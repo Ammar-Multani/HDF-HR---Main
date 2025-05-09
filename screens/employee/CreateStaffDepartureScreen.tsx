@@ -4,7 +4,7 @@ import { Text, TextInput, Button, useTheme, Snackbar, HelperText, Checkbox } fro
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useForm, Controller } from 'react-hook-form';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { format } from 'date-fns';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -63,11 +63,13 @@ const CreateStaffDepartureScreen = () => {
     fetchCompanyId();
   }, [user]);
 
-  const handleDateChange = (event: any, selectedDate?: Date) => {
+  const handleDateConfirm = (selectedDate: Date) => {
     setShowDatePicker(false);
-    if (selectedDate) {
-      setValue('exit_date', selectedDate);
-    }
+    setValue('exit_date', selectedDate);
+  };
+
+  const handleDateCancel = () => {
+    setShowDatePicker(false);
   };
 
   const toggleDocument = (document: DocumentType) => {
@@ -155,15 +157,14 @@ const CreateStaffDepartureScreen = () => {
             {format(exitDate, 'MMMM d, yyyy')}
           </Button>
           
-          {showDatePicker && (
-            <DateTimePicker
-              value={exitDate}
-              mode="date"
-              display="default"
-              onChange={handleDateChange}
-              minimumDate={new Date()}
-            />
-          )}
+          <DateTimePickerModal
+            isVisible={showDatePicker}
+            mode="date"
+            onConfirm={handleDateConfirm}
+            onCancel={handleDateCancel}
+            date={exitDate}
+            minimumDate={new Date()}
+          />
           
           <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
             Required Documents

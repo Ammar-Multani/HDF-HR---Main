@@ -4,7 +4,7 @@ import { Text, TextInput, Button, useTheme, Snackbar, HelperText } from 'react-n
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useForm, Controller } from 'react-hook-form';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { format } from 'date-fns';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -64,11 +64,13 @@ const CreateIllnessReportScreen = () => {
     fetchCompanyId();
   }, [user]);
 
-  const handleDateChange = (event: any, selectedDate?: Date) => {
+  const handleDateConfirm = (selectedDate: Date) => {
     setShowDatePicker(false);
-    if (selectedDate) {
-      setValue('date_of_onset_leave', selectedDate);
-    }
+    setValue('date_of_onset_leave', selectedDate);
+  };
+
+  const handleDateCancel = () => {
+    setShowDatePicker(false);
   };
 
   const onSubmit = async (data: IllnessReportFormData) => {
@@ -143,15 +145,14 @@ const CreateIllnessReportScreen = () => {
             {format(dateOfOnsetLeave, 'MMMM d, yyyy')}
           </Button>
           
-          {showDatePicker && (
-            <DateTimePicker
-              value={dateOfOnsetLeave}
-              mode="date"
-              display="default"
-              onChange={handleDateChange}
-              maximumDate={new Date()}
-            />
-          )}
+          <DateTimePickerModal
+            isVisible={showDatePicker}
+            mode="date"
+            onConfirm={handleDateConfirm}
+            onCancel={handleDateCancel}
+            date={dateOfOnsetLeave}
+            maximumDate={new Date()}
+          />
           
           <Controller
             control={control}
