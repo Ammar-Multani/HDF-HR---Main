@@ -1,4 +1,3 @@
-
 // User roles
 export enum UserRole {
   SUPER_ADMIN = 'superadmin',
