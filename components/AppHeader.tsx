@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { StyleSheet, View, TouchableOpacity } from 'react-native';
 import { Appbar, Avatar, useTheme, Menu, Divider } from 'react-native-paper';
@@ -28,7 +29,7 @@ const AppHeader = ({ title, showBackButton = false, showMenu = true }: AppHeader
 
   const navigateToProfile = () => {
     closeMenu();
-    navigation.navigate('Profile');
+    navigation.navigate('Profile' as never);
   };
 
   const getInitials = () => {
@@ -75,7 +76,7 @@ const AppHeader = ({ title, showBackButton = false, showMenu = true }: AppHeader
                 leadingIcon="account-multiple"
                 onPress={() => {
                   closeMenu();
-                  navigation.navigate('Users');
+                  navigation.navigate('Users' as never);
                 }}
                 title="Super Admins"
               />

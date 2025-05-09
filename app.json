@@ -1,3 +1,4 @@
+
 {
   "expo": {
     "name": "Business Management",
@@ -31,6 +32,14 @@
     "plugins": [
       "expo-router"
     ],
-    "scheme": "businessmanagementapp"
+    "scheme": "businessmanagementapp",
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "your-project-id"
+      }
+    }
   }
 }
