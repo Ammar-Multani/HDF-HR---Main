@@ -23,14 +23,16 @@ const CompanyAdminDashboard = () => {
     activeEmployees: 0,
     totalTasks: 0,
     pendingTasks: 0,
+    completedTasks: 0,
+    overdueTasks: 0,
+    totalForms: 0,
     pendingForms: 0,
   });
 
-  // Fetch company ID for the current admin
   const fetchCompanyId = async () => {
+    if (!user) return null;
+    
     try {
-      if (!user) return null;
-      
       const { data, error } = await supabase
         .from('company_user')
         .select('company_id')
@@ -42,7 +44,7 @@ const CompanyAdminDashboard = () => {
         return null;
       }
       
-      return data?.company_id;
+      return data?.company_id || null;
     } catch (error) {
       console.error('Error fetching company ID:', error);
       return null;
@@ -53,79 +55,103 @@ const CompanyAdminDashboard = () => {
     try {
       setLoading(true);
       
-      // First get the company ID
-      const compId = await fetchCompanyId();
-      if (!compId) {
+      // Get company ID if not already set
+      const currentCompanyId = companyId || await fetchCompanyId();
+      if (!currentCompanyId) {
+        console.error('No company ID found');
         setLoading(false);
         return;
       }
       
-      setCompanyId(compId);
+      setCompanyId(currentCompanyId);
       
       // Fetch employees count
       const { count: totalEmployees, error: employeesError } = await supabase
         .from('company_user')
         .select('*', { count: 'exact', head: true })
-        .eq('company_id', compId);
+        .eq('company_id', currentCompanyId);
       
       // Fetch active employees count
       const { count: activeEmployees, error: activeEmployeesError } = await supabase
         .from('company_user')
         .select('*', { count: 'exact', head: true })
-        .eq('company_id', compId)
+        .eq('company_id', currentCompanyId)
         .eq('active_status', 'active');
       
       // Fetch tasks count
       const { count: totalTasks, error: tasksError } = await supabase
         .from('task')
         .select('*', { count: 'exact', head: true })
-        .or(`assigned_users.cs.{${user?.id}},created_by.eq.${user?.id}`);
+        .eq('company_id', currentCompanyId);
       
       // Fetch pending tasks count (open + in progress + awaiting response)
       const { count: pendingTasks, error: pendingTasksError } = await supabase
         .from('task')
         .select('*', { count: 'exact', head: true })
-        .or(`assigned_users.cs.{${user?.id}},created_by.eq.${user?.id}`)
+        .eq('company_id', currentCompanyId)
         .in('status', [TaskStatus.OPEN, TaskStatus.IN_PROGRESS, TaskStatus.AWAITING_RESPONSE]);
       
+      // Fetch completed tasks count
+      const { count: completedTasks, error: completedTasksError } = await supabase
+        .from('task')
+        .select('*', { count: 'exact', head: true })
+        .eq('company_id', currentCompanyId)
+        .eq('status', TaskStatus.COMPLETED);
+      
+      // Fetch overdue tasks count
+      const { count: overdueTasks, error: overdueTasksError } = await supabase
+        .from('task')
+        .select('*', { count: 'exact', head: true })
+        .eq('company_id', currentCompanyId)
+        .eq('status', TaskStatus.OVERDUE);
+      
+      // Fetch forms count (accident reports + illness reports + staff departure reports)
+      const { count: accidentReports, error: accidentError } = await supabase
+        .from('accident_report')
+        .select('*', { count: 'exact', head: true })
+        .eq('company_id', currentCompanyId);
+      
+      const { count: illnessReports, error: illnessError } = await supabase
+        .from('illness_report')
+        .select('*', { count: 'exact', head: true })
+        .eq('company_id', currentCompanyId);
+      
+      const { count: departureReports, error: departureError } = await supabase
+        .from('staff_departure_report')
+        .select('*', { count: 'exact', head: true })
+        .eq('company_id', currentCompanyId);
+      
       // Fetch pending forms count
-      const pendingFormsPromises = [
-        supabase
-          .from('accident_report')
-          .select('*', { count: 'exact', head: true })
-          .eq('company_id', compId)
-          .eq('status', FormStatus.PENDING),
-        
-        supabase
-          .from('illness_report')
-          .select('*', { count: 'exact', head: true })
-          .eq('company_id', compId)
-          .eq('status', FormStatus.PENDING),
-        
-        supabase
-          .from('staff_departure_report')
-          .select('*', { count: 'exact', head: true })
-          .eq('company_id', compId)
-          .eq('status', FormStatus.PENDING),
-      ];
+      const { count: pendingAccidentReports, error: pendingAccidentError } = await supabase
+        .from('accident_report')
+        .select('*', { count: 'exact', head: true })
+        .eq('company_id', currentCompanyId)
+        .in('status', [FormStatus.DRAFT, FormStatus.PENDING]);
       
-      const [
-        { count: pendingAccidentForms },
-        { count: pendingIllnessForms },
-        { count: pendingDepartureForms },
-      ] = await Promise.all(pendingFormsPromises);
+      const { count: pendingIllnessReports, error: pendingIllnessError } = await supabase
+        .from('illness_report')
+        .select('*', { count: 'exact', head: true })
+        .eq('company_id', currentCompanyId)
+        .in('status', [FormStatus.DRAFT, FormStatus.PENDING]);
       
-      const totalPendingForms = 
-        (pendingAccidentForms || 0) + 
-        (pendingIllnessForms || 0) + 
-        (pendingDepartureForms || 0);
+      const { count: pendingDepartureReports, error: pendingDepartureError } = await supabase
+        .from('staff_departure_report')
+        .select('*', { count: 'exact', head: true })
+        .eq('company_id', currentCompanyId)
+        .in('status', [FormStatus.DRAFT, FormStatus.PENDING]);
+      
+      const totalForms = (accidentReports || 0) + (illnessReports || 0) + (departureReports || 0);
+      const pendingForms = (pendingAccidentReports || 0) + (pendingIllnessReports || 0) + (pendingDepartureReports || 0);
       
       setStats({
         totalEmployees: totalEmployees || 0,
         activeEmployees: activeEmployees || 0,
         totalTasks: totalTasks || 0,
         pendingTasks: pendingTasks || 0,
-        pendingForms: totalPendingForms,
+        completedTasks: completedTasks || 0,
+        overdueTasks: overdueTasks || 0,
+        totalForms: totalForms,
+        pendingForms: pendingForms,
       });
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -182,7 +208,7 @@ const CompanyAdminDashboard = () => {
         </View>
         
         <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
-          Tasks & Forms
+          Tasks
         </Text>
         
         <View style={styles.cardsContainer}>
@@ -203,10 +229,40 @@ const CompanyAdminDashboard = () => {
           />
           
           <DashboardCard
+            title="Completed Tasks"
+            count={stats.completedTasks}
+            icon="clipboard-check"
+            color="#10B981" // Green
+            onPress={() => navigation.navigate('Tasks' as never)}
+          />
+          
+          <DashboardCard
+            title="Overdue Tasks"
+            count={stats.overdueTasks}
+            icon="clipboard-alert"
+            color="#EF4444" // Red
+            onPress={() => navigation.navigate('Tasks' as never)}
+          />
+        </View>
+        
+        <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+          Forms
+        </Text>
+        
+        <View style={styles.cardsContainer}>
+          <DashboardCard
+            title="Total Forms"
+            count={stats.totalForms}
+            icon="file-document"
+            color={theme.colors.primary}
+            onPress={() => navigation.navigate('FormSubmissions' as never)}
+          />
+          
+          <DashboardCard
             title="Pending Forms"
             count={stats.pendingForms}
-            icon="file-document-edit"
-            color="#3B82F6" // Blue
+            icon="file-clock"
+            color="#F59E0B" // Amber
             onPress={() => navigation.navigate('FormSubmissions' as never)}
           />
         </View>

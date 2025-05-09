@@ -1,15 +1,17 @@
 
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
-import { Text, useTheme, Card, Button } from 'react-native-paper';
+import { StyleSheet, View, ScrollView, RefreshControl } from 'react-native';
+import { Text, Card, Button, useTheme, Divider } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { format } from 'date-fns';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import AppHeader from '../../components/AppHeader';
+import DashboardCard from '../../components/DashboardCard';
 import LoadingIndicator from '../../components/LoadingIndicator';
-import { FormStatus } from '../../types';
+import StatusBadge from '../../components/StatusBadge';
+import { FormStatus, TaskStatus } from '../../types';
 
 const EmployeeDashboard = () => {
   const theme = useTheme();
@@ -17,128 +19,116 @@ const EmployeeDashboard = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [employeeData, setEmployeeData] = useState<any>(null);
+  const [companyData, setCompanyData] = useState<any>(null);
   const [stats, setStats] = useState({
-    draftForms: 0,
+    totalForms: 0,
     pendingForms: 0,
-    approvedForms: 0,
-    declinedForms: 0,
+    totalTasks: 0,
+    pendingTasks: 0,
   });
+  const [recentTasks, setRecentTasks] = useState<any[]>([]);
+  const [recentForms, setRecentForms] = useState<any[]>([]);
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
       
-      if (!user) {
-        setLoading(false);
+      if (!user) return;
+      
+      // Fetch employee data
+      const { data: userData, error: userError } = await supabase
+        .from('company_user')
+        .select('*, company:company_id(*)')
+        .eq('id', user.id)
+        .single();
+      
+      if (userError) {
+        console.error('Error fetching employee data:', userError);
         return;
       }
       
-      // Fetch forms count by status
-      const formsPromises = [
-        // Draft forms
-        Promise.all([
-          supabase
-            .from('accident_report')
-            .select('*', { count: 'exact', head: true })
-            .eq('employee_id', user.id)
-            .eq('status', FormStatus.DRAFT),
-          
-          supabase
-            .from('illness_report')
-            .select('*', { count: 'exact', head: true })
-            .eq('employee_id', user.id)
-            .eq('status', FormStatus.DRAFT),
-          
-          supabase
-            .from('staff_departure_report')
-            .select('*', { count: 'exact', head: true })
-            .eq('employee_id', user.id)
-            .eq('status', FormStatus.DRAFT),
-        ]),
-        
-        // Pending forms
-        Promise.all([
-          supabase
-            .from('accident_report')
-            .select('*', { count: 'exact', head: true })
-            .eq('employee_id', user.id)
-            .eq('status', FormStatus.PENDING),
-          
-          supabase
-            .from('illness_report')
-            .select('*', { count: 'exact', head: true })
-            .eq('employee_id', user.id)
-            .eq('status', FormStatus.PENDING),
-          
-          supabase
-            .from('staff_departure_report')
-            .select('*', { count: 'exact', head: true })
-            .eq('employee_id', user.id)
-            .eq('status', FormStatus.PENDING),
-        ]),
-        
-        // Approved forms
-        Promise.all([
-          supabase
-            .from('accident_report')
-            .select('*', { count: 'exact', head: true })
-            .eq('employee_id', user.id)
-            .eq('status', FormStatus.APPROVED),
-          
-          supabase
-            .from('illness_report')
-            .select('*', { count: 'exact', head: true })
-            .eq('employee_id', user.id)
-            .eq('status', FormStatus.APPROVED),
-          
-          supabase
-            .from('staff_departure_report')
-            .select('*', { count: 'exact', head: true })
-            .eq('employee_id', user.id)
-            .eq('status', FormStatus.APPROVED),
-        ]),
-        
-        // Declined forms
-        Promise.all([
-          supabase
-            .from('accident_report')
-            .select('*', { count: 'exact', head: true })
-            .eq('employee_id', user.id)
-            .eq('status', FormStatus.DECLINED),
-          
-          supabase
-            .from('illness_report')
-            .select('*', { count: 'exact', head: true })
-            .eq('employee_id', user.id)
-            .eq('status', FormStatus.DECLINED),
-          
-          supabase
-            .from('staff_departure_report')
-            .select('*', { count: 'exact', head: true })
-            .eq('employee_id', user.id)
-            .eq('status', FormStatus.DECLINED),
-        ]),
-      ];
+      setEmployeeData(userData);
+      setCompanyData(userData.company);
       
-      const [
-        draftFormsResults,
-        pendingFormsResults,
-        approvedFormsResults,
-        declinedFormsResults,
-      ] = await Promise.all(formsPromises);
+      // Fetch tasks assigned to employee
+      const { data: tasksData, error: tasksError } = await supabase
+        .from('task')
+        .select('*')
+        .contains('assigned_users', [user.id])
+        .order('created_at', { ascending: false });
       
-      // Calculate totals for each status
-      const draftForms = draftFormsResults.reduce((sum, { count }) => sum + (count || 0), 0);
-      const pendingForms = pendingFormsResults.reduce((sum, { count }) => sum + (count || 0), 0);
-      const approvedForms = approvedFormsResults.reduce((sum, { count }) => sum + (count || 0), 0);
-      const declinedForms = declinedFormsResults.reduce((sum, { count }) => sum + (count || 0), 0);
+      if (!tasksError) {
+        const tasks = tasksData || [];
+        const pendingTasks = tasks.filter(task => 
+          task.status !== TaskStatus.COMPLETED
+        );
+        
+        setStats(prev => ({
+          ...prev,
+          totalTasks: tasks.length,
+          pendingTasks: pendingTasks.length,
+        }));
+        
+        setRecentTasks(tasks.slice(0, 3));
+      }
       
-      setStats({
-        draftForms,
-        pendingForms,
-        approvedForms,
-        declinedForms,
-      });
+      // Fetch forms submitted by employee
+      const { data: accidentData, error: accidentError } = await supabase
+        .from('accident_report')
+        .select('*')
+        .eq('employee_id', user.id)
+        .order('created_at', { ascending: false });
+      
+      const { data: illnessData, error: illnessError } = await supabase
+        .from('illness_report')
+        .select('*')
+        .eq('employee_id', user.id)
+        .order('submission_date', { ascending: false });
+      
+      const { data: departureData, error: departureError } = await supabase
+        .from('staff_departure_report')
+        .select('*')
+        .eq('employee_id', user.id)
+        .order('created_at', { ascending: false });
+      
+      if (!accidentError && !illnessError && !departureError) {
+        const accidentForms = (accidentData || []).map(form => ({
+          ...form,
+          type: 'accident',
+          title: 'Accident Report',
+          date: form.created_at,
+        }));
+        
+        const illnessForms = (illnessData || []).map(form => ({
+          ...form,
+          type: 'illness',
+          title: 'Illness Report',
+          date: form.submission_date,
+        }));
+        
+        const departureForms = (departureData || []).map(form => ({
+          ...form,
+          type: 'departure',
+          title: 'Staff Departure Report',
+          date: form.created_at,
+        }));
+        
+        const allForms = [...accidentForms, ...illnessForms, ...departureForms]
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        
+        const pendingForms = allForms.filter(form => 
+          form.status !== FormStatus.APPROVED && form.status !== FormStatus.DECLINED
+        );
+        
+        setStats(prev => ({
+          ...prev,
+          totalForms: allForms.length,
+          pendingForms: pendingForms.length,
+        }));
+        
+        setRecentForms(allForms.slice(0, 3));
+      }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -156,13 +146,26 @@ const EmployeeDashboard = () => {
     fetchDashboardData();
   };
 
+  const getFormTypeIcon = (type: string) => {
+    switch (type) {
+      case 'accident':
+        return 'alert-circle';
+      case 'illness':
+        return 'medical-bag';
+      case 'departure':
+        return 'account-arrow-right';
+      default:
+        return 'file-document';
+    }
+  };
+
   if (loading && !refreshing) {
     return <LoadingIndicator />;
   }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <AppHeader title="Employee Dashboard" showBackButton={false} />
+      <AppHeader title="Dashboard" showBackButton={false} />
       
       <ScrollView
         style={styles.scrollView}
@@ -171,97 +174,163 @@ const EmployeeDashboard = () => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
-          Create New Form
-        </Text>
+        <Card style={[styles.welcomeCard, { backgroundColor: theme.colors.primary }]}>
+          <Card.Content>
+            <Text style={styles.welcomeText}>
+              Welcome, {employeeData?.first_name || 'Employee'}!
+            </Text>
+            <Text style={styles.companyText}>
+              {companyData?.company_name || 'Your Company'}
+            </Text>
+          </Card.Content>
+        </Card>
         
-        <View style={styles.formCardsContainer}>
-          <TouchableOpacity
-            style={styles.formCard}
-            onPress={() => navigation.navigate('CreateAccidentReport' as never)}
-          >
-            <Card style={{ backgroundColor: theme.colors.surface }}>
-              <Card.Content style={styles.formCardContent}>
-                <MaterialCommunityIcons
-                  name="alert-circle"
-                  size={40}
-                  color={theme.colors.error}
-                />
-                <Text style={styles.formCardTitle}>Accident Report</Text>
-              </Card.Content>
-            </Card>
-          </TouchableOpacity>
+        <View style={styles.statsContainer}>
+          <DashboardCard
+            title="My Forms"
+            count={stats.totalForms}
+            icon="file-document"
+            color={theme.colors.primary}
+            onPress={() => navigation.navigate('Forms' as never)}
+          />
           
-          <TouchableOpacity
-            style={styles.formCard}
-            onPress={() => navigation.navigate('CreateIllnessReport' as never)}
-          >
-            <Card style={{ backgroundColor: theme.colors.surface }}>
-              <Card.Content style={styles.formCardContent}>
-                <MaterialCommunityIcons
-                  name="medical-bag"
-                  size={40}
-                  color={theme.colors.primary}
-                />
-                <Text style={styles.formCardTitle}>Illness Report</Text>
-              </Card.Content>
-            </Card>
-          </TouchableOpacity>
+          <DashboardCard
+            title="Pending Forms"
+            count={stats.pendingForms}
+            icon="file-clock"
+            color="#F59E0B" // Amber
+            onPress={() => navigation.navigate('Forms' as never)}
+          />
           
-          <TouchableOpacity
-            style={styles.formCard}
-            onPress={() => navigation.navigate('CreateStaffDeparture' as never)}
-          >
-            <Card style={{ backgroundColor: theme.colors.surface }}>
-              <Card.Content style={styles.formCardContent}>
-                <MaterialCommunityIcons
-                  name="exit-run"
-                  size={40}
-                  color={theme.colors.tertiary}
-                />
-                <Text style={styles.formCardTitle}>Staff Departure</Text>
-              </Card.Content>
-            </Card>
-          </TouchableOpacity>
+          <DashboardCard
+            title="My Tasks"
+            count={stats.totalTasks}
+            icon="clipboard-list"
+            color={theme.colors.primary}
+            onPress={() => navigation.navigate('Tasks' as never)}
+          />
+          
+          <DashboardCard
+            title="Pending Tasks"
+            count={stats.pendingTasks}
+            icon="clipboard-clock"
+            color="#F59E0B" // Amber
+            onPress={() => navigation.navigate('Tasks' as never)}
+          />
         </View>
         
         <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
-          My Forms
+          Quick Actions
         </Text>
         
-        <Card style={[styles.statsCard, { backgroundColor: theme.colors.surface }]}>
-          <Card.Content>
-            <View style={styles.statsRow}>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{stats.draftForms}</Text>
-                <Text style={styles.statLabel}>Draft</Text>
-              </View>
-              
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{stats.pendingForms}</Text>
-                <Text style={styles.statLabel}>Pending</Text>
-              </View>
-              
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{stats.approvedForms}</Text>
-                <Text style={styles.statLabel}>Approved</Text>
-              </View>
-              
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{stats.declinedForms}</Text>
-                <Text style={styles.statLabel}>Declined</Text>
-              </View>
+        <View style={styles.actionsContainer}>
+          <Button
+            mode="contained-tonal"
+            icon="alert-circle"
+            onPress={() => navigation.navigate('CreateAccidentReport' as never)}
+            style={styles.actionButton}
+          >
+            Report Accident
+          </Button>
+          
+          <Button
+            mode="contained-tonal"
+            icon="medical-bag"
+            onPress={() => navigation.navigate('CreateIllnessReport' as never)}
+            style={styles.actionButton}
+          >
+            Report Illness
+          </Button>
+          
+          <Button
+            mode="contained-tonal"
+            icon="account-arrow-right"
+            onPress={() => navigation.navigate('CreateStaffDeparture' as never)}
+            style={styles.actionButton}
+          >
+            Staff Departure
+          </Button>
+        </View>
+        
+        {recentTasks.length > 0 && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+                Recent Tasks
+              </Text>
+              <Button
+                mode="text"
+                onPress={() => navigation.navigate('Tasks' as never)}
+              >
+                View All
+              </Button>
             </View>
             
-            <Button
-              mode="contained"
-              onPress={() => navigation.navigate('Forms' as never)}
-              style={styles.viewAllButton}
-            >
-              View All Forms
-            </Button>
-          </Card.Content>
-        </Card>
+            {recentTasks.map((task, index) => (
+              <Card
+                key={task.id}
+                style={[styles.itemCard, { backgroundColor: theme.colors.surface }]}
+                onPress={() => navigation.navigate('TaskDetails' as never, { taskId: task.id } as never)}
+              >
+                <Card.Content>
+                  <View style={styles.cardHeader}>
+                    <Text style={styles.cardTitle} numberOfLines={1}>
+                      {task.title}
+                    </Text>
+                    <StatusBadge status={task.status} size="small" />
+                  </View>
+                  <Text style={styles.cardDescription} numberOfLines={1}>
+                    {task.description}
+                  </Text>
+                  <Text style={styles.cardDate}>
+                    Due: {format(new Date(task.deadline), 'MMM d, yyyy')}
+                  </Text>
+                </Card.Content>
+              </Card>
+            ))}
+          </>
+        )}
+        
+        {recentForms.length > 0 && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+                Recent Forms
+              </Text>
+              <Button
+                mode="text"
+                onPress={() => navigation.navigate('Forms' as never)}
+              >
+                View All
+              </Button>
+            </View>
+            
+            {recentForms.map((form, index) => (
+              <Card
+                key={`${form.type}-${form.id}`}
+                style={[styles.itemCard, { backgroundColor: theme.colors.surface }]}
+                onPress={() => navigation.navigate('FormDetails' as never, { 
+                  formId: form.id, 
+                  formType: form.type 
+                } as never)}
+              >
+                <Card.Content>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.formTitleContainer}>
+                      <Text style={styles.formType}>
+                        {form.title}
+                      </Text>
+                      <StatusBadge status={form.status} size="small" />
+                    </View>
+                  </View>
+                  <Text style={styles.cardDate}>
+                    Submitted: {format(new Date(form.date), 'MMM d, yyyy')}
+                  </Text>
+                </Card.Content>
+              </Card>
+            ))}
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -276,53 +345,79 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
+    paddingBottom: 40,
   },
-  sectionTitle: {
-    fontSize: 18,
+  welcomeCard: {
+    marginBottom: 16,
+    elevation: 2,
+  },
+  welcomeText: {
+    fontSize: 22,
     fontWeight: 'bold',
-    marginTop: 16,
-    marginBottom: 12,
+    color: 'white',
   },
-  formCardsContainer: {
+  companyText: {
+    fontSize: 16,
+    color: 'white',
+    opacity: 0.9,
+  },
+  statsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     marginBottom: 16,
   },
-  formCard: {
-    width: '31%',
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: 8,
     marginBottom: 12,
   },
-  formCardContent: {
-    alignItems: 'center',
-    padding: 16,
+  actionsContainer: {
+    marginBottom: 24,
   },
-  formCardTitle: {
-    marginTop: 8,
-    textAlign: 'center',
-    fontWeight: '500',
+  actionButton: {
+    marginBottom: 8,
   },
-  statsCard: {
-    marginBottom: 16,
-  },
-  statsRow: {
+  sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  statItem: {
     alignItems: 'center',
+    marginBottom: 8,
   },
-  statValue: {
-    fontSize: 24,
+  itemCard: {
+    marginBottom: 12,
+    elevation: 2,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 4,
+  },
+  cardTitle: {
+    fontSize: 16,
     fontWeight: 'bold',
+    flex: 1,
+    marginRight: 8,
   },
-  statLabel: {
+  cardDescription: {
+    opacity: 0.7,
+    marginBottom: 4,
+  },
+  cardDate: {
     fontSize: 12,
     opacity: 0.7,
   },
-  viewAllButton: {
-    marginTop: 8,
+  formTitleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+  },
+  formType: {
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
 
