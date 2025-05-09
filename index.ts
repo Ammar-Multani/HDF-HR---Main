@@ -1,3 +1,4 @@
+import './polyfills';
 import "@expo/metro-runtime";
 import { registerRootComponent } from 'expo';
 
