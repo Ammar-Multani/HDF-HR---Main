@@ -1,4 +1,3 @@
-
 const { getDefaultConfig } = require('expo/metro-config');
 const { withMetroConfig } = require('react-native-reanimated/plugin');
 
