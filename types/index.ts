@@ -72,6 +72,11 @@ export enum DocumentType {
   WAGE_STATEMENT = 'wage_statement',
   REFERENCE_LETTER = 'reference_letter',
   EXIT_INTERVIEW = 'exit_interview',
+  RESIGNATION_LETTER = 'resignation_letter',
+  EQUIPMENT_RETURN = 'equipment_return',
+  FINAL_SETTLEMENT = 'final_settlement',
+  NON_DISCLOSURE = 'non_disclosure',
+  NON_COMPETE = 'non_compete',
 }
 
 // Payment method

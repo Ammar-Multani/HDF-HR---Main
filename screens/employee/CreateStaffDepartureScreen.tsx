@@ -17,16 +17,6 @@ interface StaffDepartureFormData {
   comments: string;
 }
 
-const documentTypes: { id: DocumentType; label: string }[] = [
-  { id: 'resignation_letter', label: 'Resignation Letter' },
-  { id: 'exit_interview', label: 'Exit Interview Form' },
-  { id: 'equipment_return', label: 'Equipment Return Form' },
-  { id: 'final_paycheck', label: 'Final Paycheck Request' },
-  { id: 'benefits_termination', label: 'Benefits Termination Form' },
-  { id: 'non_disclosure', label: 'Non-Disclosure Reminder' },
-  { id: 'reference_request', label: 'Reference Request Form' },
-];
-
 const CreateStaffDepartureScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
@@ -80,11 +70,11 @@ const CreateStaffDepartureScreen = () => {
     }
   };
 
-  const toggleDocument = (documentType: DocumentType) => {
-    if (selectedDocuments.includes(documentType)) {
-      setSelectedDocuments(selectedDocuments.filter(doc => doc !== documentType));
+  const toggleDocument = (document: DocumentType) => {
+    if (selectedDocuments.includes(document)) {
+      setSelectedDocuments(selectedDocuments.filter(doc => doc !== document));
     } else {
-      setSelectedDocuments([...selectedDocuments, documentType]);
+      setSelectedDocuments([...selectedDocuments, document]);
     }
   };
 
@@ -105,7 +95,7 @@ const CreateStaffDepartureScreen = () => {
       setLoading(true);
       
       // Create staff departure report
-      const { data: reportData, error } = await supabase
+      const { error } = await supabase
         .from('staff_departure_report')
         .insert([
           {
@@ -116,9 +106,7 @@ const CreateStaffDepartureScreen = () => {
             documents_required: selectedDocuments,
             status: FormStatus.PENDING,
           },
-        ])
-        .select()
-        .single();
+        ]);
       
       if (error) {
         throw error;
@@ -130,7 +118,7 @@ const CreateStaffDepartureScreen = () => {
       // Navigate back after a short delay
       setTimeout(() => {
         navigation.goBack();
-      }, 1500);
+      }, 2000);
     } catch (error: any) {
       console.error('Error submitting staff departure report:', error);
       setSnackbarMessage(error.message || 'Failed to submit staff departure report');
@@ -157,7 +145,7 @@ const CreateStaffDepartureScreen = () => {
             Departure Details
           </Text>
           
-          <Text style={styles.inputLabel}>Expected Exit Date *</Text>
+          <Text style={styles.inputLabel}>Exit Date *</Text>
           <Button
             mode="outlined"
             onPress={() => setShowDatePicker(true)}
@@ -182,24 +170,58 @@ const CreateStaffDepartureScreen = () => {
           </Text>
           
           <Text style={styles.helperText}>
-            Select the documents you need for your departure process:
+            Select the documents you need to submit for your departure:
           </Text>
           
-          {documentTypes.map((doc) => (
-            <View key={doc.id} style={styles.checkboxContainer}>
+          <View style={styles.documentsContainer}>
+            <View style={styles.documentItem}>
               <Checkbox
-                status={selectedDocuments.includes(doc.id) ? 'checked' : 'unchecked'}
-                onPress={() => toggleDocument(doc.id)}
-                disabled={loading}
+                status={selectedDocuments.includes(DocumentType.RESIGNATION_LETTER) ? 'checked' : 'unchecked'}
+                onPress={() => toggleDocument(DocumentType.RESIGNATION_LETTER)}
               />
-              <Text
-                style={styles.checkboxLabel}
-                onPress={() => toggleDocument(doc.id)}
-              >
-                {doc.label}
-              </Text>
+              <Text style={styles.documentLabel}>Resignation Letter</Text>
             </View>
-          ))}
+            
+            <View style={styles.documentItem}>
+              <Checkbox
+                status={selectedDocuments.includes(DocumentType.EXIT_INTERVIEW) ? 'checked' : 'unchecked'}
+                onPress={() => toggleDocument(DocumentType.EXIT_INTERVIEW)}
+              />
+              <Text style={styles.documentLabel}>Exit Interview</Text>
+            </View>
+            
+            <View style={styles.documentItem}>
+              <Checkbox
+                status={selectedDocuments.includes(DocumentType.EQUIPMENT_RETURN) ? 'checked' : 'unchecked'}
+                onPress={() => toggleDocument(DocumentType.EQUIPMENT_RETURN)}
+              />
+              <Text style={styles.documentLabel}>Equipment Return Form</Text>
+            </View>
+            
+            <View style={styles.documentItem}>
+              <Checkbox
+                status={selectedDocuments.includes(DocumentType.FINAL_SETTLEMENT) ? 'checked' : 'unchecked'}
+                onPress={() => toggleDocument(DocumentType.FINAL_SETTLEMENT)}
+              />
+              <Text style={styles.documentLabel}>Final Settlement Form</Text>
+            </View>
+            
+            <View style={styles.documentItem}>
+              <Checkbox
+                status={selectedDocuments.includes(DocumentType.NON_DISCLOSURE) ? 'checked' : 'unchecked'}
+                onPress={() => toggleDocument(DocumentType.NON_DISCLOSURE)}
+              />
+              <Text style={styles.documentLabel}>Non-Disclosure Agreement</Text>
+            </View>
+            
+            <View style={styles.documentItem}>
+              <Checkbox
+                status={selectedDocuments.includes(DocumentType.NON_COMPETE) ? 'checked' : 'unchecked'}
+                onPress={() => toggleDocument(DocumentType.NON_COMPETE)}
+              />
+              <Text style={styles.documentLabel}>Non-Compete Agreement</Text>
+            </View>
+          </View>
           
           <Controller
             control={control}
@@ -263,12 +285,11 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    marginTop: 24,
+    marginTop: 16,
     marginBottom: 16,
   },
   input: {
     marginBottom: 12,
-    marginTop: 16,
   },
   inputLabel: {
     fontSize: 14,
@@ -280,15 +301,18 @@ const styles = StyleSheet.create({
   },
   helperText: {
     fontSize: 14,
-    marginBottom: 16,
     opacity: 0.7,
+    marginBottom: 12,
   },
-  checkboxContainer: {
+  documentsContainer: {
+    marginBottom: 16,
+  },
+  documentItem: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
   },
-  checkboxLabel: {
+  documentLabel: {
     fontSize: 16,
     marginLeft: 8,
   },
