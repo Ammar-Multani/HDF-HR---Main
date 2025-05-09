@@ -155,10 +155,10 @@ const EmployeeFormsScreen = () => {
 
   const renderFormItem = ({ item }: { item: FormSubmission }) => (
     <TouchableOpacity
-      onPress={() => navigation.navigate('FormDetails' as never, { 
+      onPress={() => navigation.navigate('FormDetails', { 
         formId: item.id, 
         formType: item.type 
-      } as never)}
+      })}
     >
       <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
         <Card.Content>
@@ -310,7 +310,7 @@ const EmployeeFormsScreen = () => {
                   setTypeFilter('all');
                   setStatusFilter('all');
                 }
-              : () => navigation.navigate('CreateAccidentReport' as never)
+              : () => navigation.navigate('CreateAccidentReport')
           }
         />
       ) : (
@@ -332,17 +332,17 @@ const EmployeeFormsScreen = () => {
           {
             icon: 'alert-circle',
             label: 'Report Accident',
-            onPress: () => navigation.navigate('CreateAccidentReport' as never),
+            onPress: () => navigation.navigate('CreateAccidentReport'),
           },
           {
             icon: 'medical-bag',
             label: 'Report Illness',
-            onPress: () => navigation.navigate('CreateIllnessReport' as never),
+            onPress: () => navigation.navigate('CreateIllnessReport'),
           },
           {
             icon: 'account-arrow-right',
             label: 'Staff Departure',
-            onPress: () => navigation.navigate('CreateStaffDeparture' as never),
+            onPress: () => navigation.navigate('CreateStaffDeparture'),
           },
         ]}
         onStateChange={() => {}}

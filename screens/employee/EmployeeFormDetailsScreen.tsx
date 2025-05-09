@@ -10,15 +10,17 @@ import LoadingIndicator from '../../components/LoadingIndicator';
 import StatusBadge from '../../components/StatusBadge';
 import { FormStatus, DocumentType } from '../../types';
 
-type FormDetailsRouteParams = {
-  formId: string;
-  formType: 'accident' | 'illness' | 'departure';
+type FormDetailsParams = {
+  FormDetails: {
+    formId: string;
+    formType: 'accident' | 'illness' | 'departure';
+  };
 };
 
 const EmployeeFormDetailsScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
-  const route = useRoute<RouteProp<Record<string, FormDetailsRouteParams>, string>>();
+  const route = useRoute<RouteProp<FormDetailsParams, 'FormDetails'>>();
   const { formId, formType } = route.params;
   
   const [loading, setLoading] = useState(true);
