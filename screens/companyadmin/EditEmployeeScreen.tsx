@@ -1,16 +1,36 @@
-
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform, Alert } from 'react-native';
-import { Text, TextInput, Button, useTheme, SegmentedButtons, Snackbar, HelperText } from 'react-native-paper';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { useForm, Controller } from 'react-hook-form';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { format } from 'date-fns';
-import { supabase } from '../../lib/supabase';
-import AppHeader from '../../components/AppHeader';
-import LoadingIndicator from '../../components/LoadingIndicator';
-import { Gender, MaritalStatus, IDType, EmploymentType, CompanyUser } from '../../types';
+import React, { useState, useEffect } from "react";
+import {
+  StyleSheet,
+  View,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
+} from "react-native";
+import {
+  Text,
+  TextInput,
+  Button,
+  useTheme,
+  SegmentedButtons,
+  Snackbar,
+  HelperText,
+} from "react-native-paper";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
+import { useForm, Controller } from "react-hook-form";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import { format } from "date-fns";
+import { supabase } from "../../lib/supabase";
+import AppHeader from "../../components/AppHeader";
+import LoadingIndicator from "../../components/LoadingIndicator";
+import {
+  Gender,
+  MaritalStatus,
+  IDType,
+  EmploymentType,
+  CompanyUser,
+} from "../../types";
 
 type EditEmployeeRouteParams = {
   employeeId: string;
@@ -48,9 +68,10 @@ interface EmployeeFormData {
 const EditEmployeeScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
-  const route = useRoute<RouteProp<Record<string, EditEmployeeRouteParams>, string>>();
+  const route =
+    useRoute<RouteProp<Record<string, EditEmployeeRouteParams>, string>>();
   const { employeeId } = route.params;
-  
+
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [employee, setEmployee] = useState<CompanyUser | null>(null);
@@ -59,102 +80,160 @@ const EditEmployeeScreen = () => {
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [hasEndDate, setHasEndDate] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [snackbarMessage, setSnackbarMessage] = useState("");
 
-  const { control, handleSubmit, formState: { errors }, watch, setValue, reset } = useForm<EmployeeFormData>({
+  const {
+    control,
+    handleSubmit,
+    formState: { errors },
+    watch,
+    setValue,
+    reset,
+  } = useForm<EmployeeFormData>({
     defaultValues: {
-      first_name: '',
-      last_name: '',
-      phone_number: '',
+      first_name: "",
+      last_name: "",
+      phone_number: "",
       date_of_birth: new Date(),
       gender: Gender.MALE,
-      nationality: '',
+      nationality: "",
       marital_status: MaritalStatus.SINGLE,
       id_type: IDType.ID_CARD,
-      ahv_number: '',
-      job_title: '',
+      ahv_number: "",
+      job_title: "",
       employment_type: EmploymentType.FULL_TIME,
-      workload_percentage: '100',
+      workload_percentage: "100",
       employment_start_date: new Date(),
-      education: '',
-      address_line1: '',
-      address_line2: '',
-      address_city: '',
-      address_state: '',
-      address_postal_code: '',
-      address_country: '',
-      bank_name: '',
-      account_number: '',
-      iban: '',
-      swift_code: '',
-      comments: '',
+      education: "",
+      address_line1: "",
+      address_line2: "",
+      address_city: "",
+      address_state: "",
+      address_postal_code: "",
+      address_country: "",
+      bank_name: "",
+      account_number: "",
+      iban: "",
+      swift_code: "",
+      comments: "",
     },
   });
 
-  const dateOfBirth = watch('date_of_birth');
-  const employmentStartDate = watch('employment_start_date');
-  const employmentEndDate = watch('employment_end_date');
+  const dateOfBirth = watch("date_of_birth");
+  const employmentStartDate = watch("employment_start_date");
+  const employmentEndDate = watch("employment_end_date");
 
   const fetchEmployeeDetails = async () => {
     try {
       setLoading(true);
-      
+
       const { data, error } = await supabase
-        .from('company_user')
-        .select('*')
-        .eq('id', employeeId)
+        .from("company_user")
+        .select("*")
+        .eq("id", employeeId)
         .single();
-      
+
       if (error) {
-        console.error('Error fetching employee details:', error);
+        console.error("Error fetching employee details:", error);
         return;
       }
-      
+
       setEmployee(data);
-      
+
       // Set form values
-      setValue('first_name', data.first_name);
-      setValue('last_name', data.last_name);
-      setValue('phone_number', data.phone_number);
-      setValue('date_of_birth', new Date(data.date_of_birth));
-      setValue('gender', data.gender);
-      setValue('nationality', data.nationality);
-      setValue('marital_status', data.marital_status);
-      setValue('id_type', data.id_type);
-      setValue('ahv_number', data.ahv_number);
-      setValue('job_title', data.job_title);
-      setValue('employment_type', data.employment_type);
-      setValue('workload_percentage', data.workload_percentage.toString());
-      setValue('employment_start_date', new Date(data.employment_start_date));
-      
+      setValue("first_name", data.first_name || "");
+      setValue("last_name", data.last_name || "");
+      setValue("phone_number", data.phone_number || "");
+
+      // Handle date of birth with validation
+      try {
+        if (data.date_of_birth) {
+          const dobDate = new Date(data.date_of_birth);
+          if (!isNaN(dobDate.getTime())) {
+            setValue("date_of_birth", dobDate);
+          } else {
+            setValue("date_of_birth", new Date());
+          }
+        } else {
+          setValue("date_of_birth", new Date());
+        }
+      } catch (e) {
+        setValue("date_of_birth", new Date());
+      }
+
+      setValue("gender", data.gender || Gender.MALE);
+      setValue("nationality", data.nationality || "");
+      setValue("marital_status", data.marital_status || MaritalStatus.SINGLE);
+      setValue("id_type", data.id_type || IDType.ID_CARD);
+      setValue("ahv_number", data.ahv_number || "");
+      setValue("job_title", data.job_title || "");
+      setValue(
+        "employment_type",
+        data.employment_type || EmploymentType.FULL_TIME
+      );
+      setValue(
+        "workload_percentage",
+        data.workload_percentage ? data.workload_percentage.toString() : "100"
+      );
+
+      // Handle employment start date with validation
+      try {
+        if (data.employment_start_date) {
+          const startDate = new Date(data.employment_start_date);
+          if (!isNaN(startDate.getTime())) {
+            setValue("employment_start_date", startDate);
+          } else {
+            setValue("employment_start_date", new Date());
+          }
+        } else {
+          setValue("employment_start_date", new Date());
+        }
+      } catch (e) {
+        setValue("employment_start_date", new Date());
+      }
+
+      // Handle employment end date with validation
       if (data.employment_end_date) {
-        setValue('employment_end_date', new Date(data.employment_end_date));
-        setHasEndDate(true);
+        try {
+          const endDate = new Date(data.employment_end_date);
+          if (!isNaN(endDate.getTime())) {
+            setValue("employment_end_date", endDate);
+            setHasEndDate(true);
+          }
+        } catch (e) {
+          console.log("Invalid employment end date", e);
+        }
       }
-      
-      setValue('education', data.education || '');
-      
-      // Set address values
+
+      setValue("education", data.education || "");
+
+      // Set address values - reading from JSONB address object
       if (data.address) {
-        setValue('address_line1', data.address.line1);
-        setValue('address_line2', data.address.line2 || '');
-        setValue('address_city', data.address.city);
-        setValue('address_state', data.address.state);
-        setValue('address_postal_code', data.address.postal_code);
-        setValue('address_country', data.address.country);
+        setValue("address_line1", data.address.line1 || "");
+        setValue("address_line2", data.address.line2 || "");
+        setValue("address_city", data.address.city || "");
+        setValue("address_state", data.address.state || "");
+        setValue("address_postal_code", data.address.postal_code || "");
+        setValue("address_country", data.address.country || "");
       }
-      
-      // Set bank details
+
+      // Set bank details - reading from JSONB bank_details object
       if (data.bank_details) {
-        setValue('bank_name', data.bank_details.bank_name);
-        setValue('account_number', data.bank_details.account_number);
-        setValue('iban', data.bank_details.iban);
-        setValue('swift_code', data.bank_details.swift_code);
+        // Handle bank_details as both string or object
+        const bankDetails =
+          typeof data.bank_details === "string"
+            ? JSON.parse(data.bank_details)
+            : data.bank_details;
+
+        setValue("bank_name", bankDetails.bank_name || "");
+        setValue("account_number", bankDetails.account_number || "");
+        setValue("iban", bankDetails.iban || "");
+        setValue("swift_code", bankDetails.swift_code || "");
       }
-      
-      setValue('comments', data.comments || '');
+
+      setValue("comments", data.comments || "");
     } catch (error) {
-      console.error('Error fetching employee details:', error);
+      console.error("Error fetching employee details:", error);
     } finally {
       setLoading(false);
     }
@@ -167,46 +246,55 @@ const EditEmployeeScreen = () => {
   const handleDobChange = (event: any, selectedDate?: Date) => {
     setShowDobPicker(false);
     if (selectedDate) {
-      setValue('date_of_birth', selectedDate);
+      setValue("date_of_birth", selectedDate);
     }
   };
 
   const handleStartDateChange = (event: any, selectedDate?: Date) => {
     setShowStartDatePicker(false);
     if (selectedDate) {
-      setValue('employment_start_date', selectedDate);
+      setValue("employment_start_date", selectedDate);
     }
   };
 
   const handleEndDateChange = (event: any, selectedDate?: Date) => {
     setShowEndDatePicker(false);
     if (selectedDate) {
-      setValue('employment_end_date', selectedDate);
+      setValue("employment_end_date", selectedDate);
     }
   };
 
   const onSubmit = async (data: EmployeeFormData) => {
     try {
       if (!employee) {
-        setSnackbarMessage('Employee information not available');
+        setSnackbarMessage("Employee information not available");
         setSnackbarVisible(true);
         return;
       }
-      
+
       setSubmitting(true);
-      
+
       // Validate workload percentage
       const workloadPercentage = parseInt(data.workload_percentage);
-      if (isNaN(workloadPercentage) || workloadPercentage <= 0 || workloadPercentage > 100) {
-        setSnackbarMessage('Workload percentage must be between 1 and 100');
+      if (
+        isNaN(workloadPercentage) ||
+        workloadPercentage <= 0 ||
+        workloadPercentage > 100
+      ) {
+        setSnackbarMessage("Workload percentage must be between 1 and 100");
         setSnackbarVisible(true);
         setSubmitting(false);
         return;
       }
-      
+
+      // Convert employment_type to boolean (true for full-time/part-time, false for contract/temporary)
+      const isEmployeeType =
+        data.employment_type === EmploymentType.FULL_TIME ||
+        data.employment_type === EmploymentType.PART_TIME;
+
       // Update employee record
       const { error } = await supabase
-        .from('company_user')
+        .from("company_user")
         .update({
           first_name: data.first_name,
           last_name: data.last_name,
@@ -218,10 +306,11 @@ const EditEmployeeScreen = () => {
           marital_status: data.marital_status,
           gender: data.gender,
           employment_start_date: data.employment_start_date.toISOString(),
-          employment_end_date: hasEndDate && data.employment_end_date 
-            ? data.employment_end_date.toISOString() 
-            : null,
-          employment_type: data.employment_type,
+          employment_end_date:
+            hasEndDate && data.employment_end_date
+              ? data.employment_end_date.toISOString()
+              : null,
+          employment_type: isEmployeeType, // Store as boolean instead of enum string
           workload_percentage: workloadPercentage,
           job_title: data.job_title,
           education: data.education,
@@ -241,22 +330,22 @@ const EditEmployeeScreen = () => {
           },
           comments: data.comments || null,
         })
-        .eq('id', employeeId);
-      
+        .eq("id", employeeId);
+
       if (error) {
         throw error;
       }
-      
-      setSnackbarMessage('Employee updated successfully');
+
+      setSnackbarMessage("Employee updated successfully");
       setSnackbarVisible(true);
-      
+
       // Navigate back after a short delay
       setTimeout(() => {
         navigation.goBack();
       }, 1500);
     } catch (error: any) {
-      console.error('Error updating employee:', error);
-      setSnackbarMessage(error.message || 'Failed to update employee');
+      console.error("Error updating employee:", error);
+      setSnackbarMessage(error.message || "Failed to update employee");
       setSnackbarVisible(true);
     } finally {
       setSubmitting(false);
@@ -269,11 +358,17 @@ const EditEmployeeScreen = () => {
 
   if (!employee) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
         <AppHeader title="Edit Employee" showBackButton />
         <View style={styles.errorContainer}>
           <Text style={{ color: theme.colors.error }}>Employee not found</Text>
-          <Button mode="contained" onPress={() => navigation.goBack()} style={styles.button}>
+          <Button
+            mode="contained"
+            onPress={() => navigation.goBack()}
+            style={styles.button}
+          >
             Go Back
           </Button>
         </View>
@@ -282,23 +377,30 @@ const EditEmployeeScreen = () => {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
       <AppHeader title="Edit Employee" showBackButton />
-      
+
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardAvoidingView}
       >
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+        >
+          <Text
+            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
+          >
             Personal Information
           </Text>
-          
+
           <View style={styles.row}>
             <View style={styles.halfInput}>
               <Controller
                 control={control}
-                rules={{ required: 'First name is required' }}
+                rules={{ required: "First name is required" }}
                 render={({ field: { onChange, onBlur, value } }) => (
                   <TextInput
                     label="First Name *"
@@ -314,14 +416,16 @@ const EditEmployeeScreen = () => {
                 name="first_name"
               />
               {errors.first_name && (
-                <HelperText type="error">{errors.first_name.message}</HelperText>
+                <HelperText type="error">
+                  {errors.first_name.message}
+                </HelperText>
               )}
             </View>
-            
+
             <View style={styles.halfInput}>
               <Controller
                 control={control}
-                rules={{ required: 'Last name is required' }}
+                rules={{ required: "Last name is required" }}
                 render={({ field: { onChange, onBlur, value } }) => (
                   <TextInput
                     label="Last Name *"
@@ -341,12 +445,12 @@ const EditEmployeeScreen = () => {
               )}
             </View>
           </View>
-          
+
           <Text style={styles.emailLabel}>Email: {employee.email}</Text>
-          
+
           <Controller
             control={control}
-            rules={{ required: 'Phone number is required' }}
+            rules={{ required: "Phone number is required" }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 label="Phone Number *"
@@ -365,7 +469,7 @@ const EditEmployeeScreen = () => {
           {errors.phone_number && (
             <HelperText type="error">{errors.phone_number.message}</HelperText>
           )}
-          
+
           <Text style={styles.inputLabel}>Date of Birth *</Text>
           <Button
             mode="outlined"
@@ -374,9 +478,9 @@ const EditEmployeeScreen = () => {
             icon="calendar"
             disabled={submitting}
           >
-            {format(dateOfBirth, 'MMMM d, yyyy')}
+            {format(dateOfBirth, "MMMM d, yyyy")}
           </Button>
-          
+
           {showDobPicker && (
             <DateTimePicker
               value={dateOfBirth}
@@ -386,29 +490,30 @@ const EditEmployeeScreen = () => {
               maximumDate={new Date()}
             />
           )}
-          
+
           <Text style={styles.inputLabel}>Gender *</Text>
           <Controller
             control={control}
             render={({ field: { onChange, value } }) => (
-              <SegmentedButtons
-                value={value}
-                onValueChange={onChange}
-                buttons={[
-                  { value: Gender.MALE, label: 'Male' },
-                  { value: Gender.FEMALE, label: 'Female' },
-                  { value: Gender.OTHER, label: 'Other' },
-                ]}
-                style={styles.segmentedButtons}
-                disabled={submitting}
-              />
+              <View style={{ opacity: submitting ? 0.5 : 1 }}>
+                <SegmentedButtons
+                  value={value}
+                  onValueChange={onChange}
+                  buttons={[
+                    { value: Gender.MALE, label: "Male" },
+                    { value: Gender.FEMALE, label: "Female" },
+                    { value: Gender.OTHER, label: "Other" },
+                  ]}
+                  style={styles.segmentedButtons}
+                />
+              </View>
             )}
             name="gender"
           />
-          
+
           <Controller
             control={control}
-            rules={{ required: 'Nationality is required' }}
+            rules={{ required: "Nationality is required" }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 label="Nationality *"
@@ -426,34 +531,37 @@ const EditEmployeeScreen = () => {
           {errors.nationality && (
             <HelperText type="error">{errors.nationality.message}</HelperText>
           )}
-          
+
           <Text style={styles.inputLabel}>Marital Status *</Text>
           <Controller
             control={control}
             render={({ field: { onChange, value } }) => (
-              <SegmentedButtons
-                value={value}
-                onValueChange={onChange}
-                buttons={[
-                  { value: MaritalStatus.SINGLE, label: 'Single' },
-                  { value: MaritalStatus.MARRIED, label: 'Married' },
-                  { value: MaritalStatus.DIVORCED, label: 'Divorced' },
-                  { value: MaritalStatus.WIDOWED, label: 'Widowed' },
-                ]}
-                style={styles.segmentedButtons}
-                disabled={submitting}
-              />
+              <View style={{ opacity: submitting ? 0.5 : 1 }}>
+                <SegmentedButtons
+                  value={value}
+                  onValueChange={onChange}
+                  buttons={[
+                    { value: MaritalStatus.SINGLE, label: "Single" },
+                    { value: MaritalStatus.MARRIED, label: "Married" },
+                    { value: MaritalStatus.DIVORCED, label: "Divorced" },
+                    { value: MaritalStatus.WIDOWED, label: "Widowed" },
+                  ]}
+                  style={styles.segmentedButtons}
+                />
+              </View>
             )}
             name="marital_status"
           />
-          
-          <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+
+          <Text
+            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
+          >
             Employment Details
           </Text>
-          
+
           <Controller
             control={control}
-            rules={{ required: 'Job title is required' }}
+            rules={{ required: "Job title is required" }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 label="Job Title *"
@@ -471,37 +579,38 @@ const EditEmployeeScreen = () => {
           {errors.job_title && (
             <HelperText type="error">{errors.job_title.message}</HelperText>
           )}
-          
+
           <Text style={styles.inputLabel}>Employment Type *</Text>
           <Controller
             control={control}
             render={({ field: { onChange, value } }) => (
-              <SegmentedButtons
-                value={value}
-                onValueChange={onChange}
-                buttons={[
-                  { value: EmploymentType.FULL_TIME, label: 'Full Time' },
-                  { value: EmploymentType.PART_TIME, label: 'Part Time' },
-                  { value: EmploymentType.CONTRACT, label: 'Contract' },
-                  { value: EmploymentType.TEMPORARY, label: 'Temporary' },
-                ]}
-                style={styles.segmentedButtons}
-                disabled={submitting}
-              />
+              <View style={{ opacity: submitting ? 0.5 : 1 }}>
+                <SegmentedButtons
+                  value={value}
+                  onValueChange={onChange}
+                  buttons={[
+                    { value: EmploymentType.FULL_TIME, label: "Full Time" },
+                    { value: EmploymentType.PART_TIME, label: "Part Time" },
+                    { value: EmploymentType.CONTRACT, label: "Contract" },
+                    { value: EmploymentType.TEMPORARY, label: "Temporary" },
+                  ]}
+                  style={styles.segmentedButtons}
+                />
+              </View>
             )}
             name="employment_type"
           />
-          
+
           <Controller
             control={control}
-            rules={{ 
-              required: 'Workload percentage is required',
-              validate: value => 
-                !isNaN(parseInt(value)) && 
-                parseInt(value) > 0 && 
-                parseInt(value) <= 100 
-                  ? true 
-                  : 'Workload must be between 1 and 100'
+            rules={{
+              required: "Workload percentage is required",
+              validate: (value) =>
+                !isNaN(parseInt(value)) &&
+                parseInt(value) > 0 &&
+                parseInt(value) <= 100
+                  ? true
+                  : "Workload must be between 1 and 100",
             }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
@@ -519,9 +628,11 @@ const EditEmployeeScreen = () => {
             name="workload_percentage"
           />
           {errors.workload_percentage && (
-            <HelperText type="error">{errors.workload_percentage.message}</HelperText>
+            <HelperText type="error">
+              {errors.workload_percentage.message}
+            </HelperText>
           )}
-          
+
           <Text style={styles.inputLabel}>Employment Start Date *</Text>
           <Button
             mode="outlined"
@@ -530,9 +641,9 @@ const EditEmployeeScreen = () => {
             icon="calendar"
             disabled={submitting}
           >
-            {format(employmentStartDate, 'MMMM d, yyyy')}
+            {format(employmentStartDate, "MMMM d, yyyy")}
           </Button>
-          
+
           {showStartDatePicker && (
             <DateTimePicker
               value={employmentStartDate}
@@ -541,7 +652,7 @@ const EditEmployeeScreen = () => {
               onChange={handleStartDateChange}
             />
           )}
-          
+
           <View style={styles.endDateContainer}>
             <Button
               mode={hasEndDate ? "contained" : "outlined"}
@@ -551,7 +662,7 @@ const EditEmployeeScreen = () => {
             >
               {hasEndDate ? "Has End Date" : "Add End Date"}
             </Button>
-            
+
             {hasEndDate && (
               <>
                 <Button
@@ -561,11 +672,11 @@ const EditEmployeeScreen = () => {
                   icon="calendar"
                   disabled={submitting}
                 >
-                  {employmentEndDate 
-                    ? format(employmentEndDate, 'MMMM d, yyyy') 
-                    : 'Select End Date'}
+                  {employmentEndDate
+                    ? format(employmentEndDate, "MMMM d, yyyy")
+                    : "Select End Date"}
                 </Button>
-                
+
                 {showEndDatePicker && (
                   <DateTimePicker
                     value={employmentEndDate || new Date()}
@@ -578,7 +689,7 @@ const EditEmployeeScreen = () => {
               </>
             )}
           </View>
-          
+
           <Controller
             control={control}
             render={({ field: { onChange, onBlur, value } }) => (
@@ -594,33 +705,39 @@ const EditEmployeeScreen = () => {
             )}
             name="education"
           />
-          
-          <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+
+          <Text
+            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
+          >
             Identification
           </Text>
-          
+
           <Text style={styles.inputLabel}>ID Type *</Text>
           <Controller
             control={control}
             render={({ field: { onChange, value } }) => (
-              <SegmentedButtons
-                value={value}
-                onValueChange={onChange}
-                buttons={[
-                  { value: IDType.ID_CARD, label: 'ID Card' },
-                  { value: IDType.PASSPORT, label: 'Passport' },
-                  { value: IDType.DRIVERS_LICENSE, label: 'Driver\'s License' },
-                ]}
-                style={styles.segmentedButtons}
-                disabled={submitting}
-              />
+              <View style={{ opacity: submitting ? 0.5 : 1 }}>
+                <SegmentedButtons
+                  value={value}
+                  onValueChange={onChange}
+                  buttons={[
+                    { value: IDType.ID_CARD, label: "ID Card" },
+                    { value: IDType.PASSPORT, label: "Passport" },
+                    {
+                      value: IDType.DRIVERS_LICENSE,
+                      label: "Driver's License",
+                    },
+                  ]}
+                  style={styles.segmentedButtons}
+                />
+              </View>
             )}
             name="id_type"
           />
-          
+
           <Controller
             control={control}
-            rules={{ required: 'AHV number is required' }}
+            rules={{ required: "AHV number is required" }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 label="AHV Number *"
@@ -638,14 +755,16 @@ const EditEmployeeScreen = () => {
           {errors.ahv_number && (
             <HelperText type="error">{errors.ahv_number.message}</HelperText>
           )}
-          
-          <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+
+          <Text
+            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
+          >
             Address
           </Text>
-          
+
           <Controller
             control={control}
-            rules={{ required: 'Address line 1 is required' }}
+            rules={{ required: "Address line 1 is required" }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 label="Address Line 1 *"
@@ -663,7 +782,7 @@ const EditEmployeeScreen = () => {
           {errors.address_line1 && (
             <HelperText type="error">{errors.address_line1.message}</HelperText>
           )}
-          
+
           <Controller
             control={control}
             render={({ field: { onChange, onBlur, value } }) => (
@@ -679,12 +798,12 @@ const EditEmployeeScreen = () => {
             )}
             name="address_line2"
           />
-          
+
           <View style={styles.row}>
             <View style={styles.halfInput}>
               <Controller
                 control={control}
-                rules={{ required: 'City is required' }}
+                rules={{ required: "City is required" }}
                 render={({ field: { onChange, onBlur, value } }) => (
                   <TextInput
                     label="City *"
@@ -700,14 +819,16 @@ const EditEmployeeScreen = () => {
                 name="address_city"
               />
               {errors.address_city && (
-                <HelperText type="error">{errors.address_city.message}</HelperText>
+                <HelperText type="error">
+                  {errors.address_city.message}
+                </HelperText>
               )}
             </View>
-            
+
             <View style={styles.halfInput}>
               <Controller
                 control={control}
-                rules={{ required: 'State is required' }}
+                rules={{ required: "State is required" }}
                 render={({ field: { onChange, onBlur, value } }) => (
                   <TextInput
                     label="State/Province *"
@@ -723,16 +844,18 @@ const EditEmployeeScreen = () => {
                 name="address_state"
               />
               {errors.address_state && (
-                <HelperText type="error">{errors.address_state.message}</HelperText>
+                <HelperText type="error">
+                  {errors.address_state.message}
+                </HelperText>
               )}
             </View>
           </View>
-          
+
           <View style={styles.row}>
             <View style={styles.halfInput}>
               <Controller
                 control={control}
-                rules={{ required: 'Postal code is required' }}
+                rules={{ required: "Postal code is required" }}
                 render={({ field: { onChange, onBlur, value } }) => (
                   <TextInput
                     label="Postal Code *"
@@ -748,14 +871,16 @@ const EditEmployeeScreen = () => {
                 name="address_postal_code"
               />
               {errors.address_postal_code && (
-                <HelperText type="error">{errors.address_postal_code.message}</HelperText>
+                <HelperText type="error">
+                  {errors.address_postal_code.message}
+                </HelperText>
               )}
             </View>
-            
+
             <View style={styles.halfInput}>
               <Controller
                 control={control}
-                rules={{ required: 'Country is required' }}
+                rules={{ required: "Country is required" }}
                 render={({ field: { onChange, onBlur, value } }) => (
                   <TextInput
                     label="Country *"
@@ -771,18 +896,22 @@ const EditEmployeeScreen = () => {
                 name="address_country"
               />
               {errors.address_country && (
-                <HelperText type="error">{errors.address_country.message}</HelperText>
+                <HelperText type="error">
+                  {errors.address_country.message}
+                </HelperText>
               )}
             </View>
           </View>
-          
-          <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+
+          <Text
+            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
+          >
             Bank Details
           </Text>
-          
+
           <Controller
             control={control}
-            rules={{ required: 'Bank name is required' }}
+            rules={{ required: "Bank name is required" }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 label="Bank Name *"
@@ -800,10 +929,10 @@ const EditEmployeeScreen = () => {
           {errors.bank_name && (
             <HelperText type="error">{errors.bank_name.message}</HelperText>
           )}
-          
+
           <Controller
             control={control}
-            rules={{ required: 'Account number is required' }}
+            rules={{ required: "Account number is required" }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 label="Account Number *"
@@ -819,12 +948,14 @@ const EditEmployeeScreen = () => {
             name="account_number"
           />
           {errors.account_number && (
-            <HelperText type="error">{errors.account_number.message}</HelperText>
+            <HelperText type="error">
+              {errors.account_number.message}
+            </HelperText>
           )}
-          
+
           <Controller
             control={control}
-            rules={{ required: 'IBAN is required' }}
+            rules={{ required: "IBAN is required" }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 label="IBAN *"
@@ -842,10 +973,10 @@ const EditEmployeeScreen = () => {
           {errors.iban && (
             <HelperText type="error">{errors.iban.message}</HelperText>
           )}
-          
+
           <Controller
             control={control}
-            rules={{ required: 'SWIFT code is required' }}
+            rules={{ required: "SWIFT code is required" }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 label="SWIFT Code *"
@@ -863,11 +994,13 @@ const EditEmployeeScreen = () => {
           {errors.swift_code && (
             <HelperText type="error">{errors.swift_code.message}</HelperText>
           )}
-          
-          <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+
+          <Text
+            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
+          >
             Additional Information
           </Text>
-          
+
           <Controller
             control={control}
             render={({ field: { onChange, onBlur, value } }) => (
@@ -885,7 +1018,7 @@ const EditEmployeeScreen = () => {
             )}
             name="comments"
           />
-          
+
           <Button
             mode="contained"
             onPress={handleSubmit(onSubmit)}
@@ -897,13 +1030,13 @@ const EditEmployeeScreen = () => {
           </Button>
         </ScrollView>
       </KeyboardAvoidingView>
-      
+
       <Snackbar
         visible={snackbarVisible}
         onDismiss={() => setSnackbarVisible(false)}
         duration={3000}
         action={{
-          label: 'OK',
+          label: "OK",
           onPress: () => setSnackbarVisible(false),
         }}
       >
@@ -929,7 +1062,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginTop: 24,
     marginBottom: 16,
   },
@@ -937,17 +1070,17 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
   },
   halfInput: {
-    width: '48%',
+    width: "48%",
   },
   emailLabel: {
     fontSize: 14,
     marginBottom: 16,
     opacity: 0.7,
-    fontStyle: 'italic',
+    fontStyle: "italic",
   },
   inputLabel: {
     fontSize: 14,
@@ -972,8 +1105,8 @@ const styles = StyleSheet.create({
   },
   errorContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: 20,
   },
   button: {

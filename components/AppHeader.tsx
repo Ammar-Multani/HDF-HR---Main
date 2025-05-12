@@ -39,7 +39,16 @@ const AppHeader = ({ title, showBackButton = false, showMenu = true }: AppHeader
 
   return (
     <Appbar.Header
-      style={[styles.header, { backgroundColor: theme.colors.primary }]}
+      style={[
+        styles.header,
+        { 
+          backgroundColor: theme.colors.primary,
+          height: 25, 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          marginBottom: 20,
+        }
+      ]}
     >
       {showBackButton && (
         <Appbar.BackAction
@@ -49,7 +58,11 @@ const AppHeader = ({ title, showBackButton = false, showMenu = true }: AppHeader
       )}
       <Appbar.Content
         title={title}
-        titleStyle={{ color: theme.colors.surface, fontWeight: 'bold' }}
+        titleStyle={{ 
+          color: theme.colors.surface, 
+          fontWeight: 'bold',
+          fontSize: 20 // Added font size
+        }}
       />
       {showMenu && (
         <View style={styles.menuContainer}>
@@ -59,7 +72,7 @@ const AppHeader = ({ title, showBackButton = false, showMenu = true }: AppHeader
             anchor={
               <TouchableOpacity onPress={openMenu}>
                 <Avatar.Text
-                  size={40}
+                  size={36} // Reduced avatar size
                   label={getInitials()}
                   style={{ backgroundColor: theme.colors.tertiary }}
                 />

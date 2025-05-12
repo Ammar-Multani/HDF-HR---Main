@@ -1,17 +1,38 @@
-
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform, Alert } from 'react-native';
-import { Text, TextInput, Button, useTheme, SegmentedButtons, Snackbar, HelperText } from 'react-native-paper';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import { useForm, Controller } from 'react-hook-form';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { format } from 'date-fns';
-import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../contexts/AuthContext';
-import AppHeader from '../../components/AppHeader';
-import LoadingIndicator from '../../components/LoadingIndicator';
-import { Gender, MaritalStatus, IDType, EmploymentType, UserRole, UserStatus } from '../../types';
+import React, { useState, useEffect } from "react";
+import {
+  StyleSheet,
+  View,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
+} from "react-native";
+import {
+  Text,
+  TextInput,
+  Button,
+  useTheme,
+  SegmentedButtons,
+  Snackbar,
+  HelperText,
+} from "react-native-paper";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
+import { useForm, Controller } from "react-hook-form";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import { format } from "date-fns";
+import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../contexts/AuthContext";
+import AppHeader from "../../components/AppHeader";
+import LoadingIndicator from "../../components/LoadingIndicator";
+import {
+  Gender,
+  MaritalStatus,
+  IDType,
+  EmploymentType,
+  UserRole,
+  UserStatus,
+} from "../../types";
 
 interface EmployeeFormData {
   first_name: string;
@@ -42,70 +63,79 @@ interface EmployeeFormData {
   comments: string;
 }
 
+// Default password for new employees - they will change it via reset password flow
+const DEFAULT_PASSWORD = "Password123!";
+
 const CreateEmployeeScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
   const { user } = useAuth();
-  
+
   const [loading, setLoading] = useState(false);
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [showDobPicker, setShowDobPicker] = useState(false);
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [snackbarMessage, setSnackbarMessage] = useState("");
 
-  const { control, handleSubmit, formState: { errors }, watch, setValue } = useForm<EmployeeFormData>({
+  const {
+    control,
+    handleSubmit,
+    formState: { errors },
+    watch,
+    setValue,
+  } = useForm<EmployeeFormData>({
     defaultValues: {
-      first_name: '',
-      last_name: '',
-      email: '',
-      phone_number: '',
+      first_name: "",
+      last_name: "",
+      email: "",
+      phone_number: "",
       date_of_birth: new Date(1990, 0, 1),
       gender: Gender.MALE,
-      nationality: '',
+      nationality: "",
       marital_status: MaritalStatus.SINGLE,
       id_type: IDType.ID_CARD,
-      ahv_number: '',
-      job_title: '',
+      ahv_number: "",
+      job_title: "",
       employment_type: EmploymentType.FULL_TIME,
-      workload_percentage: '100',
+      workload_percentage: "100",
       employment_start_date: new Date(),
-      education: '',
-      address_line1: '',
-      address_line2: '',
-      address_city: '',
-      address_state: '',
-      address_postal_code: '',
-      address_country: '',
-      bank_name: '',
-      account_number: '',
-      iban: '',
-      swift_code: '',
-      comments: '',
+      education: "",
+      address_line1: "",
+      address_line2: "",
+      address_city: "",
+      address_state: "",
+      address_postal_code: "",
+      address_country: "",
+      bank_name: "",
+      account_number: "",
+      iban: "",
+      swift_code: "",
+      comments: "",
     },
   });
 
-  const dateOfBirth = watch('date_of_birth');
-  const employmentStartDate = watch('employment_start_date');
+  const dateOfBirth = watch("date_of_birth");
+  const employmentStartDate = watch("employment_start_date");
 
   const fetchCompanyId = async () => {
     if (!user) return;
-    
+
     try {
       const { data, error } = await supabase
-        .from('company_user')
-        .select('company_id')
-        .eq('id', user.id)
+        .from("company_user")
+        .select("company_id")
+        .eq("id", user.id)
         .single();
-      
+
       if (error) {
-        console.error('Error fetching company ID:', error);
+        console.error("Error fetching company ID:", error);
         return;
       }
-      
+
       setCompanyId(data.company_id);
     } catch (error) {
-      console.error('Error fetching company ID:', error);
+      console.error("Error fetching company ID:", error);
     }
   };
 
@@ -116,53 +146,68 @@ const CreateEmployeeScreen = () => {
   const handleDobChange = (event: any, selectedDate?: Date) => {
     setShowDobPicker(false);
     if (selectedDate) {
-      setValue('date_of_birth', selectedDate);
+      setValue("date_of_birth", selectedDate);
     }
   };
 
   const handleStartDateChange = (event: any, selectedDate?: Date) => {
     setShowStartDatePicker(false);
     if (selectedDate) {
-      setValue('employment_start_date', selectedDate);
+      setValue("employment_start_date", selectedDate);
     }
   };
 
   const onSubmit = async (data: EmployeeFormData) => {
     try {
       if (!user || !companyId) {
-        setSnackbarMessage('User or company information not available');
+        setSnackbarMessage("User or company information not available");
         setSnackbarVisible(true);
         return;
       }
-      
+
       setLoading(true);
-      
+
       // Validate workload percentage
       const workloadPercentage = parseInt(data.workload_percentage);
-      if (isNaN(workloadPercentage) || workloadPercentage <= 0 || workloadPercentage > 100) {
-        setSnackbarMessage('Workload percentage must be between 1 and 100');
+      if (
+        isNaN(workloadPercentage) ||
+        workloadPercentage <= 0 ||
+        workloadPercentage > 100
+      ) {
+        setSnackbarMessage("Workload percentage must be between 1 and 100");
         setSnackbarVisible(true);
         setLoading(false);
         return;
       }
-      
+
+      // Convert employment_type to boolean (true for full-time/part-time, false for contract/temporary)
+      const isEmployeeType =
+        data.employment_type === EmploymentType.FULL_TIME ||
+        data.employment_type === EmploymentType.PART_TIME;
+
       // Create auth user
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
-        email_confirm: true,
-        user_metadata: {
-          role: UserRole.EMPLOYEE,
-          company_id: companyId,
+        password: DEFAULT_PASSWORD,
+        options: {
+          data: {
+            role: UserRole.EMPLOYEE,
+            company_id: companyId,
+          },
         },
       });
-      
+
       if (authError) {
         throw authError;
       }
-      
+
+      if (!authData?.user) {
+        throw new Error("Failed to create employee user");
+      }
+
       // Create employee record
       const { error: employeeError } = await supabase
-        .from('company_user')
+        .from("company_user")
         .insert([
           {
             id: authData.user.id,
@@ -181,7 +226,7 @@ const CreateEmployeeScreen = () => {
             marital_status: data.marital_status,
             gender: data.gender,
             employment_start_date: data.employment_start_date.toISOString(),
-            employment_type: data.employment_type,
+            employment_type: isEmployeeType,
             workload_percentage: workloadPercentage,
             job_title: data.job_title,
             education: data.education,
@@ -202,33 +247,33 @@ const CreateEmployeeScreen = () => {
             comments: data.comments || null,
           },
         ]);
-      
+
       if (employeeError) {
         throw employeeError;
       }
-      
+
       // Send magic link to the employee
       const { error: magicLinkError } = await supabase.auth.signInWithOtp({
         email: data.email,
         options: {
-          emailRedirectTo: 'businessmanagementapp://auth/callback',
+          emailRedirectTo: "businessmanagementapp://auth/callback",
         },
       });
-      
+
       if (magicLinkError) {
         throw magicLinkError;
       }
-      
-      setSnackbarMessage('Employee created successfully and invitation sent');
+
+      setSnackbarMessage("Employee created successfully and invitation sent");
       setSnackbarVisible(true);
-      
+
       // Navigate back after a short delay
       setTimeout(() => {
         navigation.goBack();
       }, 2000);
     } catch (error: any) {
-      console.error('Error creating employee:', error);
-      setSnackbarMessage(error.message || 'Failed to create employee');
+      console.error("Error creating employee:", error);
+      setSnackbarMessage(error.message || "Failed to create employee");
       setSnackbarVisible(true);
     } finally {
       setLoading(false);
@@ -240,23 +285,30 @@ const CreateEmployeeScreen = () => {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
       <AppHeader title="Create Employee" showBackButton />
-      
+
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardAvoidingView}
       >
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+        >
+          <Text
+            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
+          >
             Personal Information
           </Text>
-          
+
           <View style={styles.row}>
             <View style={styles.halfInput}>
               <Controller
                 control={control}
-                rules={{ required: 'First name is required' }}
+                rules={{ required: "First name is required" }}
                 render={({ field: { onChange, onBlur, value } }) => (
                   <TextInput
                     label="First Name *"
@@ -272,14 +324,16 @@ const CreateEmployeeScreen = () => {
                 name="first_name"
               />
               {errors.first_name && (
-                <HelperText type="error">{errors.first_name.message}</HelperText>
+                <HelperText type="error">
+                  {errors.first_name.message}
+                </HelperText>
               )}
             </View>
-            
+
             <View style={styles.halfInput}>
               <Controller
                 control={control}
-                rules={{ required: 'Last name is required' }}
+                rules={{ required: "Last name is required" }}
                 render={({ field: { onChange, onBlur, value } }) => (
                   <TextInput
                     label="Last Name *"
@@ -299,14 +353,14 @@ const CreateEmployeeScreen = () => {
               )}
             </View>
           </View>
-          
+
           <Controller
             control={control}
             rules={{
-              required: 'Email is required',
+              required: "Email is required",
               pattern: {
                 value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                message: 'Invalid email address',
+                message: "Invalid email address",
               },
             }}
             render={({ field: { onChange, onBlur, value } }) => (
@@ -328,10 +382,10 @@ const CreateEmployeeScreen = () => {
           {errors.email && (
             <HelperText type="error">{errors.email.message}</HelperText>
           )}
-          
+
           <Controller
             control={control}
-            rules={{ required: 'Phone number is required' }}
+            rules={{ required: "Phone number is required" }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 label="Phone Number *"
@@ -350,7 +404,7 @@ const CreateEmployeeScreen = () => {
           {errors.phone_number && (
             <HelperText type="error">{errors.phone_number.message}</HelperText>
           )}
-          
+
           <Text style={styles.inputLabel}>Date of Birth *</Text>
           <Button
             mode="outlined"
@@ -358,9 +412,9 @@ const CreateEmployeeScreen = () => {
             style={styles.dateButton}
             icon="calendar"
           >
-            {format(dateOfBirth, 'MMMM d, yyyy')}
+            {format(dateOfBirth, "MMMM d, yyyy")}
           </Button>
-          
+
           {showDobPicker && (
             <DateTimePicker
               value={dateOfBirth}
@@ -370,7 +424,7 @@ const CreateEmployeeScreen = () => {
               maximumDate={new Date()}
             />
           )}
-          
+
           <Text style={styles.inputLabel}>Gender *</Text>
           <Controller
             control={control}
@@ -379,19 +433,19 @@ const CreateEmployeeScreen = () => {
                 value={value}
                 onValueChange={onChange}
                 buttons={[
-                  { value: Gender.MALE, label: 'Male' },
-                  { value: Gender.FEMALE, label: 'Female' },
-                  { value: Gender.OTHER, label: 'Other' },
+                  { value: Gender.MALE, label: "Male" },
+                  { value: Gender.FEMALE, label: "Female" },
+                  { value: Gender.OTHER, label: "Other" },
                 ]}
                 style={styles.segmentedButtons}
               />
             )}
             name="gender"
           />
-          
+
           <Controller
             control={control}
-            rules={{ required: 'Nationality is required' }}
+            rules={{ required: "Nationality is required" }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 label="Nationality *"
@@ -409,7 +463,7 @@ const CreateEmployeeScreen = () => {
           {errors.nationality && (
             <HelperText type="error">{errors.nationality.message}</HelperText>
           )}
-          
+
           <Text style={styles.inputLabel}>Marital Status *</Text>
           <Controller
             control={control}
@@ -418,24 +472,26 @@ const CreateEmployeeScreen = () => {
                 value={value}
                 onValueChange={onChange}
                 buttons={[
-                  { value: MaritalStatus.SINGLE, label: 'Single' },
-                  { value: MaritalStatus.MARRIED, label: 'Married' },
-                  { value: MaritalStatus.DIVORCED, label: 'Divorced' },
-                  { value: MaritalStatus.WIDOWED, label: 'Widowed' },
+                  { value: MaritalStatus.SINGLE, label: "Single" },
+                  { value: MaritalStatus.MARRIED, label: "Married" },
+                  { value: MaritalStatus.DIVORCED, label: "Divorced" },
+                  { value: MaritalStatus.WIDOWED, label: "Widowed" },
                 ]}
                 style={styles.segmentedButtons}
               />
             )}
             name="marital_status"
           />
-          
-          <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+
+          <Text
+            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
+          >
             Employment Details
           </Text>
-          
+
           <Controller
             control={control}
-            rules={{ required: 'Job title is required' }}
+            rules={{ required: "Job title is required" }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 label="Job Title *"
@@ -453,7 +509,7 @@ const CreateEmployeeScreen = () => {
           {errors.job_title && (
             <HelperText type="error">{errors.job_title.message}</HelperText>
           )}
-          
+
           <Text style={styles.inputLabel}>Employment Type *</Text>
           <Controller
             control={control}
@@ -462,27 +518,27 @@ const CreateEmployeeScreen = () => {
                 value={value}
                 onValueChange={onChange}
                 buttons={[
-                  { value: EmploymentType.FULL_TIME, label: 'Full Time' },
-                  { value: EmploymentType.PART_TIME, label: 'Part Time' },
-                  { value: EmploymentType.CONTRACT, label: 'Contract' },
-                  { value: EmploymentType.TEMPORARY, label: 'Temporary' },
+                  { value: EmploymentType.FULL_TIME, label: "Full Time" },
+                  { value: EmploymentType.PART_TIME, label: "Part Time" },
+                  { value: EmploymentType.CONTRACT, label: "Contract" },
+                  { value: EmploymentType.TEMPORARY, label: "Temporary" },
                 ]}
                 style={styles.segmentedButtons}
               />
             )}
             name="employment_type"
           />
-          
+
           <Controller
             control={control}
-            rules={{ 
-              required: 'Workload percentage is required',
-              validate: value => 
-                !isNaN(parseInt(value)) && 
-                parseInt(value) > 0 && 
-                parseInt(value) <= 100 
-                  ? true 
-                  : 'Workload must be between 1 and 100'
+            rules={{
+              required: "Workload percentage is required",
+              validate: (value) =>
+                !isNaN(parseInt(value)) &&
+                parseInt(value) > 0 &&
+                parseInt(value) <= 100
+                  ? true
+                  : "Workload must be between 1 and 100",
             }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
@@ -500,9 +556,11 @@ const CreateEmployeeScreen = () => {
             name="workload_percentage"
           />
           {errors.workload_percentage && (
-            <HelperText type="error">{errors.workload_percentage.message}</HelperText>
+            <HelperText type="error">
+              {errors.workload_percentage.message}
+            </HelperText>
           )}
-          
+
           <Text style={styles.inputLabel}>Employment Start Date *</Text>
           <Button
             mode="outlined"
@@ -510,9 +568,9 @@ const CreateEmployeeScreen = () => {
             style={styles.dateButton}
             icon="calendar"
           >
-            {format(employmentStartDate, 'MMMM d, yyyy')}
+            {format(employmentStartDate, "MMMM d, yyyy")}
           </Button>
-          
+
           {showStartDatePicker && (
             <DateTimePicker
               value={employmentStartDate}
@@ -521,7 +579,7 @@ const CreateEmployeeScreen = () => {
               onChange={handleStartDateChange}
             />
           )}
-          
+
           <Controller
             control={control}
             render={({ field: { onChange, onBlur, value } }) => (
@@ -537,11 +595,13 @@ const CreateEmployeeScreen = () => {
             )}
             name="education"
           />
-          
-          <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+
+          <Text
+            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
+          >
             Identification
           </Text>
-          
+
           <Text style={styles.inputLabel}>ID Type *</Text>
           <Controller
             control={control}
@@ -550,19 +610,19 @@ const CreateEmployeeScreen = () => {
                 value={value}
                 onValueChange={onChange}
                 buttons={[
-                  { value: IDType.ID_CARD, label: 'ID Card' },
-                  { value: IDType.PASSPORT, label: 'Passport' },
-                  { value: IDType.DRIVERS_LICENSE, label: 'Driver\'s License' },
+                  { value: IDType.ID_CARD, label: "ID Card" },
+                  { value: IDType.PASSPORT, label: "Passport" },
+                  { value: IDType.DRIVERS_LICENSE, label: "Driver's License" },
                 ]}
                 style={styles.segmentedButtons}
               />
             )}
             name="id_type"
           />
-          
+
           <Controller
             control={control}
-            rules={{ required: 'AHV number is required' }}
+            rules={{ required: "AHV number is required" }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 label="AHV Number *"
@@ -580,14 +640,16 @@ const CreateEmployeeScreen = () => {
           {errors.ahv_number && (
             <HelperText type="error">{errors.ahv_number.message}</HelperText>
           )}
-          
-          <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+
+          <Text
+            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
+          >
             Address
           </Text>
-          
+
           <Controller
             control={control}
-            rules={{ required: 'Address line 1 is required' }}
+            rules={{ required: "Address line 1 is required" }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 label="Address Line 1 *"
@@ -605,7 +667,7 @@ const CreateEmployeeScreen = () => {
           {errors.address_line1 && (
             <HelperText type="error">{errors.address_line1.message}</HelperText>
           )}
-          
+
           <Controller
             control={control}
             render={({ field: { onChange, onBlur, value } }) => (
@@ -621,12 +683,12 @@ const CreateEmployeeScreen = () => {
             )}
             name="address_line2"
           />
-          
+
           <View style={styles.row}>
             <View style={styles.halfInput}>
               <Controller
                 control={control}
-                rules={{ required: 'City is required' }}
+                rules={{ required: "City is required" }}
                 render={({ field: { onChange, onBlur, value } }) => (
                   <TextInput
                     label="City *"
@@ -642,14 +704,16 @@ const CreateEmployeeScreen = () => {
                 name="address_city"
               />
               {errors.address_city && (
-                <HelperText type="error">{errors.address_city.message}</HelperText>
+                <HelperText type="error">
+                  {errors.address_city.message}
+                </HelperText>
               )}
             </View>
-            
+
             <View style={styles.halfInput}>
               <Controller
                 control={control}
-                rules={{ required: 'State is required' }}
+                rules={{ required: "State is required" }}
                 render={({ field: { onChange, onBlur, value } }) => (
                   <TextInput
                     label="State/Province *"
@@ -665,16 +729,18 @@ const CreateEmployeeScreen = () => {
                 name="address_state"
               />
               {errors.address_state && (
-                <HelperText type="error">{errors.address_state.message}</HelperText>
+                <HelperText type="error">
+                  {errors.address_state.message}
+                </HelperText>
               )}
             </View>
           </View>
-          
+
           <View style={styles.row}>
             <View style={styles.halfInput}>
               <Controller
                 control={control}
-                rules={{ required: 'Postal code is required' }}
+                rules={{ required: "Postal code is required" }}
                 render={({ field: { onChange, onBlur, value } }) => (
                   <TextInput
                     label="Postal Code *"
@@ -690,14 +756,16 @@ const CreateEmployeeScreen = () => {
                 name="address_postal_code"
               />
               {errors.address_postal_code && (
-                <HelperText type="error">{errors.address_postal_code.message}</HelperText>
+                <HelperText type="error">
+                  {errors.address_postal_code.message}
+                </HelperText>
               )}
             </View>
-            
+
             <View style={styles.halfInput}>
               <Controller
                 control={control}
-                rules={{ required: 'Country is required' }}
+                rules={{ required: "Country is required" }}
                 render={({ field: { onChange, onBlur, value } }) => (
                   <TextInput
                     label="Country *"
@@ -713,18 +781,22 @@ const CreateEmployeeScreen = () => {
                 name="address_country"
               />
               {errors.address_country && (
-                <HelperText type="error">{errors.address_country.message}</HelperText>
+                <HelperText type="error">
+                  {errors.address_country.message}
+                </HelperText>
               )}
             </View>
           </View>
-          
-          <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+
+          <Text
+            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
+          >
             Bank Details
           </Text>
-          
+
           <Controller
             control={control}
-            rules={{ required: 'Bank name is required' }}
+            rules={{ required: "Bank name is required" }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 label="Bank Name *"
@@ -742,10 +814,10 @@ const CreateEmployeeScreen = () => {
           {errors.bank_name && (
             <HelperText type="error">{errors.bank_name.message}</HelperText>
           )}
-          
+
           <Controller
             control={control}
-            rules={{ required: 'Account number is required' }}
+            rules={{ required: "Account number is required" }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 label="Account Number *"
@@ -761,12 +833,14 @@ const CreateEmployeeScreen = () => {
             name="account_number"
           />
           {errors.account_number && (
-            <HelperText type="error">{errors.account_number.message}</HelperText>
+            <HelperText type="error">
+              {errors.account_number.message}
+            </HelperText>
           )}
-          
+
           <Controller
             control={control}
-            rules={{ required: 'IBAN is required' }}
+            rules={{ required: "IBAN is required" }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 label="IBAN *"
@@ -784,10 +858,10 @@ const CreateEmployeeScreen = () => {
           {errors.iban && (
             <HelperText type="error">{errors.iban.message}</HelperText>
           )}
-          
+
           <Controller
             control={control}
-            rules={{ required: 'SWIFT code is required' }}
+            rules={{ required: "SWIFT code is required" }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 label="SWIFT Code *"
@@ -805,11 +879,13 @@ const CreateEmployeeScreen = () => {
           {errors.swift_code && (
             <HelperText type="error">{errors.swift_code.message}</HelperText>
           )}
-          
-          <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+
+          <Text
+            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
+          >
             Additional Information
           </Text>
-          
+
           <Controller
             control={control}
             render={({ field: { onChange, onBlur, value } }) => (
@@ -827,7 +903,7 @@ const CreateEmployeeScreen = () => {
             )}
             name="comments"
           />
-          
+
           <Button
             mode="contained"
             onPress={handleSubmit(onSubmit)}
@@ -839,13 +915,13 @@ const CreateEmployeeScreen = () => {
           </Button>
         </ScrollView>
       </KeyboardAvoidingView>
-      
+
       <Snackbar
         visible={snackbarVisible}
         onDismiss={() => setSnackbarVisible(false)}
         duration={3000}
         action={{
-          label: 'OK',
+          label: "OK",
           onPress: () => setSnackbarVisible(false),
         }}
       >
@@ -871,7 +947,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginTop: 24,
     marginBottom: 16,
   },
@@ -879,11 +955,11 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
   },
   halfInput: {
-    width: '48%',
+    width: "48%",
   },
   inputLabel: {
     fontSize: 14,

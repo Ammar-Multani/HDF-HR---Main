@@ -7,15 +7,24 @@ import {
   ReactNode,
 } from "react";
 import { supabase } from "../lib/supabase";
-import { Session } from "@supabase/supabase-js";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { UserRole } from "../types";
+import {
+  hashPassword,
+  validatePassword,
+  generateResetToken,
+} from "../utils/auth";
 
 // Default super admin credentials
 const DEFAULT_ADMIN_EMAIL = "admin@businessmanagement.com";
 const DEFAULT_ADMIN_PASSWORD = "Admin@123";
 
+// Auth token constants
+const AUTH_TOKEN_KEY = "auth_token";
+const USER_DATA_KEY = "user_data";
+
 interface AuthContextType {
-  session: Session | null;
+  session: any | null;
   user: any | null;
   userRole: UserRole | null;
   loading: boolean;
@@ -34,43 +43,55 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<any | null>(null);
   const [user, setUser] = useState<any | null>(null);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
   const [isFirstTimeSetup, setIsFirstTimeSetup] = useState(false);
 
+  // Function to handle user authentication
+  const authenticate = async (token: string, userData: any) => {
+    setSession({ access_token: token });
+    setUser(userData);
+
+    // Store auth data in AsyncStorage
+    await AsyncStorage.setItem(AUTH_TOKEN_KEY, token);
+    await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
+
+    // Fetch user role
+    if (userData?.id) {
+      await fetchUserRole(userData.id);
+    }
+
+    setLoading(false);
+  };
+
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchUserRole(session.user.id);
-      } else {
-        checkIfFirstTimeSetup();
+    // Check for existing session in AsyncStorage
+    const loadStoredSession = async () => {
+      try {
+        const storedToken = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
+        const storedUserData = await AsyncStorage.getItem(USER_DATA_KEY);
+
+        if (storedToken && storedUserData) {
+          const userData = JSON.parse(storedUserData);
+          setSession({ access_token: storedToken });
+          setUser(userData);
+
+          if (userData?.id) {
+            await fetchUserRole(userData.id);
+          }
+        } else {
+          await checkIfFirstTimeSetup();
+        }
+      } catch (error) {
+        console.error("Error loading stored session:", error);
+      } finally {
         setLoading(false);
       }
-    });
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchUserRole(session.user.id);
-      } else {
-        setUserRole(null);
-        checkIfFirstTimeSetup();
-        setLoading(false);
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
     };
+
+    loadStoredSession();
   }, []);
 
   const checkIfFirstTimeSetup = async () => {
@@ -94,38 +115,41 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const setupDefaultAdmin = async () => {
     setLoading(true);
     try {
-      // First, create the user in auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      // Hash the password
+      const hashedPassword = await hashPassword(DEFAULT_ADMIN_PASSWORD);
+
+      // Create the default admin in your custom users table
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .insert({
+          email: DEFAULT_ADMIN_EMAIL,
+          password_hash: hashedPassword,
+          status: "active",
+        })
+        .select("id")
+        .single();
+
+      if (userError) {
+        setLoading(false);
+        return { error: userError };
+      }
+
+      // Add the user to the admin table with super admin role
+      const { error: adminError } = await supabase.from("admin").insert({
+        id: userData.id,
         email: DEFAULT_ADMIN_EMAIL,
-        password: DEFAULT_ADMIN_PASSWORD,
+        role: UserRole.SUPER_ADMIN,
+        name: "System Administrator",
+        status: "active",
       });
 
-      if (authError) {
+      if (adminError) {
         setLoading(false);
-        return { error: authError };
+        return { error: adminError };
       }
 
-      if (authData.user) {
-        // Then, add the user to the admin table with super admin role
-        const { error: adminError } = await supabase.from("admin").insert({
-          id: authData.user.id,
-          email: DEFAULT_ADMIN_EMAIL,
-          role: UserRole.SUPER_ADMIN,
-          name: "System Administrator",
-          status: "active",
-        });
-
-        if (adminError) {
-          setLoading(false);
-          return { error: adminError };
-        }
-
-        // Auto sign in with the default admin
-        return await signIn(DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_PASSWORD);
-      }
-
-      setLoading(false);
-      return { error: new Error("Failed to create default admin") };
+      // Auto sign in with the default admin
+      return await signIn(DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_PASSWORD);
     } catch (error) {
       setLoading(false);
       return { error };
@@ -134,6 +158,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const fetchUserRole = async (userId: string) => {
     try {
+      console.log("Fetching user role for ID:", userId);
+
       // First check if user is a super admin
       const { data: adminData, error: adminError } = await supabase
         .from("admin")
@@ -141,7 +167,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .eq("id", userId)
         .single();
 
+      console.log("Admin check result:", { adminData, adminError });
+
       if (adminData) {
+        console.log("User is an admin with role:", adminData.role);
         setUserRole(adminData.role as UserRole);
         setLoading(false);
         return;
@@ -154,9 +183,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .eq("id", userId)
         .single();
 
+      console.log("Company user check result:", {
+        companyUserData,
+        companyUserError,
+      });
+
       if (companyUserData) {
+        console.log("User is a company user with role:", companyUserData.role);
         setUserRole(companyUserData.role as UserRole);
       } else {
+        console.log("User has no role assigned");
         setUserRole(null);
       }
     } catch (error) {
@@ -169,46 +205,192 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signIn = async (email: string, password: string) => {
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    setLoading(false);
-    return { error };
+    try {
+      // Find user by email
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .select("id, email, password_hash, status")
+        .eq("email", email)
+        .single();
+
+      if (userError || !userData) {
+        return { error: { message: "Invalid email or password" } };
+      }
+
+      // Validate password
+      const isPasswordValid = await validatePassword(
+        password,
+        userData.password_hash
+      );
+
+      if (!isPasswordValid) {
+        return { error: { message: "Invalid email or password" } };
+      }
+
+      if (userData.status !== "active") {
+        return { error: { message: "Account is not active" } };
+      }
+
+      // Update last login time
+      await supabase
+        .from("users")
+        .update({ last_login: new Date().toISOString() })
+        .eq("id", userData.id);
+
+      // Generate a token (in a real implementation, do this server-side)
+      const token = `user-token-${userData.id}-${Date.now()}`;
+
+      // Remove password_hash from user data before storing
+      const { password_hash, ...userDataWithoutPassword } = userData;
+
+      await authenticate(token, userDataWithoutPassword);
+
+      return { error: null };
+    } catch (error: any) {
+      console.error("Sign in error:", error);
+      return { error };
+    } finally {
+      setLoading(false);
+    }
   };
 
   const signUp = async (email: string, password: string) => {
     setLoading(true);
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
-    setLoading(false);
-    return { data, error };
+    try {
+      // Check if user already exists
+      const { data: existingUser } = await supabase
+        .from("users")
+        .select("id")
+        .eq("email", email)
+        .single();
+
+      if (existingUser) {
+        return {
+          error: { message: "User with this email already exists" },
+          data: null,
+        };
+      }
+
+      // Hash the password
+      const hashedPassword = await hashPassword(password);
+
+      // Insert new user
+      const { data, error } = await supabase
+        .from("users")
+        .insert({
+          email,
+          password_hash: hashedPassword,
+          status: "pending_confirmation", // Require email verification
+        })
+        .select("id, email, status")
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      // In a real app, send verification email here
+
+      return { data, error: null };
+    } catch (error: any) {
+      console.error("Sign up error:", error);
+      return { data: null, error };
+    } finally {
+      setLoading(false);
+    }
   };
 
   const signOut = async () => {
     setLoading(true);
-    await supabase.auth.signOut();
-    setLoading(false);
+    try {
+      // Clear stored session
+      await AsyncStorage.removeItem(AUTH_TOKEN_KEY);
+      await AsyncStorage.removeItem(USER_DATA_KEY);
+
+      // Reset state
+      setSession(null);
+      setUser(null);
+      setUserRole(null);
+    } catch (error) {
+      console.error("Sign out error:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const forgotPassword = async (email: string) => {
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: "businessmanagementapp://auth/reset-password",
-    });
-    setLoading(false);
-    return { error };
+    try {
+      // Check if user exists
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .select("id")
+        .eq("email", email)
+        .single();
+
+      if (userError || !userData) {
+        // Don't reveal if user exists or not for security
+        return { error: null }; // Return success even if user doesn't exist
+      }
+
+      // Generate a reset token
+      const resetToken = await generateResetToken();
+      const expiration = new Date();
+      expiration.setHours(expiration.getHours() + 1); // Token valid for 1 hour
+
+      // Save the reset token
+      await supabase
+        .from("users")
+        .update({
+          reset_token: resetToken,
+          reset_token_expires: expiration.toISOString(),
+        })
+        .eq("id", userData.id);
+
+      // In a real app, send email with reset link
+      // For demo purposes, just console log
+      console.log(`Reset token for ${email}: ${resetToken}`);
+
+      return { error: null };
+    } catch (error: any) {
+      console.error("Forgot password error:", error);
+      return { error };
+    } finally {
+      setLoading(false);
+    }
   };
 
   const resetPassword = async (newPassword: string) => {
     setLoading(true);
-    const { error } = await supabase.auth.updateUser({
-      password: newPassword,
-    });
-    setLoading(false);
-    return { error };
+    try {
+      if (!user?.id) {
+        return { error: { message: "No authenticated user" } };
+      }
+
+      // Hash the new password
+      const hashedPassword = await hashPassword(newPassword);
+
+      // Update password and clear reset token
+      const { error } = await supabase
+        .from("users")
+        .update({
+          password_hash: hashedPassword,
+          reset_token: null,
+          reset_token_expires: null,
+        })
+        .eq("id", user.id);
+
+      if (error) {
+        throw error;
+      }
+
+      return { error: null };
+    } catch (error: any) {
+      console.error("Reset password error:", error);
+      return { error };
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Business Management",
-    "slug": "business-management-app",
+    "name": "HDF-HR",
+    "slug": "HDF-HR",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
