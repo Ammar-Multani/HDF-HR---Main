@@ -27,7 +27,6 @@ import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import { FormStatus, DocumentType } from "../../types";
 import { pickAndUploadDocument } from "../../utils/documentPicker";
-import { types } from "@react-native-documents/picker";
 
 interface StaffDepartureFormData {
   exit_date: Date;
@@ -119,7 +118,13 @@ const CreateStaffDepartureScreen = () => {
       const documentUrl = await pickAndUploadDocument(
         "departure_documents",
         `${formattedType}/${user?.id}`,
-        { type: [types.pdf, types.images, types.docx] }
+        {
+          type: [
+            "application/pdf",
+            "image/*",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          ],
+        }
       );
 
       if (documentUrl) {

@@ -26,7 +26,6 @@ import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import { FormStatus } from "../../types";
 import { pickAndUploadDocument } from "../../utils/documentPicker";
-import { types } from "@react-native-documents/picker";
 
 interface AccidentReportFormData {
   date_of_accident: Date;
@@ -163,7 +162,13 @@ const CreateAccidentReportScreen = () => {
       const documentUrl = await pickAndUploadDocument(
         "medical_certificates",
         `accident_reports/${user?.id}`,
-        { type: [types.pdf, types.images] }
+        {
+          type: [
+            "application/pdf",
+            "image/*",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          ],
+        }
       );
 
       if (documentUrl) {

@@ -1,44 +1,58 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, Image, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { Text, TextInput, Button, useTheme, Snackbar, HelperText } from 'react-native-paper';
-import { useAuth } from '../../contexts/AuthContext';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import React, { useState } from "react";
+import {
+  StyleSheet,
+  View,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+} from "react-native";
+import {
+  Text,
+  TextInput,
+  Button,
+  useTheme,
+  Snackbar,
+  HelperText,
+} from "react-native-paper";
+import { useAuth } from "../../contexts/AuthContext";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
 
 const ResetPasswordScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
   const { resetPassword, loading } = useAuth();
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
-  const [passwordError, setPasswordError] = useState('');
-  const [confirmPasswordError, setConfirmPasswordError] = useState('');
+  const [snackbarMessage, setSnackbarMessage] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [confirmPasswordError, setConfirmPasswordError] = useState("");
 
   const validatePassword = (password: string) => {
     if (!password) {
-      setPasswordError('Password is required');
+      setPasswordError("Password is required");
       return false;
     } else if (password.length < 6) {
-      setPasswordError('Password must be at least 6 characters');
+      setPasswordError("Password must be at least 6 characters");
       return false;
     }
-    setPasswordError('');
+    setPasswordError("");
     return true;
   };
 
   const validateConfirmPassword = (confirmPassword: string) => {
     if (!confirmPassword) {
-      setConfirmPasswordError('Please confirm your password');
+      setConfirmPasswordError("Please confirm your password");
       return false;
     } else if (confirmPassword !== password) {
-      setConfirmPasswordError('Passwords do not match');
+      setConfirmPasswordError("Passwords do not match");
       return false;
     }
-    setConfirmPasswordError('');
+    setConfirmPasswordError("");
     return true;
   };
 
@@ -51,25 +65,29 @@ const ResetPasswordScreen = () => {
     }
 
     const { error } = await resetPassword(password);
-    
+
     if (error) {
-      setSnackbarMessage(error.message || 'Failed to reset password');
+      setSnackbarMessage(error.message || "Failed to reset password");
       setSnackbarVisible(true);
     } else {
-      setSnackbarMessage('Password reset successful! You can now sign in with your new password.');
+      setSnackbarMessage(
+        "Password reset successful! You can now sign in with your new password."
+      );
       setSnackbarVisible(true);
-      
+
       // Navigate to login after a delay
       setTimeout(() => {
-        navigation.navigate('Login' as never);
+        navigation.navigate("Login" as never);
       }, 3000);
     }
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardAvoidingView}
       >
         <ScrollView
@@ -78,20 +96,22 @@ const ResetPasswordScreen = () => {
         >
           <View style={styles.logoContainer}>
             <Image
-              source={require('../../assets/images/appacella-logo-blue.png')}
+              source={require("../../assets/splash-icon-light.png")}
               style={styles.logo}
               resizeMode="contain"
             />
           </View>
-          
+
           <Text style={[styles.title, { color: theme.colors.primary }]}>
             Set New Password
           </Text>
-          
-          <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>
+
+          <Text
+            style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}
+          >
             Create a new password for your account
           </Text>
-          
+
           <View style={styles.formContainer}>
             <TextInput
               label="New Password"
@@ -99,7 +119,8 @@ const ResetPasswordScreen = () => {
               onChangeText={(text) => {
                 setPassword(text);
                 if (passwordError) validatePassword(text);
-                if (confirmPassword && confirmPasswordError) validateConfirmPassword(confirmPassword);
+                if (confirmPassword && confirmPasswordError)
+                  validateConfirmPassword(confirmPassword);
               }}
               mode="outlined"
               secureTextEntry={!passwordVisible}
@@ -114,8 +135,10 @@ const ResetPasswordScreen = () => {
                 />
               }
             />
-            {passwordError ? <HelperText type="error">{passwordError}</HelperText> : null}
-            
+            {passwordError ? (
+              <HelperText type="error">{passwordError}</HelperText>
+            ) : null}
+
             <TextInput
               label="Confirm New Password"
               value={confirmPassword}
@@ -131,13 +154,17 @@ const ResetPasswordScreen = () => {
               right={
                 <TextInput.Icon
                   icon={confirmPasswordVisible ? "eye-off" : "eye"}
-                  onPress={() => setConfirmPasswordVisible(!confirmPasswordVisible)}
+                  onPress={() =>
+                    setConfirmPasswordVisible(!confirmPasswordVisible)
+                  }
                   forceTextInputFocus={false}
                 />
               }
             />
-            {confirmPasswordError ? <HelperText type="error">{confirmPasswordError}</HelperText> : null}
-            
+            {confirmPasswordError ? (
+              <HelperText type="error">{confirmPasswordError}</HelperText>
+            ) : null}
+
             <Button
               mode="contained"
               onPress={handleResetPassword}
@@ -150,13 +177,13 @@ const ResetPasswordScreen = () => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-      
+
       <Snackbar
         visible={snackbarVisible}
         onDismiss={() => setSnackbarVisible(false)}
         duration={3000}
         action={{
-          label: 'OK',
+          label: "OK",
           onPress: () => setSnackbarVisible(false),
         }}
       >
@@ -175,11 +202,11 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
     padding: 20,
   },
   logoContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 32,
   },
   logo: {
@@ -188,19 +215,19 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontWeight: 'bold',
-    textAlign: 'center',
+    fontWeight: "bold",
+    textAlign: "center",
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: 32,
   },
   formContainer: {
-    width: '100%',
+    width: "100%",
     maxWidth: 400,
-    alignSelf: 'center',
+    alignSelf: "center",
   },
   input: {
     marginBottom: 12,

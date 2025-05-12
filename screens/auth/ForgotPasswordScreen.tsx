@@ -1,29 +1,44 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, Image, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity } from 'react-native';
-import { Text, TextInput, Button, useTheme, Snackbar, HelperText } from 'react-native-paper';
-import { useAuth } from '../../contexts/AuthContext';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import React, { useState } from "react";
+import {
+  StyleSheet,
+  View,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  TouchableOpacity,
+} from "react-native";
+import {
+  Text,
+  TextInput,
+  Button,
+  useTheme,
+  Snackbar,
+  HelperText,
+} from "react-native-paper";
+import { useAuth } from "../../contexts/AuthContext";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
 
 const ForgotPasswordScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
   const { forgotPassword, loading } = useAuth();
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState("");
   const [snackbarVisible, setSnackbarVisible] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
-  const [emailError, setEmailError] = useState('');
+  const [snackbarMessage, setSnackbarMessage] = useState("");
+  const [emailError, setEmailError] = useState("");
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email) {
-      setEmailError('Email is required');
+      setEmailError("Email is required");
       return false;
     } else if (!emailRegex.test(email)) {
-      setEmailError('Please enter a valid email address');
+      setEmailError("Please enter a valid email address");
       return false;
     }
-    setEmailError('');
+    setEmailError("");
     return true;
   };
 
@@ -35,29 +50,33 @@ const ForgotPasswordScreen = () => {
     }
 
     const { error } = await forgotPassword(email);
-    
+
     if (error) {
-      setSnackbarMessage(error.message || 'Failed to send reset password email');
+      setSnackbarMessage(
+        error.message || "Failed to send reset password email"
+      );
       setSnackbarVisible(true);
     } else {
-      setSnackbarMessage('Password reset instructions sent to your email');
+      setSnackbarMessage("Password reset instructions sent to your email");
       setSnackbarVisible(true);
-      
+
       // Navigate back to login after a delay
       setTimeout(() => {
-        navigation.navigate('Login' as never);
+        navigation.navigate("Login" as never);
       }, 3000);
     }
   };
 
   const navigateToLogin = () => {
-    navigation.navigate('Login' as never);
+    navigation.navigate("Login" as never);
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardAvoidingView}
       >
         <ScrollView
@@ -66,20 +85,22 @@ const ForgotPasswordScreen = () => {
         >
           <View style={styles.logoContainer}>
             <Image
-              source={require('../../assets/images/appacella-logo-blue.png')}
+              source={require("../../assets/splash-icon-light.png")}
               style={styles.logo}
               resizeMode="contain"
             />
           </View>
-          
+
           <Text style={[styles.title, { color: theme.colors.primary }]}>
             Reset Password
           </Text>
-          
-          <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>
+
+          <Text
+            style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}
+          >
             Enter your email to receive password reset instructions
           </Text>
-          
+
           <View style={styles.formContainer}>
             <TextInput
               label="Email"
@@ -95,8 +116,10 @@ const ForgotPasswordScreen = () => {
               disabled={loading}
               error={!!emailError}
             />
-            {emailError ? <HelperText type="error">{emailError}</HelperText> : null}
-            
+            {emailError ? (
+              <HelperText type="error">{emailError}</HelperText>
+            ) : null}
+
             <Button
               mode="contained"
               onPress={handleResetPassword}
@@ -107,26 +130,26 @@ const ForgotPasswordScreen = () => {
               Send Reset Instructions
             </Button>
           </View>
-          
+
           <View style={styles.loginContainer}>
             <Text style={{ color: theme.colors.onSurfaceVariant }}>
               Remember your password?
             </Text>
             <TouchableOpacity onPress={navigateToLogin}>
               <Text style={[styles.loginText, { color: theme.colors.primary }]}>
-                {' Sign In'}
+                {" Sign In"}
               </Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-      
+
       <Snackbar
         visible={snackbarVisible}
         onDismiss={() => setSnackbarVisible(false)}
         duration={3000}
         action={{
-          label: 'OK',
+          label: "OK",
           onPress: () => setSnackbarVisible(false),
         }}
       >
@@ -145,11 +168,11 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
     padding: 20,
   },
   logoContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 32,
   },
   logo: {
@@ -158,19 +181,19 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontWeight: 'bold',
-    textAlign: 'center',
+    fontWeight: "bold",
+    textAlign: "center",
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: 32,
   },
   formContainer: {
-    width: '100%',
+    width: "100%",
     maxWidth: 400,
-    alignSelf: 'center',
+    alignSelf: "center",
   },
   input: {
     marginBottom: 12,
@@ -180,12 +203,12 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   loginContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
     marginTop: 32,
   },
   loginText: {
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
 });
 

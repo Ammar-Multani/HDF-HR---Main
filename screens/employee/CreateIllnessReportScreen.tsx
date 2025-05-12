@@ -26,7 +26,6 @@ import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import { FormStatus } from "../../types";
 import { pickAndUploadDocument } from "../../utils/documentPicker";
-import { types } from "@react-native-documents/picker";
 
 interface IllnessReportFormData {
   date_of_onset_leave: Date;
@@ -103,7 +102,7 @@ const CreateIllnessReportScreen = () => {
       const documentUrl = await pickAndUploadDocument(
         "medical_certificates",
         `illness_reports/${user?.id}`,
-        { type: [types.pdf, types.images] }
+        { type: ["application/pdf", "image/*"] }
       );
 
       if (documentUrl) {

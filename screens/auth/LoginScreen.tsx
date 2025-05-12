@@ -117,7 +117,7 @@ const LoginScreen = () => {
         >
           <View style={styles.logoContainer}>
             <Image
-              source={require("../../assets/images/appacella-logo-blue.png")}
+              source={require("../../assets/splash-icon-light.png")}
               style={styles.logo}
               resizeMode="contain"
             />

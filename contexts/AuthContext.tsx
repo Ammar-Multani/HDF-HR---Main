@@ -6,7 +6,7 @@ import {
   useContext,
   ReactNode,
 } from "react";
-import { supabase, getAuthenticatedClient } from "../lib/supabase";
+import { supabase } from "../lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { UserRole } from "../types";
 import {
@@ -471,17 +471,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const expiration = new Date();
       expiration.setHours(expiration.getHours() + 1); // Token valid for 1 hour
 
-      // Get authenticated client
-      const supabaseAuth = await getAuthenticatedClient();
-
-      // Save the reset token
-      await supabaseAuth
+      // Save the reset token directly to users table
+      const { error: updateError } = await supabase
         .from("users")
         .update({
           reset_token: resetToken,
           reset_token_expires: expiration.toISOString(),
         })
         .eq("id", userData.id);
+
+      if (updateError) {
+        console.error("Error updating reset token:", updateError);
+        return { error: updateError };
+      }
 
       // In a real app, send email with reset link
       // For demo purposes, just console log
@@ -506,16 +508,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Hash the new password
       const hashedPassword = await hashPassword(newPassword);
 
-      // Get authenticated client
-      const supabaseAuth = await getAuthenticatedClient();
-
-      // Update password and clear reset token
-      const { error } = await supabaseAuth
+      // Update password and clear reset token directly in users table
+      const { error } = await supabase
         .from("users")
         .update({
           password_hash: hashedPassword,
           reset_token: null,
           reset_token_expires: null,
+          updated_at: new Date().toISOString(),
         })
         .eq("id", user.id);
 
