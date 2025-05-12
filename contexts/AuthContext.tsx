@@ -3,6 +3,10 @@ import { supabase } from '../lib/supabase';
 import { Session } from '@supabase/supabase-js';
 import { UserRole } from '../types';
 
+// Default super admin credentials
+const DEFAULT_ADMIN_EMAIL = 'admin@businessmanagement.com';
+const DEFAULT_ADMIN_PASSWORD = 'Admin@123';
+
 interface AuthContextType {
   session: Session | null;
   user: any | null;
@@ -13,6 +17,8 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   forgotPassword: (email: string) => Promise<{ error: any }>;
   resetPassword: (newPassword: string) => Promise<{ error: any }>;
+  isFirstTimeSetup: boolean;
+  setupDefaultAdmin: () => Promise<{ error: any }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -22,6 +28,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<any | null>(null);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isFirstTimeSetup, setIsFirstTimeSetup] = useState(false);
 
   useEffect(() => {
     // Get initial session
@@ -31,6 +38,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (session?.user) {
         fetchUserRole(session.user.id);
       } else {
+        checkIfFirstTimeSetup();
         setLoading(false);
       }
     });
@@ -44,6 +52,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           fetchUserRole(session.user.id);
         } else {
           setUserRole(null);
+          checkIfFirstTimeSetup();
           setLoading(false);
         }
       }
@@ -53,6 +62,67 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       subscription.unsubscribe();
     };
   }, []);
+
+  const checkIfFirstTimeSetup = async () => {
+    try {
+      // Check if any admin exists in the system
+      const { data, error, count } = await supabase
+        .from('admin')
+        .select('*', { count: 'exact' });
+
+      if (count === 0) {
+        setIsFirstTimeSetup(true);
+      } else {
+        setIsFirstTimeSetup(false);
+      }
+    } catch (error) {
+      console.error('Error checking first time setup:', error);
+      setIsFirstTimeSetup(false);
+    }
+  };
+
+  const setupDefaultAdmin = async () => {
+    setLoading(true);
+    try {
+      // First, create the user in auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: DEFAULT_ADMIN_EMAIL,
+        password: DEFAULT_ADMIN_PASSWORD,
+      });
+
+      if (authError) {
+        setLoading(false);
+        return { error: authError };
+      }
+
+      if (authData.user) {
+        // Then, add the user to the admin table with super admin role
+        const { error: adminError } = await supabase
+          .from('admin')
+          .insert({
+            id: authData.user.id,
+            email: DEFAULT_ADMIN_EMAIL,
+            role: UserRole.SUPER_ADMIN,
+            name: 'System Administrator',
+            status: 'active',
+          });
+
+        if (adminError) {
+          setLoading(false);
+          return { error: adminError };
+        }
+
+        // Auto sign in with the default admin
+        return await signIn(DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_PASSWORD);
+      }
+
+      setLoading(false);
+      return { error: new Error('Failed to create default admin') };
+    } catch (error) {
+      setLoading(false);
+      return { error };
+    }
+  };
 
   const fetchUserRole = async (userId: string) => {
     try {
@@ -145,6 +215,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         signOut,
         forgotPassword,
         resetPassword,
+        isFirstTimeSetup,
+        setupDefaultAdmin,
       }}
     >
       {children}

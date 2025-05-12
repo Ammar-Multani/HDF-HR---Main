@@ -146,6 +146,7 @@ const RegisterScreen = () => {
                 <TextInput.Icon
                   icon={passwordVisible ? "eye-off" : "eye"}
                   onPress={() => setPasswordVisible(!passwordVisible)}
+                  forceTextInputFocus={false}
                 />
               }
             />
@@ -167,6 +168,7 @@ const RegisterScreen = () => {
                 <TextInput.Icon
                   icon={confirmPasswordVisible ? "eye-off" : "eye"}
                   onPress={() => setConfirmPasswordVisible(!confirmPasswordVisible)}
+                  forceTextInputFocus={false}
                 />
               }
             />

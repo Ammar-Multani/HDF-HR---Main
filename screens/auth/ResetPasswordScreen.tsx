@@ -110,6 +110,7 @@ const ResetPasswordScreen = () => {
                 <TextInput.Icon
                   icon={passwordVisible ? "eye-off" : "eye"}
                   onPress={() => setPasswordVisible(!passwordVisible)}
+                  forceTextInputFocus={false}
                 />
               }
             />
@@ -131,6 +132,7 @@ const ResetPasswordScreen = () => {
                 <TextInput.Icon
                   icon={confirmPasswordVisible ? "eye-off" : "eye"}
                   onPress={() => setConfirmPasswordVisible(!confirmPasswordVisible)}
+                  forceTextInputFocus={false}
                 />
               }
             />

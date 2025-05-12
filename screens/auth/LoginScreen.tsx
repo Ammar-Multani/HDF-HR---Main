@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, Image, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity } from 'react-native';
-import { Text, TextInput, Button, useTheme, Snackbar, HelperText } from 'react-native-paper';
+import { Text, TextInput, Button, useTheme, Snackbar, HelperText, Dialog, Portal } from 'react-native-paper';
 import { useAuth } from '../../contexts/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -8,7 +8,7 @@ import { useNavigation } from '@react-navigation/native';
 const LoginScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
-  const { signIn, loading } = useAuth();
+  const { signIn, loading, isFirstTimeSetup, setupDefaultAdmin } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -16,6 +16,7 @@ const LoginScreen = () => {
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [setupDialogVisible, setSetupDialogVisible] = useState(false);
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -56,6 +57,25 @@ const LoginScreen = () => {
       setSnackbarMessage(error.message || 'Failed to sign in');
       setSnackbarVisible(true);
     }
+  };
+
+  const handleSetupDefaultAdmin = async () => {
+    const { error } = await setupDefaultAdmin();
+    
+    if (error) {
+      setSnackbarMessage(error.message || 'Failed to set up default admin');
+      setSnackbarVisible(true);
+    } else {
+      setSetupDialogVisible(false);
+    }
+  };
+
+  const showSetupDialog = () => {
+    setSetupDialogVisible(true);
+  };
+
+  const hideSetupDialog = () => {
+    setSetupDialogVisible(false);
   };
 
   const navigateToRegister = () => {
@@ -125,6 +145,7 @@ const LoginScreen = () => {
                 <TextInput.Icon
                   icon={passwordVisible ? "eye-off" : "eye"}
                   onPress={() => setPasswordVisible(!passwordVisible)}
+                  forceTextInputFocus={false}
                 />
               }
             />
@@ -139,6 +160,17 @@ const LoginScreen = () => {
             >
               Sign In
             </Button>
+
+            {isFirstTimeSetup && (
+              <Button
+                mode="outlined"
+                onPress={showSetupDialog}
+                style={[styles.button, { marginTop: 16 }]}
+                disabled={loading}
+              >
+                Set Up Default Admin
+              </Button>
+            )}
 
             <TouchableOpacity 
               onPress={navigateToForgotPassword}
@@ -162,6 +194,30 @@ const LoginScreen = () => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      
+      <Portal>
+        <Dialog visible={setupDialogVisible} onDismiss={hideSetupDialog}>
+          <Dialog.Title>Set Up Default Admin</Dialog.Title>
+          <Dialog.Content>
+            <Text>
+              This will create a default super admin account with the following credentials:
+            </Text>
+            <Text style={styles.credentialText}>
+              Email: admin@businessmanagement.com
+            </Text>
+            <Text style={styles.credentialText}>
+              Password: Admin@123
+            </Text>
+            <Text style={{ marginTop: 12 }}>
+              You should change these credentials after your first login for security reasons.
+            </Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={hideSetupDialog}>Cancel</Button>
+            <Button onPress={handleSetupDefaultAdmin} loading={loading}>Proceed</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
       
       <Snackbar
         visible={snackbarVisible}
@@ -235,6 +291,10 @@ const styles = StyleSheet.create({
   },
   registerText: {
     fontWeight: 'bold',
+  },
+  credentialText: {
+    fontWeight: 'bold',
+    marginTop: 8,
   },
 });
 
