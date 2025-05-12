@@ -124,7 +124,7 @@ const LoginScreen = () => {
           </View>
 
           <Text style={[styles.title, { color: theme.colors.primary }]}>
-            Business Management
+            HDF HR
           </Text>
 
           <Text
@@ -228,31 +228,6 @@ const LoginScreen = () => {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <Portal>
-        <Dialog visible={setupDialogVisible} onDismiss={hideSetupDialog}>
-          <Dialog.Title>Set Up Default Admin</Dialog.Title>
-          <Dialog.Content>
-            <Text>
-              This will create a default super admin account with the following
-              credentials:
-            </Text>
-            <Text style={styles.credentialText}>
-              Email: admin@businessmanagement.com
-            </Text>
-            <Text style={styles.credentialText}>Password: Admin@123</Text>
-            <Text style={{ marginTop: 12 }}>
-              You should change these credentials after your first login for
-              security reasons.
-            </Text>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={hideSetupDialog}>Cancel</Button>
-            <Button onPress={handleSetupDefaultAdmin} loading={loading}>
-              Proceed
-            </Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
 
       <Snackbar
         visible={snackbarVisible}

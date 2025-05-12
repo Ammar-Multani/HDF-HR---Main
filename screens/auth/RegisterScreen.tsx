@@ -124,7 +124,7 @@ const RegisterScreen = () => {
           </View>
 
           <Text style={[styles.title, { color: theme.colors.primary }]}>
-            Create Account
+            HDF HR
           </Text>
 
           <Text
