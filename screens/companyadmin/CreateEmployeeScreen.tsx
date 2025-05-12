@@ -186,10 +186,7 @@ const CreateEmployeeScreen = () => {
         data.employment_type === EmploymentType.FULL_TIME ||
         data.employment_type === EmploymentType.PART_TIME;
 
-      // Hash the default password for the new employee
-      const hashedPassword = await hashPassword(DEFAULT_PASSWORD);
-
-      // Check if user with this email already exists
+      // Check if user with this email already exists in custom users table
       const { data: existingUser } = await supabase
         .from("users")
         .select("id")
@@ -199,6 +196,9 @@ const CreateEmployeeScreen = () => {
       if (existingUser) {
         throw new Error("A user with this email already exists");
       }
+
+      // Hash the default password for the new employee
+      const hashedPassword = await hashPassword(DEFAULT_PASSWORD);
 
       // Create the user in our custom users table
       const { data: userData, error: userError } = await supabase
@@ -222,7 +222,7 @@ const CreateEmployeeScreen = () => {
         .from("company_user")
         .insert([
           {
-            id: userData.id,
+            id: userData.id, // Use the ID from our custom users table
             company_id: companyId,
             first_name: data.first_name,
             last_name: data.last_name,

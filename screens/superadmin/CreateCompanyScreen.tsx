@@ -167,7 +167,7 @@ const CreateCompanyScreen = () => {
       // Hash the default password for the company admin
       const hashedPassword = await hashPassword(DEFAULT_PASSWORD);
 
-      // Check if user with this email already exists
+      // Check if user with this email already exists in custom users table
       const { data: existingUser } = await supabase
         .from("users")
         .select("id")
@@ -200,7 +200,7 @@ const CreateCompanyScreen = () => {
         .from("company_user")
         .insert([
           {
-            id: userData.id,
+            id: userData.id, // Use the ID from our custom users table
             company_id: companyData.id,
             first_name: "Company", // Default placeholder - admin will update later
             last_name: "Admin", // Default placeholder - admin will update later
@@ -256,9 +256,6 @@ const CreateCompanyScreen = () => {
       console.error("Error creating company:", error);
       setSnackbarMessage(error.message || "Failed to create company");
       setSnackbarVisible(true);
-
-      // If the error was related to the auth step but company was created,
-      // you might want to clean up the orphaned company record
     } finally {
       setLoading(false);
     }
