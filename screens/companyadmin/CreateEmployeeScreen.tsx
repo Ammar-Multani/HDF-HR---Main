@@ -33,6 +33,7 @@ import {
   UserRole,
   UserStatus,
 } from "../../types";
+import { hashPassword } from "../../utils/auth";
 
 interface EmployeeFormData {
   first_name: string;
@@ -185,24 +186,35 @@ const CreateEmployeeScreen = () => {
         data.employment_type === EmploymentType.FULL_TIME ||
         data.employment_type === EmploymentType.PART_TIME;
 
-      // Create auth user
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: data.email,
-        password: DEFAULT_PASSWORD,
-        options: {
-          data: {
-            role: UserRole.EMPLOYEE,
-            company_id: companyId,
-          },
-        },
-      });
+      // Hash the default password for the new employee
+      const hashedPassword = await hashPassword(DEFAULT_PASSWORD);
 
-      if (authError) {
-        throw authError;
+      // Check if user with this email already exists
+      const { data: existingUser } = await supabase
+        .from("users")
+        .select("id")
+        .eq("email", data.email)
+        .single();
+
+      if (existingUser) {
+        throw new Error("A user with this email already exists");
       }
 
-      if (!authData?.user) {
-        throw new Error("Failed to create employee user");
+      // Create the user in our custom users table
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .insert({
+          email: data.email,
+          password_hash: hashedPassword,
+          status: "active", // Set as active so they can log in immediately
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select("id")
+        .single();
+
+      if (userError) {
+        throw userError;
       }
 
       // Create employee record
@@ -210,7 +222,7 @@ const CreateEmployeeScreen = () => {
         .from("company_user")
         .insert([
           {
-            id: authData.user.id,
+            id: userData.id,
             company_id: companyId,
             first_name: data.first_name,
             last_name: data.last_name,
@@ -252,25 +264,34 @@ const CreateEmployeeScreen = () => {
         throw employeeError;
       }
 
-      // Send magic link to the employee
-      const { error: magicLinkError } = await supabase.auth.signInWithOtp({
-        email: data.email,
-        options: {
-          emailRedirectTo: "businessmanagementapp://auth/callback",
-        },
-      });
+      // Generate a reset token for the new employee
+      const { error: resetTokenError } = await supabase
+        .from("users")
+        .update({
+          reset_token:
+            Math.random().toString(36).substring(2, 15) +
+            Math.random().toString(36).substring(2, 15),
+          reset_token_expires: new Date(
+            Date.now() + 7 * 24 * 60 * 60 * 1000
+          ).toISOString(), // 7 days from now
+        })
+        .eq("id", userData.id);
 
-      if (magicLinkError) {
-        throw magicLinkError;
+      if (resetTokenError) {
+        console.error("Error setting reset token:", resetTokenError);
+        // Non-critical error, continue
       }
 
-      setSnackbarMessage("Employee created successfully and invitation sent");
+      setSnackbarMessage(
+        "Employee created successfully! Temporary password is: " +
+          DEFAULT_PASSWORD
+      );
       setSnackbarVisible(true);
 
       // Navigate back after a short delay
       setTimeout(() => {
         navigation.goBack();
-      }, 2000);
+      }, 5000); // Give them time to see the password
     } catch (error: any) {
       console.error("Error creating employee:", error);
       setSnackbarMessage(error.message || "Failed to create employee");

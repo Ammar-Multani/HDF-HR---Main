@@ -6,13 +6,14 @@ import {
   useContext,
   ReactNode,
 } from "react";
-import { supabase } from "../lib/supabase";
+import { supabase, getAuthenticatedClient } from "../lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { UserRole } from "../types";
 import {
   hashPassword,
   validatePassword,
   generateResetToken,
+  generateJWT,
 } from "../utils/auth";
 
 // Default super admin credentials
@@ -51,18 +52,53 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Function to handle user authentication
   const authenticate = async (token: string, userData: any) => {
+    console.log("Authentication starting...", {
+      token: token.substring(0, 10) + "...",
+      userData,
+    });
+
     setSession({ access_token: token });
     setUser(userData);
 
-    // Store auth data in AsyncStorage
-    await AsyncStorage.setItem(AUTH_TOKEN_KEY, token);
-    await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
+    try {
+      // Store auth data in AsyncStorage
+      await AsyncStorage.setItem(AUTH_TOKEN_KEY, token);
+      await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
+      console.log("Authentication data stored in AsyncStorage");
 
-    // Fetch user role
-    if (userData?.id) {
-      await fetchUserRole(userData.id);
+      // If userData has role, set it directly
+      if (userData?.role) {
+        console.log("User has role in userData:", userData.role);
+
+        const roleValue = userData.role.toLowerCase();
+        if (roleValue === "superadmin") {
+          console.log("Setting role to SUPER_ADMIN directly");
+          setUserRole(UserRole.SUPER_ADMIN);
+        } else if (roleValue === "admin" || roleValue === "companyadmin") {
+          console.log("Setting role to COMPANY_ADMIN directly");
+          setUserRole(UserRole.COMPANY_ADMIN);
+        } else if (roleValue === "employee") {
+          console.log("Setting role to EMPLOYEE directly");
+          setUserRole(UserRole.EMPLOYEE);
+        } else {
+          console.log("Unknown role value, fetching from database:", roleValue);
+          // Fetch user role from database
+          if (userData?.id) {
+            await fetchUserRole(userData.id);
+          }
+        }
+      } else {
+        // Fetch user role from database
+        if (userData?.id) {
+          console.log("No role in userData, fetching from database");
+          await fetchUserRole(userData.id);
+        }
+      }
+    } catch (error) {
+      console.error("Error in authenticate function:", error);
     }
 
+    console.log("Authentication completed, setting loading to false");
     setLoading(false);
   };
 
@@ -70,11 +106,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Check for existing session in AsyncStorage
     const loadStoredSession = async () => {
       try {
+        console.log("Checking for stored session...");
         const storedToken = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
         const storedUserData = await AsyncStorage.getItem(USER_DATA_KEY);
 
+        console.log("Stored session check result:", {
+          hasToken: !!storedToken,
+          hasUserData: !!storedUserData,
+        });
+
         if (storedToken && storedUserData) {
           const userData = JSON.parse(storedUserData);
+          console.log("Found stored session, restoring...", {
+            userId: userData.id,
+          });
+
           setSession({ access_token: storedToken });
           setUser(userData);
 
@@ -82,11 +128,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             await fetchUserRole(userData.id);
           }
         } else {
+          console.log("No stored session found, checking first time setup");
           await checkIfFirstTimeSetup();
         }
       } catch (error) {
         console.error("Error loading stored session:", error);
       } finally {
+        console.log("Session loading completed, setting loading to false");
         setLoading(false);
       }
     };
@@ -160,23 +208,38 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       console.log("Fetching user role for ID:", userId);
 
+      // For debugging - log the user roles enum
+      console.log("UserRole enum values:", UserRole);
+
+      // Since RLS is disabled, we can use the regular supabase client
       // First check if user is a super admin
+      console.log("Checking admin role directly...");
       const { data: adminData, error: adminError } = await supabase
         .from("admin")
         .select("role")
         .eq("id", userId)
         .single();
 
-      console.log("Admin check result:", { adminData, adminError });
+      console.log("Admin check result:", {
+        adminData,
+        adminError: adminError ? adminError.message : null,
+      });
 
-      if (adminData) {
-        console.log("User is an admin with role:", adminData.role);
-        setUserRole(adminData.role as UserRole);
-        setLoading(false);
-        return;
+      if (adminData && adminData.role) {
+        const role = adminData.role.toLowerCase();
+        console.log("User is an admin with raw role value:", role);
+
+        // Map string role to enum
+        if (role === "superadmin") {
+          console.log("Setting role to SUPER_ADMIN");
+          setUserRole(UserRole.SUPER_ADMIN);
+          setLoading(false);
+          return;
+        }
       }
 
       // If not a super admin, check if user is a company user
+      console.log("Checking company user role directly...");
       const { data: companyUserData, error: companyUserError } = await supabase
         .from("company_user")
         .select("role")
@@ -185,12 +248,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       console.log("Company user check result:", {
         companyUserData,
-        companyUserError,
+        companyUserError: companyUserError ? companyUserError.message : null,
       });
 
-      if (companyUserData) {
-        console.log("User is a company user with role:", companyUserData.role);
-        setUserRole(companyUserData.role as UserRole);
+      if (companyUserData && companyUserData.role) {
+        const role = companyUserData.role.toLowerCase();
+        console.log("User is a company user with raw role value:", role);
+
+        // Map string role to enum
+        if (role === "companyadmin" || role === "admin") {
+          console.log("Setting role to COMPANY_ADMIN");
+          setUserRole(UserRole.COMPANY_ADMIN);
+        } else if (role === "employee") {
+          console.log("Setting role to EMPLOYEE");
+          setUserRole(UserRole.EMPLOYEE);
+        } else {
+          console.log("Unknown company user role:", role);
+          setUserRole(null);
+        }
       } else {
         console.log("User has no role assigned");
         setUserRole(null);
@@ -205,49 +280,107 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signIn = async (email: string, password: string) => {
     setLoading(true);
+    console.log("Sign-in attempt for:", email);
+
     try {
       // Find user by email
+      console.log("Looking up user by email...");
       const { data: userData, error: userError } = await supabase
         .from("users")
         .select("id, email, password_hash, status")
         .eq("email", email)
         .single();
 
+      console.log("User lookup result:", {
+        found: !!userData,
+        error: userError ? userError.message : null,
+      });
+
       if (userError || !userData) {
+        console.log("Sign-in failed: User not found");
         return { error: { message: "Invalid email or password" } };
       }
 
       // Validate password
+      console.log("Validating password...");
       const isPasswordValid = await validatePassword(
         password,
         userData.password_hash
       );
 
+      console.log("Password validation result:", { isValid: isPasswordValid });
+
       if (!isPasswordValid) {
+        console.log("Sign-in failed: Invalid password");
         return { error: { message: "Invalid email or password" } };
       }
 
       if (userData.status !== "active") {
+        console.log(
+          "Sign-in failed: Account not active, status:",
+          userData.status
+        );
         return { error: { message: "Account is not active" } };
       }
 
-      // Update last login time
+      console.log("Sign-in successful, updating last login");
+
+      // Update last login time using regular client since RLS is disabled
       await supabase
         .from("users")
         .update({ last_login: new Date().toISOString() })
         .eq("id", userData.id);
 
-      // Generate a token (in a real implementation, do this server-side)
-      const token = `user-token-${userData.id}-${Date.now()}`;
+      // First, check if user has a role
+      let role = null;
+
+      // Check admin table
+      const { data: adminData } = await supabase
+        .from("admin")
+        .select("role")
+        .eq("id", userData.id)
+        .single();
+
+      if (adminData && adminData.role) {
+        role = adminData.role;
+      } else {
+        // Check company_user table
+        const { data: companyUserData } = await supabase
+          .from("company_user")
+          .select("role")
+          .eq("id", userData.id)
+          .single();
+
+        if (companyUserData && companyUserData.role) {
+          role = companyUserData.role;
+        }
+      }
+
+      console.log("Retrieved user role:", role);
+
+      // For now, use a simple token (RLS is disabled anyway)
+      const simpleToken = `user-token-${userData.id}-${Date.now()}`;
+      console.log("Using simple token for authentication");
 
       // Remove password_hash from user data before storing
       const { password_hash, ...userDataWithoutPassword } = userData;
 
-      await authenticate(token, userDataWithoutPassword);
+      // Add role to userData for easier access
+      const userDataWithRole = {
+        ...userDataWithoutPassword,
+        role,
+      };
 
+      console.log(
+        "Calling authenticate with user data including role:",
+        userDataWithRole
+      );
+      await authenticate(simpleToken, userDataWithRole);
+
+      console.log("Sign-in process completed successfully");
       return { error: null };
     } catch (error: any) {
-      console.error("Sign in error:", error);
+      console.error("Sign-in error:", error);
       return { error };
     } finally {
       setLoading(false);
@@ -338,8 +471,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const expiration = new Date();
       expiration.setHours(expiration.getHours() + 1); // Token valid for 1 hour
 
+      // Get authenticated client
+      const supabaseAuth = await getAuthenticatedClient();
+
       // Save the reset token
-      await supabase
+      await supabaseAuth
         .from("users")
         .update({
           reset_token: resetToken,
@@ -370,8 +506,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Hash the new password
       const hashedPassword = await hashPassword(newPassword);
 
+      // Get authenticated client
+      const supabaseAuth = await getAuthenticatedClient();
+
       // Update password and clear reset token
-      const { error } = await supabase
+      const { error } = await supabaseAuth
         .from("users")
         .update({
           password_hash: hashedPassword,

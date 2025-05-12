@@ -177,8 +177,29 @@ const EmployeeNavigator = () => (
 export const AppNavigator = () => {
   const { user, userRole, loading } = useAuth();
 
+  console.log("Navigation state:", {
+    isLoading: loading,
+    hasUser: !!user,
+    userRole,
+    userId: user?.id,
+  });
+
   if (loading) {
+    console.log("Showing loading screen");
     return <LoadingScreen />;
+  }
+
+  // For debugging - show what screen will be displayed
+  if (!user) {
+    console.log("No user found, showing auth navigator");
+  } else if (userRole === UserRole.SUPER_ADMIN) {
+    console.log("User is super admin, showing super admin navigator");
+  } else if (userRole === UserRole.COMPANY_ADMIN) {
+    console.log("User is company admin, showing company admin navigator");
+  } else if (userRole === UserRole.EMPLOYEE) {
+    console.log("User is employee, showing employee navigator");
+  } else {
+    console.log("User has no role or invalid role:", userRole);
   }
 
   return (

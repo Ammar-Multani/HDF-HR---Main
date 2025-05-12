@@ -19,6 +19,7 @@ import { useForm, Controller } from "react-hook-form";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
+import { hashPassword } from "../../utils/auth";
 
 // Default password for new company admins - they will change it via reset password flow
 const DEFAULT_PASSWORD = "Password123!";
@@ -163,35 +164,35 @@ const CreateCompanyScreen = () => {
         throw companyError;
       }
 
-      // Create company admin user
-      const { data: adminData, error: adminError } = await supabase.auth.signUp(
-        {
-          email: data.admin_email,
-          password: DEFAULT_PASSWORD,
-          options: {
-            data: {
-              company_id: companyData.id,
-              role: "admin",
-            },
-          },
-        }
-      );
+      // Hash the default password for the company admin
+      const hashedPassword = await hashPassword(DEFAULT_PASSWORD);
 
-      if (adminError) {
-        // Show more specific error for email issues
-        if (
-          adminError.message.includes("Email") ||
-          adminError.message.includes("email")
-        ) {
-          throw new Error(
-            `Invalid email address: ${data.admin_email}. Please use a valid email domain.`
-          );
-        }
-        throw adminError;
+      // Check if user with this email already exists
+      const { data: existingUser } = await supabase
+        .from("users")
+        .select("id")
+        .eq("email", data.admin_email)
+        .single();
+
+      if (existingUser) {
+        throw new Error("A user with this email already exists");
       }
 
-      if (!adminData?.user) {
-        throw new Error("Failed to create company admin user");
+      // Create the user in our custom users table
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .insert({
+          email: data.admin_email,
+          password_hash: hashedPassword,
+          status: "active", // Set as active so they can log in immediately
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select("id")
+        .single();
+
+      if (userError) {
+        throw userError;
       }
 
       // Create company_user record for the admin
@@ -199,7 +200,7 @@ const CreateCompanyScreen = () => {
         .from("company_user")
         .insert([
           {
-            id: adminData.user.id,
+            id: userData.id,
             company_id: companyData.id,
             first_name: "Company", // Default placeholder - admin will update later
             last_name: "Admin", // Default placeholder - admin will update later
@@ -217,27 +218,40 @@ const CreateCompanyScreen = () => {
         throw companyUserError;
       }
 
-      // Send magic link to the admin
-      const { error: magicLinkError } = await supabase.auth.signInWithOtp({
-        email: data.admin_email,
-        options: {
-          emailRedirectTo: "businessmanagementapp://auth/callback",
-        },
-      });
+      // Generate a reset token for the new admin
+      const { error: resetTokenError } = await supabase
+        .from("users")
+        .update({
+          reset_token:
+            Math.random().toString(36).substring(2, 15) +
+            Math.random().toString(36).substring(2, 15),
+          reset_token_expires: new Date(
+            Date.now() + 7 * 24 * 60 * 60 * 1000
+          ).toISOString(), // 7 days from now
+        })
+        .eq("id", userData.id);
 
-      if (magicLinkError) {
-        throw magicLinkError;
+      if (resetTokenError) {
+        console.error("Error setting reset token:", resetTokenError);
+        // Non-critical error, continue
       }
 
+      // Here you would typically send an email to the admin with instructions
+      // Since we can't send emails directly from the app, we'll just show a message
+      console.log(
+        `Company admin created with email: ${data.admin_email} and temporary password: ${DEFAULT_PASSWORD}`
+      );
+
       setSnackbarMessage(
-        "Company created successfully and invitation sent to admin"
+        "Company created successfully! Company admin password is: " +
+          DEFAULT_PASSWORD
       );
       setSnackbarVisible(true);
 
       // Navigate back to companies list after a short delay
       setTimeout(() => {
         navigation.goBack();
-      }, 2000);
+      }, 5000); // Give them time to see the password
     } catch (error: any) {
       console.error("Error creating company:", error);
       setSnackbarMessage(error.message || "Failed to create company");

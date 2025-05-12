@@ -1,4 +1,5 @@
 import * as Crypto from "expo-crypto";
+import { encode as base64Encode } from "base-64";
 
 /**
  * Hashes a password using SHA-256
@@ -84,4 +85,62 @@ export const validatePasswordStrength = (
   }
 
   return { valid: true, message: "Password is strong" };
+};
+
+/**
+ * Generates a JSON Web Token (JWT) for authentication
+ * NOTE: This is a simplified implementation for demo purposes only
+ * In production, use a proper JWT library with secure signing
+ */
+export const generateJWT = async (userData: {
+  id: string;
+  email: string;
+  role?: string;
+}): Promise<string> => {
+  // Create the JWT header
+  const header = {
+    alg: "HS256",
+    typ: "JWT",
+  };
+
+  // Create the JWT payload with standard claims
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    sub: userData.id,
+    email: userData.email,
+    role: userData.role || "user",
+    iat: now,
+    exp: now + 60 * 60 * 24, // Token expires in 24 hours
+    iss: "businessmanagementapp",
+  };
+
+  // Encode header and payload
+  const encodedHeader = base64Encode(JSON.stringify(header))
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+
+  const encodedPayload = base64Encode(JSON.stringify(payload))
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+
+  // In a real implementation, you would sign the token with a secret key
+  // For demo purposes, we'll use a simple hash
+  const signatureInput =
+    encodedHeader + "." + encodedPayload + "." + "secretkey";
+
+  // Create signature (this is NOT secure - use a proper JWT library in production!)
+  const signature = await Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    signatureInput
+  );
+
+  const formattedSignature = signature
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+
+  // Return the complete JWT
+  return `${encodedHeader}.${encodedPayload}.${formattedSignature}`;
 };
