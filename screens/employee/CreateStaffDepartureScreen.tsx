@@ -1,16 +1,33 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform, Alert } from 'react-native';
-import { Text, TextInput, Button, useTheme, Snackbar, HelperText, Checkbox } from 'react-native-paper';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import { useForm, Controller } from 'react-hook-form';
-import DateTimePickerModal from 'react-native-modal-datetime-picker';
-import { format } from 'date-fns';
-import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../contexts/AuthContext';
-import AppHeader from '../../components/AppHeader';
-import LoadingIndicator from '../../components/LoadingIndicator';
-import { FormStatus, DocumentType } from '../../types';
+import React, { useState, useEffect } from "react";
+import {
+  StyleSheet,
+  View,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
+} from "react-native";
+import {
+  Text,
+  TextInput,
+  Button,
+  useTheme,
+  Snackbar,
+  HelperText,
+  Checkbox,
+} from "react-native-paper";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
+import { useForm, Controller } from "react-hook-form";
+import DateTimePickerModal from "react-native-modal-datetime-picker";
+import { format } from "date-fns";
+import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../contexts/AuthContext";
+import AppHeader from "../../components/AppHeader";
+import LoadingIndicator from "../../components/LoadingIndicator";
+import { FormStatus, DocumentType } from "../../types";
+import { pickAndUploadDocument } from "../../utils/documentPicker";
+import { types } from "@react-native-documents/picker";
 
 interface StaffDepartureFormData {
   exit_date: Date;
@@ -21,41 +38,53 @@ const CreateStaffDepartureScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
   const { user } = useAuth();
-  
+
   const [loading, setLoading] = useState(false);
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
-  const [selectedDocuments, setSelectedDocuments] = useState<DocumentType[]>([]);
+  const [snackbarMessage, setSnackbarMessage] = useState("");
+  const [selectedDocuments, setSelectedDocuments] = useState<DocumentType[]>(
+    []
+  );
+  const [uploadingDocument, setUploadingDocument] = useState(false);
+  const [uploadedDocuments, setUploadedDocuments] = useState<
+    Record<DocumentType, string | null>
+  >({} as Record<DocumentType, string | null>);
 
-  const { control, handleSubmit, formState: { errors }, watch, setValue } = useForm<StaffDepartureFormData>({
+  const {
+    control,
+    handleSubmit,
+    formState: { errors },
+    watch,
+    setValue,
+  } = useForm<StaffDepartureFormData>({
     defaultValues: {
       exit_date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 2 weeks from now
-      comments: '',
+      comments: "",
     },
   });
 
-  const exitDate = watch('exit_date');
+  const exitDate = watch("exit_date");
 
   const fetchCompanyId = async () => {
     if (!user) return;
-    
+
     try {
       const { data, error } = await supabase
-        .from('company_user')
-        .select('company_id')
-        .eq('id', user.id)
+        .from("company_user")
+        .select("company_id")
+        .eq("id", user.id)
         .single();
-      
+
       if (error) {
-        console.error('Error fetching company ID:', error);
+        console.error("Error fetching company ID:", error);
         return;
       }
-      
+
       setCompanyId(data.company_id);
     } catch (error) {
-      console.error('Error fetching company ID:', error);
+      console.error("Error fetching company ID:", error);
     }
   };
 
@@ -65,7 +94,7 @@ const CreateStaffDepartureScreen = () => {
 
   const handleDateConfirm = (selectedDate: Date) => {
     setShowDatePicker(false);
-    setValue('exit_date', selectedDate);
+    setValue("exit_date", selectedDate);
   };
 
   const handleDateCancel = () => {
@@ -74,60 +103,117 @@ const CreateStaffDepartureScreen = () => {
 
   const toggleDocument = (document: DocumentType) => {
     if (selectedDocuments.includes(document)) {
-      setSelectedDocuments(selectedDocuments.filter(doc => doc !== document));
+      setSelectedDocuments(selectedDocuments.filter((doc) => doc !== document));
     } else {
       setSelectedDocuments([...selectedDocuments, document]);
+    }
+  };
+
+  const handlePickDocument = async (documentType: DocumentType) => {
+    try {
+      setUploadingDocument(true);
+
+      // Format document type for folder name
+      const formattedType = documentType.toLowerCase().replace(/_/g, "-");
+
+      const documentUrl = await pickAndUploadDocument(
+        "departure_documents",
+        `${formattedType}/${user?.id}`,
+        { type: [types.pdf, types.images, types.docx] }
+      );
+
+      if (documentUrl) {
+        // Update uploaded documents state
+        setUploadedDocuments((prev) => ({
+          ...prev,
+          [documentType]: documentUrl,
+        }));
+      }
+    } catch (error) {
+      console.error("Error picking document:", error);
+      setSnackbarMessage("Failed to upload document. Please try again.");
+      setSnackbarVisible(true);
+    } finally {
+      setUploadingDocument(false);
     }
   };
 
   const onSubmit = async (data: StaffDepartureFormData) => {
     try {
       if (!user || !companyId) {
-        setSnackbarMessage('User or company information not available');
+        setSnackbarMessage("User or company information not available");
         setSnackbarVisible(true);
         return;
       }
-      
+
       if (selectedDocuments.length === 0) {
-        setSnackbarMessage('Please select at least one required document');
+        setSnackbarMessage("Please select at least one required document");
         setSnackbarVisible(true);
         return;
       }
-      
+
       setLoading(true);
-      
+
       // Create staff departure report
-      const { error } = await supabase
-        .from('staff_departure_report')
-        .insert([
-          {
-            employee_id: user.id,
-            company_id: companyId,
-            exit_date: data.exit_date.toISOString(),
-            comments: data.comments,
-            documents_required: selectedDocuments,
-            status: FormStatus.PENDING,
-          },
-        ]);
-      
+      const { error } = await supabase.from("staff_departure").insert([
+        {
+          employee_id: user.id,
+          company_id: companyId,
+          exit_date: data.exit_date.toISOString(),
+          comments: data.comments,
+          documents_required: selectedDocuments,
+          documents_submitted: uploadedDocuments,
+          status: FormStatus.PENDING,
+          submission_date: new Date().toISOString(),
+        },
+      ]);
+
       if (error) {
         throw error;
       }
-      
-      setSnackbarMessage('Staff departure report submitted successfully');
+
+      setSnackbarMessage("Staff departure report submitted successfully");
       setSnackbarVisible(true);
-      
+
       // Navigate back after a short delay
       setTimeout(() => {
         navigation.goBack();
       }, 2000);
     } catch (error: any) {
-      console.error('Error submitting staff departure report:', error);
-      setSnackbarMessage(error.message || 'Failed to submit staff departure report');
+      console.error("Error submitting staff departure report:", error);
+      setSnackbarMessage(error.message || "Failed to submit report");
       setSnackbarVisible(true);
     } finally {
       setLoading(false);
     }
+  };
+
+  const renderDocumentItem = (document: DocumentType, label: string) => {
+    const isSelected = selectedDocuments.includes(document);
+    const isUploaded = !!uploadedDocuments[document];
+
+    return (
+      <View style={styles.documentItem} key={document}>
+        <Checkbox
+          status={isSelected ? "checked" : "unchecked"}
+          onPress={() => toggleDocument(document)}
+        />
+        <Text style={styles.documentLabel}>{label}</Text>
+        {isSelected && (
+          <Button
+            mode={isUploaded ? "contained" : "outlined"}
+            onPress={() => handlePickDocument(document)}
+            style={styles.uploadButton}
+            icon={isUploaded ? "check" : "upload"}
+            loading={uploadingDocument}
+            disabled={loading || uploadingDocument}
+            compact
+          >
+            {isUploaded ? "Uploaded" : "Upload"}
+          </Button>
+        )}
+      </View>
+    );
   };
 
   if (!companyId) {
@@ -135,18 +221,25 @@ const CreateStaffDepartureScreen = () => {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
       <AppHeader title="Staff Departure" showBackButton />
-      
+
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardAvoidingView}
       >
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+        >
+          <Text
+            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
+          >
             Departure Details
           </Text>
-          
+
           <Text style={styles.inputLabel}>Exit Date *</Text>
           <Button
             mode="outlined"
@@ -154,9 +247,9 @@ const CreateStaffDepartureScreen = () => {
             style={styles.dateButton}
             icon="calendar"
           >
-            {format(exitDate, 'MMMM d, yyyy')}
+            {format(exitDate, "MMMM d, yyyy")}
           </Button>
-          
+
           <DateTimePickerModal
             isVisible={showDatePicker}
             mode="date"
@@ -165,65 +258,41 @@ const CreateStaffDepartureScreen = () => {
             date={exitDate}
             minimumDate={new Date()}
           />
-          
-          <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+
+          <Text
+            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
+          >
             Required Documents
           </Text>
-          
+
           <Text style={styles.helperText}>
             Select the documents you need to submit for your departure:
           </Text>
-          
+
           <View style={styles.documentsContainer}>
-            <View style={styles.documentItem}>
-              <Checkbox
-                status={selectedDocuments.includes(DocumentType.RESIGNATION_LETTER) ? 'checked' : 'unchecked'}
-                onPress={() => toggleDocument(DocumentType.RESIGNATION_LETTER)}
-              />
-              <Text style={styles.documentLabel}>Resignation Letter</Text>
-            </View>
-            
-            <View style={styles.documentItem}>
-              <Checkbox
-                status={selectedDocuments.includes(DocumentType.EXIT_INTERVIEW) ? 'checked' : 'unchecked'}
-                onPress={() => toggleDocument(DocumentType.EXIT_INTERVIEW)}
-              />
-              <Text style={styles.documentLabel}>Exit Interview</Text>
-            </View>
-            
-            <View style={styles.documentItem}>
-              <Checkbox
-                status={selectedDocuments.includes(DocumentType.EQUIPMENT_RETURN) ? 'checked' : 'unchecked'}
-                onPress={() => toggleDocument(DocumentType.EQUIPMENT_RETURN)}
-              />
-              <Text style={styles.documentLabel}>Equipment Return Form</Text>
-            </View>
-            
-            <View style={styles.documentItem}>
-              <Checkbox
-                status={selectedDocuments.includes(DocumentType.FINAL_SETTLEMENT) ? 'checked' : 'unchecked'}
-                onPress={() => toggleDocument(DocumentType.FINAL_SETTLEMENT)}
-              />
-              <Text style={styles.documentLabel}>Final Settlement Form</Text>
-            </View>
-            
-            <View style={styles.documentItem}>
-              <Checkbox
-                status={selectedDocuments.includes(DocumentType.NON_DISCLOSURE) ? 'checked' : 'unchecked'}
-                onPress={() => toggleDocument(DocumentType.NON_DISCLOSURE)}
-              />
-              <Text style={styles.documentLabel}>Non-Disclosure Agreement</Text>
-            </View>
-            
-            <View style={styles.documentItem}>
-              <Checkbox
-                status={selectedDocuments.includes(DocumentType.NON_COMPETE) ? 'checked' : 'unchecked'}
-                onPress={() => toggleDocument(DocumentType.NON_COMPETE)}
-              />
-              <Text style={styles.documentLabel}>Non-Compete Agreement</Text>
-            </View>
+            {renderDocumentItem(
+              DocumentType.RESIGNATION_LETTER,
+              "Resignation Letter"
+            )}
+            {renderDocumentItem(DocumentType.EXIT_INTERVIEW, "Exit Interview")}
+            {renderDocumentItem(
+              DocumentType.EQUIPMENT_RETURN,
+              "Equipment Return Form"
+            )}
+            {renderDocumentItem(
+              DocumentType.FINAL_SETTLEMENT,
+              "Final Settlement Form"
+            )}
+            {renderDocumentItem(
+              DocumentType.NON_DISCLOSURE,
+              "Non-Disclosure Agreement"
+            )}
+            {renderDocumentItem(
+              DocumentType.NON_COMPETE,
+              "Non-Compete Agreement"
+            )}
           </View>
-          
+
           <Controller
             control={control}
             render={({ field: { onChange, onBlur, value } }) => (
@@ -241,7 +310,7 @@ const CreateStaffDepartureScreen = () => {
             )}
             name="comments"
           />
-          
+
           <Button
             mode="contained"
             onPress={handleSubmit(onSubmit)}
@@ -253,13 +322,13 @@ const CreateStaffDepartureScreen = () => {
           </Button>
         </ScrollView>
       </KeyboardAvoidingView>
-      
+
       <Snackbar
         visible={snackbarVisible}
         onDismiss={() => setSnackbarVisible(false)}
         duration={3000}
         action={{
-          label: 'OK',
+          label: "OK",
           onPress: () => setSnackbarVisible(false),
         }}
       >
@@ -285,7 +354,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginTop: 16,
     marginBottom: 16,
   },
@@ -309,8 +378,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   documentItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 8,
   },
   documentLabel: {
@@ -320,6 +389,10 @@ const styles = StyleSheet.create({
   submitButton: {
     marginTop: 24,
     paddingVertical: 6,
+  },
+  uploadButton: {
+    marginLeft: "auto",
+    minWidth: 100,
   },
 });
 

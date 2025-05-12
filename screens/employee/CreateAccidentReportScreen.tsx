@@ -1,16 +1,32 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, ScrollView, KeyboardAvoidingView, Platform, Alert } from 'react-native';
-import { Text, TextInput, Button, useTheme, Snackbar, HelperText } from 'react-native-paper';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import { useForm, Controller } from 'react-hook-form';
-import DateTimePickerModal from 'react-native-modal-datetime-picker';
-import { format } from 'date-fns';
-import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../contexts/AuthContext';
-import AppHeader from '../../components/AppHeader';
-import LoadingIndicator from '../../components/LoadingIndicator';
-import { FormStatus } from '../../types';
+import React, { useState, useEffect } from "react";
+import {
+  StyleSheet,
+  View,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
+} from "react-native";
+import {
+  Text,
+  TextInput,
+  Button,
+  useTheme,
+  Snackbar,
+  HelperText,
+} from "react-native-paper";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
+import { useForm, Controller } from "react-hook-form";
+import DateTimePickerModal from "react-native-modal-datetime-picker";
+import { format } from "date-fns";
+import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../contexts/AuthContext";
+import AppHeader from "../../components/AppHeader";
+import LoadingIndicator from "../../components/LoadingIndicator";
+import { FormStatus } from "../../types";
+import { pickAndUploadDocument } from "../../utils/documentPicker";
+import { types } from "@react-native-documents/picker";
 
 interface AccidentReportFormData {
   date_of_accident: Date;
@@ -28,47 +44,55 @@ const CreateAccidentReportScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
   const { user } = useAuth();
-  
+
   const [loading, setLoading] = useState(false);
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [snackbarMessage, setSnackbarMessage] = useState("");
+  const [uploadingDocument, setUploadingDocument] = useState(false);
+  const [documentName, setDocumentName] = useState<string | null>(null);
 
-  const { control, handleSubmit, formState: { errors }, watch, setValue } = useForm<AccidentReportFormData>({
+  const {
+    control,
+    handleSubmit,
+    formState: { errors },
+    watch,
+    setValue,
+  } = useForm<AccidentReportFormData>({
     defaultValues: {
       date_of_accident: new Date(),
-      time_of_accident: format(new Date(), 'HH:mm'),
-      accident_address: '',
-      city: '',
-      accident_description: '',
-      objects_involved: '',
-      injuries: '',
-      accident_type: '',
-      medical_certificate: '',
+      time_of_accident: format(new Date(), "HH:mm"),
+      accident_address: "",
+      city: "",
+      accident_description: "",
+      objects_involved: "",
+      injuries: "",
+      accident_type: "",
+      medical_certificate: "",
     },
   });
 
-  const dateOfAccident = watch('date_of_accident');
+  const dateOfAccident = watch("date_of_accident");
 
   const fetchCompanyId = async () => {
     if (!user) return;
-    
+
     try {
       const { data, error } = await supabase
-        .from('company_user')
-        .select('company_id')
-        .eq('id', user.id)
+        .from("company_user")
+        .select("company_id")
+        .eq("id", user.id)
         .single();
-      
+
       if (error) {
-        console.error('Error fetching company ID:', error);
+        console.error("Error fetching company ID:", error);
         return;
       }
-      
+
       setCompanyId(data.company_id);
     } catch (error) {
-      console.error('Error fetching company ID:', error);
+      console.error("Error fetching company ID:", error);
     }
   };
 
@@ -78,7 +102,7 @@ const CreateAccidentReportScreen = () => {
 
   const handleDateConfirm = (selectedDate: Date) => {
     setShowDatePicker(false);
-    setValue('date_of_accident', selectedDate);
+    setValue("date_of_accident", selectedDate);
   };
 
   const handleDateCancel = () => {
@@ -88,50 +112,72 @@ const CreateAccidentReportScreen = () => {
   const onSubmit = async (data: AccidentReportFormData) => {
     try {
       if (!user || !companyId) {
-        setSnackbarMessage('User or company information not available');
+        setSnackbarMessage("User or company information not available");
         setSnackbarVisible(true);
         return;
       }
-      
+
       setLoading(true);
-      
+
       // Create accident report
-      const { error } = await supabase
-        .from('accident_report')
-        .insert([
-          {
-            employee_id: user.id,
-            company_id: companyId,
-            date_of_accident: data.date_of_accident.toISOString(),
-            time_of_accident: data.time_of_accident,
-            accident_address: data.accident_address,
-            city: data.city,
-            accident_description: data.accident_description,
-            objects_involved: data.objects_involved,
-            injuries: data.injuries,
-            accident_type: data.accident_type,
-            medical_certificate: data.medical_certificate || null,
-            status: FormStatus.PENDING,
-          },
-        ]);
-      
+      const { error } = await supabase.from("accident_report").insert([
+        {
+          employee_id: user.id,
+          company_id: companyId,
+          date_of_accident: data.date_of_accident.toISOString(),
+          time_of_accident: data.time_of_accident,
+          accident_address: data.accident_address,
+          city: data.city,
+          accident_description: data.accident_description,
+          objects_involved: data.objects_involved,
+          injuries: data.injuries,
+          accident_type: data.accident_type,
+          medical_certificate: data.medical_certificate || null,
+          status: FormStatus.PENDING,
+        },
+      ]);
+
       if (error) {
         throw error;
       }
-      
-      setSnackbarMessage('Accident report submitted successfully');
+
+      setSnackbarMessage("Accident report submitted successfully");
       setSnackbarVisible(true);
-      
+
       // Navigate back after a short delay
       setTimeout(() => {
         navigation.goBack();
       }, 2000);
     } catch (error: any) {
-      console.error('Error submitting accident report:', error);
-      setSnackbarMessage(error.message || 'Failed to submit accident report');
+      console.error("Error submitting accident report:", error);
+      setSnackbarMessage(error.message || "Failed to submit accident report");
       setSnackbarVisible(true);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePickDocument = async () => {
+    try {
+      setUploadingDocument(true);
+      const documentUrl = await pickAndUploadDocument(
+        "medical_certificates",
+        `accident_reports/${user?.id}`,
+        { type: [types.pdf, types.images] }
+      );
+
+      if (documentUrl) {
+        setValue("medical_certificate", documentUrl);
+        // Extract file name from URL
+        const fileName = documentUrl.split("/").pop() || "Document uploaded";
+        setDocumentName(fileName);
+      }
+    } catch (error) {
+      console.error("Error picking document:", error);
+      setSnackbarMessage("Failed to upload document. Please try again.");
+      setSnackbarVisible(true);
+    } finally {
+      setUploadingDocument(false);
     }
   };
 
@@ -140,18 +186,25 @@ const CreateAccidentReportScreen = () => {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
       <AppHeader title="Report Accident" showBackButton />
-      
+
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardAvoidingView}
       >
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+        >
+          <Text
+            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
+          >
             Accident Details
           </Text>
-          
+
           <Text style={styles.inputLabel}>Date of Accident *</Text>
           <Button
             mode="outlined"
@@ -159,9 +212,9 @@ const CreateAccidentReportScreen = () => {
             style={styles.dateButton}
             icon="calendar"
           >
-            {format(dateOfAccident, 'MMMM d, yyyy')}
+            {format(dateOfAccident, "MMMM d, yyyy")}
           </Button>
-          
+
           <DateTimePickerModal
             isVisible={showDatePicker}
             mode="date"
@@ -170,10 +223,10 @@ const CreateAccidentReportScreen = () => {
             date={dateOfAccident}
             maximumDate={new Date()}
           />
-          
+
           <Controller
             control={control}
-            rules={{ required: 'Time of accident is required' }}
+            rules={{ required: "Time of accident is required" }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 label="Time of Accident *"
@@ -189,12 +242,14 @@ const CreateAccidentReportScreen = () => {
             name="time_of_accident"
           />
           {errors.time_of_accident && (
-            <HelperText type="error">{errors.time_of_accident.message}</HelperText>
+            <HelperText type="error">
+              {errors.time_of_accident.message}
+            </HelperText>
           )}
-          
+
           <Controller
             control={control}
-            rules={{ required: 'Address is required' }}
+            rules={{ required: "Address is required" }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 label="Accident Address *"
@@ -210,12 +265,14 @@ const CreateAccidentReportScreen = () => {
             name="accident_address"
           />
           {errors.accident_address && (
-            <HelperText type="error">{errors.accident_address.message}</HelperText>
+            <HelperText type="error">
+              {errors.accident_address.message}
+            </HelperText>
           )}
-          
+
           <Controller
             control={control}
-            rules={{ required: 'City is required' }}
+            rules={{ required: "City is required" }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 label="City *"
@@ -233,10 +290,10 @@ const CreateAccidentReportScreen = () => {
           {errors.city && (
             <HelperText type="error">{errors.city.message}</HelperText>
           )}
-          
+
           <Controller
             control={control}
-            rules={{ required: 'Accident description is required' }}
+            rules={{ required: "Accident description is required" }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 label="Accident Description *"
@@ -254,12 +311,14 @@ const CreateAccidentReportScreen = () => {
             name="accident_description"
           />
           {errors.accident_description && (
-            <HelperText type="error">{errors.accident_description.message}</HelperText>
+            <HelperText type="error">
+              {errors.accident_description.message}
+            </HelperText>
           )}
-          
+
           <Controller
             control={control}
-            rules={{ required: 'Objects involved is required' }}
+            rules={{ required: "Objects involved is required" }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 label="Objects Involved *"
@@ -275,12 +334,14 @@ const CreateAccidentReportScreen = () => {
             name="objects_involved"
           />
           {errors.objects_involved && (
-            <HelperText type="error">{errors.objects_involved.message}</HelperText>
+            <HelperText type="error">
+              {errors.objects_involved.message}
+            </HelperText>
           )}
-          
+
           <Controller
             control={control}
-            rules={{ required: 'Injuries is required' }}
+            rules={{ required: "Injuries is required" }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 label="Injuries *"
@@ -300,10 +361,10 @@ const CreateAccidentReportScreen = () => {
           {errors.injuries && (
             <HelperText type="error">{errors.injuries.message}</HelperText>
           )}
-          
+
           <Controller
             control={control}
-            rules={{ required: 'Accident type is required' }}
+            rules={{ required: "Accident type is required" }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
                 label="Accident Type *"
@@ -321,23 +382,21 @@ const CreateAccidentReportScreen = () => {
           {errors.accident_type && (
             <HelperText type="error">{errors.accident_type.message}</HelperText>
           )}
-          
-          <Controller
-            control={control}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Medical Certificate URL (if available)"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                style={styles.input}
-                disabled={loading}
-              />
-            )}
-            name="medical_certificate"
-          />
-          
+
+          <Text style={styles.inputLabel}>Medical Certificate</Text>
+          <View style={styles.documentPickerContainer}>
+            <Button
+              mode="outlined"
+              onPress={handlePickDocument}
+              style={styles.documentButton}
+              icon="file-upload"
+              loading={uploadingDocument}
+              disabled={loading || uploadingDocument}
+            >
+              {documentName || "Upload Medical Certificate"}
+            </Button>
+          </View>
+
           <Button
             mode="contained"
             onPress={handleSubmit(onSubmit)}
@@ -349,13 +408,13 @@ const CreateAccidentReportScreen = () => {
           </Button>
         </ScrollView>
       </KeyboardAvoidingView>
-      
+
       <Snackbar
         visible={snackbarVisible}
         onDismiss={() => setSnackbarVisible(false)}
         duration={3000}
         action={{
-          label: 'OK',
+          label: "OK",
           onPress: () => setSnackbarVisible(false),
         }}
       >
@@ -381,7 +440,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginTop: 8,
     marginBottom: 16,
   },
@@ -399,6 +458,12 @@ const styles = StyleSheet.create({
   submitButton: {
     marginTop: 24,
     paddingVertical: 6,
+  },
+  documentPickerContainer: {
+    marginBottom: 16,
+  },
+  documentButton: {
+    marginTop: 8,
   },
 });
 

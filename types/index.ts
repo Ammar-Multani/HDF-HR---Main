@@ -1,90 +1,90 @@
 // User roles
 export enum UserRole {
-  SUPER_ADMIN = 'superadmin',
-  COMPANY_ADMIN = 'admin',
-  EMPLOYEE = 'employee',
+  SUPER_ADMIN = "superadmin",
+  COMPANY_ADMIN = "admin",
+  EMPLOYEE = "employee",
 }
 
 // User status
 export enum UserStatus {
-  ACTIVE = 'active',
-  INACTIVE = 'inactive',
+  ACTIVE = "active",
+  INACTIVE = "inactive",
 }
 
 // Task priority
 export enum TaskPriority {
-  LOW = 'low',
-  MEDIUM = 'medium',
-  HIGH = 'high',
+  LOW = "low",
+  MEDIUM = "medium",
+  HIGH = "high",
 }
 
 // Task status
 export enum TaskStatus {
-  OPEN = 'open',
-  IN_PROGRESS = 'in_progress',
-  AWAITING_RESPONSE = 'awaiting_response',
-  COMPLETED = 'completed',
-  OVERDUE = 'overdue',
+  OPEN = "open",
+  IN_PROGRESS = "in_progress",
+  AWAITING_RESPONSE = "awaiting_response",
+  COMPLETED = "completed",
+  OVERDUE = "overdue",
 }
 
 // Form status
 export enum FormStatus {
-  DRAFT = 'draft',
-  PENDING = 'pending',
-  IN_PROGRESS = 'in_progress',
-  APPROVED = 'approved',
-  DECLINED = 'declined',
+  DRAFT = "draft",
+  PENDING = "pending",
+  IN_PROGRESS = "in_progress",
+  APPROVED = "approved",
+  DECLINED = "declined",
 }
 
 // ID types
 export enum IDType {
-  PASSPORT = 'passport',
-  ID_CARD = 'id_card',
-  DRIVERS_LICENSE = 'drivers_license',
+  PASSPORT = "passport",
+  ID_CARD = "id_card",
+  DRIVERS_LICENSE = "drivers_license",
 }
 
 // Gender
 export enum Gender {
-  MALE = 'male',
-  FEMALE = 'female',
-  OTHER = 'other',
+  MALE = "male",
+  FEMALE = "female",
+  OTHER = "other",
 }
 
 // Marital status
 export enum MaritalStatus {
-  SINGLE = 'single',
-  MARRIED = 'married',
-  DIVORCED = 'divorced',
-  WIDOWED = 'widowed',
+  SINGLE = "single",
+  MARRIED = "married",
+  DIVORCED = "divorced",
+  WIDOWED = "widowed",
 }
 
 // Employment type
 export enum EmploymentType {
-  FULL_TIME = 'full_time',
-  PART_TIME = 'part_time',
-  CONTRACT = 'contract',
-  TEMPORARY = 'temporary',
+  FULL_TIME = "full_time",
+  PART_TIME = "part_time",
+  CONTRACT = "contract",
+  TEMPORARY = "temporary",
 }
 
 // Document types for staff departure
 export enum DocumentType {
-  LETTER_OF_TERMINATION = 'letter_of_termination',
-  WAGE_STATEMENT = 'wage_statement',
-  REFERENCE_LETTER = 'reference_letter',
-  EXIT_INTERVIEW = 'exit_interview',
-  RESIGNATION_LETTER = 'resignation_letter',
-  EQUIPMENT_RETURN = 'equipment_return',
-  FINAL_SETTLEMENT = 'final_settlement',
-  NON_DISCLOSURE = 'non_disclosure',
-  NON_COMPETE = 'non_compete',
+  LETTER_OF_TERMINATION = "letter_of_termination",
+  WAGE_STATEMENT = "wage_statement",
+  REFERENCE_LETTER = "reference_letter",
+  EXIT_INTERVIEW = "exit_interview",
+  RESIGNATION_LETTER = "resignation_letter",
+  EQUIPMENT_RETURN = "equipment_return",
+  FINAL_SETTLEMENT = "final_settlement",
+  NON_DISCLOSURE = "non_disclosure",
+  NON_COMPETE = "non_compete",
 }
 
 // Payment method
 export enum PaymentMethod {
-  CASH = 'cash',
-  CREDIT_CARD = 'credit_card',
-  DEBIT_CARD = 'debit_card',
-  BANK_TRANSFER = 'bank_transfer',
+  CASH = "cash",
+  CREDIT_CARD = "credit_card",
+  DEBIT_CARD = "debit_card",
+  BANK_TRANSFER = "bank_transfer",
 }
 
 // User interface
@@ -247,10 +247,11 @@ export interface StaffDepartureReport {
   employee_id: string;
   exit_date: string;
   comments?: string;
-  created_at: string;
-  updated_at: string;
-  status: FormStatus;
   documents_required: DocumentType[];
+  documents_submitted?: Record<DocumentType, string | null>;
+  status: FormStatus;
+  submission_date: string;
+  updated_at: string;
 }
 
 // Receipt interface
@@ -274,4 +275,12 @@ export interface Receipt {
   created_by: string;
   created_at: string;
   updated_at: string;
+}
+
+// Document picker related types
+export interface DocumentUpload {
+  uri: string;
+  name: string;
+  type: string;
+  size: number;
 }

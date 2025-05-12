@@ -11,9 +11,7 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.yourcompany.businessmanagement",
@@ -42,23 +40,20 @@
     "web": {
       "favicon": "./assets/images/favicon.png"
     },
-    "plugins": [
-      "expo-router",
-      [
-        "expo-document-picker",
-        {
-          "iCloudContainerEnvironment": "Production"
-        }
-      ]
-    ],
+    "plugins": ["expo-router"],
     "scheme": "businessmanagementapp",
     "extra": {
       "router": {
         "origin": false
       },
       "eas": {
-        "projectId": "your-project-id"
+        "projectId": "e3081746-c231-4868-96de-49ea29a4414a"
       }
-    }
+    },
+    "owner": "ammar001",
+    "experiments": {
+      "tsconfigPaths": true
+    },
+    "newArchEnabled": false
   }
 }
