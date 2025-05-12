@@ -5,17 +5,20 @@ import { useAuth } from '../../contexts/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 
-const LoginScreen = () => {
+const RegisterScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
-  const { signIn, loading } = useAuth();
+  const { signUp, loading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [confirmPasswordError, setConfirmPasswordError] = useState('');
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -42,28 +45,45 @@ const LoginScreen = () => {
     return true;
   };
 
-  const handleSignIn = async () => {
+  const validateConfirmPassword = (confirmPassword: string) => {
+    if (!confirmPassword) {
+      setConfirmPasswordError('Please confirm your password');
+      return false;
+    } else if (confirmPassword !== password) {
+      setConfirmPasswordError('Passwords do not match');
+      return false;
+    }
+    setConfirmPasswordError('');
+    return true;
+  };
+
+  const handleRegister = async () => {
     const isEmailValid = validateEmail(email);
     const isPasswordValid = validatePassword(password);
+    const isConfirmPasswordValid = validateConfirmPassword(confirmPassword);
 
-    if (!isEmailValid || !isPasswordValid) {
+    if (!isEmailValid || !isPasswordValid || !isConfirmPasswordValid) {
       return;
     }
 
-    const { error } = await signIn(email, password);
+    const { data, error } = await signUp(email, password);
     
     if (error) {
-      setSnackbarMessage(error.message || 'Failed to sign in');
+      setSnackbarMessage(error.message || 'Failed to register');
       setSnackbarVisible(true);
+    } else {
+      setSnackbarMessage('Registration successful! Please check your email to confirm your account.');
+      setSnackbarVisible(true);
+      
+      // Navigate back to login after a delay
+      setTimeout(() => {
+        navigation.navigate('Login' as never);
+      }, 3000);
     }
   };
 
-  const navigateToRegister = () => {
-    navigation.navigate('Register' as never);
-  };
-
-  const navigateToForgotPassword = () => {
-    navigation.navigate('ForgotPassword' as never);
+  const navigateToLogin = () => {
+    navigation.navigate('Login' as never);
   };
 
   return (
@@ -85,11 +105,11 @@ const LoginScreen = () => {
           </View>
           
           <Text style={[styles.title, { color: theme.colors.primary }]}>
-            Business Management
+            Create Account
           </Text>
           
           <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>
-            Sign in to your account
+            Register for a new account
           </Text>
           
           <View style={styles.formContainer}>
@@ -115,6 +135,7 @@ const LoginScreen = () => {
               onChangeText={(text) => {
                 setPassword(text);
                 if (passwordError) validatePassword(text);
+                if (confirmPassword && confirmPasswordError) validateConfirmPassword(confirmPassword);
               }}
               mode="outlined"
               secureTextEntry={!passwordVisible}
@@ -130,33 +151,45 @@ const LoginScreen = () => {
             />
             {passwordError ? <HelperText type="error">{passwordError}</HelperText> : null}
             
+            <TextInput
+              label="Confirm Password"
+              value={confirmPassword}
+              onChangeText={(text) => {
+                setConfirmPassword(text);
+                if (confirmPasswordError) validateConfirmPassword(text);
+              }}
+              mode="outlined"
+              secureTextEntry={!confirmPasswordVisible}
+              style={styles.input}
+              disabled={loading}
+              error={!!confirmPasswordError}
+              right={
+                <TextInput.Icon
+                  icon={confirmPasswordVisible ? "eye-off" : "eye"}
+                  onPress={() => setConfirmPasswordVisible(!confirmPasswordVisible)}
+                />
+              }
+            />
+            {confirmPasswordError ? <HelperText type="error">{confirmPasswordError}</HelperText> : null}
+            
             <Button
               mode="contained"
-              onPress={handleSignIn}
+              onPress={handleRegister}
               style={styles.button}
               loading={loading}
               disabled={loading}
             >
-              Sign In
+              Register
             </Button>
-
-            <TouchableOpacity 
-              onPress={navigateToForgotPassword}
-              style={styles.forgotPasswordContainer}
-            >
-              <Text style={[styles.forgotPasswordText, { color: theme.colors.primary }]}>
-                Forgot Password?
-              </Text>
-            </TouchableOpacity>
           </View>
           
-          <View style={styles.registerContainer}>
+          <View style={styles.loginContainer}>
             <Text style={{ color: theme.colors.onSurfaceVariant }}>
-              Don't have an account?
+              Already have an account?
             </Text>
-            <TouchableOpacity onPress={navigateToRegister}>
-              <Text style={[styles.registerText, { color: theme.colors.primary }]}>
-                {' Register'}
+            <TouchableOpacity onPress={navigateToLogin}>
+              <Text style={[styles.loginText, { color: theme.colors.primary }]}>
+                {' Sign In'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -221,21 +254,14 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingVertical: 6,
   },
-  forgotPasswordContainer: {
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  forgotPasswordText: {
-    fontSize: 14,
-  },
-  registerContainer: {
+  loginContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     marginTop: 32,
   },
-  registerText: {
+  loginText: {
     fontWeight: 'bold',
   },
 });
 
-export default LoginScreen;
+export default RegisterScreen;

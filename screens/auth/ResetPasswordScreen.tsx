@@ -1,34 +1,22 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Image, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, Image, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { Text, TextInput, Button, useTheme, Snackbar, HelperText } from 'react-native-paper';
 import { useAuth } from '../../contexts/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 
-const LoginScreen = () => {
+const ResetPasswordScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
-  const { signIn, loading } = useAuth();
-  const [email, setEmail] = useState('');
+  const { resetPassword, loading } = useAuth();
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
-  const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
-
-  const validateEmail = (email: string) => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!email) {
-      setEmailError('Email is required');
-      return false;
-    } else if (!emailRegex.test(email)) {
-      setEmailError('Please enter a valid email address');
-      return false;
-    }
-    setEmailError('');
-    return true;
-  };
+  const [confirmPasswordError, setConfirmPasswordError] = useState('');
 
   const validatePassword = (password: string) => {
     if (!password) {
@@ -42,28 +30,40 @@ const LoginScreen = () => {
     return true;
   };
 
-  const handleSignIn = async () => {
-    const isEmailValid = validateEmail(email);
-    const isPasswordValid = validatePassword(password);
+  const validateConfirmPassword = (confirmPassword: string) => {
+    if (!confirmPassword) {
+      setConfirmPasswordError('Please confirm your password');
+      return false;
+    } else if (confirmPassword !== password) {
+      setConfirmPasswordError('Passwords do not match');
+      return false;
+    }
+    setConfirmPasswordError('');
+    return true;
+  };
 
-    if (!isEmailValid || !isPasswordValid) {
+  const handleResetPassword = async () => {
+    const isPasswordValid = validatePassword(password);
+    const isConfirmPasswordValid = validateConfirmPassword(confirmPassword);
+
+    if (!isPasswordValid || !isConfirmPasswordValid) {
       return;
     }
 
-    const { error } = await signIn(email, password);
+    const { error } = await resetPassword(password);
     
     if (error) {
-      setSnackbarMessage(error.message || 'Failed to sign in');
+      setSnackbarMessage(error.message || 'Failed to reset password');
       setSnackbarVisible(true);
+    } else {
+      setSnackbarMessage('Password reset successful! You can now sign in with your new password.');
+      setSnackbarVisible(true);
+      
+      // Navigate to login after a delay
+      setTimeout(() => {
+        navigation.navigate('Login' as never);
+      }, 3000);
     }
-  };
-
-  const navigateToRegister = () => {
-    navigation.navigate('Register' as never);
-  };
-
-  const navigateToForgotPassword = () => {
-    navigation.navigate('ForgotPassword' as never);
   };
 
   return (
@@ -85,36 +85,21 @@ const LoginScreen = () => {
           </View>
           
           <Text style={[styles.title, { color: theme.colors.primary }]}>
-            Business Management
+            Set New Password
           </Text>
           
           <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>
-            Sign in to your account
+            Create a new password for your account
           </Text>
           
           <View style={styles.formContainer}>
             <TextInput
-              label="Email"
-              value={email}
-              onChangeText={(text) => {
-                setEmail(text);
-                if (emailError) validateEmail(text);
-              }}
-              mode="outlined"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              style={styles.input}
-              disabled={loading}
-              error={!!emailError}
-            />
-            {emailError ? <HelperText type="error">{emailError}</HelperText> : null}
-            
-            <TextInput
-              label="Password"
+              label="New Password"
               value={password}
               onChangeText={(text) => {
                 setPassword(text);
                 if (passwordError) validatePassword(text);
+                if (confirmPassword && confirmPasswordError) validateConfirmPassword(confirmPassword);
               }}
               mode="outlined"
               secureTextEntry={!passwordVisible}
@@ -130,35 +115,36 @@ const LoginScreen = () => {
             />
             {passwordError ? <HelperText type="error">{passwordError}</HelperText> : null}
             
+            <TextInput
+              label="Confirm New Password"
+              value={confirmPassword}
+              onChangeText={(text) => {
+                setConfirmPassword(text);
+                if (confirmPasswordError) validateConfirmPassword(text);
+              }}
+              mode="outlined"
+              secureTextEntry={!confirmPasswordVisible}
+              style={styles.input}
+              disabled={loading}
+              error={!!confirmPasswordError}
+              right={
+                <TextInput.Icon
+                  icon={confirmPasswordVisible ? "eye-off" : "eye"}
+                  onPress={() => setConfirmPasswordVisible(!confirmPasswordVisible)}
+                />
+              }
+            />
+            {confirmPasswordError ? <HelperText type="error">{confirmPasswordError}</HelperText> : null}
+            
             <Button
               mode="contained"
-              onPress={handleSignIn}
+              onPress={handleResetPassword}
               style={styles.button}
               loading={loading}
               disabled={loading}
             >
-              Sign In
+              Reset Password
             </Button>
-
-            <TouchableOpacity 
-              onPress={navigateToForgotPassword}
-              style={styles.forgotPasswordContainer}
-            >
-              <Text style={[styles.forgotPasswordText, { color: theme.colors.primary }]}>
-                Forgot Password?
-              </Text>
-            </TouchableOpacity>
-          </View>
-          
-          <View style={styles.registerContainer}>
-            <Text style={{ color: theme.colors.onSurfaceVariant }}>
-              Don't have an account?
-            </Text>
-            <TouchableOpacity onPress={navigateToRegister}>
-              <Text style={[styles.registerText, { color: theme.colors.primary }]}>
-                {' Register'}
-              </Text>
-            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -221,21 +207,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingVertical: 6,
   },
-  forgotPasswordContainer: {
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  forgotPasswordText: {
-    fontSize: 14,
-  },
-  registerContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 32,
-  },
-  registerText: {
-    fontWeight: 'bold',
-  },
 });
 
-export default LoginScreen;
+export default ResetPasswordScreen;

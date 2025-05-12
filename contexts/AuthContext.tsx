@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
 import { Session } from '@supabase/supabase-js';
@@ -9,8 +8,11 @@ interface AuthContextType {
   user: any | null;
   userRole: UserRole | null;
   loading: boolean;
-  signIn: (email: string) => Promise<{ error: any }>;
+  signIn: (email: string, password: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string) => Promise<{ error: any, data: any }>;
   signOut: () => Promise<void>;
+  forgotPassword: (email: string) => Promise<{ error: any }>;
+  resetPassword: (newPassword: string) => Promise<{ error: any }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -87,22 +89,48 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const signIn = async (email: string) => {
+  const signIn = async (email: string, password: string) => {
     setLoading(true);
-    const { error } = await supabase.auth.signInWithOtp({
+    const { error } = await supabase.auth.signInWithPassword({
       email,
-      options: {
-        emailRedirectTo: 'businessmanagementapp://auth/callback',
-      },
+      password,
     });
     setLoading(false);
     return { error };
+  };
+
+  const signUp = async (email: string, password: string) => {
+    setLoading(true);
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+    });
+    setLoading(false);
+    return { data, error };
   };
 
   const signOut = async () => {
     setLoading(true);
     await supabase.auth.signOut();
     setLoading(false);
+  };
+
+  const forgotPassword = async (email: string) => {
+    setLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: 'businessmanagementapp://auth/reset-password',
+    });
+    setLoading(false);
+    return { error };
+  };
+
+  const resetPassword = async (newPassword: string) => {
+    setLoading(true);
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+    setLoading(false);
+    return { error };
   };
 
   return (
@@ -113,7 +141,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         userRole,
         loading,
         signIn,
+        signUp,
         signOut,
+        forgotPassword,
+        resetPassword,
       }}
     >
       {children}

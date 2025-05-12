@@ -5,17 +5,14 @@ import { useAuth } from '../../contexts/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 
-const LoginScreen = () => {
+const ForgotPasswordScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
-  const { signIn, loading } = useAuth();
+  const { forgotPassword, loading } = useAuth();
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [passwordVisible, setPasswordVisible] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [emailError, setEmailError] = useState('');
-  const [passwordError, setPasswordError] = useState('');
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -30,40 +27,31 @@ const LoginScreen = () => {
     return true;
   };
 
-  const validatePassword = (password: string) => {
-    if (!password) {
-      setPasswordError('Password is required');
-      return false;
-    } else if (password.length < 6) {
-      setPasswordError('Password must be at least 6 characters');
-      return false;
-    }
-    setPasswordError('');
-    return true;
-  };
-
-  const handleSignIn = async () => {
+  const handleResetPassword = async () => {
     const isEmailValid = validateEmail(email);
-    const isPasswordValid = validatePassword(password);
 
-    if (!isEmailValid || !isPasswordValid) {
+    if (!isEmailValid) {
       return;
     }
 
-    const { error } = await signIn(email, password);
+    const { error } = await forgotPassword(email);
     
     if (error) {
-      setSnackbarMessage(error.message || 'Failed to sign in');
+      setSnackbarMessage(error.message || 'Failed to send reset password email');
       setSnackbarVisible(true);
+    } else {
+      setSnackbarMessage('Password reset instructions sent to your email');
+      setSnackbarVisible(true);
+      
+      // Navigate back to login after a delay
+      setTimeout(() => {
+        navigation.navigate('Login' as never);
+      }, 3000);
     }
   };
 
-  const navigateToRegister = () => {
-    navigation.navigate('Register' as never);
-  };
-
-  const navigateToForgotPassword = () => {
-    navigation.navigate('ForgotPassword' as never);
+  const navigateToLogin = () => {
+    navigation.navigate('Login' as never);
   };
 
   return (
@@ -85,11 +73,11 @@ const LoginScreen = () => {
           </View>
           
           <Text style={[styles.title, { color: theme.colors.primary }]}>
-            Business Management
+            Reset Password
           </Text>
           
           <Text style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}>
-            Sign in to your account
+            Enter your email to receive password reset instructions
           </Text>
           
           <View style={styles.formContainer}>
@@ -109,54 +97,24 @@ const LoginScreen = () => {
             />
             {emailError ? <HelperText type="error">{emailError}</HelperText> : null}
             
-            <TextInput
-              label="Password"
-              value={password}
-              onChangeText={(text) => {
-                setPassword(text);
-                if (passwordError) validatePassword(text);
-              }}
-              mode="outlined"
-              secureTextEntry={!passwordVisible}
-              style={styles.input}
-              disabled={loading}
-              error={!!passwordError}
-              right={
-                <TextInput.Icon
-                  icon={passwordVisible ? "eye-off" : "eye"}
-                  onPress={() => setPasswordVisible(!passwordVisible)}
-                />
-              }
-            />
-            {passwordError ? <HelperText type="error">{passwordError}</HelperText> : null}
-            
             <Button
               mode="contained"
-              onPress={handleSignIn}
+              onPress={handleResetPassword}
               style={styles.button}
               loading={loading}
               disabled={loading}
             >
-              Sign In
+              Send Reset Instructions
             </Button>
-
-            <TouchableOpacity 
-              onPress={navigateToForgotPassword}
-              style={styles.forgotPasswordContainer}
-            >
-              <Text style={[styles.forgotPasswordText, { color: theme.colors.primary }]}>
-                Forgot Password?
-              </Text>
-            </TouchableOpacity>
           </View>
           
-          <View style={styles.registerContainer}>
+          <View style={styles.loginContainer}>
             <Text style={{ color: theme.colors.onSurfaceVariant }}>
-              Don't have an account?
+              Remember your password?
             </Text>
-            <TouchableOpacity onPress={navigateToRegister}>
-              <Text style={[styles.registerText, { color: theme.colors.primary }]}>
-                {' Register'}
+            <TouchableOpacity onPress={navigateToLogin}>
+              <Text style={[styles.loginText, { color: theme.colors.primary }]}>
+                {' Sign In'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -221,21 +179,14 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingVertical: 6,
   },
-  forgotPasswordContainer: {
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  forgotPasswordText: {
-    fontSize: 14,
-  },
-  registerContainer: {
+  loginContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     marginTop: 32,
   },
-  registerText: {
+  loginText: {
     fontWeight: 'bold',
   },
 });
 
-export default LoginScreen;
+export default ForgotPasswordScreen;
