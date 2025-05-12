@@ -1,11 +1,18 @@
-import React, { createContext, useState, useEffect, useContext, ReactNode } from 'react';
-import { supabase } from '../lib/supabase';
-import { Session } from '@supabase/supabase-js';
-import { UserRole } from '../types';
+import * as React from "react";
+import {
+  createContext,
+  useState,
+  useEffect,
+  useContext,
+  ReactNode,
+} from "react";
+import { supabase } from "../lib/supabase";
+import { Session } from "@supabase/supabase-js";
+import { UserRole } from "../types";
 
 // Default super admin credentials
-const DEFAULT_ADMIN_EMAIL = 'admin@businessmanagement.com';
-const DEFAULT_ADMIN_PASSWORD = 'Admin@123';
+const DEFAULT_ADMIN_EMAIL = "admin@businessmanagement.com";
+const DEFAULT_ADMIN_PASSWORD = "Admin@123";
 
 interface AuthContextType {
   session: Session | null;
@@ -13,7 +20,10 @@ interface AuthContextType {
   userRole: UserRole | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
-  signUp: (email: string, password: string) => Promise<{ error: any, data: any }>;
+  signUp: (
+    email: string,
+    password: string
+  ) => Promise<{ error: any; data: any }>;
   signOut: () => Promise<void>;
   forgotPassword: (email: string) => Promise<{ error: any }>;
   resetPassword: (newPassword: string) => Promise<{ error: any }>;
@@ -44,19 +54,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          fetchUserRole(session.user.id);
-        } else {
-          setUserRole(null);
-          checkIfFirstTimeSetup();
-          setLoading(false);
-        }
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchUserRole(session.user.id);
+      } else {
+        setUserRole(null);
+        checkIfFirstTimeSetup();
+        setLoading(false);
       }
-    );
+    });
 
     return () => {
       subscription.unsubscribe();
@@ -67,8 +77,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       // Check if any admin exists in the system
       const { data, error, count } = await supabase
-        .from('admin')
-        .select('*', { count: 'exact' });
+        .from("admin")
+        .select("*", { count: "exact" });
 
       if (count === 0) {
         setIsFirstTimeSetup(true);
@@ -76,7 +86,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setIsFirstTimeSetup(false);
       }
     } catch (error) {
-      console.error('Error checking first time setup:', error);
+      console.error("Error checking first time setup:", error);
       setIsFirstTimeSetup(false);
     }
   };
@@ -97,15 +107,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (authData.user) {
         // Then, add the user to the admin table with super admin role
-        const { error: adminError } = await supabase
-          .from('admin')
-          .insert({
-            id: authData.user.id,
-            email: DEFAULT_ADMIN_EMAIL,
-            role: UserRole.SUPER_ADMIN,
-            name: 'System Administrator',
-            status: 'active',
-          });
+        const { error: adminError } = await supabase.from("admin").insert({
+          id: authData.user.id,
+          email: DEFAULT_ADMIN_EMAIL,
+          role: UserRole.SUPER_ADMIN,
+          name: "System Administrator",
+          status: "active",
+        });
 
         if (adminError) {
           setLoading(false);
@@ -117,7 +125,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
 
       setLoading(false);
-      return { error: new Error('Failed to create default admin') };
+      return { error: new Error("Failed to create default admin") };
     } catch (error) {
       setLoading(false);
       return { error };
@@ -128,9 +136,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       // First check if user is a super admin
       const { data: adminData, error: adminError } = await supabase
-        .from('admin')
-        .select('role')
-        .eq('id', userId)
+        .from("admin")
+        .select("role")
+        .eq("id", userId)
         .single();
 
       if (adminData) {
@@ -141,9 +149,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       // If not a super admin, check if user is a company user
       const { data: companyUserData, error: companyUserError } = await supabase
-        .from('company_user')
-        .select('role')
-        .eq('id', userId)
+        .from("company_user")
+        .select("role")
+        .eq("id", userId)
         .single();
 
       if (companyUserData) {
@@ -152,7 +160,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUserRole(null);
       }
     } catch (error) {
-      console.error('Error fetching user role:', error);
+      console.error("Error fetching user role:", error);
       setUserRole(null);
     } finally {
       setLoading(false);
@@ -188,7 +196,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const forgotPassword = async (email: string) => {
     setLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: 'businessmanagementapp://auth/reset-password',
+      redirectTo: "businessmanagementapp://auth/reset-password",
     });
     setLoading(false);
     return { error };
@@ -227,7 +235,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };
