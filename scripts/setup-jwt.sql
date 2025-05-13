@@ -27,3 +27,6 @@ SELECT pg_reload_conf();
 SELECT name, setting, category 
 FROM pg_settings 
 WHERE name LIKE 'jwt%'; 
+-- Finally, run this to verify JWT settings:
+SELECT name, setting, category 
+FROM pg_settings 

@@ -21,7 +21,7 @@ import { useNavigation } from "@react-navigation/native";
 import { useForm, Controller } from "react-hook-form";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { format } from "date-fns";
-import { supabase, getAuthenticatedClient } from "../../lib/supabase";
+import { getAuthenticatedClient } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
@@ -123,7 +123,8 @@ const CreateEmployeeScreen = () => {
     if (!user) return;
 
     try {
-      const { data, error } = await supabase
+      const supabaseAuth = await getAuthenticatedClient();
+      const { data, error } = await supabaseAuth
         .from("company_user")
         .select("company_id")
         .eq("id", user.id)

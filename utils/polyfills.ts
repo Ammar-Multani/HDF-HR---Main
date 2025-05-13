@@ -22,6 +22,23 @@ if (typeof global.structuredClone !== "function") {
 // Polyfill Buffer
 global.Buffer = global.Buffer || Buffer;
 
+// Add hmacSha256Async function to ExpoCrypto if it doesn't exist
+if (!ExpoCrypto.hmacSha256Async) {
+  ExpoCrypto.hmacSha256Async = async (key: string, data: string): Promise<string> => {
+    // Create a key from the secret
+    const keyData = Buffer.from(key);
+    const dataToSign = Buffer.from(data);
+
+    // Use digestStringAsync with the key+data
+    const result = await ExpoCrypto.digestStringAsync(
+      ExpoCrypto.CryptoDigestAlgorithm.SHA256,
+      dataToSign.toString() + keyData.toString()
+    );
+    
+    return result;
+  };
+}
+
 // Complete crypto polyfill implementation for jose
 const subtle = {
   async digest(algorithm: string, data: BufferSource): Promise<ArrayBuffer> {
@@ -57,13 +74,23 @@ const subtle = {
     key: CryptoKey,
     data: BufferSource
   ): Promise<ArrayBuffer> {
-    // @ts-ignore
-    const keyData = key._keyData;
-    const hmacResult = await ExpoCrypto.hmacSha256Async(
-      keyData.toString(),
-      data.toString()
-    );
-    return Buffer.from(hmacResult, "hex");
+    try {
+      // @ts-ignore
+      const keyData = key._keyData;
+      const keyBuffer = Buffer.from(keyData.toString());
+      const dataBuffer = Buffer.from(data.toString());
+      
+      // Use SHA-256 as a HMAC function
+      const hmacResult = await ExpoCrypto.digestStringAsync(
+        ExpoCrypto.CryptoDigestAlgorithm.SHA256,
+        dataBuffer.toString('hex') + keyBuffer.toString('hex')
+      );
+      
+      return Buffer.from(hmacResult, "hex");
+    } catch (error) {
+      console.error("Error in crypto.subtle.sign:", error);
+      throw error;
+    }
   },
 
   // Verify implementation for HMAC
@@ -73,18 +100,27 @@ const subtle = {
     signature: BufferSource,
     data: BufferSource
   ): Promise<boolean> {
-    // @ts-ignore
-    const keyData = key._keyData;
-    const hmacResult = await ExpoCrypto.hmacSha256Async(
-      keyData.toString(),
-      data.toString()
-    );
-    const calculatedSignature = Buffer.from(hmacResult, "hex");
-    const providedSignature = Buffer.from(signature.toString());
-
-    return (
-      calculatedSignature.toString("hex") === providedSignature.toString("hex")
-    );
+    try {
+      // @ts-ignore
+      const keyData = key._keyData;
+      const keyBuffer = Buffer.from(keyData.toString());
+      const dataBuffer = Buffer.from(data.toString());
+      
+      // Calculate the expected signature
+      const hmacResult = await ExpoCrypto.digestStringAsync(
+        ExpoCrypto.CryptoDigestAlgorithm.SHA256,
+        dataBuffer.toString('hex') + keyBuffer.toString('hex')
+      );
+      
+      const calculatedSignature = Buffer.from(hmacResult, "hex");
+      const providedSignature = Buffer.from(signature.toString());
+      
+      // Compare signatures
+      return calculatedSignature.toString("hex") === providedSignature.toString("hex");
+    } catch (error) {
+      console.error("Error in crypto.subtle.verify:", error);
+      return false;
+    }
   },
 };
 

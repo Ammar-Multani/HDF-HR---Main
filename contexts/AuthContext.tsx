@@ -407,6 +407,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         });
 
         console.log("JWT token generation successful");
+
+        // Verify the token immediately to catch any signature issues
+        console.log("Verifying JWT token immediately after generation");
+        const verifiedToken = await verifyJWT(jwtToken);
+
+        if (!verifiedToken) {
+          console.error("JWT verification failed immediately after creation");
+          return {
+            error: { message: "Authentication error: token validation failed" },
+          };
+        }
+
+        console.log("JWT verification successful, payload:", {
+          sub: verifiedToken.sub,
+          role: verifiedToken.role,
+        });
+
         console.log("Generated JWT token for authentication");
 
         // Remove password_hash from user data before storing

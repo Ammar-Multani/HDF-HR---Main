@@ -93,3 +93,4 @@ To access the Test screen:
   - 'role': Contains the user's role (superadmin, admin, employee)
 - All database tables have RLS enabled
 - The 'service_role' can bypass all RLS policies
+ 

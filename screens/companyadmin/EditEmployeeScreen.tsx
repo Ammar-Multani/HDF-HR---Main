@@ -15,13 +15,16 @@ import {
   SegmentedButtons,
   Snackbar,
   HelperText,
+  Dialog,
+  Portal,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { useForm, Controller } from "react-hook-form";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { format } from "date-fns";
-import { supabase } from "../../lib/supabase";
+import { getAuthenticatedClient } from "../../lib/supabase";
+import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import {
@@ -31,6 +34,7 @@ import {
   EmploymentType,
   CompanyUser,
 } from "../../types";
+import { base64UrlDecode } from "../../utils/auth";
 
 type EditEmployeeRouteParams = {
   employeeId: string;
@@ -71,6 +75,7 @@ const EditEmployeeScreen = () => {
   const route =
     useRoute<RouteProp<Record<string, EditEmployeeRouteParams>, string>>();
   const { employeeId } = route.params;
+  const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -81,6 +86,8 @@ const EditEmployeeScreen = () => {
   const [hasEndDate, setHasEndDate] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
+  const [diagnosticDialogVisible, setDiagnosticDialogVisible] = useState(false);
+  const [diagnosticInfo, setDiagnosticInfo] = useState<string | null>(null);
 
   const {
     control,
@@ -127,7 +134,36 @@ const EditEmployeeScreen = () => {
     try {
       setLoading(true);
 
-      const { data, error } = await supabase
+      console.log("Fetching employee details for ID:", employeeId);
+
+      // Get authenticated client for RLS
+      let supabaseAuth;
+      try {
+        supabaseAuth = await getAuthenticatedClient();
+        console.log("Successfully obtained authenticated client");
+      } catch (authError: any) {
+        console.error("Authentication error:", authError.message);
+        setSnackbarMessage(`Authentication error: ${authError.message}`);
+        setSnackbarVisible(true);
+
+        // Show diagnostic dialog with error details
+        setDiagnosticInfo(
+          "AUTHENTICATION ERROR\n" +
+            "====================\n\n" +
+            `Error: ${authError.message}\n\n` +
+            "Possible solutions:\n" +
+            "1. Try logging out and back in\n" +
+            "2. Check if your JWT secret matches Supabase settings\n" +
+            "3. Verify your token format and claims\n"
+        );
+        setDiagnosticDialogVisible(true);
+
+        setLoading(false);
+        return;
+      }
+
+      // Attempt to fetch employee details
+      const { data, error } = await supabaseAuth
         .from("company_user")
         .select("*")
         .eq("id", employeeId)
@@ -135,9 +171,37 @@ const EditEmployeeScreen = () => {
 
       if (error) {
         console.error("Error fetching employee details:", error);
+
+        // Check if it's a JWT authentication error
+        if (
+          error.message.includes("JWSInvalidSignature") ||
+          error.message.includes("JWT") ||
+          error.message.includes("authentication")
+        ) {
+          // Show JWT-specific error message
+          setSnackbarMessage(
+            "Authentication error. Please try logging in again."
+          );
+          setSnackbarVisible(true);
+
+          // Navigate back to login after a short delay
+          setTimeout(() => {
+            navigation.navigate("Login" as never);
+          }, 2000);
+
+          return;
+        }
+
+        // For non-auth errors, show generic error
+        setSnackbarMessage(
+          "Failed to fetch employee details. Please try again."
+        );
+        setSnackbarVisible(true);
         return;
       }
 
+      // Process employee data
+      console.log("Employee data retrieved successfully");
       setEmployee(data);
 
       // Set form values
@@ -239,6 +303,63 @@ const EditEmployeeScreen = () => {
     }
   };
 
+  const showJwtDiagnostics = async () => {
+    try {
+      setDiagnosticInfo("Loading JWT information...");
+      setDiagnosticDialogVisible(true);
+
+      // Get authentication information
+      const { user } = useAuth();
+      const token = user?.token || "No token available";
+
+      // Try to analyze token
+      let tokenInfo = "JWT Token information not available";
+      if (token && token !== "No token available") {
+        // Split token parts
+        const parts = token.split(".");
+        if (parts.length === 3) {
+          try {
+            // Show basic token structure using our utility function
+            const headerJson = base64UrlDecode(parts[0]);
+            const payloadJson = base64UrlDecode(parts[1]);
+            const header = JSON.parse(headerJson);
+            const payload = JSON.parse(payloadJson);
+
+            tokenInfo =
+              `JWT Header: ${JSON.stringify(header, null, 2)}\n\n` +
+              `JWT Payload: ${JSON.stringify(payload, null, 2)}\n\n` +
+              `Signature: ${parts[2].substring(0, 10)}...(truncated)`;
+          } catch (e: any) {
+            tokenInfo = `Error parsing token: ${e.message || String(e)}`;
+          }
+        } else {
+          tokenInfo =
+            "Invalid token format - should have 3 parts separated by dots";
+        }
+      }
+
+      // Create diagnostic information
+      const diagnosticText =
+        "JWT DIAGNOSTIC INFORMATION\n" +
+        "===========================\n\n" +
+        `User: ${user?.id || "Not available"}\n` +
+        `Email: ${user?.email || "Not available"}\n` +
+        `Authenticated: ${user ? "Yes" : "No"}\n\n` +
+        `${tokenInfo}\n\n` +
+        "TROUBLESHOOTING STEPS:\n" +
+        "1. Check if token is expired\n" +
+        "2. Verify the 'role' claim is set to 'authenticated'\n" +
+        "3. Ensure token is signed with the correct secret\n" +
+        "4. Try logging out and back in";
+
+      setDiagnosticInfo(diagnosticText);
+    } catch (error: any) {
+      setDiagnosticInfo(
+        `Error generating diagnostics: ${error?.message || String(error)}`
+      );
+    }
+  };
+
   useEffect(() => {
     fetchEmployeeDetails();
   }, [employeeId]);
@@ -287,13 +408,41 @@ const EditEmployeeScreen = () => {
         return;
       }
 
+      // Get authenticated client for RLS
+      let supabaseAuth;
+      let authAttempts = 0;
+      const maxAttempts = 2;
+
+      while (authAttempts < maxAttempts) {
+        try {
+          supabaseAuth = await getAuthenticatedClient();
+          break; // Successfully authenticated
+        } catch (authError) {
+          console.error("Authentication error:", authError);
+          authAttempts++;
+
+          if (authAttempts >= maxAttempts) {
+            throw new Error(
+              "Authentication failed after multiple attempts. Please log in again."
+            );
+          }
+
+          // Wait before retrying
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+      }
+
+      if (!supabaseAuth) {
+        throw new Error("Failed to authenticate with Supabase");
+      }
+
       // Convert employment_type to boolean (true for full-time/part-time, false for contract/temporary)
       const isEmployeeType =
         data.employment_type === EmploymentType.FULL_TIME ||
         data.employment_type === EmploymentType.PART_TIME;
 
       // Update employee record
-      const { error } = await supabase
+      const { error } = await supabaseAuth
         .from("company_user")
         .update({
           first_name: data.first_name,
@@ -333,6 +482,14 @@ const EditEmployeeScreen = () => {
         .eq("id", employeeId);
 
       if (error) {
+        // Check if it's a JWT authentication error
+        if (
+          error.message.includes("JWT") ||
+          error.message.includes("authentication") ||
+          error.message.includes("JWSInvalidSignature")
+        ) {
+          throw new Error("Authentication error. Please try logging in again.");
+        }
         throw error;
       }
 
@@ -347,6 +504,16 @@ const EditEmployeeScreen = () => {
       console.error("Error updating employee:", error);
       setSnackbarMessage(error.message || "Failed to update employee");
       setSnackbarVisible(true);
+
+      // If authentication error, redirect to login
+      if (
+        error.message?.includes("Authentication") ||
+        error.message?.includes("log in")
+      ) {
+        setTimeout(() => {
+          navigation.navigate("Login" as never);
+        }, 2000);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -370,6 +537,13 @@ const EditEmployeeScreen = () => {
             style={styles.button}
           >
             Go Back
+          </Button>
+          <Button
+            mode="outlined"
+            onPress={showJwtDiagnostics}
+            style={[styles.button, { marginTop: 12 }]}
+          >
+            Show JWT Diagnostics
           </Button>
         </View>
       </SafeAreaView>
@@ -1028,8 +1202,47 @@ const EditEmployeeScreen = () => {
           >
             Update Employee
           </Button>
+
+          <Button
+            mode="outlined"
+            onPress={showJwtDiagnostics}
+            style={[styles.button, { marginTop: 12 }]}
+            icon="key-variant"
+          >
+            JWT Diagnostics
+          </Button>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <Portal>
+        <Dialog
+          visible={diagnosticDialogVisible}
+          onDismiss={() => setDiagnosticDialogVisible(false)}
+          style={{ maxHeight: "80%" }}
+        >
+          <Dialog.Title>JWT Diagnostics</Dialog.Title>
+          <Dialog.ScrollArea>
+            <ScrollView>
+              <Text
+                style={{
+                  padding: 10,
+                  fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+                }}
+              >
+                {diagnosticInfo}
+              </Text>
+            </ScrollView>
+          </Dialog.ScrollArea>
+          <Dialog.Actions>
+            <Button onPress={() => setDiagnosticDialogVisible(false)}>
+              Close
+            </Button>
+            <Button onPress={() => navigation.navigate("Login" as never)}>
+              Go to Login
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
 
       <Snackbar
         visible={snackbarVisible}
