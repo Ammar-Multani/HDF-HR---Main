@@ -6,7 +6,7 @@ import {
   useContext,
   ReactNode,
 } from "react";
-import { supabase } from "../lib/supabase";
+import { supabase, getAuthenticatedClient } from "../lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { UserRole } from "../types";
 import {
@@ -358,9 +358,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       console.log("Retrieved user role:", role);
 
-      // For now, use a simple token (RLS is disabled anyway)
-      const simpleToken = `user-token-${userData.id}-${Date.now()}`;
-      console.log("Using simple token for authentication");
+      // Generate a proper JWT token for RLS
+      const jwtToken = await generateJWT({
+        id: userData.id,
+        email: userData.email,
+        role: role || "user",
+      });
+
+      console.log("Generated JWT token for authentication");
 
       // Remove password_hash from user data before storing
       const { password_hash, ...userDataWithoutPassword } = userData;
@@ -375,7 +380,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         "Calling authenticate with user data including role:",
         userDataWithRole
       );
-      await authenticate(simpleToken, userDataWithRole);
+      await authenticate(jwtToken, userDataWithRole);
 
       console.log("Sign-in process completed successfully");
       return { error: null };
@@ -471,8 +476,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const expiration = new Date();
       expiration.setHours(expiration.getHours() + 1); // Token valid for 1 hour
 
+      // Get authenticated client for RLS
+      const supabaseAuth = await getAuthenticatedClient();
+
       // Save the reset token directly to users table
-      const { error: updateError } = await supabase
+      const { error: updateError } = await supabaseAuth
         .from("users")
         .update({
           reset_token: resetToken,
@@ -508,8 +516,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Hash the new password
       const hashedPassword = await hashPassword(newPassword);
 
+      // Get authenticated client for RLS
+      const supabaseAuth = await getAuthenticatedClient();
+
       // Update password and clear reset token directly in users table
-      const { error } = await supabase
+      const { error } = await supabaseAuth
         .from("users")
         .update({
           password_hash: hashedPassword,

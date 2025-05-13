@@ -16,7 +16,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { useForm, Controller } from "react-hook-form";
-import { supabase } from "../../lib/supabase";
+import { supabase, getAuthenticatedClient } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
 import { hashPassword } from "../../utils/auth";
@@ -134,8 +134,11 @@ const CreateCompanyScreen = () => {
         return;
       }
 
+      // Get authenticated client for RLS
+      const supabaseAuth = await getAuthenticatedClient();
+
       // Create company record
-      const { data: companyData, error: companyError } = await supabase
+      const { data: companyData, error: companyError } = await supabaseAuth
         .from("company")
         .insert([
           {
@@ -168,7 +171,7 @@ const CreateCompanyScreen = () => {
       const hashedPassword = await hashPassword(DEFAULT_PASSWORD);
 
       // Check if user with this email already exists in custom users table
-      const { data: existingUser } = await supabase
+      const { data: existingUser } = await supabaseAuth
         .from("users")
         .select("id")
         .eq("email", data.admin_email)
@@ -179,7 +182,7 @@ const CreateCompanyScreen = () => {
       }
 
       // Create the user in our custom users table
-      const { data: userData, error: userError } = await supabase
+      const { data: userData, error: userError } = await supabaseAuth
         .from("users")
         .insert({
           email: data.admin_email,
@@ -196,7 +199,7 @@ const CreateCompanyScreen = () => {
       }
 
       // Create company_user record for the admin
-      const { error: companyUserError } = await supabase
+      const { error: companyUserError } = await supabaseAuth
         .from("company_user")
         .insert([
           {
@@ -219,7 +222,7 @@ const CreateCompanyScreen = () => {
       }
 
       // Generate a reset token for the new admin
-      const { error: resetTokenError } = await supabase
+      const { error: resetTokenError } = await supabaseAuth
         .from("users")
         .update({
           reset_token:

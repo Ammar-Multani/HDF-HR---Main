@@ -1,5 +1,6 @@
 import * as Crypto from "expo-crypto";
 import { encode as base64Encode } from "base-64";
+import { EXPO_PUBLIC_JWT_SECRET } from "@env";
 
 /**
  * Hashes a password using SHA-256
@@ -106,12 +107,12 @@ export const generateJWT = async (userData: {
   // Create the JWT payload with standard claims
   const now = Math.floor(Date.now() / 1000);
   const payload = {
-    sub: userData.id,
+    sub: userData.id, // Subject - user ID for RLS policies
     email: userData.email,
     role: userData.role || "user",
     iat: now,
     exp: now + 60 * 60 * 24, // Token expires in 24 hours
-    iss: "businessmanagementapp",
+    iss: "hdfhr",
   };
 
   // Encode header and payload
@@ -125,15 +126,17 @@ export const generateJWT = async (userData: {
     .replace(/\+/g, "-")
     .replace(/\//g, "_");
 
-  // In a real implementation, you would sign the token with a secret key
-  // For demo purposes, we'll use a simple hash
-  const signatureInput =
-    encodedHeader + "." + encodedPayload + "." + "secretkey";
+  // Use environment variable for JWT secret
+  const jwtSecret =
+    EXPO_PUBLIC_JWT_SECRET;
 
-  // Create signature (this is NOT secure - use a proper JWT library in production!)
+  // In a real implementation, you would sign the token with a secret key
+  const signatureInput = `${encodedHeader}.${encodedPayload}`;
+
+  // Create signature (this is still simplified - use a proper JWT library in production!)
   const signature = await Crypto.digestStringAsync(
     Crypto.CryptoDigestAlgorithm.SHA256,
-    signatureInput
+    signatureInput + jwtSecret
   );
 
   const formattedSignature = signature

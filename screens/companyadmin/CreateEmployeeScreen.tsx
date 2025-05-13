@@ -21,7 +21,7 @@ import { useNavigation } from "@react-navigation/native";
 import { useForm, Controller } from "react-hook-form";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { format } from "date-fns";
-import { supabase } from "../../lib/supabase";
+import { supabase, getAuthenticatedClient } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
@@ -181,13 +181,16 @@ const CreateEmployeeScreen = () => {
         return;
       }
 
+      // Get authenticated client for RLS
+      const supabaseAuth = await getAuthenticatedClient();
+
       // Convert employment_type to boolean (true for full-time/part-time, false for contract/temporary)
       const isEmployeeType =
         data.employment_type === EmploymentType.FULL_TIME ||
         data.employment_type === EmploymentType.PART_TIME;
 
       // Check if user with this email already exists in custom users table
-      const { data: existingUser } = await supabase
+      const { data: existingUser } = await supabaseAuth
         .from("users")
         .select("id")
         .eq("email", data.email)
@@ -201,7 +204,7 @@ const CreateEmployeeScreen = () => {
       const hashedPassword = await hashPassword(DEFAULT_PASSWORD);
 
       // Create the user in our custom users table
-      const { data: userData, error: userError } = await supabase
+      const { data: userData, error: userError } = await supabaseAuth
         .from("users")
         .insert({
           email: data.email,
@@ -218,7 +221,7 @@ const CreateEmployeeScreen = () => {
       }
 
       // Create employee record
-      const { error: employeeError } = await supabase
+      const { error: employeeError } = await supabaseAuth
         .from("company_user")
         .insert([
           {
@@ -265,7 +268,7 @@ const CreateEmployeeScreen = () => {
       }
 
       // Generate a reset token for the new employee
-      const { error: resetTokenError } = await supabase
+      const { error: resetTokenError } = await supabaseAuth
         .from("users")
         .update({
           reset_token:
