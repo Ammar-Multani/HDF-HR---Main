@@ -1,42 +1,52 @@
 import { createClient } from "@supabase/supabase-js";
 import { EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY } from "@env";
+import { getValidToken } from "../utils/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const AUTH_TOKEN_KEY = "auth_token";
 
-const supabaseUrl = EXPO_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = EXPO_PUBLIC_SUPABASE_ANON_KEY;
-
 // Create Supabase client
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(
+  EXPO_PUBLIC_SUPABASE_URL,
+  EXPO_PUBLIC_SUPABASE_ANON_KEY,
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  }
+);
+
+/**
+ * Creates a Supabase client with the provided JWT token for authentication
+ */
+export function createAuthClient(jwt: string) {
+  return createClient(EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+    global: {
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+      },
+    },
+  });
+}
 
 /**
  * Returns a Supabase client with authentication headers for RLS
  * Use this for all authenticated requests
  */
 export const getAuthenticatedClient = async () => {
-  try {
-    const token = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
+  const token = await getValidToken();
 
-    if (!token) {
-      console.warn("No authentication token found");
-      return supabase; // Return unauthenticated client if no token
-    }
-
-    console.log("Creating authenticated client with JWT token");
-
-    // Create a client with JWT auth
-    return createClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      },
-    });
-  } catch (error) {
-    console.error("Error getting authenticated client:", error);
-    return supabase; // Return unauthenticated client on error
+  if (!token) {
+    console.warn("No valid token found, using unauthenticated client");
+    return supabase;
   }
+
+  return createAuthClient(token);
 };
 
 /**

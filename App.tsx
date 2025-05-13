@@ -1,10 +1,11 @@
-import React, { useEffect } from 'react';
-import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { AuthProvider } from './contexts/AuthContext';
-import { ThemeProvider } from './contexts/ThemeContext';
-import { AppNavigator } from './navigation';
-import * as SplashScreen from 'expo-splash-screen';
+import React, { useEffect } from "react";
+import { StatusBar } from "expo-status-bar";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import { AuthProvider } from "./contexts/AuthContext";
+import { ThemeProvider } from "./contexts/ThemeContext";
+import { AppNavigator } from "./navigation";
+import * as SplashScreen from "expo-splash-screen";
+import { QueryProvider } from "./lib/query";
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -22,13 +23,15 @@ export default function App() {
   }, []);
 
   return (
-    <SafeAreaProvider>
-      <ThemeProvider>
-        <AuthProvider>
-          <AppNavigator />
-          <StatusBar style="auto" />
-        </AuthProvider>
-      </ThemeProvider>
-    </SafeAreaProvider>
+    <QueryProvider>
+      <AuthProvider>
+        <SafeAreaProvider>
+          <ThemeProvider>
+            <AppNavigator />
+            <StatusBar style="auto" />
+          </ThemeProvider>
+        </SafeAreaProvider>
+      </AuthProvider>
+    </QueryProvider>
   );
 }

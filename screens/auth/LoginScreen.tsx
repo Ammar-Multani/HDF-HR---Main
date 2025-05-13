@@ -103,6 +103,10 @@ const LoginScreen = () => {
     navigation.navigate("ForgotPassword" as never);
   };
 
+  const navigateToTestScreen = () => {
+    navigation.navigate("Test" as never);
+  };
+
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -197,6 +201,17 @@ const LoginScreen = () => {
                 Set Up Default Admin
               </Button>
             )}
+
+            <Button
+              mode="outlined"
+              onPress={navigateToTestScreen}
+              style={[
+                styles.button,
+                { marginTop: 16, backgroundColor: theme.colors.surfaceVariant },
+              ]}
+            >
+              Test RLS Policies
+            </Button>
 
             <TouchableOpacity
               onPress={navigateToForgotPassword}

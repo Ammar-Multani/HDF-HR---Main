@@ -14,14 +14,18 @@ import {
   validatePassword,
   generateResetToken,
   generateJWT,
+  storeAuthToken,
+  getAuthToken,
+  removeAuthToken,
+  getValidToken,
+  verifyJWT,
 } from "../utils/auth";
 
 // Default super admin credentials
 const DEFAULT_ADMIN_EMAIL = "admin@businessmanagement.com";
 const DEFAULT_ADMIN_PASSWORD = "Admin@123";
 
-// Auth token constants
-const AUTH_TOKEN_KEY = "auth_token";
+// User data storage key
 const USER_DATA_KEY = "user_data";
 
 interface AuthContextType {
@@ -61,101 +65,87 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(userData);
 
     try {
-      // Store auth data in AsyncStorage
-      await AsyncStorage.setItem(AUTH_TOKEN_KEY, token);
+      // Store auth token securely
+      await storeAuthToken(token);
+
+      // Store user data
       await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));
-      console.log("Authentication data stored in AsyncStorage");
 
-      // If userData has role, set it directly
-      if (userData?.role) {
-        console.log("User has role in userData:", userData.role);
+      console.log("Authentication data stored securely");
 
-        const roleValue = userData.role.toLowerCase();
-        if (roleValue === "superadmin") {
-          console.log("Setting role to SUPER_ADMIN directly");
-          setUserRole(UserRole.SUPER_ADMIN);
-        } else if (roleValue === "admin" || roleValue === "companyadmin") {
-          console.log("Setting role to COMPANY_ADMIN directly");
-          setUserRole(UserRole.COMPANY_ADMIN);
-        } else if (roleValue === "employee") {
-          console.log("Setting role to EMPLOYEE directly");
-          setUserRole(UserRole.EMPLOYEE);
-        } else {
-          console.log("Unknown role value, fetching from database:", roleValue);
-          // Fetch user role from database
-          if (userData?.id) {
-            await fetchUserRole(userData.id);
-          }
-        }
-      } else {
-        // Fetch user role from database
-        if (userData?.id) {
-          console.log("No role in userData, fetching from database");
-          await fetchUserRole(userData.id);
-        }
-      }
+      // Update user role
+      await fetchUserRole(userData.id);
     } catch (error) {
-      console.error("Error in authenticate function:", error);
+      console.error("Authentication error:", error);
     }
-
-    console.log("Authentication completed, setting loading to false");
-    setLoading(false);
   };
 
+  // Initialize the auth state on startup
   useEffect(() => {
-    // Check for existing session in AsyncStorage
-    const loadStoredSession = async () => {
+    const initAuth = async () => {
+      setLoading(true);
       try {
-        console.log("Checking for stored session...");
-        const storedToken = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
-        const storedUserData = await AsyncStorage.getItem(USER_DATA_KEY);
+        // Check for existing token
+        const token = await getValidToken();
 
-        console.log("Stored session check result:", {
-          hasToken: !!storedToken,
-          hasUserData: !!storedUserData,
-        });
-
-        if (storedToken && storedUserData) {
-          const userData = JSON.parse(storedUserData);
-          console.log("Found stored session, restoring...", {
-            userId: userData.id,
-          });
-
-          setSession({ access_token: storedToken });
-          setUser(userData);
-
-          if (userData?.id) {
-            await fetchUserRole(userData.id);
-          }
-        } else {
-          console.log("No stored session found, checking first time setup");
-          await checkIfFirstTimeSetup();
+        if (!token) {
+          // If no valid token, check if this is first run
+          await checkFirstTimeSetup();
+          setLoading(false);
+          return;
         }
+
+        // Verify token
+        const tokenData = await verifyJWT(token);
+        if (!tokenData || !tokenData.sub) {
+          // Invalid token
+          await signOut();
+          return;
+        }
+
+        // Get stored user data
+        const storedUserStr = await AsyncStorage.getItem(USER_DATA_KEY);
+        if (!storedUserStr) {
+          await signOut();
+          return;
+        }
+
+        const storedUser = JSON.parse(storedUserStr);
+
+        // Set auth state
+        setSession({ access_token: token });
+        setUser(storedUser);
+        await fetchUserRole(tokenData.sub as string);
       } catch (error) {
-        console.error("Error loading stored session:", error);
+        console.error("Error initializing auth:", error);
+        await signOut();
       } finally {
-        console.log("Session loading completed, setting loading to false");
         setLoading(false);
       }
     };
 
-    loadStoredSession();
+    initAuth();
   }, []);
 
-  const checkIfFirstTimeSetup = async () => {
+  // Check if this is the first time setup
+  const checkFirstTimeSetup = async () => {
     try {
-      // Check if any admin exists in the system
-      const { data, error, count } = await supabase
+      // Check if admin exists
+      const { data: adminData, error: adminError } = await supabase
         .from("admin")
-        .select("*", { count: "exact" });
+        .select("count")
+        .single();
 
-      if (count === 0) {
-        setIsFirstTimeSetup(true);
-      } else {
+      if (adminError) {
+        console.error("Error checking admin count:", adminError);
         setIsFirstTimeSetup(false);
+        return;
       }
+
+      // If no admin records, it's first time setup
+      setIsFirstTimeSetup(adminData.count === 0);
     } catch (error) {
-      console.error("Error checking first time setup:", error);
+      console.error("First time setup check error:", error);
       setIsFirstTimeSetup(false);
     }
   };
@@ -211,63 +201,105 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // For debugging - log the user roles enum
       console.log("UserRole enum values:", UserRole);
 
-      // Since RLS is disabled, we can use the regular supabase client
       // First check if user is a super admin
       console.log("Checking admin role directly...");
-      const { data: adminData, error: adminError } = await supabase
-        .from("admin")
-        .select("role")
-        .eq("id", userId)
-        .single();
 
-      console.log("Admin check result:", {
-        adminData,
-        adminError: adminError ? adminError.message : null,
-      });
+      try {
+        const { data: adminData, error: adminError } = await supabase
+          .from("admin")
+          .select("role, status")
+          .eq("id", userId);
 
-      if (adminData && adminData.role) {
-        const role = adminData.role.toLowerCase();
-        console.log("User is an admin with raw role value:", role);
+        console.log("Admin check result:", {
+          adminData,
+          adminError: adminError ? adminError.message : null,
+        });
 
-        // Map string role to enum
-        if (role === "superadmin") {
-          console.log("Setting role to SUPER_ADMIN");
-          setUserRole(UserRole.SUPER_ADMIN);
-          setLoading(false);
-          return;
+        if (adminData && adminData.length > 0 && adminData[0].role) {
+          const role = adminData[0].role.toLowerCase();
+          const status = adminData[0].status;
+          console.log(
+            "User is an admin with raw role value:",
+            role,
+            "status:",
+            status
+          );
+
+          // Only assign role if status is active or true
+          if (
+            role === "superadmin" &&
+            (status === "active" || status === true || status === "true")
+          ) {
+            console.log("Setting role to SUPER_ADMIN");
+            setUserRole(UserRole.SUPER_ADMIN);
+            setLoading(false);
+            return;
+          } else {
+            console.log(
+              "Admin account not active or has invalid status:",
+              status
+            );
+          }
         }
+      } catch (adminCheckError) {
+        console.error("Error checking admin role:", adminCheckError);
       }
 
       // If not a super admin, check if user is a company user
       console.log("Checking company user role directly...");
-      const { data: companyUserData, error: companyUserError } = await supabase
-        .from("company_user")
-        .select("role")
-        .eq("id", userId)
-        .single();
 
-      console.log("Company user check result:", {
-        companyUserData,
-        companyUserError: companyUserError ? companyUserError.message : null,
-      });
+      try {
+        const { data: companyUserData, error: companyUserError } =
+          await supabase
+            .from("company_user")
+            .select("role, active_status")
+            .eq("id", userId);
 
-      if (companyUserData && companyUserData.role) {
-        const role = companyUserData.role.toLowerCase();
-        console.log("User is a company user with raw role value:", role);
+        console.log("Company user check result:", {
+          companyUserData,
+          companyUserError: companyUserError ? companyUserError.message : null,
+        });
 
-        // Map string role to enum
-        if (role === "companyadmin" || role === "admin") {
-          console.log("Setting role to COMPANY_ADMIN");
-          setUserRole(UserRole.COMPANY_ADMIN);
-        } else if (role === "employee") {
-          console.log("Setting role to EMPLOYEE");
-          setUserRole(UserRole.EMPLOYEE);
+        if (
+          companyUserData &&
+          companyUserData.length > 0 &&
+          companyUserData[0].role
+        ) {
+          const role = companyUserData[0].role.toLowerCase();
+          const status = companyUserData[0].active_status;
+          console.log(
+            "User is a company user with raw role value:",
+            role,
+            "status:",
+            status
+          );
+
+          // Only assign role if status is active
+          if (status === "active" || status === true || status === "true") {
+            // Map string role to enum
+            if (role === "companyadmin" || role === "admin") {
+              console.log("Setting role to COMPANY_ADMIN");
+              setUserRole(UserRole.COMPANY_ADMIN);
+            } else if (role === "employee") {
+              console.log("Setting role to EMPLOYEE");
+              setUserRole(UserRole.EMPLOYEE);
+            } else {
+              console.log("Unknown company user role:", role);
+              setUserRole(null);
+            }
+          } else {
+            console.log("Company user account not active, status:", status);
+            setUserRole(null);
+          }
         } else {
-          console.log("Unknown company user role:", role);
+          console.log("User has no role assigned");
           setUserRole(null);
         }
-      } else {
-        console.log("User has no role assigned");
+      } catch (companyUserCheckError) {
+        console.error(
+          "Error checking company user role:",
+          companyUserCheckError
+        );
         setUserRole(null);
       }
     } catch (error) {
@@ -338,52 +370,66 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const { data: adminData } = await supabase
         .from("admin")
         .select("role")
-        .eq("id", userData.id)
-        .single();
+        .eq("id", userData.id);
 
-      if (adminData && adminData.role) {
-        role = adminData.role;
+      if (adminData && adminData.length > 0 && adminData[0].role) {
+        role = adminData[0].role;
       } else {
         // Check company_user table
         const { data: companyUserData } = await supabase
           .from("company_user")
           .select("role")
-          .eq("id", userData.id)
-          .single();
+          .eq("id", userData.id);
 
-        if (companyUserData && companyUserData.role) {
-          role = companyUserData.role;
+        if (
+          companyUserData &&
+          companyUserData.length > 0 &&
+          companyUserData[0].role
+        ) {
+          role = companyUserData[0].role;
         }
       }
 
       console.log("Retrieved user role:", role);
 
       // Generate a proper JWT token for RLS
-      const jwtToken = await generateJWT({
+      console.log("Generating JWT token with user data:", {
         id: userData.id,
         email: userData.email,
         role: role || "user",
       });
 
-      console.log("Generated JWT token for authentication");
+      try {
+        const jwtToken = await generateJWT({
+          id: userData.id,
+          email: userData.email,
+          role: role || "user",
+        });
 
-      // Remove password_hash from user data before storing
-      const { password_hash, ...userDataWithoutPassword } = userData;
+        console.log("JWT token generation successful");
+        console.log("Generated JWT token for authentication");
 
-      // Add role to userData for easier access
-      const userDataWithRole = {
-        ...userDataWithoutPassword,
-        role,
-      };
+        // Remove password_hash from user data before storing
+        const { password_hash, ...userDataWithoutPassword } = userData;
 
-      console.log(
-        "Calling authenticate with user data including role:",
-        userDataWithRole
-      );
-      await authenticate(jwtToken, userDataWithRole);
+        // Add role to userData for easier access
+        const userDataWithRole = {
+          ...userDataWithoutPassword,
+          role,
+        };
 
-      console.log("Sign-in process completed successfully");
-      return { error: null };
+        console.log(
+          "Calling authenticate with user data including role:",
+          userDataWithRole
+        );
+        await authenticate(jwtToken, userDataWithRole);
+
+        console.log("Sign-in process completed successfully");
+        return { error: null };
+      } catch (error: any) {
+        console.error("JWT generation failed:", error);
+        return { error };
+      }
     } catch (error: any) {
       console.error("Sign-in error:", error);
       return { error };
@@ -441,8 +487,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signOut = async () => {
     setLoading(true);
     try {
-      // Clear stored session
-      await AsyncStorage.removeItem(AUTH_TOKEN_KEY);
+      // Clear stored session and user data
+      await removeAuthToken();
       await AsyncStorage.removeItem(USER_DATA_KEY);
 
       // Reset state

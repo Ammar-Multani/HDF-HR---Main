@@ -48,6 +48,9 @@ import EmployeeProfileScreen from "../screens/employee/EmployeeProfileScreen";
 import EmployeeTasksScreen from "../screens/employee/EmployeeTasksScreen";
 import EmployeeTaskDetailsScreen from "../screens/employee/EmployeeTaskDetailsScreen";
 
+// Test Screen
+import TestScreen from "../screens/TestScreen";
+
 // Stack navigators
 const AuthStack = createNativeStackNavigator();
 const SuperAdminStack = createNativeStackNavigator();
@@ -61,6 +64,7 @@ const AuthNavigator = () => (
     <AuthStack.Screen name="Register" component={RegisterScreen} />
     <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
     <AuthStack.Screen name="ResetPassword" component={ResetPasswordScreen} />
+    <AuthStack.Screen name="Test" component={TestScreen} />
   </AuthStack.Navigator>
 );
 
@@ -93,6 +97,7 @@ const SuperAdminNavigator = () => (
       name="CreateSuperAdmin"
       component={CreateSuperAdminScreen}
     />
+    <SuperAdminStack.Screen name="Test" component={TestScreen} />
   </SuperAdminStack.Navigator>
 );
 
@@ -140,6 +145,7 @@ const CompanyAdminNavigator = () => (
       name="Profile"
       component={CompanyAdminProfileScreen}
     />
+    <CompanyAdminStack.Screen name="Test" component={TestScreen} />
   </CompanyAdminStack.Navigator>
 );
 
@@ -170,6 +176,7 @@ const EmployeeNavigator = () => (
       component={EmployeeTaskDetailsScreen}
     />
     <EmployeeStack.Screen name="Profile" component={EmployeeProfileScreen} />
+    <EmployeeStack.Screen name="Test" component={TestScreen} />
   </EmployeeStack.Navigator>
 );
 

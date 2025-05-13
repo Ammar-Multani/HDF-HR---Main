@@ -47,21 +47,25 @@ yarn start
 #### EAS Build
 
 1. Install EAS CLI:
+
    ```
    npm install -g eas-cli
    ```
 
 2. Login to your Expo account:
+
    ```
    eas login
    ```
 
 3. Configure your project:
+
    ```
    eas build:configure
    ```
 
 4. Build for Android:
+
    ```
    eas build --platform android --profile production
    ```
@@ -74,11 +78,13 @@ yarn start
 #### Local Builds
 
 For Android:
+
 ```
 yarn android
 ```
 
 For iOS:
+
 ```
 yarn ios
 ```
