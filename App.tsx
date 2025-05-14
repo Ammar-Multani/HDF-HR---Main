@@ -6,8 +6,14 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { AppNavigator } from "./navigation";
 import * as SplashScreen from "expo-splash-screen";
 import * as Linking from "expo-linking";
-import { Alert } from "react-native";
+import { Alert, AppState, AppStateStatus, Platform } from "react-native";
 import { initEmailService } from "./utils/emailService";
+import {
+  prefetchCommonData,
+  clearAllCache,
+  resetCacheMetrics,
+} from "./lib/supabase";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -15,19 +21,111 @@ SplashScreen.preventAutoHideAsync();
 // Initialize EmailJS
 initEmailService();
 
+// Constants for cache management
+const LAST_CACHE_RESET_KEY = "last_cache_reset";
+const ONE_DAY_MS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+const CACHE_METRICS_RESET_DAYS = 3; // Reset metrics every 3 days
+const AUTH_CHECK_KEY = "auth_check"; // Key for auth pre-check
+
 export default function App() {
   const [appIsReady, setAppIsReady] = useState(false);
+  const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
+  const [preAuthCheck, setPreAuthCheck] = useState<boolean | null>(null);
+
+  // Fast pre-check for auth state to speed up app loading
+  useEffect(() => {
+    const checkAuthState = async () => {
+      try {
+        // First, check if we've already done this check recently
+        const lastCheck = await AsyncStorage.getItem(AUTH_CHECK_KEY);
+        const now = Date.now();
+
+        if (lastCheck) {
+          const { state, timestamp } = JSON.parse(lastCheck);
+          // If check is recent (within 5 minutes), use it
+          if (now - timestamp < 5 * 60 * 1000) {
+            console.log("Using recent auth pre-check result:", state);
+            setPreAuthCheck(state);
+            setHasCheckedAuth(true);
+            return;
+          }
+        }
+
+        // Otherwise do a quick check for auth token
+        const token = await AsyncStorage.getItem("auth_token");
+        const isAuthenticated = !!token;
+
+        // Store the result for future quick checks
+        await AsyncStorage.setItem(
+          AUTH_CHECK_KEY,
+          JSON.stringify({
+            state: isAuthenticated,
+            timestamp: now,
+          })
+        );
+
+        console.log("Fresh auth pre-check result:", isAuthenticated);
+        setPreAuthCheck(isAuthenticated);
+        setHasCheckedAuth(true);
+      } catch (error) {
+        console.error("Error in auth pre-check:", error);
+        setHasCheckedAuth(true); // Continue anyway
+      }
+    };
+
+    checkAuthState();
+  }, []);
+
+  // Manage cache maintenance
+  const performCacheMaintenance = async () => {
+    try {
+      // Check when we last reset cache metrics
+      const lastResetStr = await AsyncStorage.getItem(LAST_CACHE_RESET_KEY);
+      const now = Date.now();
+
+      if (
+        !lastResetStr ||
+        now - parseInt(lastResetStr) > CACHE_METRICS_RESET_DAYS * ONE_DAY_MS
+      ) {
+        console.log("Performing periodic cache maintenance...");
+
+        // Reset cache performance metrics periodically
+        await resetCacheMetrics();
+
+        // Store the timestamp of this reset
+        await AsyncStorage.setItem(LAST_CACHE_RESET_KEY, now.toString());
+      }
+    } catch (error) {
+      console.warn("Cache maintenance error:", error);
+      // Non-critical, so continue app initialization
+    }
+  };
 
   // Prepare app resources and data
   useEffect(() => {
     const prepare = async () => {
       try {
-        // Perform any initialization tasks here
-        // This runs in parallel with AuthProvider initialization
-        await Promise.all([
-          // Add any other async initialization here if needed
-          new Promise((resolve) => setTimeout(resolve, 50)), // Small delay to ensure UI is ready
-        ]);
+        if (!hasCheckedAuth) {
+          return; // Wait for auth check first
+        }
+
+        // Different preparation based on auth state
+        // If user is authenticated, we can begin prefetching data immediately
+        if (preAuthCheck) {
+          await Promise.all([
+            performCacheMaintenance(),
+            new Promise((resolve) => {
+              // Delay prefetch slightly to prioritize UI rendering
+              setTimeout(() => {
+                prefetchCommonData().catch(console.warn);
+                resolve(null);
+              }, 2000);
+            }),
+          ]);
+        } else {
+          // If not authenticated, just do minimal preparation
+          await performCacheMaintenance();
+        }
       } catch (e) {
         console.warn("Error preparing app:", e);
       } finally {
@@ -37,17 +135,59 @@ export default function App() {
     };
 
     prepare();
-  }, []);
+  }, [hasCheckedAuth, preAuthCheck]);
+
+  // Set up AppState listener for background/foreground transitions
+  useEffect(() => {
+    // Handle app state changes
+    const handleAppStateChange = async (nextAppState: AppStateStatus) => {
+      if (nextAppState === "active") {
+        // App came to foreground - good time to prefetch data
+        try {
+          // Prefetch common data after a slight delay to avoid interfering with UI
+          setTimeout(async () => {
+            await prefetchCommonData();
+          }, 2000);
+        } catch (error) {
+          console.warn("Background prefetch error:", error);
+        }
+      }
+    };
+
+    // Subscribe to app state changes
+    const subscription = AppState.addEventListener(
+      "change",
+      handleAppStateChange
+    );
+
+    // Initial prefetch after delay - only if authenticated
+    if (preAuthCheck) {
+      setTimeout(async () => {
+        try {
+          await prefetchCommonData();
+        } catch (error) {
+          console.warn("Initial prefetch error:", error);
+        }
+      }, 5000);
+    }
+
+    // Clean up
+    return () => {
+      subscription.remove();
+    };
+  }, [preAuthCheck]);
 
   // Hide splash screen once the app is ready
   useEffect(() => {
-    if (appIsReady) {
+    if (appIsReady && hasCheckedAuth) {
       const hideSplash = async () => {
+        // Wait a moment to ensure auth context has initialized
+        await new Promise((resolve) => setTimeout(resolve, 100));
         await SplashScreen.hideAsync();
       };
       hideSplash();
     }
-  }, [appIsReady]);
+  }, [appIsReady, hasCheckedAuth]);
 
   // Function to handle deep links
   const handleDeepLink = useCallback(async (event) => {
@@ -98,11 +238,16 @@ export default function App() {
     };
   }, [handleDeepLink]);
 
+  // If pre-auth check hasn't completed yet, we're still loading
+  if (!hasCheckedAuth) {
+    return null; // Keep splash screen visible
+  }
+
   return (
     <SafeAreaProvider>
       <ThemeProvider>
         <AuthProvider>
-          <AppNavigator />
+          <AppNavigator initialAuthState={preAuthCheck} />
           <StatusBar style="auto" />
         </AuthProvider>
       </ThemeProvider>

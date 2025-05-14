@@ -2,37 +2,40 @@ import React, { useState, useEffect } from "react";
 import { StyleSheet, View, Image } from "react-native";
 import { ActivityIndicator, Text, useTheme } from "react-native-paper";
 
+// Cache the loading animation values for reuse
+const loadingTexts = ["Loading", "Loading.", "Loading..", "Loading..."];
+const ANIMATION_TIMEOUT = 500; // Reduced from 500ms
+
 const LoadingScreen = () => {
   const theme = useTheme();
   const [loadingText, setLoadingText] = useState("Loading");
   const [loadingProgress, setLoadingProgress] = useState(0);
+  const [textIndex, setTextIndex] = useState(0);
 
-  // Simulate loading progress
+  // Use simplified, more efficient loading progress
   useEffect(() => {
+    // Only update progress every 300ms
     const interval = setInterval(() => {
       setLoadingProgress((prev) => {
+        // Faster animation cycling
         if (prev >= 100) {
           return 0;
         }
-        return prev + 10;
+        return prev + 20; // Larger step for smoother animation
       });
     }, 300);
 
-    // Update loading text with dots animation
+    // Use pre-calculated text values for dots animation
     const textInterval = setInterval(() => {
-      setLoadingText((prev) => {
-        if (prev === "Loading...") {
-          return "Loading";
-        }
-        return prev + ".";
-      });
-    }, 500);
+      setTextIndex((prev) => (prev + 1) % loadingTexts.length);
+      setLoadingText(loadingTexts[textIndex]);
+    }, ANIMATION_TIMEOUT);
 
     return () => {
       clearInterval(interval);
       clearInterval(textInterval);
     };
-  }, []);
+  }, [textIndex]);
 
   return (
     <View

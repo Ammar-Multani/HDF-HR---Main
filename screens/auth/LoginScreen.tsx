@@ -7,6 +7,7 @@ import {
   Platform,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
 } from "react-native";
 import {
   Text,
@@ -15,15 +16,20 @@ import {
   useTheme,
   Snackbar,
   HelperText,
+  Surface,
 } from "react-native-paper";
 import { useAuth } from "../../contexts/AuthContext";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+// Key to prevent showing loading screen right after login
+const SKIP_LOADING_KEY = "skip_loading_after_login";
 
 const LoginScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
-  const { signIn, loading } = useAuth();
+  const { signIn } = useAuth(); // Don't get loading state from auth context
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -31,6 +37,8 @@ const LoginScreen = () => {
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("");
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -65,11 +73,44 @@ const LoginScreen = () => {
       return;
     }
 
-    const { error } = await signIn(email, password);
+    try {
+      // Set local loading state
+      setIsLoggingIn(true);
+      setStatusMessage("Authenticating...");
 
-    if (error) {
-      setSnackbarMessage(error.message || "Failed to sign in");
+      // Set flag to skip redundant loading screens
+      await AsyncStorage.setItem(SKIP_LOADING_KEY, "true");
+
+      // Update status as authentication progresses
+      const timer = setTimeout(() => {
+        if (isLoggingIn) {
+          setStatusMessage("Verifying credentials...");
+        }
+      }, 1000);
+
+      // Attempt sign in
+      const { error } = await signIn(email, password);
+
+      clearTimeout(timer);
+
+      if (error) {
+        setSnackbarMessage(error.message || "Failed to sign in");
+        setSnackbarVisible(true);
+        await AsyncStorage.removeItem(SKIP_LOADING_KEY);
+      } else {
+        // Show success state briefly
+        setStatusMessage("Success! Redirecting...");
+      }
+    } catch (err) {
+      setSnackbarMessage("An unexpected error occurred");
       setSnackbarVisible(true);
+      await AsyncStorage.removeItem(SKIP_LOADING_KEY);
+    } finally {
+      // Don't hide loading immediately on success to avoid UI flashing
+      if (snackbarVisible) {
+        setIsLoggingIn(false);
+        setStatusMessage("");
+      }
     }
   };
 
@@ -79,6 +120,18 @@ const LoginScreen = () => {
 
   const navigateToForgotPassword = () => {
     navigation.navigate("ForgotPassword" as never);
+  };
+
+  // Render a minimal loading overlay instead of disabling the entire form
+  const renderLoadingOverlay = () => {
+    if (!isLoggingIn) return null;
+
+    return (
+      <Surface style={styles.loadingOverlay}>
+        <ActivityIndicator size="small" color={theme.colors.primary} />
+        <Text style={styles.loadingText}>{statusMessage}</Text>
+      </Surface>
+    );
   };
 
   return (
@@ -123,7 +176,7 @@ const LoginScreen = () => {
               keyboardType="email-address"
               autoCapitalize="none"
               style={styles.input}
-              disabled={loading}
+              disabled={isLoggingIn}
               error={!!emailError}
               left={<TextInput.Icon icon="email" />}
             />
@@ -141,7 +194,7 @@ const LoginScreen = () => {
               mode="outlined"
               secureTextEntry={!passwordVisible}
               style={styles.input}
-              disabled={loading}
+              disabled={isLoggingIn}
               error={!!passwordError}
               left={<TextInput.Icon icon="lock" />}
               right={
@@ -160,15 +213,16 @@ const LoginScreen = () => {
               mode="contained"
               onPress={handleSignIn}
               style={styles.button}
-              loading={loading}
-              disabled={loading}
+              loading={isLoggingIn}
+              disabled={isLoggingIn}
             >
-              Sign In
+              {isLoggingIn ? "Signing In..." : "Sign In"}
             </Button>
 
             <TouchableOpacity
               onPress={navigateToForgotPassword}
               style={styles.forgotPasswordContainer}
+              disabled={isLoggingIn}
             >
               <Text
                 style={[
@@ -185,7 +239,10 @@ const LoginScreen = () => {
             <Text style={{ color: theme.colors.onSurfaceVariant }}>
               Don't have an account?
             </Text>
-            <TouchableOpacity onPress={navigateToRegister}>
+            <TouchableOpacity
+              onPress={navigateToRegister}
+              disabled={isLoggingIn}
+            >
               <Text
                 style={[styles.registerText, { color: theme.colors.primary }]}
               >
@@ -195,6 +252,9 @@ const LoginScreen = () => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Render minimal loading overlay */}
+      {renderLoadingOverlay()}
 
       <Snackbar
         visible={snackbarVisible}
@@ -267,6 +327,26 @@ const styles = StyleSheet.create({
   credentialText: {
     fontWeight: "bold",
     marginTop: 8,
+  },
+  loadingOverlay: {
+    position: "absolute",
+    bottom: 40,
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  loadingText: {
+    marginLeft: 12,
+    fontSize: 14,
+    fontWeight: "500",
   },
 });
 
