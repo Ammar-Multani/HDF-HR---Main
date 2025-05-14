@@ -1,8 +1,12 @@
-import React from "react";
-import { NavigationContainer } from "@react-navigation/native";
+import React, { createRef, useEffect } from "react";
+import {
+  NavigationContainer,
+  useNavigationContainerRef,
+} from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useAuth } from "../contexts/AuthContext";
 import { UserRole } from "../types";
+import * as Linking from "expo-linking";
 
 // Auth Screens
 import LoginScreen from "../screens/auth/LoginScreen";
@@ -54,13 +58,43 @@ const SuperAdminStack = createNativeStackNavigator();
 const CompanyAdminStack = createNativeStackNavigator();
 const EmployeeStack = createNativeStackNavigator();
 
+// Create a navigation ref that can be used outside of the Navigation Provider
+export const navigationRef = createRef();
+
+// Configure linking
+const linking = {
+  prefixes: [
+    "hdf-hr://", // Your app's URL scheme
+    "https://*.yourdomain.com", // Your website domain (update this)
+  ],
+  config: {
+    screens: {
+      // Auth screens
+      ResetPassword: {
+        path: "reset-password",
+        parse: {
+          token: (token) => token,
+        },
+      },
+      Login: "login",
+      Register: "register",
+      ForgotPassword: "forgot-password",
+      // Add other screens as needed
+    },
+  },
+};
+
 // Auth Navigator
 const AuthNavigator = () => (
   <AuthStack.Navigator screenOptions={{ headerShown: false }}>
     <AuthStack.Screen name="Login" component={LoginScreen} />
     <AuthStack.Screen name="Register" component={RegisterScreen} />
     <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
-    <AuthStack.Screen name="ResetPassword" component={ResetPasswordScreen} />
+    <AuthStack.Screen
+      name="ResetPassword"
+      component={ResetPasswordScreen}
+      initialParams={{ token: null }}
+    />
   </AuthStack.Navigator>
 );
 
@@ -176,6 +210,12 @@ const EmployeeNavigator = () => (
 // Main Navigator
 export const AppNavigator = () => {
   const { user, userRole, loading } = useAuth();
+  const navRef = useNavigationContainerRef();
+
+  // Set the navigationRef for use outside of the component
+  useEffect(() => {
+    navigationRef.current = navRef;
+  }, [navRef]);
 
   console.log("Navigation state:", {
     isLoading: loading,
@@ -203,7 +243,11 @@ export const AppNavigator = () => {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer
+      ref={navRef}
+      linking={linking}
+      fallback={<LoadingScreen />}
+    >
       {!user ? (
         <AuthNavigator />
       ) : (

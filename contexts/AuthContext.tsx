@@ -16,6 +16,8 @@ import {
   generateJWT,
 } from "../utils/auth";
 import * as Crypto from "expo-crypto";
+import { generatePasswordResetEmail } from "../utils/emailTemplates";
+import { sendPasswordResetEmail } from "../utils/emailService";
 
 // Auth token constants
 const AUTH_TOKEN_KEY = "auth_token";
@@ -33,7 +35,10 @@ interface AuthContextType {
   ) => Promise<{ error: any; data: any }>;
   signOut: () => Promise<void>;
   forgotPassword: (email: string) => Promise<{ error: any }>;
-  resetPassword: (newPassword: string) => Promise<{ error: any }>;
+  resetPassword: (
+    newPassword: string,
+    token: string
+  ) => Promise<{ error: any }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -516,10 +521,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return { error: updateError };
       }
 
-      // In a real app, send email with reset link
-      // For demo purposes, just console log
-      console.log(`Reset token for ${email}: ${resetToken}`);
+      // Send the password reset email using EmailJS
+      const emailResult = await sendPasswordResetEmail(email, resetToken);
 
+      if (!emailResult.success) {
+        console.error("Failed to send reset email:", emailResult.error);
+        return { error: { message: "Failed to send reset email" } };
+      }
+
+      console.log(`Reset email sent to ${email} successfully`);
       return { error: null };
     } catch (error: any) {
       console.error("Forgot password error:", error);
@@ -529,17 +539,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const resetPassword = async (newPassword: string) => {
+  const resetPassword = async (newPassword: string, token: string) => {
     setLoading(true);
     try {
-      if (!user?.id) {
-        return { error: { message: "No authenticated user" } };
+      if (!token) {
+        return { error: { message: "Reset token is required" } };
+      }
+
+      // Find user with matching reset token
+      const { data: userData, error: userError } = await supabase
+        .from("users")
+        .select("id, reset_token_expires")
+        .eq("reset_token", token)
+        .single();
+
+      if (userError || !userData) {
+        return { error: { message: "Invalid or expired reset token" } };
+      }
+
+      // Check if token has expired
+      const tokenExpiry = new Date(userData.reset_token_expires);
+      const now = new Date();
+      if (now > tokenExpiry) {
+        return { error: { message: "Reset token has expired" } };
       }
 
       // Hash the new password
       const hashedPassword = await hashPassword(newPassword);
 
-      // Update password and clear reset token directly in users table
+      // Update password and clear reset token
       const { error } = await supabase
         .from("users")
         .update({
@@ -548,7 +576,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           reset_token_expires: null,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", user.id);
+        .eq("id", userData.id);
 
       if (error) {
         throw error;

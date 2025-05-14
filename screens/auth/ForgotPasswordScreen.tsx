@@ -85,15 +85,21 @@ const ForgotPasswordScreen = () => {
         >
           <View style={styles.logoContainer}>
             <Image
-              source={require("../../assets/splash-icon-light.png")}
+              source={
+                theme.dark
+                  ? require("../../assets/splash-icon-light.png")
+                  : require("../../assets/splash-icon-dark.png")
+              }
               style={styles.logo}
               resizeMode="contain"
             />
+            <Text
+              variant="headlineMedium"
+              style={[styles.title, { color: theme.colors.primary }]}
+            >
+              HDF HR
+            </Text>
           </View>
-
-          <Text style={[styles.title, { color: theme.colors.primary }]}>
-            Reset Password
-          </Text>
 
           <Text
             style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}
@@ -115,6 +121,7 @@ const ForgotPasswordScreen = () => {
               style={styles.input}
               disabled={loading}
               error={!!emailError}
+              left={<TextInput.Icon icon="email" />}
             />
             {emailError ? (
               <HelperText type="error">{emailError}</HelperText>
@@ -169,43 +176,43 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: "center",
-    padding: 20,
+    padding: 16,
   },
   logoContainer: {
     alignItems: "center",
-    marginBottom: 32,
+    marginBottom: 16,
   },
   logo: {
-    width: 200,
+    width: 100,
     height: 100,
+    marginBottom: 16,
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: "bold",
     textAlign: "center",
     marginBottom: 8,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 14,
     textAlign: "center",
     marginBottom: 32,
   },
   formContainer: {
     width: "100%",
-    maxWidth: 400,
-    alignSelf: "center",
+    marginBottom: 32,
   },
   input: {
     marginBottom: 12,
   },
   button: {
-    marginTop: 8,
+    marginTop: 12,
     paddingVertical: 6,
   },
   loginContainer: {
     flexDirection: "row",
     justifyContent: "center",
-    marginTop: 32,
+    marginTop: 16,
   },
   loginText: {
     fontWeight: "bold",
