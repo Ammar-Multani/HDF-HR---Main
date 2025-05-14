@@ -15,8 +15,6 @@ import {
   useTheme,
   Snackbar,
   HelperText,
-  Dialog,
-  Portal,
 } from "react-native-paper";
 import { useAuth } from "../../contexts/AuthContext";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -25,7 +23,7 @@ import { useNavigation } from "@react-navigation/native";
 const LoginScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
-  const { signIn, loading, isFirstTimeSetup, setupDefaultAdmin } = useAuth();
+  const { signIn, loading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -33,7 +31,6 @@ const LoginScreen = () => {
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
-  const [setupDialogVisible, setSetupDialogVisible] = useState(false);
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -76,25 +73,6 @@ const LoginScreen = () => {
     }
   };
 
-  const handleSetupDefaultAdmin = async () => {
-    const { error } = await setupDefaultAdmin();
-
-    if (error) {
-      setSnackbarMessage(error.message || "Failed to set up default admin");
-      setSnackbarVisible(true);
-    } else {
-      setSetupDialogVisible(false);
-    }
-  };
-
-  const showSetupDialog = () => {
-    setSetupDialogVisible(true);
-  };
-
-  const hideSetupDialog = () => {
-    setSetupDialogVisible(false);
-  };
-
   const navigateToRegister = () => {
     navigation.navigate("Register" as never);
   };
@@ -109,10 +87,10 @@ const LoginScreen = () => {
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.keyboardAvoidingView}
+        style={styles.keyboardAvoidView}
       >
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={styles.scrollViewContent}
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.logoContainer}>
@@ -121,17 +99,13 @@ const LoginScreen = () => {
               style={styles.logo}
               resizeMode="contain"
             />
+            <Text
+              variant="headlineMedium"
+              style={[styles.title, { color: theme.colors.primary }]}
+            >
+              HDF HR
+            </Text>
           </View>
-
-          <Text style={[styles.title, { color: theme.colors.primary }]}>
-            HDF HR
-          </Text>
-
-          <Text
-            style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}
-          >
-            Sign in to your account
-          </Text>
 
           <View style={styles.formContainer}>
             <TextInput
@@ -147,6 +121,7 @@ const LoginScreen = () => {
               style={styles.input}
               disabled={loading}
               error={!!emailError}
+              left={<TextInput.Icon icon="email" />}
             />
             {emailError ? (
               <HelperText type="error">{emailError}</HelperText>
@@ -164,12 +139,12 @@ const LoginScreen = () => {
               style={styles.input}
               disabled={loading}
               error={!!passwordError}
+              left={<TextInput.Icon icon="lock" />}
               right={
                 <TextInput.Icon
                   icon={passwordVisible ? "eye-off" : "eye"}
                   onPress={() => setPasswordVisible(!passwordVisible)}
                   forceTextInputFocus={false}
-                  size={24}
                 />
               }
             />
@@ -186,17 +161,6 @@ const LoginScreen = () => {
             >
               Sign In
             </Button>
-
-            {isFirstTimeSetup && (
-              <Button
-                mode="outlined"
-                onPress={showSetupDialog}
-                style={[styles.button, { marginTop: 16 }]}
-                disabled={loading}
-              >
-                Set Up Default Admin
-              </Button>
-            )}
 
             <TouchableOpacity
               onPress={navigateToForgotPassword}
@@ -228,7 +192,6 @@ const LoginScreen = () => {
         </ScrollView>
       </KeyboardAvoidingView>
 
-
       <Snackbar
         visible={snackbarVisible}
         onDismiss={() => setSnackbarVisible(false)}
@@ -248,43 +211,38 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  keyboardAvoidingView: {
+  keyboardAvoidView: {
     flex: 1,
   },
-  scrollContent: {
+  scrollViewContent: {
     flexGrow: 1,
     justifyContent: "center",
-    padding: 20,
+    padding: 16,
   },
   logoContainer: {
     alignItems: "center",
-    marginBottom: 32,
+    marginBottom: 16,
   },
   logo: {
-    width: 200,
+    width: 100,
     height: 100,
+    marginBottom: 16,
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: "bold",
     textAlign: "center",
     marginBottom: 8,
   },
-  subtitle: {
-    fontSize: 16,
-    textAlign: "center",
-    marginBottom: 32,
-  },
   formContainer: {
     width: "100%",
-    maxWidth: 400,
-    alignSelf: "center",
+    marginBottom: 32,
   },
   input: {
     marginBottom: 12,
   },
   button: {
-    marginTop: 8,
+    marginTop: 12,
     paddingVertical: 6,
   },
   forgotPasswordContainer: {
@@ -297,7 +255,7 @@ const styles = StyleSheet.create({
   registerContainer: {
     flexDirection: "row",
     justifyContent: "center",
-    marginTop: 32,
+    marginTop: 16,
   },
   registerText: {
     fontWeight: "bold",

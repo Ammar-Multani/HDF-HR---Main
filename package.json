@@ -24,7 +24,9 @@
     "@react-navigation/native": "^7.0.14",
     "@react-navigation/native-stack": "^7.2.0",
     "@supabase/supabase-js": "~2.49.4",
+    "@types/bcrypt": "^5.0.2",
     "base-64": "^1.0.0",
+    "bcrypt": "^6.0.0",
     "date-fns": "~4.1.0",
     "expo": "~52.0.7",
     "expo-blur": "~14.0.3",
@@ -59,6 +61,7 @@
   "devDependencies": {
     "@babel/core": "^7.25.2",
     "@expo/config-plugins": "~9.0.0",
+    "@types/base-64": "^1.0.2",
     "@types/react": "~18.3.12",
     "eslint": "~8.57.0",
     "eslint-config-prettier": "~9.1.0",

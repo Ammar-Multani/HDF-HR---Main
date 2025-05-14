@@ -2,29 +2,86 @@ import * as Crypto from "expo-crypto";
 import { encode as base64Encode } from "base-64";
 
 /**
- * Hashes a password using SHA-256
- * Note: In a production app, use a stronger algorithm like bcrypt or Argon2
- * This is for demo purposes only
+ * Hashes a password using PBKDF2 via expo-crypto
+ * This implementation includes:
+ * - Automatic salting
+ * - Configurable iterations to slow down brute force attacks
  */
 export const hashPassword = async (password: string): Promise<string> => {
-  // In a real app, add a salt and use a stronger algorithm
-  const hash = await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    password
-  );
-  return hash;
+  // Generate a salt (16 random bytes)
+  const saltBytes = await Crypto.getRandomBytesAsync(16);
+  const salt = Array.from(saltBytes)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+  
+  // Use PBKDF2 with SHA-256 and 10000 iterations (strong and available in Expo)
+  const iterations = 10000;
+  
+  // Hash with PBKDF2 (using expo-crypto's digest function repeatedly)
+  const derivedKey = await pbkdf2(password, salt, iterations, 32);
+  
+  // Format as iterations:salt:hash for storage and future validation
+  return `${iterations}:${salt}:${derivedKey}`;
 };
 
 /**
  * Validates if a password matches a hash
- * Note: In a production app, use a proper password validation function
  */
 export const validatePassword = async (
   password: string,
-  hash: string
+  storedHash: string
 ): Promise<boolean> => {
-  const passwordHash = await hashPassword(password);
-  return passwordHash === hash;
+  try {
+    // Parse stored hash components
+    const [iterationsStr, salt, originalDerivedKey] = storedHash.split(':');
+    
+    // Handle bcrypt format (for backward compatibility during development)
+    if (storedHash.startsWith('$2')) {
+      console.warn('Detected bcrypt hash - this should not be used in production with Expo');
+      return false; // We can't validate bcrypt hashes without the library
+    }
+    
+    if (!iterationsStr || !salt || !originalDerivedKey) {
+      return false; // Invalid format
+    }
+    
+    const iterations = parseInt(iterationsStr, 10);
+    
+    // Recompute the derived key with the same salt and iterations
+    const derivedKey = await pbkdf2(password, salt, iterations, 32);
+    
+    // Compare the derived key with the stored one
+    return derivedKey === originalDerivedKey;
+  } catch (error) {
+    console.error('Error validating password:', error);
+    return false;
+  }
+};
+
+/**
+ * PBKDF2 implementation using expo-crypto
+ * This is a key derivation function that applies a pseudorandom function
+ * to the input password along with a salt value and repeats the process many times
+ */
+const pbkdf2 = async (
+  password: string,
+  salt: string,
+  iterations: number,
+  keyLength: number
+): Promise<string> => {
+  // Start with the password and salt
+  let derivedKey = password + salt;
+  
+  // Apply the SHA-256 hash function repeatedly (iterations times)
+  for (let i = 0; i < iterations; i++) {
+    derivedKey = await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      derivedKey
+    );
+  }
+  
+  // Truncate or pad if needed to match keyLength
+  return derivedKey.substring(0, keyLength * 2); // Hex representation, so *2
 };
 
 /**

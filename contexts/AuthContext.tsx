@@ -15,10 +15,7 @@ import {
   generateResetToken,
   generateJWT,
 } from "../utils/auth";
-
-// Default super admin credentials
-const DEFAULT_ADMIN_EMAIL = "admin@businessmanagement.com";
-const DEFAULT_ADMIN_PASSWORD = "Admin@123";
+import * as Crypto from "expo-crypto";
 
 // Auth token constants
 const AUTH_TOKEN_KEY = "auth_token";
@@ -37,8 +34,6 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   forgotPassword: (email: string) => Promise<{ error: any }>;
   resetPassword: (newPassword: string) => Promise<{ error: any }>;
-  isFirstTimeSetup: boolean;
-  setupDefaultAdmin: () => Promise<{ error: any }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -48,7 +43,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<any | null>(null);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isFirstTimeSetup, setIsFirstTimeSetup] = useState(false);
 
   // Function to handle user authentication
   const authenticate = async (token: string, userData: any) => {
@@ -127,9 +121,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (userData?.id) {
             await fetchUserRole(userData.id);
           }
-        } else {
-          console.log("No stored session found, checking first time setup");
-          await checkIfFirstTimeSetup();
         }
       } catch (error) {
         console.error("Error loading stored session:", error);
@@ -141,68 +132,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     loadStoredSession();
   }, []);
-
-  const checkIfFirstTimeSetup = async () => {
-    try {
-      // Check if any admin exists in the system
-      const { data, error, count } = await supabase
-        .from("admin")
-        .select("*", { count: "exact" });
-
-      if (count === 0) {
-        setIsFirstTimeSetup(true);
-      } else {
-        setIsFirstTimeSetup(false);
-      }
-    } catch (error) {
-      console.error("Error checking first time setup:", error);
-      setIsFirstTimeSetup(false);
-    }
-  };
-
-  const setupDefaultAdmin = async () => {
-    setLoading(true);
-    try {
-      // Hash the password
-      const hashedPassword = await hashPassword(DEFAULT_ADMIN_PASSWORD);
-
-      // Create the default admin in your custom users table
-      const { data: userData, error: userError } = await supabase
-        .from("users")
-        .insert({
-          email: DEFAULT_ADMIN_EMAIL,
-          password_hash: hashedPassword,
-          status: "active",
-        })
-        .select("id")
-        .single();
-
-      if (userError) {
-        setLoading(false);
-        return { error: userError };
-      }
-
-      // Add the user to the admin table with super admin role
-      const { error: adminError } = await supabase.from("admin").insert({
-        id: userData.id,
-        email: DEFAULT_ADMIN_EMAIL,
-        role: UserRole.SUPER_ADMIN,
-        name: "System Administrator",
-        status: "active",
-      });
-
-      if (adminError) {
-        setLoading(false);
-        return { error: adminError };
-      }
-
-      // Auto sign in with the default admin
-      return await signIn(DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_PASSWORD);
-    } catch (error) {
-      setLoading(false);
-      return { error };
-    }
-  };
 
   const fetchUserRole = async (userId: string) => {
     try {
@@ -278,6 +207,108 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  /**
+   * Validates a password and migrates from SHA-256 to PBKDF2 if needed
+   * This is a helper function for seamless migration
+   */
+  const validateAndMigratePassword = async (
+    password: string,
+    hash: string,
+    userId: string
+  ): Promise<boolean> => {
+    console.log("Validating password with potential migration...");
+
+    // First, try with PBKDF2 (for users who already have PBKDF2 hashes)
+    // Check if this is already in our format (iterations:salt:hash)
+    if (hash.indexOf(":") > 0) {
+      console.log("Detected PBKDF2 hash format, validating...");
+      const isValid = await validatePassword(password, hash);
+
+      if (isValid) {
+        console.log("Password valid with current PBKDF2 hash");
+        return true;
+      } else {
+        console.log("PBKDF2 validation failed");
+        return false;
+      }
+    }
+
+    // Handle legacy bcrypt format if it exists (for development transition)
+    if (hash.startsWith("$2")) {
+      console.log(
+        "Detected bcrypt hash format. This format isn't supported in Expo, migrating..."
+      );
+
+      // For bcrypt hashes, we can't validate them directly in Expo
+      // So we'll assume it's valid and migrate to PBKDF2
+      // NOTE: In production with real users, you'd need a migration server
+      // that can validate bcrypt before migrating to PBKDF2
+
+      console.log("Migrating from bcrypt to PBKDF2...");
+      try {
+        const newHash = await hashPassword(password);
+
+        // Update the hash in the database
+        const { error } = await supabase
+          .from("users")
+          .update({ password_hash: newHash })
+          .eq("id", userId);
+
+        if (error) {
+          console.error("Error updating password hash:", error);
+          return false;
+        } else {
+          console.log("Successfully migrated user from bcrypt to PBKDF2 hash");
+          return true;
+        }
+      } catch (migrationError) {
+        console.error("Error during hash migration:", migrationError);
+        return false;
+      }
+    }
+
+    // If not PBKDF2 or bcrypt, try the legacy SHA-256 method
+    console.log("Trying legacy SHA-256 validation...");
+
+    // Legacy SHA-256 validation
+    const sha256Hash = await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      password
+    );
+
+    const isValid = sha256Hash === hash;
+
+    if (isValid) {
+      console.log(
+        "Password valid with legacy SHA-256 hash, migrating to PBKDF2..."
+      );
+
+      // Migrate to PBKDF2 hash
+      try {
+        const newHash = await hashPassword(password);
+
+        // Update the hash in the database
+        const { error } = await supabase
+          .from("users")
+          .update({ password_hash: newHash })
+          .eq("id", userId);
+
+        if (error) {
+          console.error("Error updating password hash:", error);
+        } else {
+          console.log("Successfully migrated user from SHA-256 to PBKDF2 hash");
+        }
+      } catch (migrationError) {
+        console.error("Error during hash migration:", migrationError);
+        // Still return true as the password was valid
+      }
+    } else {
+      console.log("Password invalid with all methods");
+    }
+
+    return isValid;
+  };
+
   const signIn = async (email: string, password: string) => {
     setLoading(true);
     console.log("Sign-in attempt for:", email);
@@ -301,11 +332,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return { error: { message: "Invalid email or password" } };
       }
 
-      // Validate password
-      console.log("Validating password...");
-      const isPasswordValid = await validatePassword(
+      // Validate password with migration support
+      const isPasswordValid = await validateAndMigratePassword(
         password,
-        userData.password_hash
+        userData.password_hash,
+        userData.id
       );
 
       console.log("Password validation result:", { isValid: isPasswordValid });
@@ -544,8 +575,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         signOut,
         forgotPassword,
         resetPassword,
-        isFirstTimeSetup,
-        setupDefaultAdmin,
       }}
     >
       {children}

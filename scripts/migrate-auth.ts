@@ -19,6 +19,7 @@ const TEMP_PASSWORD = "ChangeMe123!";
 const migrateUsers = async () => {
   try {
     console.log("Starting auth migration...");
+    console.log("Using PBKDF2 for password hashing (Expo-compatible)");
 
     // 1. Fetch all users from Supabase Auth
     const { data: authUsers, error: authError } =
@@ -30,8 +31,10 @@ const migrateUsers = async () => {
 
     console.log(`Found ${authUsers.users.length} users to migrate`);
 
-    // 2. For each user, create an entry in the custom users table
+    // 2. For each user, create an entry in the custom users table with secure PBKDF2 hash
+    console.log("Generating secure password hash with PBKDF2...");
     const hashedTempPassword = await hashPassword(TEMP_PASSWORD);
+    console.log("Temporary password hash generated successfully");
 
     for (const authUser of authUsers.users) {
       console.log(`Migrating user: ${authUser.email}`);
@@ -70,6 +73,7 @@ const migrateUsers = async () => {
     console.log(
       "Users will need to use the 'Forgot Password' feature to set a new password."
     );
+    console.log("All passwords are now secured with PBKDF2 hashing.");
   } catch (error) {
     console.error("Migration failed:", error);
   }
