@@ -109,10 +109,10 @@ const RegisterScreen = () => {
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.keyboardAvoidingView}
+        style={styles.keyboardAvoidView}
       >
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={styles.scrollViewContent}
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.logoContainer}>
@@ -121,17 +121,13 @@ const RegisterScreen = () => {
               style={styles.logo}
               resizeMode="contain"
             />
+            <Text
+              variant="headlineMedium"
+              style={[styles.title, { color: theme.colors.primary }]}
+            >
+              HDF HR
+            </Text>
           </View>
-
-          <Text style={[styles.title, { color: theme.colors.primary }]}>
-            Create Account
-          </Text>
-
-          <Text
-            style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}
-          >
-            Register for a new account
-          </Text>
 
           <View style={styles.formContainer}>
             <TextInput
@@ -147,6 +143,7 @@ const RegisterScreen = () => {
               style={styles.input}
               disabled={loading}
               error={!!emailError}
+              left={<TextInput.Icon icon="email" />}
             />
             {emailError ? (
               <HelperText type="error">{emailError}</HelperText>
@@ -166,6 +163,7 @@ const RegisterScreen = () => {
               style={styles.input}
               disabled={loading}
               error={!!passwordError}
+              left={<TextInput.Icon icon="lock" />}
               right={
                 <TextInput.Icon
                   icon={passwordVisible ? "eye-off" : "eye"}
@@ -190,6 +188,7 @@ const RegisterScreen = () => {
               style={styles.input}
               disabled={loading}
               error={!!confirmPasswordError}
+              left={<TextInput.Icon icon="lock-check" />}
               right={
                 <TextInput.Icon
                   icon={confirmPasswordVisible ? "eye-off" : "eye"}
@@ -247,49 +246,44 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  keyboardAvoidingView: {
+  keyboardAvoidView: {
     flex: 1,
   },
-  scrollContent: {
+  scrollViewContent: {
     flexGrow: 1,
     justifyContent: "center",
-    padding: 20,
+    padding: 16,
   },
   logoContainer: {
     alignItems: "center",
-    marginBottom: 32,
+    marginBottom: 16,
   },
   logo: {
-    width: 200,
+    width: 100,
     height: 100,
+    marginBottom: 16,
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: "bold",
     textAlign: "center",
     marginBottom: 8,
   },
-  subtitle: {
-    fontSize: 16,
-    textAlign: "center",
-    marginBottom: 32,
-  },
   formContainer: {
     width: "100%",
-    maxWidth: 400,
-    alignSelf: "center",
+    marginBottom: 32,
   },
   input: {
     marginBottom: 12,
   },
   button: {
-    marginTop: 8,
+    marginTop: 12,
     paddingVertical: 6,
   },
   loginContainer: {
     flexDirection: "row",
     justifyContent: "center",
-    marginTop: 32,
+    marginTop: 16,
   },
   loginText: {
     fontWeight: "bold",
