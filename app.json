@@ -30,6 +30,24 @@
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
         "RECORD_AUDIO"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "*.yourdomain.com",
+              "pathPrefix": "/reset-password"
+            },
+            {
+              "scheme": "hdf-hr",
+              "host": "reset-password"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
       ]
     },
     "ios": {
@@ -41,7 +59,8 @@
         "NSPhotoLibraryUsageDescription": "This app uses the photo library to upload documents and profile pictures.",
         "NSPhotoLibraryAddUsageDescription": "This app saves photos to your library when you download documents.",
         "NSMicrophoneUsageDescription": "This app uses the microphone for video recording features."
-      }
+      },
+      "associatedDomains": ["applinks:*.yourdomain.com"]
     },
     "web": {
       "favicon": "./assets/favicon.png"

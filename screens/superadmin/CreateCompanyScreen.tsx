@@ -16,7 +16,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { useForm, Controller } from "react-hook-form";
-import { supabase, getAuthenticatedClient } from "../../lib/supabase";
+import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
 import { hashPassword } from "../../utils/auth";
@@ -111,12 +111,21 @@ const CreateCompanyScreen = () => {
   const onSubmit = async (data: CompanyFormData) => {
     try {
       setLoading(true);
+      setSnackbarVisible(false);
 
-      if (stakeholders.length === 0) {
-        setSnackbarMessage("Please add at least one stakeholder");
-        setSnackbarVisible(true);
-        setLoading(false);
-        return;
+      // Validate stakeholders
+      if (stakeholders.length > 0) {
+        const totalPercentage = stakeholders.reduce(
+          (sum, s) => sum + parseFloat(s.percentage),
+          0
+        );
+
+        if (totalPercentage > 100) {
+          setSnackbarMessage("Total stakeholder percentage cannot exceed 100%");
+          setSnackbarVisible(true);
+          setLoading(false);
+          return;
+        }
       }
 
       // Validate email domain more thoroughly
@@ -134,32 +143,54 @@ const CreateCompanyScreen = () => {
         return;
       }
 
-      // Get authenticated client for RLS
-      const supabaseAuth = await getAuthenticatedClient();
+      // Performance optimization: Hash password in parallel with checking for existing user
+      // This avoids the sequential bottleneck
+      const [hashedPassword, existingUserResult] = await Promise.all([
+        hashPassword(DEFAULT_PASSWORD),
+        supabase
+          .from("users")
+          .select("id")
+          .eq("email", data.admin_email)
+          .maybeSingle(), // Use maybeSingle instead of single to avoid errors
+      ]);
 
-      // Create company record
-      const { data: companyData, error: companyError } = await supabaseAuth
+      // Check if user already exists
+      if (existingUserResult.data) {
+        throw new Error("A user with this email already exists");
+      }
+
+      // Prepare company data
+      const companyData = {
+        company_name: data.company_name,
+        registration_number: data.registration_number,
+        industry_type: data.industry_type,
+        contact_number: data.contact_number,
+        address: {
+          line1: data.address_line1,
+          line2: data.address_line2 || null,
+          city: data.address_city,
+          state: data.address_state,
+          postal_code: data.address_postal_code,
+          country: data.address_country,
+        },
+        active: true,
+        created_by: user?.id,
+        stakeholders,
+        vat_type: data.vat_type,
+      };
+
+      // Generate reset token just once - avoid regenerating later
+      const resetToken =
+        Math.random().toString(36).substring(2, 15) +
+        Math.random().toString(36).substring(2, 15);
+      const resetTokenExpiry = new Date(
+        Date.now() + 7 * 24 * 60 * 60 * 1000
+      ).toISOString();
+
+      // Create company record and get the ID
+      const { data: newCompany, error: companyError } = await supabase
         .from("company")
-        .insert([
-          {
-            company_name: data.company_name,
-            registration_number: data.registration_number,
-            industry_type: data.industry_type,
-            contact_number: data.contact_number,
-            address: {
-              line1: data.address_line1,
-              line2: data.address_line2 || null,
-              city: data.address_city,
-              state: data.address_state,
-              postal_code: data.address_postal_code,
-              country: data.address_country,
-            },
-            active: true,
-            created_by: user?.id,
-            stakeholders,
-            vat_type: data.vat_type,
-          },
-        ])
+        .insert([companyData])
         .select("id")
         .single();
 
@@ -167,80 +198,56 @@ const CreateCompanyScreen = () => {
         throw companyError;
       }
 
-      // Hash the default password for the company admin
-      const hashedPassword = await hashPassword(DEFAULT_PASSWORD);
+      // User data with reset token included
+      const userData = {
+        email: data.admin_email,
+        password_hash: hashedPassword,
+        status: "active",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        reset_token: resetToken,
+        reset_token_expires: resetTokenExpiry,
+      };
 
-      // Check if user with this email already exists in custom users table
-      const { data: existingUser } = await supabaseAuth
+      // Create the user with reset token in a single operation
+      const { data: newUser, error: userError } = await supabase
         .from("users")
-        .select("id")
-        .eq("email", data.admin_email)
-        .single();
-
-      if (existingUser) {
-        throw new Error("A user with this email already exists");
-      }
-
-      // Create the user in our custom users table
-      const { data: userData, error: userError } = await supabaseAuth
-        .from("users")
-        .insert({
-          email: data.admin_email,
-          password_hash: hashedPassword,
-          status: "active", // Set as active so they can log in immediately
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
+        .insert(userData)
         .select("id")
         .single();
 
       if (userError) {
+        // If user creation fails, delete the company for atomicity
+        await supabase.from("company").delete().eq("id", newCompany.id);
         throw userError;
       }
 
-      // Create company_user record for the admin
-      const { error: companyUserError } = await supabaseAuth
+      // Create company_user record
+      const companyUserData = {
+        id: newUser.id,
+        company_id: newCompany.id,
+        first_name: "Company",
+        last_name: "Admin",
+        email: data.admin_email,
+        role: "admin",
+        active_status: "active",
+        created_by: user?.id,
+        phone_number: "Not provided",
+        date_of_birth: new Date().toISOString(),
+        nationality: "Not provided",
+      };
+
+      const { error: companyUserError } = await supabase
         .from("company_user")
-        .insert([
-          {
-            id: userData.id, // Use the ID from our custom users table
-            company_id: companyData.id,
-            first_name: "Company", // Default placeholder - admin will update later
-            last_name: "Admin", // Default placeholder - admin will update later
-            email: data.admin_email,
-            role: "admin",
-            active_status: "active",
-            created_by: user?.id,
-            phone_number: "Not provided",
-            date_of_birth: new Date().toISOString(),
-            nationality: "Not provided",
-          },
-        ]);
+        .insert([companyUserData]);
 
       if (companyUserError) {
+        // If company_user creation fails, delete the user and company
+        await supabase.from("users").delete().eq("id", newUser.id);
+        await supabase.from("company").delete().eq("id", newCompany.id);
         throw companyUserError;
       }
 
-      // Generate a reset token for the new admin
-      const { error: resetTokenError } = await supabaseAuth
-        .from("users")
-        .update({
-          reset_token:
-            Math.random().toString(36).substring(2, 15) +
-            Math.random().toString(36).substring(2, 15),
-          reset_token_expires: new Date(
-            Date.now() + 7 * 24 * 60 * 60 * 1000
-          ).toISOString(), // 7 days from now
-        })
-        .eq("id", userData.id);
-
-      if (resetTokenError) {
-        console.error("Error setting reset token:", resetTokenError);
-        // Non-critical error, continue
-      }
-
-      // Here you would typically send an email to the admin with instructions
-      // Since we can't send emails directly from the app, we'll just show a message
       console.log(
         `Company admin created with email: ${data.admin_email} and temporary password: ${DEFAULT_PASSWORD}`
       );
@@ -254,7 +261,7 @@ const CreateCompanyScreen = () => {
       // Navigate back to companies list after a short delay
       setTimeout(() => {
         navigation.goBack();
-      }, 5000); // Give them time to see the password
+      }, 5000);
     } catch (error: any) {
       console.error("Error creating company:", error);
       setSnackbarMessage(error.message || "Failed to create company");

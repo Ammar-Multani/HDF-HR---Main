@@ -117,7 +117,11 @@ const RegisterScreen = () => {
         >
           <View style={styles.logoContainer}>
             <Image
-              source={require("../../assets/splash-icon-light.png")}
+              source={
+                theme.dark
+                  ? require("../../assets/splash-icon-light.png")
+                  : require("../../assets/splash-icon-dark.png")
+              }
               style={styles.logo}
               resizeMode="contain"
             />
