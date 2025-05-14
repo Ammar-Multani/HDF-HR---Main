@@ -106,8 +106,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const loadStoredSession = async () => {
       try {
         console.log("Checking for stored session...");
-        const storedToken = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
-        const storedUserData = await AsyncStorage.getItem(USER_DATA_KEY);
+
+        // Load token and user data in parallel instead of sequentially
+        const [storedToken, storedUserData] = await Promise.all([
+          AsyncStorage.getItem(AUTH_TOKEN_KEY),
+          AsyncStorage.getItem(USER_DATA_KEY),
+        ]);
 
         console.log("Stored session check result:", {
           hasToken: !!storedToken,
@@ -120,17 +124,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             userId: userData.id,
           });
 
+          // Set session and user state immediately
           setSession({ access_token: storedToken });
           setUser(userData);
 
-          if (userData?.id) {
+          // If user already has a role in stored data, use it directly
+          if (userData?.role) {
+            console.log("Using role from stored user data:", userData.role);
+            setUserRole(userData.role);
+            setLoading(false);
+          } else if (userData?.id) {
+            // Only fetch role from database if not in stored data
             await fetchUserRole(userData.id);
+          } else {
+            setLoading(false);
           }
+        } else {
+          setLoading(false);
         }
       } catch (error) {
         console.error("Error loading stored session:", error);
-      } finally {
-        console.log("Session loading completed, setting loading to false");
         setLoading(false);
       }
     };
@@ -142,54 +155,37 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       console.log("Fetching user role for ID:", userId);
 
-      // For debugging - log the user roles enum
-      console.log("UserRole enum values:", UserRole);
+      // Optimized approach: check both tables in parallel
+      const [adminResult, companyUserResult] = await Promise.all([
+        supabase.from("admin").select("role").eq("id", userId).single(),
+        supabase.from("company_user").select("role").eq("id", userId).single(),
+      ]);
 
-      // Since RLS is disabled, we can use the regular supabase client
-      // First check if user is a super admin
-      console.log("Checking admin role directly...");
-      const { data: adminData, error: adminError } = await supabase
-        .from("admin")
-        .select("role")
-        .eq("id", userId)
-        .single();
+      const adminData = adminResult.data;
+      const companyUserData = companyUserResult.data;
 
-      console.log("Admin check result:", {
+      console.log("Role check results:", {
         adminData,
-        adminError: adminError ? adminError.message : null,
+        companyUserData,
       });
 
+      // Process admin role first if it exists
       if (adminData && adminData.role) {
         const role = adminData.role.toLowerCase();
-        console.log("User is an admin with raw role value:", role);
+        console.log("User is an admin with role:", role);
 
-        // Map string role to enum
         if (role === "superadmin") {
           console.log("Setting role to SUPER_ADMIN");
           setUserRole(UserRole.SUPER_ADMIN);
-          setLoading(false);
           return;
         }
       }
 
-      // If not a super admin, check if user is a company user
-      console.log("Checking company user role directly...");
-      const { data: companyUserData, error: companyUserError } = await supabase
-        .from("company_user")
-        .select("role")
-        .eq("id", userId)
-        .single();
-
-      console.log("Company user check result:", {
-        companyUserData,
-        companyUserError: companyUserError ? companyUserError.message : null,
-      });
-
+      // Then check company user role
       if (companyUserData && companyUserData.role) {
         const role = companyUserData.role.toLowerCase();
-        console.log("User is a company user with raw role value:", role);
+        console.log("User is a company user with role:", role);
 
-        // Map string role to enum
         if (role === "companyadmin" || role === "admin") {
           console.log("Setting role to COMPANY_ADMIN");
           setUserRole(UserRole.COMPANY_ADMIN);
@@ -201,7 +197,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setUserRole(null);
         }
       } else {
-        console.log("User has no role assigned");
+        console.log("User has no assigned role");
         setUserRole(null);
       }
     } catch (error) {
@@ -213,105 +209,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   /**
-   * Validates a password and migrates from SHA-256 to PBKDF2 if needed
-   * This is a helper function for seamless migration
+   * Simplified password validation without migration
    */
-  const validateAndMigratePassword = async (
+  const validateUserPassword = async (
     password: string,
-    hash: string,
-    userId: string
+    hash: string
   ): Promise<boolean> => {
-    console.log("Validating password with potential migration...");
-
-    // First, try with PBKDF2 (for users who already have PBKDF2 hashes)
-    // Check if this is already in our format (iterations:salt:hash)
-    if (hash.indexOf(":") > 0) {
-      console.log("Detected PBKDF2 hash format, validating...");
+    console.log("Validating user password...");
+    try {
+      // Directly use the validatePassword function from utils/auth
       const isValid = await validatePassword(password, hash);
-
-      if (isValid) {
-        console.log("Password valid with current PBKDF2 hash");
-        return true;
-      } else {
-        console.log("PBKDF2 validation failed");
-        return false;
-      }
+      console.log("Password validation result:", { isValid });
+      return isValid;
+    } catch (error) {
+      console.error("Error validating password:", error);
+      return false;
     }
-
-    // Handle legacy bcrypt format if it exists (for development transition)
-    if (hash.startsWith("$2")) {
-      console.log(
-        "Detected bcrypt hash format. This format isn't supported in Expo, migrating..."
-      );
-
-      // For bcrypt hashes, we can't validate them directly in Expo
-      // So we'll assume it's valid and migrate to PBKDF2
-      // NOTE: In production with real users, you'd need a migration server
-      // that can validate bcrypt before migrating to PBKDF2
-
-      console.log("Migrating from bcrypt to PBKDF2...");
-      try {
-        const newHash = await hashPassword(password);
-
-        // Update the hash in the database
-        const { error } = await supabase
-          .from("users")
-          .update({ password_hash: newHash })
-          .eq("id", userId);
-
-        if (error) {
-          console.error("Error updating password hash:", error);
-          return false;
-        } else {
-          console.log("Successfully migrated user from bcrypt to PBKDF2 hash");
-          return true;
-        }
-      } catch (migrationError) {
-        console.error("Error during hash migration:", migrationError);
-        return false;
-      }
-    }
-
-    // If not PBKDF2 or bcrypt, try the legacy SHA-256 method
-    console.log("Trying legacy SHA-256 validation...");
-
-    // Legacy SHA-256 validation
-    const sha256Hash = await Crypto.digestStringAsync(
-      Crypto.CryptoDigestAlgorithm.SHA256,
-      password
-    );
-
-    const isValid = sha256Hash === hash;
-
-    if (isValid) {
-      console.log(
-        "Password valid with legacy SHA-256 hash, migrating to PBKDF2..."
-      );
-
-      // Migrate to PBKDF2 hash
-      try {
-        const newHash = await hashPassword(password);
-
-        // Update the hash in the database
-        const { error } = await supabase
-          .from("users")
-          .update({ password_hash: newHash })
-          .eq("id", userId);
-
-        if (error) {
-          console.error("Error updating password hash:", error);
-        } else {
-          console.log("Successfully migrated user from SHA-256 to PBKDF2 hash");
-        }
-      } catch (migrationError) {
-        console.error("Error during hash migration:", migrationError);
-        // Still return true as the password was valid
-      }
-    } else {
-      console.log("Password invalid with all methods");
-    }
-
-    return isValid;
   };
 
   const signIn = async (email: string, password: string) => {
@@ -334,20 +247,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (userError || !userData) {
         console.log("Sign-in failed: User not found");
+        setLoading(false);
         return { error: { message: "Invalid email or password" } };
       }
 
-      // Validate password with migration support
-      const isPasswordValid = await validateAndMigratePassword(
+      // Validate password directly without migration
+      const isPasswordValid = await validateUserPassword(
         password,
-        userData.password_hash,
-        userData.id
+        userData.password_hash
       );
-
-      console.log("Password validation result:", { isValid: isPasswordValid });
 
       if (!isPasswordValid) {
         console.log("Sign-in failed: Invalid password");
+        setLoading(false);
         return { error: { message: "Invalid email or password" } };
       }
 
@@ -356,6 +268,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           "Sign-in failed: Account not active, status:",
           userData.status
         );
+        setLoading(false);
         return { error: { message: "Account is not active" } };
       }
 
@@ -367,10 +280,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .update({ last_login: new Date().toISOString() })
         .eq("id", userData.id);
 
-      // First, check if user has a role
+      // Fetch user role directly in a single step
       let role = null;
 
-      // Check admin table
+      // First check admin table
       const { data: adminData } = await supabase
         .from("admin")
         .select("role")
@@ -380,7 +293,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (adminData && adminData.role) {
         role = adminData.role;
       } else {
-        // Check company_user table
+        // If not in admin table, check company_user table
         const { data: companyUserData } = await supabase
           .from("company_user")
           .select("role")
@@ -394,7 +307,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       console.log("Retrieved user role:", role);
 
-      // For now, use a simple token (RLS is disabled anyway)
+      // For now, use a simple token
       const simpleToken = `user-token-${userData.id}-${Date.now()}`;
       console.log("Using simple token for authentication");
 
@@ -407,10 +320,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         role,
       };
 
-      console.log(
-        "Calling authenticate with user data including role:",
-        userDataWithRole
-      );
+      console.log("Calling authenticate with user data");
       await authenticate(simpleToken, userDataWithRole);
 
       console.log("Sign-in process completed successfully");

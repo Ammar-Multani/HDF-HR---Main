@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from "react";
+import React, { useEffect, useCallback, useState } from "react";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider } from "./contexts/AuthContext";
@@ -16,6 +16,39 @@ SplashScreen.preventAutoHideAsync();
 initEmailService();
 
 export default function App() {
+  const [appIsReady, setAppIsReady] = useState(false);
+
+  // Prepare app resources and data
+  useEffect(() => {
+    const prepare = async () => {
+      try {
+        // Perform any initialization tasks here
+        // This runs in parallel with AuthProvider initialization
+        await Promise.all([
+          // Add any other async initialization here if needed
+          new Promise((resolve) => setTimeout(resolve, 50)), // Small delay to ensure UI is ready
+        ]);
+      } catch (e) {
+        console.warn("Error preparing app:", e);
+      } finally {
+        // Mark app as ready
+        setAppIsReady(true);
+      }
+    };
+
+    prepare();
+  }, []);
+
+  // Hide splash screen once the app is ready
+  useEffect(() => {
+    if (appIsReady) {
+      const hideSplash = async () => {
+        await SplashScreen.hideAsync();
+      };
+      hideSplash();
+    }
+  }, [appIsReady]);
+
   // Function to handle deep links
   const handleDeepLink = useCallback(async (event) => {
     const url = event.url;
@@ -58,13 +91,6 @@ export default function App() {
     };
 
     getInitialURL();
-
-    // Hide splash screen after the app is ready
-    const hideSplash = async () => {
-      await SplashScreen.hideAsync();
-    };
-
-    hideSplash();
 
     // Clean up
     return () => {

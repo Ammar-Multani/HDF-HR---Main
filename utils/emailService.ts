@@ -1,8 +1,8 @@
 import { generatePasswordResetEmail } from './emailTemplates';
 
 // Your SendGrid API Key
-const SENDGRID_API_KEY = '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';
-
+const SENDGRID_API_KEY = '';
+// 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
 // The sender email details
 const FROM_EMAIL = 'aamultani@outlook.com';
 const FROM_NAME = 'HDF HR System';
