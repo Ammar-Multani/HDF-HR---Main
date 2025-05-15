@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   StyleSheet,
   View,
@@ -21,7 +21,7 @@ import { useNavigation } from "@react-navigation/native";
 import { useForm, Controller } from "react-hook-form";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { format } from "date-fns";
-import { supabase } from "../../lib/supabase";
+import { supabase, cachedQuery } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
@@ -67,6 +67,112 @@ interface EmployeeFormData {
 // Default password for new employees - they will change it via reset password flow
 const DEFAULT_PASSWORD = "Password123!";
 
+// Skeleton component for form loading state
+const CreateEmployeeFormSkeleton = () => {
+  const theme = useTheme();
+
+  const SkeletonBlock = ({
+    width,
+    height,
+    style,
+  }: {
+    width: string | number;
+    height: number;
+    style?: any;
+  }) => (
+    <View
+      style={[
+        {
+          width,
+          height,
+          backgroundColor: theme.colors.surfaceVariant,
+          borderRadius: 4,
+          opacity: 0.3,
+        },
+        style,
+      ]}
+    />
+  );
+
+  return (
+    <ScrollView
+      style={styles.scrollView}
+      contentContainerStyle={styles.scrollContent}
+    >
+      <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+        Personal Information
+      </Text>
+
+      <View style={styles.row}>
+        <View style={styles.halfInput}>
+          <SkeletonBlock width="100%" height={56} style={{ marginBottom: 8 }} />
+          <SkeletonBlock width="70%" height={16} style={{ marginBottom: 16 }} />
+        </View>
+
+        <View style={styles.halfInput}>
+          <SkeletonBlock width="100%" height={56} style={{ marginBottom: 8 }} />
+          <SkeletonBlock width="70%" height={16} style={{ marginBottom: 16 }} />
+        </View>
+      </View>
+
+      <SkeletonBlock width="100%" height={56} style={{ marginBottom: 8 }} />
+      <SkeletonBlock width="70%" height={16} style={{ marginBottom: 16 }} />
+
+      <SkeletonBlock width="100%" height={56} style={{ marginBottom: 8 }} />
+      <SkeletonBlock width="70%" height={16} style={{ marginBottom: 16 }} />
+
+      <Text style={styles.inputLabel}>Date of Birth *</Text>
+      <SkeletonBlock width="100%" height={40} style={{ marginBottom: 16 }} />
+
+      <Text style={styles.inputLabel}>Gender *</Text>
+      <SkeletonBlock width="100%" height={40} style={{ marginBottom: 16 }} />
+
+      <SkeletonBlock width="100%" height={56} style={{ marginBottom: 16 }} />
+
+      <Text style={styles.inputLabel}>Marital Status *</Text>
+      <SkeletonBlock width="100%" height={40} style={{ marginBottom: 16 }} />
+
+      <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+        Employment Details
+      </Text>
+
+      <SkeletonBlock width="100%" height={56} style={{ marginBottom: 16 }} />
+
+      <Text style={styles.inputLabel}>Employment Type *</Text>
+      <SkeletonBlock width="100%" height={40} style={{ marginBottom: 16 }} />
+
+      <SkeletonBlock width="100%" height={56} style={{ marginBottom: 16 }} />
+
+      <Text style={styles.inputLabel}>Employment Start Date *</Text>
+      <SkeletonBlock width="100%" height={40} style={{ marginBottom: 16 }} />
+
+      <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+        Address
+      </Text>
+
+      <SkeletonBlock width="100%" height={56} style={{ marginBottom: 16 }} />
+      <SkeletonBlock width="100%" height={56} style={{ marginBottom: 16 }} />
+
+      <View style={styles.row}>
+        <View style={styles.halfInput}>
+          <SkeletonBlock
+            width="100%"
+            height={56}
+            style={{ marginBottom: 16 }}
+          />
+        </View>
+        <View style={styles.halfInput}>
+          <SkeletonBlock
+            width="100%"
+            height={56}
+            style={{ marginBottom: 16 }}
+          />
+        </View>
+      </View>
+    </ScrollView>
+  );
+};
+
 const CreateEmployeeScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
@@ -74,6 +180,7 @@ const CreateEmployeeScreen = () => {
 
   const [loading, setLoading] = useState(false);
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [companyIdLoading, setCompanyIdLoading] = useState(true);
   const [showDobPicker, setShowDobPicker] = useState(false);
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
@@ -119,30 +226,54 @@ const CreateEmployeeScreen = () => {
   const dateOfBirth = watch("date_of_birth");
   const employmentStartDate = watch("employment_start_date");
 
-  const fetchCompanyId = async () => {
+  // Memoize the company ID fetch function to prevent recreating it on re-renders
+  const fetchCompanyId = useCallback(async () => {
     if (!user) return;
 
+    setCompanyIdLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("company_user")
-        .select("company_id")
-        .eq("id", user.id)
-        .single();
+      // Cache key for this specific user's company ID
+      const cacheKey = `company_id_${user.id}`;
 
-      if (error) {
-        console.error("Error fetching company ID:", error);
+      // Function to actually fetch the company ID
+      const fetchData = async () => {
+        const { data, error } = await supabase
+          .from("company_user")
+          .select("company_id")
+          .eq("id", user.id)
+          .single();
+
+        if (error) {
+          console.error("Error fetching company ID:", error);
+          return { data: null, error };
+        }
+
+        return { data, error: null };
+      };
+
+      // Use cached query with a relatively long TTL since company ID rarely changes
+      const result = await cachedQuery(fetchData, cacheKey, {
+        cacheTtl: 24 * 60 * 60 * 1000, // 24 hours
+        criticalData: true,
+      });
+
+      if (result.error) {
+        console.error("Error fetching company ID:", result.error);
         return;
       }
 
-      setCompanyId(data.company_id);
+      setCompanyId(result.data?.company_id || null);
     } catch (error) {
       console.error("Error fetching company ID:", error);
+    } finally {
+      setCompanyIdLoading(false);
     }
-  };
+  }, [user]);
 
+  // Start fetching company ID immediately when component mounts
   useEffect(() => {
     fetchCompanyId();
-  }, [user]);
+  }, [fetchCompanyId]);
 
   const handleDobChange = (event: any, selectedDate?: Date) => {
     setShowDobPicker(false);
@@ -186,21 +317,30 @@ const CreateEmployeeScreen = () => {
         data.employment_type === EmploymentType.FULL_TIME ||
         data.employment_type === EmploymentType.PART_TIME;
 
-      // Check if user with this email already exists in custom users table
-      const { data: existingUser } = await supabase
-        .from("users")
-        .select("id")
-        .eq("email", data.email)
-        .single();
+      // Performance optimization: Run the password hash and check for existing user in parallel
+      const [hashedPassword, existingUserResult] = await Promise.all([
+        hashPassword(DEFAULT_PASSWORD),
+        supabase
+          .from("users")
+          .select("id")
+          .eq("email", data.email)
+          .maybeSingle(), // Use maybeSingle instead of single to avoid errors
+      ]);
 
-      if (existingUser) {
+      // Check if user with this email already exists
+      if (existingUserResult.data) {
         throw new Error("A user with this email already exists");
       }
 
-      // Hash the default password for the new employee
-      const hashedPassword = await hashPassword(DEFAULT_PASSWORD);
+      // Generate a reset token now - avoid regenerating later
+      const resetToken =
+        Math.random().toString(36).substring(2, 15) +
+        Math.random().toString(36).substring(2, 15);
+      const resetTokenExpiry = new Date(
+        Date.now() + 7 * 24 * 60 * 60 * 1000
+      ).toISOString(); // 7 days from now
 
-      // Create the user in our custom users table
+      // Create the user with reset token in a single operation
       const { data: userData, error: userError } = await supabase
         .from("users")
         .insert({
@@ -209,12 +349,14 @@ const CreateEmployeeScreen = () => {
           status: "active", // Set as active so they can log in immediately
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
+          reset_token: resetToken,
+          reset_token_expires: resetTokenExpiry,
         })
         .select("id")
         .single();
 
-      if (userError) {
-        throw userError;
+      if (userError || !userData) {
+        throw userError || new Error("Failed to create user");
       }
 
       // Create employee record
@@ -261,25 +403,9 @@ const CreateEmployeeScreen = () => {
         ]);
 
       if (employeeError) {
+        // If employee creation fails, delete the user for atomicity
+        await supabase.from("users").delete().eq("id", userData.id);
         throw employeeError;
-      }
-
-      // Generate a reset token for the new employee
-      const { error: resetTokenError } = await supabase
-        .from("users")
-        .update({
-          reset_token:
-            Math.random().toString(36).substring(2, 15) +
-            Math.random().toString(36).substring(2, 15),
-          reset_token_expires: new Date(
-            Date.now() + 7 * 24 * 60 * 60 * 1000
-          ).toISOString(), // 7 days from now
-        })
-        .eq("id", userData.id);
-
-      if (resetTokenError) {
-        console.error("Error setting reset token:", resetTokenError);
-        // Non-critical error, continue
       }
 
       setSnackbarMessage(
@@ -301,16 +427,9 @@ const CreateEmployeeScreen = () => {
     }
   };
 
-  if (!companyId) {
-    return <LoadingIndicator />;
-  }
-
-  return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
-      <AppHeader title="Create Employee" showBackButton />
-
+  // Pre-render form even while company ID is loading to improve perceived performance
+  const formContent = useMemo(
+    () => (
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardAvoidingView}
@@ -930,12 +1049,56 @@ const CreateEmployeeScreen = () => {
             onPress={handleSubmit(onSubmit)}
             style={styles.submitButton}
             loading={loading}
-            disabled={loading}
+            disabled={loading || !companyId}
           >
             Create Employee
           </Button>
         </ScrollView>
       </KeyboardAvoidingView>
+    ),
+    [
+      control,
+      errors,
+      loading,
+      companyId,
+      theme.colors.onBackground,
+      dateOfBirth,
+      employmentStartDate,
+      handleSubmit,
+      onSubmit,
+    ]
+  );
+
+  return (
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
+      <AppHeader title="Create Employee" showBackButton />
+
+      {companyIdLoading ? (
+        <CreateEmployeeFormSkeleton />
+      ) : (
+        <>
+          {!companyId && (
+            <View style={styles.errorContainer}>
+              <Text
+                style={{
+                  color: theme.colors.error,
+                  textAlign: "center",
+                  marginBottom: 16,
+                }}
+              >
+                Unable to load company information. Please try again.
+              </Text>
+              <Button mode="contained" onPress={fetchCompanyId}>
+                Retry
+              </Button>
+            </View>
+          )}
+
+          {companyId && formContent}
+        </>
+      )}
 
       <Snackbar
         visible={snackbarVisible}
@@ -996,6 +1159,12 @@ const styles = StyleSheet.create({
   submitButton: {
     marginTop: 24,
     paddingVertical: 6,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
   },
 });
 
