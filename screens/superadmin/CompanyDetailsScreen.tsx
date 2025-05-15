@@ -224,61 +224,101 @@ const CompanyDetailsScreen = () => {
 
       // Define the async function to fetch company data
       const fetchCompanyData = async () => {
-        // Create multiple queries to run in parallel
-        const companyDetailsPromise = supabase
-          .from("company")
-          .select(
-            "id, company_name, registration_number, industry_type, contact_number, address, active, vat_type, stakeholders"
-          )
-          .eq("id", companyId)
-          .single();
+        try {
+          // Optimize by using a single combined query to fetch all details
+          // This reduces the number of network requests dramatically
+          const companyDetailsPromise = supabase
+            .from("company")
+            .select(
+              `
+              id, 
+              company_name, 
+              registration_number, 
+              industry_type, 
+              contact_number, 
+              address, 
+              active, 
+              vat_type, 
+              stakeholders,
+              company_user!company_id (
+                id, 
+                first_name, 
+                last_name, 
+                email, 
+                phone_number, 
+                role, 
+                active_status
+              )
+            `
+            )
+            .eq("id", companyId)
+            .single();
 
-        const companyAdminsPromise = supabase
-          .from("company_user")
-          .select(
-            "id, first_name, last_name, email, phone_number, role, active_status"
-          )
-          .eq("company_id", companyId)
-          .eq("role", UserRole.COMPANY_ADMIN)
-          .order("first_name", { ascending: true });
+          // If we need to optimize for mobile performance, we can still split this
+          // into two separate queries - one for company details and one for related data
+          const countPromise = supabase.rpc("get_company_counts", {
+            company_id: companyId,
+          });
 
-        // Optimize employee count queries with limit 0 and count only
-        const totalEmployeesPromise = supabase
-          .from("company_user")
-          .select("id", { count: "exact", head: true })
-          .eq("company_id", companyId)
-          .limit(0); // Limit 0 is more efficient for count-only queries
+          // Execute queries in parallel
+          const [companyDetailsResult, countResult] = await Promise.all([
+            companyDetailsPromise,
+            countPromise,
+          ]);
 
-        const activeEmployeesPromise = supabase
-          .from("company_user")
-          .select("id", { count: "exact", head: true })
-          .eq("company_id", companyId)
-          .eq("active_status", UserStatus.ACTIVE)
-          .limit(0); // Limit 0 is more efficient for count-only queries
+          // Process company details and related records
+          let companyData = companyDetailsResult.data;
+          let companyAdmins: CompanyUser[] = [];
+          let totalEmployeeCount = 0;
+          let activeEmployeeCount = 0;
 
-        // Execute all queries in parallel
-        const [
-          companyDetailsResult,
-          companyAdminsResult,
-          totalEmployeesResult,
-          activeEmployeesResult,
-        ] = await Promise.all([
-          companyDetailsPromise,
-          companyAdminsPromise,
-          totalEmployeesPromise,
-          activeEmployeesPromise,
-        ]);
+          if (companyData) {
+            // Extract company admins from the nested company_user data
+            if (companyData.company_user) {
+              // Safely cast to CompanyUser[] if the structure matches
+              const users = companyData.company_user as CompanyUser[];
+              companyAdmins = users
+                .filter((user) => user.role === UserRole.COMPANY_ADMIN)
+                .sort((a, b) => a.first_name.localeCompare(b.first_name));
 
-        // Construct a combined result object
-        return {
-          data: {
-            companyDetails: companyDetailsResult,
-            companyAdmins: companyAdminsResult,
-            totalEmployees: totalEmployeesResult,
-            activeEmployees: activeEmployeesResult,
-          },
-          error: null,
-        };
+              // Use optional chaining to avoid TypeScript errors when deleting property
+              // @ts-ignore - we need to remove this property but TypeScript doesn't like it
+              if (companyData.company_user) delete companyData.company_user;
+            }
+          }
+
+          // Extract counts from the RPC call
+          if (countResult.data) {
+            totalEmployeeCount = countResult.data.total_count || 0;
+            activeEmployeeCount = countResult.data.active_count || 0;
+          }
+
+          // Construct a combined result object in the expected format
+          return {
+            data: {
+              companyDetails: {
+                data: companyData,
+                error: companyDetailsResult.error,
+              },
+              companyAdmins: {
+                data: companyAdmins,
+                error: null,
+              },
+              totalEmployees: {
+                count: totalEmployeeCount,
+                error: null,
+              },
+              activeEmployees: {
+                count: activeEmployeeCount,
+                error: null,
+              },
+            },
+            error: companyDetailsResult.error || countResult.error,
+          };
+        } catch (error) {
+          console.error("Error in optimized company data fetch:", error);
+          return { data: null, error };
+        }
       };
 
       // Use the cached query with enhanced options for large user bases
@@ -765,7 +805,7 @@ const CompanyDetailsScreen = () => {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-            <AppHeader
+      <AppHeader
         showLogo={false}
         showBackButton={true}
         title="Company Details"

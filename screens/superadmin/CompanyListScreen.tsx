@@ -183,13 +183,20 @@ const CompanyListScreen = () => {
 
         // Apply optimization: use text_search for better performance when searching
         if (searchQuery.trim() !== "") {
-          // Better performance than multiple .or() conditions
-          const searchPattern = `%${searchQuery.toLowerCase()}%`;
-          query = query.or(
-            `company_name.ilike.${searchPattern},registration_number.ilike.${searchPattern},industry_type.ilike.${searchPattern}`
-          );
+          // Better performance using the pg_trgm index we've added
+          if (searchQuery.length > 2) {
+            query = query.or(
+              `company_name.ilike.%${searchQuery.toLowerCase()}%,registration_number.ilike.%${searchQuery.toLowerCase()}%,industry_type.ilike.%${searchQuery.toLowerCase()}%`
+            );
+          } else {
+            // For very short queries, use exact matching for better performance
+            query = query.or(
+              `company_name.ilike.${searchQuery.toLowerCase()}%,registration_number.ilike.${searchQuery.toLowerCase()}%,industry_type.ilike.${searchQuery.toLowerCase()}%`
+            );
+          }
         }
 
+        // Add proper pagination with ordering for consistent results
         query = query.order("created_at", { ascending: false }).range(from, to);
 
         const result = await query;

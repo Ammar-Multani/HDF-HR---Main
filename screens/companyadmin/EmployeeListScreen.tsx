@@ -240,17 +240,31 @@ const EmployeeListScreen = () => {
       const fetchData = async () => {
         let query = supabase
           .from("company_user")
-          .select("*", { count: "exact" }) // Get exact count for better pagination
+          .select(
+            // Only select fields needed for the list view instead of *
+            "id, first_name, last_name, email, job_title, active, created_at, position, profile_picture",
+            { count: "exact" }
+          )
           .eq("company_id", currentCompanyId);
 
-        // Apply search filter if present
+        // Apply search filter if present using optimized query patterns
         if (searchQuery.trim() !== "") {
-          const searchPattern = `%${searchQuery.toLowerCase()}%`;
-          query = query.or(
-            `first_name.ilike.${searchPattern},last_name.ilike.${searchPattern},email.ilike.${searchPattern},job_title.ilike.${searchPattern}`
-          );
+          if (searchQuery.length > 2) {
+            // For longer queries use wildcard search (uses our GIN index)
+            const searchPattern = `%${searchQuery.toLowerCase()}%`;
+            query = query.or(
+              `first_name.ilike.${searchPattern},last_name.ilike.${searchPattern},email.ilike.${searchPattern},job_title.ilike.${searchPattern}`
+            );
+          } else {
+            // For short queries just search for starts-with for better performance
+            const searchPattern = `${searchQuery.toLowerCase()}%`;
+            query = query.or(
+              `first_name.ilike.${searchPattern},last_name.ilike.${searchPattern},email.ilike.${searchPattern},job_title.ilike.${searchPattern}`
+            );
+          }
         }
 
+        // Add proper pagination with consistent ordering
         query = query.order("created_at", { ascending: false }).range(from, to);
 
         const result = await query;

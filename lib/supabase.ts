@@ -7,9 +7,10 @@ const AUTH_TOKEN_KEY = "auth_token";
 
 // Cache configuration
 const CACHE_PREFIX = "supabase_cache_";
-const DEFAULT_CACHE_TIME = 5 * 60 * 1000; // 5 minutes in milliseconds
-const MAX_CACHE_ITEMS = 200; // Limit total cache entries for large user base
+const DEFAULT_CACHE_TIME = 10 * 60 * 1000; // Increased from 5 to 10 minutes for better caching
+const MAX_CACHE_ITEMS = 300; // Increased from 200 to 300 for large user base
 const CACHE_PERFORMANCE_KEY = "cache_performance";
+const SLOW_QUERY_THRESHOLD = 3000; // Increased from 1000ms to 3000ms (3 seconds)
 
 const supabaseUrl = EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -69,8 +70,8 @@ export const trackCachePerformance = async (
     
     await AsyncStorage.setItem(CACHE_PERFORMANCE_KEY, JSON.stringify(metrics));
     
-    // Log slow queries (over 1 second)
-    if (responseTime > 1000) {
+    // Log slow queries (over threshold)
+    if (responseTime > SLOW_QUERY_THRESHOLD) {
       console.warn(`Slow query detected: ${responseTime}ms`);
     }
   } catch (err) {
