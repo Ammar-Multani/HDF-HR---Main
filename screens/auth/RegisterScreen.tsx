@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -7,6 +7,10 @@ import {
   Platform,
   ScrollView,
   TouchableOpacity,
+  Animated,
+  StatusBar,
+  Dimensions,
+  ActivityIndicator,
 } from "react-native";
 import {
   Text,
@@ -15,10 +19,20 @@ import {
   useTheme,
   Snackbar,
   HelperText,
+  Surface,
+  Divider,
+  Avatar,
+  IconButton,
+  Tooltip,
 } from "react-native-paper";
 import { useAuth } from "../../contexts/AuthContext";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
+import { LinearGradient } from "expo-linear-gradient";
+import AppHeader from "../../components/AppHeader";
+import { BlurView } from "expo-blur";
+
+const { width, height } = Dimensions.get("window");
 
 const RegisterScreen = () => {
   const theme = useTheme();
@@ -34,6 +48,25 @@ const RegisterScreen = () => {
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [confirmPasswordError, setConfirmPasswordError] = useState("");
+
+  // Animation values
+  const fadeAnim = useState(new Animated.Value(0))[0];
+  const slideAnim = useState(new Animated.Value(30))[0];
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -103,145 +136,253 @@ const RegisterScreen = () => {
     navigation.navigate("Login" as never);
   };
 
+  const getGradientColors = () => {
+    return theme.dark ? ["#151729", "#2a2e43"] : ["#f0f8ff", "#e6f2ff"];
+  };
+
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.keyboardAvoidView}
+      <StatusBar barStyle={theme.dark ? "light-content" : "dark-content"} />
+      <LinearGradient
+        colors={getGradientColors()}
+        style={styles.container}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
       >
-        <ScrollView
-          contentContainerStyle={styles.scrollViewContent}
-          keyboardShouldPersistTaps="handled"
+        <AppHeader
+          showBackButton={false}
+          showHelpButton={true}
+          absolute={true}
+        />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.keyboardAvoidView}
         >
-          <View style={styles.logoContainer}>
-            <Image
-              source={
-                theme.dark
-                  ? require("../../assets/splash-icon-light.png")
-                  : require("../../assets/splash-icon-dark.png")
-              }
-              style={styles.logo}
-              resizeMode="contain"
-            />
-            <Text
-              variant="headlineMedium"
-              style={[styles.title, { color: theme.colors.primary }]}
+          <ScrollView
+            contentContainerStyle={styles.scrollViewContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <Animated.View
+              style={[
+                styles.logoContainer,
+                {
+                  opacity: fadeAnim,
+                  transform: [{ translateY: slideAnim }],
+                },
+              ]}
+            ></Animated.View>
+
+            <Animated.View
+              style={[
+                styles.formContainer,
+                {
+                  opacity: fadeAnim,
+                  transform: [{ translateY: slideAnim }],
+                },
+              ]}
             >
-              HDF HR
-            </Text>
-          </View>
-
-          <View style={styles.formContainer}>
-            <TextInput
-              label="Email"
-              value={email}
-              onChangeText={(text) => {
-                setEmail(text);
-                if (emailError) validateEmail(text);
-              }}
-              mode="outlined"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              style={styles.input}
-              disabled={loading}
-              error={!!emailError}
-              left={<TextInput.Icon icon="email" />}
-            />
-            {emailError ? (
-              <HelperText type="error">{emailError}</HelperText>
-            ) : null}
-
-            <TextInput
-              label="Password"
-              value={password}
-              onChangeText={(text) => {
-                setPassword(text);
-                if (passwordError) validatePassword(text);
-                if (confirmPassword && confirmPasswordError)
-                  validateConfirmPassword(confirmPassword);
-              }}
-              mode="outlined"
-              secureTextEntry={!passwordVisible}
-              style={styles.input}
-              disabled={loading}
-              error={!!passwordError}
-              left={<TextInput.Icon icon="lock" />}
-              right={
-                <TextInput.Icon
-                  icon={passwordVisible ? "eye-off" : "eye"}
-                  onPress={() => setPasswordVisible(!passwordVisible)}
-                  forceTextInputFocus={false}
+              <BlurView
+                intensity={50}
+                tint={theme.dark ? "dark" : "light"}
+                style={[
+                  styles.glassSurface,
+                  {
+                    backgroundColor: theme.dark
+                      ? "rgba(30, 30, 50, 0.75)"
+                      : "rgba(255, 255, 255, 0.75)",
+                    borderColor: theme.colors.outlineVariant,
+                  },
+                ]}
+              >
+                <Text
+                  variant="headlineMedium"
+                  style={[styles.title, { color: theme.colors.text }]}
+                >
+                  Create Account
+                </Text>
+                <Text
+                  variant="bodyLarge"
+                  style={[
+                    styles.subtitle,
+                    { color: theme.colors.onSurfaceVariant },
+                  ]}
+                >
+                  Create a new account
+                </Text>
+                <TextInput
+                  label="Email"
+                  value={email}
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    if (emailError) validateEmail(text);
+                  }}
+                  mode="flat"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  style={styles.input}
+                  disabled={loading}
+                  error={!!emailError}
+                  theme={{
+                    colors: {
+                      background: "transparent",
+                    },
+                  }}
+                  underlineColor={theme.colors.outlineVariant}
+                  activeUnderlineColor={theme.colors.primary}
                 />
-              }
-            />
-            {passwordError ? (
-              <HelperText type="error">{passwordError}</HelperText>
-            ) : null}
+                {emailError ? (
+                  <HelperText type="error">{emailError}</HelperText>
+                ) : null}
 
-            <TextInput
-              label="Confirm Password"
-              value={confirmPassword}
-              onChangeText={(text) => {
-                setConfirmPassword(text);
-                if (confirmPasswordError) validateConfirmPassword(text);
-              }}
-              mode="outlined"
-              secureTextEntry={!confirmPasswordVisible}
-              style={styles.input}
-              disabled={loading}
-              error={!!confirmPasswordError}
-              left={<TextInput.Icon icon="lock-check" />}
-              right={
-                <TextInput.Icon
-                  icon={confirmPasswordVisible ? "eye-off" : "eye"}
-                  onPress={() =>
-                    setConfirmPasswordVisible(!confirmPasswordVisible)
+                <TextInput
+                  label="Password"
+                  value={password}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    if (passwordError) validatePassword(text);
+                    if (confirmPassword && confirmPasswordError)
+                      validateConfirmPassword(confirmPassword);
+                  }}
+                  mode="flat"
+                  secureTextEntry={!passwordVisible}
+                  style={styles.input}
+                  disabled={loading}
+                  error={!!passwordError}
+                  right={
+                    <TextInput.Icon
+                      icon={passwordVisible ? "eye-off" : "eye"}
+                      onPress={() => setPasswordVisible(!passwordVisible)}
+                      forceTextInputFocus={false}
+                      color={theme.colors.onSurfaceVariant}
+                    />
                   }
-                  forceTextInputFocus={false}
+                  theme={{
+                    colors: {
+                      background: "transparent",
+                    },
+                  }}
+                  underlineColor={theme.colors.outlineVariant}
+                  activeUnderlineColor={theme.colors.primary}
                 />
-              }
-            />
-            {confirmPasswordError ? (
-              <HelperText type="error">{confirmPasswordError}</HelperText>
-            ) : null}
+                {passwordError ? (
+                  <HelperText type="error">{passwordError}</HelperText>
+                ) : null}
 
-            <Button
-              mode="contained"
-              onPress={handleRegister}
-              style={styles.button}
-              loading={loading}
-              disabled={loading}
+                <TextInput
+                  label="Confirm Password"
+                  value={confirmPassword}
+                  onChangeText={(text) => {
+                    setConfirmPassword(text);
+                    if (confirmPasswordError) validateConfirmPassword(text);
+                  }}
+                  mode="flat"
+                  secureTextEntry={!confirmPasswordVisible}
+                  style={styles.input}
+                  disabled={loading}
+                  error={!!confirmPasswordError}
+                  right={
+                    <TextInput.Icon
+                      icon={confirmPasswordVisible ? "eye-off" : "eye"}
+                      onPress={() =>
+                        setConfirmPasswordVisible(!confirmPasswordVisible)
+                      }
+                      forceTextInputFocus={false}
+                      color={theme.colors.onSurfaceVariant}
+                    />
+                  }
+                  theme={{
+                    colors: {
+                      background: "transparent",
+                    },
+                  }}
+                  underlineColor={theme.colors.outlineVariant}
+                  activeUnderlineColor={theme.colors.primary}
+                />
+                {confirmPasswordError ? (
+                  <HelperText type="error">{confirmPasswordError}</HelperText>
+                ) : null}
+
+                <TouchableOpacity
+                  style={styles.button}
+                  onPress={handleRegister}
+                  disabled={loading}
+                >
+                  <LinearGradient
+                    colors={
+                      ["#4c669f", "#3b5998", "#192f6a"] as [
+                        "#4c669f",
+                        "#3b5998",
+                        "#192f6a",
+                      ]
+                    }
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.gradientButton}
+                  >
+                    {loading ? (
+                      <ActivityIndicator size="small" color="#ffffff" />
+                    ) : (
+                      <Text style={styles.buttonLabel}>Register</Text>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+              </BlurView>
+            </Animated.View>
+
+            <Animated.View
+              style={[
+                styles.socialLoginContainer,
+                {
+                  opacity: fadeAnim,
+                  transform: [{ translateY: slideAnim }],
+                },
+              ]}
             >
-              Register
-            </Button>
-          </View>
+              <View style={styles.dividerContainer}>
+                <Divider style={styles.divider} />
+                <Text
+                  style={[
+                    styles.dividerText,
+                    { color: theme.colors.onSurfaceVariant },
+                  ]}
+                >
+                  OR
+                </Text>
+                <Divider style={styles.divider} />
+              </View>
 
-          <View style={styles.loginContainer}>
-            <Text style={{ color: theme.colors.onSurfaceVariant }}>
-              Already have an account?
-            </Text>
-            <TouchableOpacity onPress={navigateToLogin}>
-              <Text style={[styles.loginText, { color: theme.colors.primary }]}>
-                {" Sign In"}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+              <View style={styles.loginContainer}>
+                <Text style={{ color: theme.colors.onSurfaceVariant }}>
+                  Already have an account?
+                </Text>
+                <TouchableOpacity onPress={navigateToLogin}>
+                  <Text
+                    style={[styles.loginText, { color: theme.colors.primary }]}
+                  >
+                    {" Sign In"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
+          </ScrollView>
+        </KeyboardAvoidingView>
 
-      <Snackbar
-        visible={snackbarVisible}
-        onDismiss={() => setSnackbarVisible(false)}
-        duration={3000}
-        action={{
-          label: "OK",
-          onPress: () => setSnackbarVisible(false),
-        }}
-      >
-        {snackbarMessage}
-      </Snackbar>
+        <Snackbar
+          visible={snackbarVisible}
+          onDismiss={() => setSnackbarVisible(false)}
+          duration={3000}
+          action={{
+            label: "OK",
+            onPress: () => setSnackbarVisible(false),
+          }}
+          style={styles.snackbar}
+        >
+          {snackbarMessage}
+        </Snackbar>
+      </LinearGradient>
     </SafeAreaView>
   );
 };
@@ -256,41 +397,132 @@ const styles = StyleSheet.create({
   scrollViewContent: {
     flexGrow: 1,
     justifyContent: "center",
-    padding: 16,
+    padding: 24,
   },
   logoContainer: {
+    width: "100%",
+    marginBottom: 12,
+  },
+  headerContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    width: "100%",
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  logoWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   logo: {
-    width: 100,
-    height: 100,
-    marginBottom: 16,
+    width: 40,
+    height: 40,
+    marginRight: 8,
+  },
+  logoText: {
+    fontWeight: "bold",
+  },
+  helpButton: {
+    margin: 0,
   },
   title: {
-    fontSize: 24,
     fontWeight: "bold",
-    textAlign: "center",
     marginBottom: 8,
+  },
+  subtitle: {
+    marginBottom: 24,
   },
   formContainer: {
     width: "100%",
-    marginBottom: 32,
+    marginBottom: 20,
+  },
+  glassSurface: {
+    padding: 20,
+    borderRadius: 16,
+    borderWidth: 0.3,
+    overflow: "hidden",
   },
   input: {
-    marginBottom: 12,
+    marginBottom: 16,
+    backgroundColor: "transparent",
+    height: 60,
   },
   button: {
-    marginTop: 12,
-    paddingVertical: 6,
+    marginTop: 24,
+    borderRadius: 30,
+    shadowRadius: 4,
+    overflow: "hidden",
+  },
+  gradientButton: {
+    width: "100%",
+    height: 56,
+    borderRadius: 30,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  buttonLabel: {
+    fontSize: 16,
+    letterSpacing: 1,
+    fontWeight: "600",
+    color: "#ffffff",
+  },
+  dividerContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 16,
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  socialLoginContainer: {
+    marginTop: 8,
+  },
+  socialButtons: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginVertical: 16,
+    gap: 16,
+  },
+  socialButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 30,
+    width: "40%",
+    elevation: 0,
+  },
+  googleButton: {
+    backgroundColor: "#DB4437",
+  },
+  appleButton: {
+    backgroundColor: "#000",
+  },
+  socialButtonText: {
+    color: "#FFF",
+    marginLeft: 8,
+    fontWeight: "600",
+    fontSize: 14,
   },
   loginContainer: {
     flexDirection: "row",
     justifyContent: "center",
-    marginTop: 16,
+    marginTop: 24,
   },
   loginText: {
     fontWeight: "bold",
+  },
+  snackbar: {
+    marginBottom: 16,
+    borderRadius: 8,
   },
 });
 

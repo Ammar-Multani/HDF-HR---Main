@@ -1,15 +1,22 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, FlatList, TouchableOpacity, RefreshControl, ScrollView } from 'react-native';
-import { Text, Card, Searchbar, useTheme, FAB, Chip } from 'react-native-paper';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import { format } from 'date-fns';
-import { supabase } from '../../lib/supabase';
-import AppHeader from '../../components/AppHeader';
-import LoadingIndicator from '../../components/LoadingIndicator';
-import EmptyState from '../../components/EmptyState';
-import StatusBadge from '../../components/StatusBadge';
-import { Task, TaskPriority, TaskStatus } from '../../types';
+import React, { useState, useEffect } from "react";
+import {
+  StyleSheet,
+  View,
+  FlatList,
+  TouchableOpacity,
+  RefreshControl,
+  ScrollView,
+} from "react-native";
+import { Text, Card, Searchbar, useTheme, FAB, Chip } from "react-native-paper";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
+import { format } from "date-fns";
+import { supabase } from "../../lib/supabase";
+import AppHeader from "../../components/AppHeader";
+import LoadingIndicator from "../../components/LoadingIndicator";
+import EmptyState from "../../components/EmptyState";
+import StatusBadge from "../../components/StatusBadge";
+import { Task, TaskPriority, TaskStatus } from "../../types";
 
 const SuperAdminTasksScreen = () => {
   const theme = useTheme();
@@ -17,28 +24,28 @@ const SuperAdminTasksScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
-  const [statusFilter, setStatusFilter] = useState<TaskStatus | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<TaskStatus | "all">("all");
 
   const fetchTasks = async () => {
     try {
       setLoading(true);
-      
+
       const { data, error } = await supabase
-        .from('task')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
+        .from("task")
+        .select("*")
+        .order("created_at", { ascending: false });
+
       if (error) {
-        console.error('Error fetching tasks:', error);
+        console.error("Error fetching tasks:", error);
         return;
       }
-      
+
       setTasks(data || []);
       setFilteredTasks(data || []);
     } catch (error) {
-      console.error('Error fetching tasks:', error);
+      console.error("Error fetching tasks:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -51,20 +58,21 @@ const SuperAdminTasksScreen = () => {
 
   useEffect(() => {
     let filtered = tasks;
-    
+
     // Apply status filter
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(task => task.status === statusFilter);
+    if (statusFilter !== "all") {
+      filtered = filtered.filter((task) => task.status === statusFilter);
     }
-    
+
     // Apply search filter
-    if (searchQuery.trim() !== '') {
-      filtered = filtered.filter(task =>
-        task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        task.description.toLowerCase().includes(searchQuery.toLowerCase())
+    if (searchQuery.trim() !== "") {
+      filtered = filtered.filter(
+        (task) =>
+          task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          task.description.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
-    
+
     setFilteredTasks(filtered);
   }, [searchQuery, statusFilter, tasks]);
 
@@ -78,7 +86,7 @@ const SuperAdminTasksScreen = () => {
       case TaskPriority.HIGH:
         return theme.colors.error;
       case TaskPriority.MEDIUM:
-        return theme.colors.warning || '#F59E0B';
+        return theme.colors.warning || "#F59E0B";
       case TaskPriority.LOW:
         return theme.colors.primary;
       default:
@@ -88,7 +96,12 @@ const SuperAdminTasksScreen = () => {
 
   const renderTaskItem = ({ item }: { item: Task }) => (
     <TouchableOpacity
-      onPress={() => navigation.navigate('TaskDetails' as never, { taskId: item.id } as never)}
+      onPress={() =>
+        navigation.navigate(
+          "TaskDetails" as never,
+          { taskId: item.id } as never
+        )
+      }
     >
       <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
         <Card.Content>
@@ -96,25 +109,25 @@ const SuperAdminTasksScreen = () => {
             <Text style={styles.taskTitle}>{item.title}</Text>
             <StatusBadge status={item.status} />
           </View>
-          
+
           <Text style={styles.taskDescription} numberOfLines={2}>
             {item.description}
           </Text>
-          
+
           <View style={styles.cardFooter}>
             <Chip
               icon="flag"
               style={[
                 styles.priorityChip,
-                { backgroundColor: getPriorityColor(item.priority) + '20' }
+                { backgroundColor: getPriorityColor(item.priority) + "20" },
               ]}
               textStyle={{ color: getPriorityColor(item.priority) }}
             >
               {item.priority.charAt(0).toUpperCase() + item.priority.slice(1)}
             </Chip>
-            
+
             <Text style={styles.deadline}>
-              Due: {format(new Date(item.deadline), 'MMM d, yyyy')}
+              Due: {format(new Date(item.deadline), "MMM d, yyyy")}
             </Text>
           </View>
         </Card.Content>
@@ -126,8 +139,8 @@ const SuperAdminTasksScreen = () => {
     <View style={styles.filterContainer}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <Chip
-          selected={statusFilter === 'all'}
-          onPress={() => setStatusFilter('all')}
+          selected={statusFilter === "all"}
+          onPress={() => setStatusFilter("all")}
           style={styles.filterChip}
         >
           All
@@ -176,9 +189,11 @@ const SuperAdminTasksScreen = () => {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
       <AppHeader title="Tasks" showBackButton />
-      
+
       <View style={styles.searchContainer}>
         <Searchbar
           placeholder="Search tasks..."
@@ -187,25 +202,29 @@ const SuperAdminTasksScreen = () => {
           style={styles.searchbar}
         />
       </View>
-      
+
       {renderStatusFilter()}
-      
+
       {filteredTasks.length === 0 ? (
         <EmptyState
           icon="clipboard-text-off"
           title="No Tasks Found"
           message={
-            searchQuery || statusFilter !== 'all'
+            searchQuery || statusFilter !== "all"
               ? "No tasks match your search criteria."
               : "You haven't created any tasks yet."
           }
-          buttonTitle={searchQuery || statusFilter !== 'all' ? "Clear Filters" : "Create Task"}
+          buttonTitle={
+            searchQuery || statusFilter !== "all"
+              ? "Clear Filters"
+              : "Create Task"
+          }
           onButtonPress={() => {
-            if (searchQuery || statusFilter !== 'all') {
-              setSearchQuery('');
-              setStatusFilter('all');
+            if (searchQuery || statusFilter !== "all") {
+              setSearchQuery("");
+              setStatusFilter("all");
             } else {
-              navigation.navigate('CreateTask' as never);
+              navigation.navigate("CreateTask" as never);
             }
           }}
         />
@@ -220,11 +239,11 @@ const SuperAdminTasksScreen = () => {
           }
         />
       )}
-      
+
       <FAB
         icon="plus"
         style={[styles.fab, { backgroundColor: theme.colors.primary }]}
-        onPress={() => navigation.navigate('CreateTask' as never)}
+        onPress={() => navigation.navigate("CreateTask" as never)}
         color={theme.colors.surface}
       />
     </SafeAreaView>
@@ -240,7 +259,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   searchbar: {
-    elevation: 2,
+    elevation: 0,
   },
   filterContainer: {
     paddingHorizontal: 16,
@@ -255,17 +274,17 @@ const styles = StyleSheet.create({
   },
   card: {
     marginBottom: 16,
-    elevation: 2,
+    elevation: 0,
   },
   cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
     marginBottom: 8,
   },
   taskTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     flex: 1,
     marginRight: 8,
   },
@@ -274,9 +293,9 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   priorityChip: {
     height: 30,
@@ -286,7 +305,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   fab: {
-    position: 'absolute',
+    position: "absolute",
     margin: 16,
     right: 0,
     bottom: 0,

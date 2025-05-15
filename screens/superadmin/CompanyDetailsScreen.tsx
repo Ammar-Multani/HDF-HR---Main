@@ -765,7 +765,13 @@ const CompanyDetailsScreen = () => {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <AppHeader title="Company Details" showBackButton />
+            <AppHeader
+        showLogo={false}
+        showBackButton={true}
+        title="Company Details"
+        showHelpButton={true}
+        absolute={false}
+      />
       {networkStatus === false && (
         <View style={styles.offlineBanner}>
           <Text style={styles.offlineText}>You are currently offline</Text>
@@ -789,7 +795,7 @@ const styles = StyleSheet.create({
   },
   card: {
     marginBottom: 16,
-    elevation: 2,
+    elevation: 0,
   },
   headerRow: {
     flexDirection: "row",

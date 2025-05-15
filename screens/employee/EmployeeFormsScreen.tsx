@@ -1,20 +1,35 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, FlatList, TouchableOpacity, RefreshControl, ScrollView } from 'react-native';
-import { Text, Card, Searchbar, useTheme, Chip, Divider, FAB } from 'react-native-paper';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import { format } from 'date-fns';
-import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../contexts/AuthContext';
-import AppHeader from '../../components/AppHeader';
-import LoadingIndicator from '../../components/LoadingIndicator';
-import EmptyState from '../../components/EmptyState';
-import StatusBadge from '../../components/StatusBadge';
-import { FormStatus } from '../../types';
+import React, { useState, useEffect } from "react";
+import {
+  StyleSheet,
+  View,
+  FlatList,
+  TouchableOpacity,
+  RefreshControl,
+  ScrollView,
+} from "react-native";
+import {
+  Text,
+  Card,
+  Searchbar,
+  useTheme,
+  Chip,
+  Divider,
+  FAB,
+} from "react-native-paper";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
+import { format } from "date-fns";
+import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../contexts/AuthContext";
+import AppHeader from "../../components/AppHeader";
+import LoadingIndicator from "../../components/LoadingIndicator";
+import EmptyState from "../../components/EmptyState";
+import StatusBadge from "../../components/StatusBadge";
+import { FormStatus } from "../../types";
 
 interface FormSubmission {
   id: string;
-  type: 'accident' | 'illness' | 'departure';
+  type: "accident" | "illness" | "departure";
   title: string;
   status: FormStatus;
   submission_date: string;
@@ -27,81 +42,91 @@ const EmployeeFormsScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [forms, setForms] = useState<FormSubmission[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
   const [filteredForms, setFilteredForms] = useState<FormSubmission[]>([]);
-  const [typeFilter, setTypeFilter] = useState<'all' | 'accident' | 'illness' | 'departure'>('all');
-  const [statusFilter, setStatusFilter] = useState<FormStatus | 'all'>('all');
+  const [typeFilter, setTypeFilter] = useState<
+    "all" | "accident" | "illness" | "departure"
+  >("all");
+  const [statusFilter, setStatusFilter] = useState<FormStatus | "all">("all");
 
   const fetchForms = async () => {
     try {
       setLoading(true);
-      
+
       if (!user) return;
-      
+
       // Fetch accident reports
       const { data: accidentData, error: accidentError } = await supabase
-        .from('accident_report')
-        .select('*')
-        .eq('employee_id', user.id)
-        .order('created_at', { ascending: false });
-      
+        .from("accident_report")
+        .select("*")
+        .eq("employee_id", user.id)
+        .order("created_at", { ascending: false });
+
       // Fetch illness reports
       const { data: illnessData, error: illnessError } = await supabase
-        .from('illness_report')
-        .select('*')
-        .eq('employee_id', user.id)
-        .order('submission_date', { ascending: false });
-      
+        .from("illness_report")
+        .select("*")
+        .eq("employee_id", user.id)
+        .order("submission_date", { ascending: false });
+
       // Fetch staff departure reports
       const { data: departureData, error: departureError } = await supabase
-        .from('staff_departure_report')
-        .select('*')
-        .eq('employee_id', user.id)
-        .order('created_at', { ascending: false });
-      
+        .from("staff_departure_report")
+        .select("*")
+        .eq("employee_id", user.id)
+        .order("created_at", { ascending: false });
+
       if (accidentError || illnessError || departureError) {
-        console.error('Error fetching forms:', { accidentError, illnessError, departureError });
+        console.error("Error fetching forms:", {
+          accidentError,
+          illnessError,
+          departureError,
+        });
         return;
       }
-      
+
       // Format accident reports
-      const formattedAccidents = (accidentData || []).map(report => ({
+      const formattedAccidents = (accidentData || []).map((report) => ({
         id: report.id,
-        type: 'accident' as const,
-        title: 'Accident Report',
+        type: "accident" as const,
+        title: "Accident Report",
         status: report.status,
         submission_date: report.created_at,
       }));
-      
+
       // Format illness reports
-      const formattedIllness = (illnessData || []).map(report => ({
+      const formattedIllness = (illnessData || []).map((report) => ({
         id: report.id,
-        type: 'illness' as const,
-        title: 'Illness Report',
+        type: "illness" as const,
+        title: "Illness Report",
         status: report.status,
         submission_date: report.submission_date,
       }));
-      
+
       // Format departure reports
-      const formattedDeparture = (departureData || []).map(report => ({
+      const formattedDeparture = (departureData || []).map((report) => ({
         id: report.id,
-        type: 'departure' as const,
-        title: 'Staff Departure Report',
+        type: "departure" as const,
+        title: "Staff Departure Report",
         status: report.status,
         submission_date: report.created_at,
       }));
-      
+
       // Combine all reports
       const allForms = [
         ...formattedAccidents,
         ...formattedIllness,
         ...formattedDeparture,
-      ].sort((a, b) => new Date(b.submission_date).getTime() - new Date(a.submission_date).getTime());
-      
+      ].sort(
+        (a, b) =>
+          new Date(b.submission_date).getTime() -
+          new Date(a.submission_date).getTime()
+      );
+
       setForms(allForms);
       setFilteredForms(allForms);
     } catch (error) {
-      console.error('Error fetching forms:', error);
+      console.error("Error fetching forms:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -114,24 +139,24 @@ const EmployeeFormsScreen = () => {
 
   useEffect(() => {
     let filtered = forms;
-    
+
     // Apply type filter
-    if (typeFilter !== 'all') {
-      filtered = filtered.filter(form => form.type === typeFilter);
+    if (typeFilter !== "all") {
+      filtered = filtered.filter((form) => form.type === typeFilter);
     }
-    
+
     // Apply status filter
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(form => form.status === statusFilter);
+    if (statusFilter !== "all") {
+      filtered = filtered.filter((form) => form.status === statusFilter);
     }
-    
+
     // Apply search filter
-    if (searchQuery.trim() !== '') {
-      filtered = filtered.filter(form =>
+    if (searchQuery.trim() !== "") {
+      filtered = filtered.filter((form) =>
         form.title.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
-    
+
     setFilteredForms(filtered);
   }, [searchQuery, typeFilter, statusFilter, forms]);
 
@@ -140,43 +165,45 @@ const EmployeeFormsScreen = () => {
     fetchForms();
   };
 
-  const getFormTypeIcon = (type: 'accident' | 'illness' | 'departure') => {
+  const getFormTypeIcon = (type: "accident" | "illness" | "departure") => {
     switch (type) {
-      case 'accident':
-        return 'alert-circle';
-      case 'illness':
-        return 'medical-bag';
-      case 'departure':
-        return 'account-arrow-right';
+      case "accident":
+        return "alert-circle";
+      case "illness":
+        return "medical-bag";
+      case "departure":
+        return "account-arrow-right";
       default:
-        return 'file-document';
+        return "file-document";
     }
   };
 
   const renderFormItem = ({ item }: { item: FormSubmission }) => (
     <TouchableOpacity
-      onPress={() => navigation.navigate('FormDetails' as never, { 
-        formId: item.id, 
-        formType: item.type 
-      } as never)}
+      onPress={() =>
+        navigation.navigate(
+          "FormDetails" as never,
+          {
+            formId: item.id,
+            formType: item.type,
+          } as never
+        )
+      }
     >
       <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
         <Card.Content>
           <View style={styles.cardHeader}>
-            <Chip
-              icon={getFormTypeIcon(item.type)}
-              style={styles.typeChip}
-            >
+            <Chip icon={getFormTypeIcon(item.type)} style={styles.typeChip}>
               {item.title}
             </Chip>
             <StatusBadge status={item.status} />
           </View>
-          
+
           <Divider style={styles.divider} />
-          
+
           <View style={styles.cardFooter}>
             <Text style={styles.submissionDate}>
-              Submitted: {format(new Date(item.submission_date), 'MMM d, yyyy')}
+              Submitted: {format(new Date(item.submission_date), "MMM d, yyyy")}
             </Text>
           </View>
         </Card.Content>
@@ -188,31 +215,31 @@ const EmployeeFormsScreen = () => {
     <View style={styles.filterContainer}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <Chip
-          selected={typeFilter === 'all'}
-          onPress={() => setTypeFilter('all')}
+          selected={typeFilter === "all"}
+          onPress={() => setTypeFilter("all")}
           style={styles.filterChip}
         >
           All Types
         </Chip>
         <Chip
-          selected={typeFilter === 'accident'}
-          onPress={() => setTypeFilter('accident')}
+          selected={typeFilter === "accident"}
+          onPress={() => setTypeFilter("accident")}
           style={styles.filterChip}
           icon="alert-circle"
         >
           Accident
         </Chip>
         <Chip
-          selected={typeFilter === 'illness'}
-          onPress={() => setTypeFilter('illness')}
+          selected={typeFilter === "illness"}
+          onPress={() => setTypeFilter("illness")}
           style={styles.filterChip}
           icon="medical-bag"
         >
           Illness
         </Chip>
         <Chip
-          selected={typeFilter === 'departure'}
-          onPress={() => setTypeFilter('departure')}
+          selected={typeFilter === "departure"}
+          onPress={() => setTypeFilter("departure")}
           style={styles.filterChip}
           icon="account-arrow-right"
         >
@@ -226,8 +253,8 @@ const EmployeeFormsScreen = () => {
     <View style={styles.filterContainer}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <Chip
-          selected={statusFilter === 'all'}
-          onPress={() => setStatusFilter('all')}
+          selected={statusFilter === "all"}
+          onPress={() => setStatusFilter("all")}
           style={styles.filterChip}
         >
           All Status
@@ -276,9 +303,11 @@ const EmployeeFormsScreen = () => {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
       <AppHeader title="My Forms" showBackButton />
-      
+
       <View style={styles.searchContainer}>
         <Searchbar
           placeholder="Search forms..."
@@ -287,30 +316,32 @@ const EmployeeFormsScreen = () => {
           style={styles.searchbar}
         />
       </View>
-      
+
       {renderTypeFilter()}
       {renderStatusFilter()}
-      
+
       {filteredForms.length === 0 ? (
         <EmptyState
           icon="file-document-off"
           title="No Forms Found"
           message={
-            searchQuery || typeFilter !== 'all' || statusFilter !== 'all'
+            searchQuery || typeFilter !== "all" || statusFilter !== "all"
               ? "No forms match your search criteria."
               : "You haven't submitted any forms yet."
           }
           buttonTitle={
-            searchQuery || typeFilter !== 'all' || statusFilter !== 'all' ? "Clear Filters" : "Create Form"
+            searchQuery || typeFilter !== "all" || statusFilter !== "all"
+              ? "Clear Filters"
+              : "Create Form"
           }
           onButtonPress={
-            searchQuery || typeFilter !== 'all' || statusFilter !== 'all'
+            searchQuery || typeFilter !== "all" || statusFilter !== "all"
               ? () => {
-                  setSearchQuery('');
-                  setTypeFilter('all');
-                  setStatusFilter('all');
+                  setSearchQuery("");
+                  setTypeFilter("all");
+                  setStatusFilter("all");
                 }
-              : () => navigation.navigate('CreateAccidentReport' as never)
+              : () => navigation.navigate("CreateAccidentReport" as never)
           }
         />
       ) : (
@@ -324,25 +355,25 @@ const EmployeeFormsScreen = () => {
           }
         />
       )}
-      
+
       <FAB.Group
         open={false}
         icon="plus"
         actions={[
           {
-            icon: 'alert-circle',
-            label: 'Report Accident',
-            onPress: () => navigation.navigate('CreateAccidentReport' as never),
+            icon: "alert-circle",
+            label: "Report Accident",
+            onPress: () => navigation.navigate("CreateAccidentReport" as never),
           },
           {
-            icon: 'medical-bag',
-            label: 'Report Illness',
-            onPress: () => navigation.navigate('CreateIllnessReport' as never),
+            icon: "medical-bag",
+            label: "Report Illness",
+            onPress: () => navigation.navigate("CreateIllnessReport" as never),
           },
           {
-            icon: 'account-arrow-right',
-            label: 'Staff Departure',
-            onPress: () => navigation.navigate('CreateStaffDeparture' as never),
+            icon: "account-arrow-right",
+            label: "Staff Departure",
+            onPress: () => navigation.navigate("CreateStaffDeparture" as never),
           },
         ]}
         onStateChange={() => {}}
@@ -361,7 +392,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   searchbar: {
-    elevation: 2,
+    elevation: 0,
   },
   filterContainer: {
     paddingHorizontal: 16,
@@ -376,23 +407,23 @@ const styles = StyleSheet.create({
   },
   card: {
     marginBottom: 16,
-    elevation: 2,
+    elevation: 0,
   },
   cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 8,
   },
   typeChip: {
-    alignSelf: 'flex-start',
+    alignSelf: "flex-start",
   },
   divider: {
     marginVertical: 12,
   },
   cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
+    flexDirection: "row",
+    justifyContent: "flex-end",
   },
   submissionDate: {
     opacity: 0.7,

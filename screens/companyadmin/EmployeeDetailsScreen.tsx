@@ -514,7 +514,10 @@ const EmployeeDetailsScreen = () => {
                 mode="contained-tonal"
                 icon="phone"
                 onPress={() => handleCall(employee.phone_number)}
-                style={[styles.contactButton, { backgroundColor: theme.colors.primary }]}
+                style={[
+                  styles.contactButton,
+                  { backgroundColor: theme.colors.primary },
+                ]}
               >
                 Call
               </Button>
@@ -523,7 +526,10 @@ const EmployeeDetailsScreen = () => {
                 mode="contained-tonal"
                 icon="email"
                 onPress={() => handleEmail(employee.email)}
-                style={[styles.contactButton, { backgroundColor: theme.colors.primary }]}
+                style={[
+                  styles.contactButton,
+                  { backgroundColor: theme.colors.primary },
+                ]}
               >
                 Email
               </Button>
@@ -811,7 +817,7 @@ const styles = StyleSheet.create({
   },
   card: {
     marginBottom: 16,
-    elevation: 2,
+    elevation: 0,
   },
   headerRow: {
     flexDirection: "row",

@@ -1,97 +1,192 @@
-
-import React from 'react';
-import { StyleSheet, View, TouchableOpacity } from 'react-native';
-import { Appbar, Avatar, useTheme, Menu, Divider } from 'react-native-paper';
-import { useNavigation } from '@react-navigation/native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useAuth } from '../contexts/AuthContext';
-import { UserRole } from '../types';
+import React, { useState } from "react";
+import {
+  StyleSheet,
+  View,
+  Image,
+  TouchableOpacity,
+  StatusBar,
+} from "react-native";
+import {
+  Text,
+  useTheme,
+  IconButton,
+  Tooltip,
+  Menu,
+  Avatar,
+  Divider,
+} from "react-native-paper";
+import { useNavigation } from "@react-navigation/native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 interface AppHeaderProps {
-  title: string;
   showBackButton?: boolean;
-  showMenu?: boolean;
+  showHelpButton?: boolean;
+  showProfileMenu?: boolean;
+  title?: string;
+  rightComponent?: React.ReactNode;
+  onBackPress?: () => void;
+  onHelpPress?: () => void;
+  onSignOut?: () => void;
+  onProfilePress?: () => void;
+  disableNavigation?: boolean;
+  showLogo?: boolean;
+  showTitle?: boolean;
+  absolute?: boolean;
+  userEmail?: string;
+  isAdmin?: boolean;
 }
 
-const AppHeader = ({ title, showBackButton = false, showMenu = true }: AppHeaderProps) => {
+const AppHeader = ({
+  showBackButton = false,
+  showHelpButton = false,
+  showProfileMenu = false,
+  title = "",
+  rightComponent,
+  onBackPress,
+  onHelpPress,
+  onSignOut,
+  onProfilePress,
+  disableNavigation = false,
+  showLogo = true,
+  showTitle = true,
+  absolute = false,
+  userEmail = "",
+  isAdmin = false,
+}: AppHeaderProps) => {
   const theme = useTheme();
-  const navigation = useNavigation();
-  const { user, userRole, signOut } = useAuth();
-  const [menuVisible, setMenuVisible] = React.useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
+  let navigationObject = null;
 
-  const openMenu = () => setMenuVisible(true);
-  const closeMenu = () => setMenuVisible(false);
+  // Only use navigation if not disabled (prevents errors in screens outside navigation container)
+  if (!disableNavigation) {
+    try {
+      navigationObject = useNavigation();
+    } catch (error) {
+      console.log("Navigation not available in this context");
+    }
+  }
 
-  const handleSignOut = async () => {
-    closeMenu();
-    await signOut();
+  const handleBackPress = () => {
+    if (onBackPress) {
+      onBackPress();
+    } else if (navigationObject) {
+      navigationObject.goBack();
+    } else {
+      console.log("Back navigation not available");
+    }
   };
 
-  const navigateToProfile = () => {
-    closeMenu();
-    navigation.navigate('Profile' as never);
+  const handleHelpPress = () => {
+    if (onHelpPress) {
+      onHelpPress();
+    } else {
+      // Default help action if no handler provided
+      console.log("Help pressed");
+    }
+  };
+
+  const handleProfilePress = () => {
+    setMenuVisible(false);
+    if (onProfilePress) {
+      onProfilePress();
+    } else if (navigationObject) {
+      navigationObject.navigate("Profile" as never);
+    }
+  };
+
+  const handleSignOut = () => {
+    setMenuVisible(false);
+    if (onSignOut) {
+      onSignOut();
+    }
   };
 
   const getInitials = () => {
-    if (!user?.email) return '?';
-    return user.email.charAt(0).toUpperCase();
+    if (!userEmail) return "?";
+    return userEmail.charAt(0).toUpperCase();
   };
 
-  return (
-    <Appbar.Header
-      style={[
-        styles.header,
-        { 
-          backgroundColor: theme.colors.primary,
-          height: 25, 
-          alignItems: 'center', 
-          justifyContent: 'center', 
-          marginBottom: 20,
-        }
-      ]}
-    >
-      {showBackButton && (
-        <Appbar.BackAction
-          onPress={() => navigation.goBack()}
-          color={theme.colors.surface}
-        />
-      )}
-      <Appbar.Content
-        title={title}
-        titleStyle={{ 
-          color: theme.colors.surface, 
-          fontWeight: 'bold',
-          fontSize: 20 // Added font size
-        }}
-      />
-      {showMenu && (
-        <View style={styles.menuContainer}>
+  const headerContent = (
+    <View style={[styles.headerContainer, absolute && styles.headerAbsolute, { backgroundColor: theme.colors.background,borderColor: theme.colors.outlineVariant, }]}>
+      <View style={styles.leftSection}>
+        {showBackButton && (
+          <IconButton
+            icon="arrow-left"
+            iconColor={theme.colors.primary}
+            size={24}
+            onPress={handleBackPress}
+            style={styles.backButton}
+          />
+        )}
+        <View style={styles.logoWrapper}>
+          {showLogo && (
+            <Image
+              source={
+                theme.dark
+                  ? require("../assets/splash-icon-light.png")
+                  : require("../assets/splash-icon-dark.png")
+              }
+              style={[styles.logo, { marginRight: showTitle ? 8 : 0 }]}
+              resizeMode="contain"
+            />
+          )}
+          {showTitle && (
+            <Text
+              variant="headlineSmall"
+              style={[styles.logoText, { color: theme.colors.text }]}
+            >
+              {title}
+            </Text>
+          )}
+        </View>
+      </View>
+
+      <View style={styles.rightSection}>
+        {rightComponent}
+        {showHelpButton && (
+          <Tooltip title="Get help">
+            <IconButton
+              icon="help-circle"
+              iconColor={theme.colors.onSurfaceVariant}
+              size={24}
+              onPress={handleHelpPress}
+              style={styles.helpButton}
+            />
+          </Tooltip>
+        )}
+        {showProfileMenu && (
           <Menu
             visible={menuVisible}
-            onDismiss={closeMenu}
+            onDismiss={() => setMenuVisible(false)}
             anchor={
-              <TouchableOpacity onPress={openMenu}>
+              <TouchableOpacity onPress={() => setMenuVisible(true)}>
                 <Avatar.Text
-                  size={36} // Reduced avatar size
+                  size={40}
                   label={getInitials()}
-                  style={{ backgroundColor: theme.colors.tertiary }}
+                  style={[
+                    styles.avatar,
+                    { backgroundColor: theme.colors.primary },
+                  ]}
+                  labelStyle={{ color: theme.colors.onPrimary }}
                 />
               </TouchableOpacity>
             }
           >
             <Menu.Item
               leadingIcon="account"
-              onPress={navigateToProfile}
+              onPress={handleProfilePress}
               title="Profile"
             />
-            {userRole === UserRole.SUPER_ADMIN && (
+            {isAdmin && (
               <Menu.Item
-                leadingIcon="account-multiple"
+                leadingIcon="account-cog"
                 onPress={() => {
-                  closeMenu();
-                  navigation.navigate('Users' as never);
+                  setMenuVisible(false);
+                  if (navigationObject) {
+                    navigationObject.navigate("AdminPanel" as never);
+                  }
                 }}
-                title="Super Admins"
+                title="Admin Panel"
               />
             )}
             <Divider />
@@ -101,18 +196,75 @@ const AppHeader = ({ title, showBackButton = false, showMenu = true }: AppHeader
               title="Sign Out"
             />
           </Menu>
-        </View>
-      )}
-    </Appbar.Header>
+        )}
+      </View>
+    </View>
   );
+
+  // Use SafeAreaView if absolute positioning to handle device notches
+  if (absolute) {
+    return (
+      <SafeAreaView edges={["top"]} style={styles.safeArea}>
+        <StatusBar barStyle={theme.dark ? "light-content" : "dark-content"} />
+        {headerContent}
+      </SafeAreaView>
+    );
+  }
+
+  return headerContent;
 };
 
 const styles = StyleSheet.create({
-  header: {
-    elevation: 4,
+  safeArea: {
+    width: "100%",
+    zIndex: 1000,
   },
-  menuContainer: {
-    marginRight: 10,
+  headerContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    height: 70,
+    borderBottomWidth: 0.4,
+    
+  },
+  headerAbsolute: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 100,
+  },
+  leftSection: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  rightSection: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  logoWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  logo: {
+    width: 120,
+    height: 100,
+  },
+  logoText: {
+    fontWeight: "bold",
+  },
+  backButton: {
+    margin: 0,
+    marginRight: 4,
+  },
+  helpButton: {
+    margin: 0,
+  },
+  avatar: {
+    marginLeft: 8,
   },
 });
 

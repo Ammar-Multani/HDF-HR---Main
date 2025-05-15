@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
   },
   card: {
     marginBottom: 12,
-    elevation: 2,
+    elevation: 0,
   },
   cardHeader: {
     flexDirection: "row",

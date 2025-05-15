@@ -275,7 +275,13 @@ const CreateCompanyScreen = () => {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <AppHeader title="Create Company" showBackButton />
+      <AppHeader
+        showLogo={false}
+        showBackButton={true}
+        title="Create Company"
+        showHelpButton={true}
+        absolute={false}
+      />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -705,8 +711,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
+    padding: 25,
     paddingBottom: 40,
+    paddingTop: -25,
   },
   sectionTitle: {
     fontSize: 18,

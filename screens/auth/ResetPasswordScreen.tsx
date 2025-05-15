@@ -6,6 +6,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Animated,
+  StatusBar,
+  Dimensions,
 } from "react-native";
 import {
   Text,
@@ -14,10 +17,19 @@ import {
   useTheme,
   Snackbar,
   HelperText,
+  Surface,
+  Divider,
+  IconButton,
+  Tooltip,
 } from "react-native-paper";
 import { useAuth } from "../../contexts/AuthContext";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRoute } from "@react-navigation/native";
+import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
+import AppHeader from "../../components/AppHeader";
+
+const { width, height } = Dimensions.get("window");
 
 const ResetPasswordScreen = () => {
   const theme = useTheme();
@@ -34,11 +46,28 @@ const ResetPasswordScreen = () => {
   const [confirmPasswordError, setConfirmPasswordError] = useState("");
   const [token, setToken] = useState("");
 
+  // Animation values
+  const fadeAnim = useState(new Animated.Value(0))[0];
+  const slideAnim = useState(new Animated.Value(30))[0];
+
   useEffect(() => {
     // Extract token from route params if available
     if (route.params && route.params.token) {
       setToken(route.params.token);
     }
+
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+    ]).start();
   }, [route.params]);
 
   const validatePassword = (password: string) => {
@@ -97,128 +126,192 @@ const ResetPasswordScreen = () => {
     }
   };
 
+  const getGradientColors = () => {
+    return theme.dark ? ["#151729", "#2a2e43"] : ["#f0f8ff", "#e6f2ff"];
+  };
+
   return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.keyboardAvoidingView}
+    <>
+      <StatusBar barStyle={theme.dark ? "light-content" : "dark-content"} />
+      <LinearGradient
+        colors={getGradientColors()}
+        style={styles.container}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
       >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.keyboardAvoidingView}
         >
-          <View style={styles.logoContainer}>
-            <Image
-              source={
-                theme.dark
-                  ? require("../../assets/splash-icon-light.png")
-                  : require("../../assets/splash-icon-dark.png")
-              }
-              style={styles.logo}
-              resizeMode="contain"
-            />
-            <Text
-              variant="headlineMedium"
-              style={[styles.title, { color: theme.colors.primary }]}
-            >
-              HDF HR
-            </Text>
-          </View>
-
-          <Text
-            style={[styles.subtitle, { color: theme.colors.onSurfaceVariant }]}
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
           >
-            Create a new password for your account
-          </Text>
-
-          <View style={styles.formContainer}>
-            <TextInput
-              label="New Password"
-              value={password}
-              onChangeText={(text) => {
-                setPassword(text);
-                if (passwordError) validatePassword(text);
-                if (confirmPassword && confirmPasswordError)
-                  validateConfirmPassword(confirmPassword);
-              }}
-              mode="outlined"
-              secureTextEntry={!passwordVisible}
-              style={styles.input}
-              disabled={loading}
-              error={!!passwordError}
-              left={<TextInput.Icon icon="lock" />}
-              right={
-                <TextInput.Icon
-                  icon={passwordVisible ? "eye-off" : "eye"}
-                  onPress={() => setPasswordVisible(!passwordVisible)}
-                  forceTextInputFocus={false}
-                />
-              }
-            />
-            {passwordError ? (
-              <HelperText type="error">{passwordError}</HelperText>
-            ) : null}
-
-            <TextInput
-              label="Confirm New Password"
-              value={confirmPassword}
-              onChangeText={(text) => {
-                setConfirmPassword(text);
-                if (confirmPasswordError) validateConfirmPassword(text);
-              }}
-              mode="outlined"
-              secureTextEntry={!confirmPasswordVisible}
-              style={styles.input}
-              disabled={loading}
-              error={!!confirmPasswordError}
-              left={<TextInput.Icon icon="lock-check" />}
-              right={
-                <TextInput.Icon
-                  icon={confirmPasswordVisible ? "eye-off" : "eye"}
-                  onPress={() =>
-                    setConfirmPasswordVisible(!confirmPasswordVisible)
-                  }
-                  forceTextInputFocus={false}
-                />
-              }
-            />
-            {confirmPasswordError ? (
-              <HelperText type="error">{confirmPasswordError}</HelperText>
-            ) : null}
-
-            <Button
-              mode="contained"
-              onPress={handleResetPassword}
-              style={styles.button}
-              loading={loading}
-              disabled={loading || !token}
+            <Animated.View
+              style={[
+                styles.logoContainer,
+                {
+                  opacity: fadeAnim,
+                  transform: [{ translateY: slideAnim }],
+                },
+              ]}
             >
-              Reset Password
-            </Button>
+              <AppHeader showBackButton={true} title="Reset Password" />
+            </Animated.View>
 
-            {!token && (
-              <HelperText type="error" style={styles.tokenError}>
-                Invalid reset link. Please request a new password reset email.
-              </HelperText>
-            )}
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+            <Animated.View
+              style={[
+                styles.formContainer,
+                {
+                  opacity: fadeAnim,
+                  transform: [{ translateY: slideAnim }],
+                },
+              ]}
+            >
+              <Text
+                variant="headlineMedium"
+                style={[styles.title, { color: theme.colors.primary }]}
+              >
+                Set New Password
+              </Text>
+              <Text
+                variant="bodyLarge"
+                style={[
+                  styles.subtitle,
+                  { color: theme.colors.onSurfaceVariant },
+                ]}
+              >
+                Create a new password for your account
+              </Text>
 
-      <Snackbar
-        visible={snackbarVisible}
-        onDismiss={() => setSnackbarVisible(false)}
-        duration={3000}
-        action={{
-          label: "OK",
-          onPress: () => setSnackbarVisible(false),
-        }}
-      >
-        {snackbarMessage}
-      </Snackbar>
-    </SafeAreaView>
+              <BlurView
+                intensity={50}
+                tint={theme.dark ? "dark" : "light"}
+                style={[
+                  styles.glassSurface,
+                  {
+                    backgroundColor: theme.dark
+                      ? "rgba(30, 30, 50, 0.75)"
+                      : "rgba(255, 255, 255, 0.75)",
+                  },
+                ]}
+              >
+                <TextInput
+                  label="New Password"
+                  value={password}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    if (passwordError) validatePassword(text);
+                    if (confirmPassword && confirmPasswordError)
+                      validateConfirmPassword(confirmPassword);
+                  }}
+                  mode="flat"
+                  secureTextEntry={!passwordVisible}
+                  style={styles.input}
+                  disabled={loading}
+                  error={!!passwordError}
+                  left={
+                    <TextInput.Icon icon="lock" color={theme.colors.primary} />
+                  }
+                  right={
+                    <TextInput.Icon
+                      icon={passwordVisible ? "eye-off" : "eye"}
+                      onPress={() => setPasswordVisible(!passwordVisible)}
+                      forceTextInputFocus={false}
+                      color={theme.colors.onSurfaceVariant}
+                    />
+                  }
+                  theme={{
+                    colors: {
+                      background: "transparent",
+                    },
+                  }}
+                  underlineColor="transparent"
+                  activeUnderlineColor={theme.colors.primary}
+                />
+                {passwordError ? (
+                  <HelperText type="error">{passwordError}</HelperText>
+                ) : null}
+
+                <TextInput
+                  label="Confirm New Password"
+                  value={confirmPassword}
+                  onChangeText={(text) => {
+                    setConfirmPassword(text);
+                    if (confirmPasswordError) validateConfirmPassword(text);
+                  }}
+                  mode="flat"
+                  secureTextEntry={!confirmPasswordVisible}
+                  style={styles.input}
+                  disabled={loading}
+                  error={!!confirmPasswordError}
+                  left={
+                    <TextInput.Icon
+                      icon="lock-check"
+                      color={theme.colors.primary}
+                    />
+                  }
+                  right={
+                    <TextInput.Icon
+                      icon={confirmPasswordVisible ? "eye-off" : "eye"}
+                      onPress={() =>
+                        setConfirmPasswordVisible(!confirmPasswordVisible)
+                      }
+                      forceTextInputFocus={false}
+                      color={theme.colors.onSurfaceVariant}
+                    />
+                  }
+                  theme={{
+                    colors: {
+                      background: "transparent",
+                    },
+                  }}
+                  underlineColor="transparent"
+                  activeUnderlineColor={theme.colors.primary}
+                />
+                {confirmPasswordError ? (
+                  <HelperText type="error">{confirmPasswordError}</HelperText>
+                ) : null}
+
+                <Button
+                  mode="contained"
+                  onPress={handleResetPassword}
+                  style={styles.button}
+                  contentStyle={styles.buttonContent}
+                  loading={loading}
+                  disabled={loading || !token}
+                  buttonColor={theme.colors.primary}
+                  labelStyle={styles.buttonLabel}
+                >
+                  Reset Password
+                </Button>
+
+                {!token && (
+                  <HelperText type="error" style={styles.tokenError}>
+                    Invalid reset link. Please request a new password reset
+                    email.
+                  </HelperText>
+                )}
+              </BlurView>
+            </Animated.View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+
+        <Snackbar
+          visible={snackbarVisible}
+          onDismiss={() => setSnackbarVisible(false)}
+          duration={3000}
+          action={{
+            label: "OK",
+            onPress: () => setSnackbarVisible(false),
+          }}
+          style={styles.snackbar}
+        >
+          {snackbarMessage}
+        </Snackbar>
+      </LinearGradient>
+    </>
   );
 };
 
@@ -232,42 +325,91 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: "center",
-    padding: 16,
+    padding: 24,
   },
   logoContainer: {
+    width: "100%",
+    marginBottom: 12,
+  },
+  headerContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    width: "100%",
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  logoWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   logo: {
-    width: 100,
-    height: 100,
-    marginBottom: 16,
+    width: 40,
+    height: 40,
+    marginRight: 8,
+  },
+  logoText: {
+    fontWeight: "bold",
+  },
+  helpButton: {
+    margin: 0,
   },
   title: {
-    fontSize: 24,
     fontWeight: "bold",
-    textAlign: "center",
     marginBottom: 8,
   },
   subtitle: {
-    fontSize: 14,
-    textAlign: "center",
-    marginBottom: 32,
+    marginBottom: 24,
   },
   formContainer: {
     width: "100%",
-    marginBottom: 32,
+    marginBottom: 20,
+  },
+  glassSurface: {
+    padding: 20,
+    borderRadius: 16,
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.2)",
+    elevation: 0,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    backdropFilter: "blur(10px)",
   },
   input: {
-    marginBottom: 12,
+    marginBottom: 16,
+    backgroundColor: "transparent",
+    height: 60,
   },
   button: {
-    marginTop: 12,
-    paddingVertical: 6,
+    marginTop: 24,
+    borderRadius: 30,
+    elevation: 0,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  buttonContent: {
+    paddingVertical: 10,
+    height: 56,
+  },
+  buttonLabel: {
+    fontSize: 16,
+    letterSpacing: 1,
+    fontWeight: "600",
   },
   tokenError: {
     textAlign: "center",
-    marginTop: 8,
+    marginTop: 16,
+    fontSize: 14,
+    letterSpacing: 0.25,
+  },
+  snackbar: {
+    marginBottom: 16,
+    borderRadius: 8,
   },
 });
 

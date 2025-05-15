@@ -1,20 +1,19 @@
-
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, ScrollView, RefreshControl } from 'react-native';
-import { Text, useTheme, FAB } from 'react-native-paper';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import { supabase } from '../../lib/supabase';
-import { useAuth } from '../../contexts/AuthContext';
-import AppHeader from '../../components/AppHeader';
-import DashboardCard from '../../components/DashboardCard';
-import LoadingIndicator from '../../components/LoadingIndicator';
-import { TaskStatus, FormStatus } from '../../types';
+import React, { useState, useEffect } from "react";
+import { StyleSheet, View, ScrollView, RefreshControl } from "react-native";
+import { Text, useTheme, FAB } from "react-native-paper";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useNavigation } from "@react-navigation/native";
+import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../contexts/AuthContext";
+import AppHeader from "../../components/AppHeader";
+import DashboardCard from "../../components/DashboardCard";
+import LoadingIndicator from "../../components/LoadingIndicator";
+import { TaskStatus, FormStatus } from "../../types";
 
 const CompanyAdminDashboard = () => {
   const theme = useTheme();
   const navigation = useNavigation();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [companyId, setCompanyId] = useState<string | null>(null);
@@ -31,22 +30,22 @@ const CompanyAdminDashboard = () => {
 
   const fetchCompanyId = async () => {
     if (!user) return null;
-    
+
     try {
       const { data, error } = await supabase
-        .from('company_user')
-        .select('company_id')
-        .eq('id', user.id)
+        .from("company_user")
+        .select("company_id")
+        .eq("id", user.id)
         .single();
-      
+
       if (error) {
-        console.error('Error fetching company ID:', error);
+        console.error("Error fetching company ID:", error);
         return null;
       }
-      
+
       return data?.company_id || null;
     } catch (error) {
-      console.error('Error fetching company ID:', error);
+      console.error("Error fetching company ID:", error);
       return null;
     }
   };
@@ -54,95 +53,110 @@ const CompanyAdminDashboard = () => {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      
+
       // Get company ID if not already set
-      const currentCompanyId = companyId || await fetchCompanyId();
+      const currentCompanyId = companyId || (await fetchCompanyId());
       if (!currentCompanyId) {
-        console.error('No company ID found');
+        console.error("No company ID found");
         setLoading(false);
         return;
       }
-      
+
       setCompanyId(currentCompanyId);
-      
+
       // Fetch employees count
       const { count: totalEmployees, error: employeesError } = await supabase
-        .from('company_user')
-        .select('*', { count: 'exact', head: true })
-        .eq('company_id', currentCompanyId);
-      
+        .from("company_user")
+        .select("*", { count: "exact", head: true })
+        .eq("company_id", currentCompanyId);
+
       // Fetch active employees count
-      const { count: activeEmployees, error: activeEmployeesError } = await supabase
-        .from('company_user')
-        .select('*', { count: 'exact', head: true })
-        .eq('company_id', currentCompanyId)
-        .eq('active_status', 'active');
-      
+      const { count: activeEmployees, error: activeEmployeesError } =
+        await supabase
+          .from("company_user")
+          .select("*", { count: "exact", head: true })
+          .eq("company_id", currentCompanyId)
+          .eq("active_status", "active");
+
       // Fetch tasks count
       const { count: totalTasks, error: tasksError } = await supabase
-        .from('task')
-        .select('*', { count: 'exact', head: true })
-        .eq('company_id', currentCompanyId);
-      
+        .from("task")
+        .select("*", { count: "exact", head: true })
+        .eq("company_id", currentCompanyId);
+
       // Fetch pending tasks count (open + in progress + awaiting response)
       const { count: pendingTasks, error: pendingTasksError } = await supabase
-        .from('task')
-        .select('*', { count: 'exact', head: true })
-        .eq('company_id', currentCompanyId)
-        .in('status', [TaskStatus.OPEN, TaskStatus.IN_PROGRESS, TaskStatus.AWAITING_RESPONSE]);
-      
+        .from("task")
+        .select("*", { count: "exact", head: true })
+        .eq("company_id", currentCompanyId)
+        .in("status", [
+          TaskStatus.OPEN,
+          TaskStatus.IN_PROGRESS,
+          TaskStatus.AWAITING_RESPONSE,
+        ]);
+
       // Fetch completed tasks count
-      const { count: completedTasks, error: completedTasksError } = await supabase
-        .from('task')
-        .select('*', { count: 'exact', head: true })
-        .eq('company_id', currentCompanyId)
-        .eq('status', TaskStatus.COMPLETED);
-      
+      const { count: completedTasks, error: completedTasksError } =
+        await supabase
+          .from("task")
+          .select("*", { count: "exact", head: true })
+          .eq("company_id", currentCompanyId)
+          .eq("status", TaskStatus.COMPLETED);
+
       // Fetch overdue tasks count
       const { count: overdueTasks, error: overdueTasksError } = await supabase
-        .from('task')
-        .select('*', { count: 'exact', head: true })
-        .eq('company_id', currentCompanyId)
-        .eq('status', TaskStatus.OVERDUE);
-      
+        .from("task")
+        .select("*", { count: "exact", head: true })
+        .eq("company_id", currentCompanyId)
+        .eq("status", TaskStatus.OVERDUE);
+
       // Fetch forms count (accident reports + illness reports + staff departure reports)
       const { count: accidentReports, error: accidentError } = await supabase
-        .from('accident_report')
-        .select('*', { count: 'exact', head: true })
-        .eq('company_id', currentCompanyId);
-      
+        .from("accident_report")
+        .select("*", { count: "exact", head: true })
+        .eq("company_id", currentCompanyId);
+
       const { count: illnessReports, error: illnessError } = await supabase
-        .from('illness_report')
-        .select('*', { count: 'exact', head: true })
-        .eq('company_id', currentCompanyId);
-      
+        .from("illness_report")
+        .select("*", { count: "exact", head: true })
+        .eq("company_id", currentCompanyId);
+
       const { count: departureReports, error: departureError } = await supabase
-        .from('staff_departure_report')
-        .select('*', { count: 'exact', head: true })
-        .eq('company_id', currentCompanyId);
-      
+        .from("staff_departure_report")
+        .select("*", { count: "exact", head: true })
+        .eq("company_id", currentCompanyId);
+
       // Fetch pending forms count
-      const { count: pendingAccidentReports, error: pendingAccidentError } = await supabase
-        .from('accident_report')
-        .select('*', { count: 'exact', head: true })
-        .eq('company_id', currentCompanyId)
-        .in('status', [FormStatus.DRAFT, FormStatus.PENDING]);
-      
-      const { count: pendingIllnessReports, error: pendingIllnessError } = await supabase
-        .from('illness_report')
-        .select('*', { count: 'exact', head: true })
-        .eq('company_id', currentCompanyId)
-        .in('status', [FormStatus.DRAFT, FormStatus.PENDING]);
-      
-      const { count: pendingDepartureReports, error: pendingDepartureError } = await supabase
-        .from('staff_departure_report')
-        .select('*', { count: 'exact', head: true })
-        .eq('company_id', currentCompanyId)
-        .in('status', [FormStatus.DRAFT, FormStatus.PENDING]);
-      
-      const totalForms = (accidentReports || 0) + (illnessReports || 0) + (departureReports || 0);
-      const pendingForms = (pendingAccidentReports || 0) + (pendingIllnessReports || 0) + (pendingDepartureReports || 0);
-      
+      const { count: pendingAccidentReports, error: pendingAccidentError } =
+        await supabase
+          .from("accident_report")
+          .select("*", { count: "exact", head: true })
+          .eq("company_id", currentCompanyId)
+          .in("status", [FormStatus.DRAFT, FormStatus.PENDING]);
+
+      const { count: pendingIllnessReports, error: pendingIllnessError } =
+        await supabase
+          .from("illness_report")
+          .select("*", { count: "exact", head: true })
+          .eq("company_id", currentCompanyId)
+          .in("status", [FormStatus.DRAFT, FormStatus.PENDING]);
+
+      const { count: pendingDepartureReports, error: pendingDepartureError } =
+        await supabase
+          .from("staff_departure_report")
+          .select("*", { count: "exact", head: true })
+          .eq("company_id", currentCompanyId)
+          .in("status", [FormStatus.DRAFT, FormStatus.PENDING]);
+
+      const totalForms =
+        (accidentReports || 0) +
+        (illnessReports || 0) +
+        (departureReports || 0);
+      const pendingForms =
+        (pendingAccidentReports || 0) +
+        (pendingIllnessReports || 0) +
+        (pendingDepartureReports || 0);
+
       setStats({
         totalEmployees: totalEmployees || 0,
         activeEmployees: activeEmployees || 0,
@@ -154,7 +168,7 @@ const CompanyAdminDashboard = () => {
         pendingForms: pendingForms,
       });
     } catch (error) {
-      console.error('Error fetching dashboard data:', error);
+      console.error("Error fetching dashboard data:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -175,9 +189,17 @@ const CompanyAdminDashboard = () => {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <AppHeader title="Company Admin Dashboard" showBackButton={false} />
-      
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
+      <AppHeader
+        showProfileMenu={true}
+        userEmail={user?.email || ""}
+        isAdmin={true} // Always true since this is SuperAdmin dashboard
+        onSignOut={signOut}
+        showHelpButton={false}
+      />
+
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -185,93 +207,99 @@ const CompanyAdminDashboard = () => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+        <Text
+          style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
+        >
           Employees
         </Text>
-        
+
         <View style={styles.cardsContainer}>
           <DashboardCard
             title="Total Employees"
             count={stats.totalEmployees}
             icon="account-group"
             color={theme.colors.primary}
-            onPress={() => navigation.navigate('Employees' as never)}
+            onPress={() => navigation.navigate("Employees" as never)}
           />
-          
+
           <DashboardCard
             title="Active Employees"
             count={stats.activeEmployees}
             icon="account-check"
             color={theme.colors.tertiary}
-            onPress={() => navigation.navigate('Employees' as never)}
+            onPress={() => navigation.navigate("Employees" as never)}
           />
         </View>
-        
-        <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+
+        <Text
+          style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
+        >
           Tasks
         </Text>
-        
+
         <View style={styles.cardsContainer}>
           <DashboardCard
             title="Total Tasks"
             count={stats.totalTasks}
             icon="clipboard-list"
             color={theme.colors.primary}
-            onPress={() => navigation.navigate('Tasks' as never)}
+            onPress={() => navigation.navigate("Tasks" as never)}
           />
-          
+
           <DashboardCard
             title="Pending Tasks"
             count={stats.pendingTasks}
             icon="clipboard-clock"
             color="#F59E0B" // Amber
-            onPress={() => navigation.navigate('Tasks' as never)}
+            onPress={() => navigation.navigate("Tasks" as never)}
           />
-          
+
           <DashboardCard
             title="Completed Tasks"
             count={stats.completedTasks}
             icon="clipboard-check"
             color="#10B981" // Green
-            onPress={() => navigation.navigate('Tasks' as never)}
+            onPress={() => navigation.navigate("Tasks" as never)}
           />
-          
+
           <DashboardCard
             title="Overdue Tasks"
             count={stats.overdueTasks}
             icon="clipboard-alert"
             color="#EF4444" // Red
-            onPress={() => navigation.navigate('Tasks' as never)}
+            onPress={() => navigation.navigate("Tasks" as never)}
           />
         </View>
-        
-        <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+
+        <Text
+          style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
+        >
           Forms
         </Text>
-        
+
         <View style={styles.cardsContainer}>
           <DashboardCard
             title="Total Forms"
             count={stats.totalForms}
             icon="file-document"
             color={theme.colors.primary}
-            onPress={() => navigation.navigate('FormSubmissions' as never)}
+            onPress={() => navigation.navigate("FormSubmissions" as never)}
           />
-          
+
           <DashboardCard
             title="Pending Forms"
             count={stats.pendingForms}
             icon="file-clock"
             color="#F59E0B" // Amber
-            onPress={() => navigation.navigate('FormSubmissions' as never)}
+            onPress={() => navigation.navigate("FormSubmissions" as never)}
           />
         </View>
       </ScrollView>
-      
+
       <FAB
         icon="plus"
         style={[styles.fab, { backgroundColor: theme.colors.primary }]}
-        onPress={() => navigation.navigate('CreateEmployee' as never)}
+        onPress={() => navigation.navigate("CreateEmployee" as never)}
         color={theme.colors.surface}
       />
     </SafeAreaView>
@@ -290,18 +318,18 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginTop: 16,
     marginBottom: 12,
   },
   cardsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
     marginBottom: 8,
   },
   fab: {
-    position: 'absolute',
+    position: "absolute",
     margin: 16,
     right: 0,
     bottom: 0,

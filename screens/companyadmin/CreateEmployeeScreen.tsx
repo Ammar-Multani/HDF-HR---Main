@@ -15,13 +15,15 @@ import {
   SegmentedButtons,
   Snackbar,
   HelperText,
+  Banner,
+  Switch,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { useForm, Controller } from "react-hook-form";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { format } from "date-fns";
-import { supabase, cachedQuery } from "../../lib/supabase";
+import { supabase, cachedQuery, isNetworkAvailable } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
@@ -33,7 +35,7 @@ import {
   UserRole,
   UserStatus,
 } from "../../types";
-import { hashPassword } from "../../utils/auth";
+import { hashPassword, generateResetToken } from "../../utils/auth";
 
 interface EmployeeFormData {
   first_name: string;
@@ -62,6 +64,7 @@ interface EmployeeFormData {
   iban: string;
   swift_code: string;
   comments: string;
+  is_admin: boolean;
 }
 
 // Default password for new employees - they will change it via reset password flow
@@ -147,6 +150,12 @@ const CreateEmployeeFormSkeleton = () => {
       <SkeletonBlock width="100%" height={40} style={{ marginBottom: 16 }} />
 
       <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+        Access Level
+      </Text>
+      <SkeletonBlock width="100%" height={40} style={{ marginBottom: 8 }} />
+      <SkeletonBlock width="70%" height={16} style={{ marginBottom: 16 }} />
+
+      <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
         Address
       </Text>
 
@@ -185,6 +194,9 @@ const CreateEmployeeScreen = () => {
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
+  const [errorBannerVisible, setErrorBannerVisible] = useState(false);
+  const [errorBannerMessage, setErrorBannerMessage] = useState("");
+  const [isOnline, setIsOnline] = useState(true);
 
   const {
     control,
@@ -220,11 +232,28 @@ const CreateEmployeeScreen = () => {
       iban: "",
       swift_code: "",
       comments: "",
+      is_admin: false,
     },
   });
 
   const dateOfBirth = watch("date_of_birth");
   const employmentStartDate = watch("employment_start_date");
+  const isAdmin = watch("is_admin");
+
+  // Check network status periodically
+  useEffect(() => {
+    const checkNetworkStatus = async () => {
+      const networkAvailable = await isNetworkAvailable();
+      setIsOnline(networkAvailable);
+    };
+
+    // Check immediately
+    checkNetworkStatus();
+
+    // Set up interval to check network periodically
+    const intervalId = setInterval(checkNetworkStatus, 10000);
+    return () => clearInterval(intervalId);
+  }, []);
 
   // Memoize the company ID fetch function to prevent recreating it on re-renders
   const fetchCompanyId = useCallback(async () => {
@@ -289,8 +318,42 @@ const CreateEmployeeScreen = () => {
     }
   };
 
+  // Confirm admin role change handler
+  const handleAdminToggle = (newValue: boolean) => {
+    if (newValue) {
+      // If turning on admin privileges, confirm with the user
+      Alert.alert(
+        "Confirm Admin Privileges",
+        "This will grant full administrative access to this employee. They will be able to manage company settings, employees, and other admin functions. Are you sure?",
+        [
+          {
+            text: "Cancel",
+            style: "cancel",
+          },
+          {
+            text: "Confirm",
+            onPress: () => setValue("is_admin", true),
+          },
+        ]
+      );
+    } else {
+      // If turning off, no confirmation needed
+      setValue("is_admin", false);
+    }
+  };
+
   const onSubmit = async (data: EmployeeFormData) => {
     try {
+      // Check network connectivity first
+      const networkAvailable = await isNetworkAvailable();
+      if (!networkAvailable) {
+        setErrorBannerMessage(
+          "Cannot create employee while offline. Please check your internet connection and try again."
+        );
+        setErrorBannerVisible(true);
+        return;
+      }
+
       if (!user || !companyId) {
         setSnackbarMessage("User or company information not available");
         setSnackbarVisible(true);
@@ -298,6 +361,8 @@ const CreateEmployeeScreen = () => {
       }
 
       setLoading(true);
+      setSnackbarVisible(false);
+      setErrorBannerVisible(false);
 
       // Validate workload percentage
       const workloadPercentage = parseInt(data.workload_percentage);
@@ -317,7 +382,23 @@ const CreateEmployeeScreen = () => {
         data.employment_type === EmploymentType.FULL_TIME ||
         data.employment_type === EmploymentType.PART_TIME;
 
-      // Performance optimization: Run the password hash and check for existing user in parallel
+      // Validate email domain more thoroughly
+      const emailParts = data.email.split("@");
+      if (
+        emailParts.length !== 2 ||
+        !emailParts[1].includes(".") ||
+        emailParts[1].length < 3
+      ) {
+        setSnackbarMessage(
+          "Please enter a valid email address with a proper domain"
+        );
+        setSnackbarVisible(true);
+        setLoading(false);
+        return;
+      }
+
+      // Performance optimization: Hash password in parallel with checking for existing user
+      // This avoids the sequential bottleneck
       const [hashedPassword, existingUserResult] = await Promise.all([
         hashPassword(DEFAULT_PASSWORD),
         supabase
@@ -327,90 +408,114 @@ const CreateEmployeeScreen = () => {
           .maybeSingle(), // Use maybeSingle instead of single to avoid errors
       ]);
 
-      // Check if user with this email already exists
+      // Check if user already exists
       if (existingUserResult.data) {
         throw new Error("A user with this email already exists");
       }
 
-      // Generate a reset token now - avoid regenerating later
+      // Generate reset token just once - avoid regenerating later
       const resetToken =
         Math.random().toString(36).substring(2, 15) +
         Math.random().toString(36).substring(2, 15);
       const resetTokenExpiry = new Date(
         Date.now() + 7 * 24 * 60 * 60 * 1000
-      ).toISOString(); // 7 days from now
+      ).toISOString();
+
+      // First prepare employee data - we'll only insert after user creation succeeds
+      const employeeData = {
+        company_id: companyId,
+        first_name: data.first_name,
+        last_name: data.last_name,
+        email: data.email,
+        phone_number: data.phone_number,
+        role: data.is_admin ? UserRole.ADMIN : UserRole.EMPLOYEE,
+        active_status: UserStatus.ACTIVE,
+        created_by: user.id,
+        date_of_birth: data.date_of_birth.toISOString(),
+        nationality: data.nationality,
+        id_type: data.id_type,
+        ahv_number: data.ahv_number,
+        marital_status: data.marital_status,
+        gender: data.gender,
+        employment_start_date: data.employment_start_date.toISOString(),
+        employment_type: isEmployeeType,
+        workload_percentage: workloadPercentage,
+        job_title: data.job_title,
+        education: data.education,
+        address: {
+          line1: data.address_line1,
+          line2: data.address_line2 || null,
+          city: data.address_city,
+          state: data.address_state,
+          postal_code: data.address_postal_code,
+          country: data.address_country,
+        },
+        bank_details: {
+          bank_name: data.bank_name,
+          account_number: data.account_number,
+          iban: data.iban,
+          swift_code: data.swift_code,
+        },
+        comments: data.comments || null,
+      };
+
+      // User data with reset token included
+      const userData = {
+        email: data.email,
+        password_hash: hashedPassword,
+        status: "active", // Set as active so they can log in immediately
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        reset_token: resetToken,
+        reset_token_expires: resetTokenExpiry,
+      };
 
       // Create the user with reset token in a single operation
-      const { data: userData, error: userError } = await supabase
+      const { data: newUser, error: userError } = await supabase
         .from("users")
-        .insert({
-          email: data.email,
-          password_hash: hashedPassword,
-          status: "active", // Set as active so they can log in immediately
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          reset_token: resetToken,
-          reset_token_expires: resetTokenExpiry,
-        })
+        .insert(userData)
         .select("id")
         .single();
 
-      if (userError || !userData) {
-        throw userError || new Error("Failed to create user");
+      if (userError) {
+        console.error("Error creating user:", userError);
+        throw new Error(
+          `Failed to create user: ${userError.message || "Unknown error"}`
+        );
       }
 
-      // Create employee record
+      if (!newUser || !newUser.id) {
+        throw new Error("Failed to create user: No ID returned");
+      }
+
+      // Now that we have the user ID, create the employee record
       const { error: employeeError } = await supabase
         .from("company_user")
         .insert([
           {
-            id: userData.id, // Use the ID from our custom users table
-            company_id: companyId,
-            first_name: data.first_name,
-            last_name: data.last_name,
-            email: data.email,
-            phone_number: data.phone_number,
-            role: UserRole.EMPLOYEE,
-            active_status: UserStatus.ACTIVE,
-            created_by: user.id,
-            date_of_birth: data.date_of_birth.toISOString(),
-            nationality: data.nationality,
-            id_type: data.id_type,
-            ahv_number: data.ahv_number,
-            marital_status: data.marital_status,
-            gender: data.gender,
-            employment_start_date: data.employment_start_date.toISOString(),
-            employment_type: isEmployeeType,
-            workload_percentage: workloadPercentage,
-            job_title: data.job_title,
-            education: data.education,
-            address: {
-              line1: data.address_line1,
-              line2: data.address_line2 || null,
-              city: data.address_city,
-              state: data.address_state,
-              postal_code: data.address_postal_code,
-              country: data.address_country,
-            },
-            bank_details: {
-              bank_name: data.bank_name,
-              account_number: data.account_number,
-              iban: data.iban,
-              swift_code: data.swift_code,
-            },
-            comments: data.comments || null,
+            id: newUser.id, // Use the ID from our custom users table
+            ...employeeData,
           },
         ]);
 
       if (employeeError) {
         // If employee creation fails, delete the user for atomicity
-        await supabase.from("users").delete().eq("id", userData.id);
-        throw employeeError;
+        console.log(
+          "Error creating employee, cleaning up user:",
+          employeeError
+        );
+        await supabase.from("users").delete().eq("id", newUser.id);
+        throw new Error(
+          `Failed to create employee: ${employeeError.message || "Unknown database error"}`
+        );
       }
 
+      console.log(
+        `Employee created with email: ${data.email} and temporary password: ${DEFAULT_PASSWORD}`
+      );
+
       setSnackbarMessage(
-        "Employee created successfully! Temporary password is: " +
-          DEFAULT_PASSWORD
+        `${data.is_admin ? "Company admin" : "Employee"} created successfully! Temporary password is: ${DEFAULT_PASSWORD}`
       );
       setSnackbarVisible(true);
 
@@ -420,8 +525,23 @@ const CreateEmployeeScreen = () => {
       }, 5000); // Give them time to see the password
     } catch (error: any) {
       console.error("Error creating employee:", error);
-      setSnackbarMessage(error.message || "Failed to create employee");
-      setSnackbarVisible(true);
+
+      // Detailed error message
+      const errorMessage =
+        error.message || "Failed to create employee. Please try again.";
+
+      // For network-related errors, show in banner
+      if (
+        errorMessage.includes("network") ||
+        errorMessage.includes("connection") ||
+        errorMessage.includes("offline")
+      ) {
+        setErrorBannerMessage(errorMessage);
+        setErrorBannerVisible(true);
+      } else {
+        setSnackbarMessage(errorMessage);
+        setSnackbarVisible(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -720,66 +840,33 @@ const CreateEmployeeScreen = () => {
             />
           )}
 
-          <Controller
-            control={control}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Education"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                style={styles.input}
-                disabled={loading}
-              />
-            )}
-            name="education"
-          />
-
           <Text
             style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
           >
-            Identification
+            Access Level
           </Text>
 
-          <Text style={styles.inputLabel}>ID Type *</Text>
-          <Controller
-            control={control}
-            render={({ field: { onChange, value } }) => (
-              <SegmentedButtons
-                value={value}
-                onValueChange={onChange}
-                buttons={[
-                  { value: IDType.ID_CARD, label: "ID Card" },
-                  { value: IDType.PASSPORT, label: "Passport" },
-                  { value: IDType.DRIVERS_LICENSE, label: "Driver's License" },
-                ]}
-                style={styles.segmentedButtons}
-              />
-            )}
-            name="id_type"
-          />
+          <View style={styles.adminToggleContainer}>
+            <Text style={styles.adminToggleLabel}>
+              Make this employee a company admin?
+            </Text>
+            <Controller
+              control={control}
+              render={({ field: { value } }) => (
+                <Switch
+                  value={value}
+                  onValueChange={handleAdminToggle}
+                  disabled={loading}
+                />
+              )}
+              name="is_admin"
+            />
+          </View>
 
-          <Controller
-            control={control}
-            rules={{ required: "AHV number is required" }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="AHV Number *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.ahv_number}
-                style={styles.input}
-                disabled={loading}
-              />
-            )}
-            name="ahv_number"
-          />
-          {errors.ahv_number && (
-            <HelperText type="error">{errors.ahv_number.message}</HelperText>
-          )}
+          <Text style={styles.helperText}>
+            Company admins have full access to manage company settings,
+            employees, departments, and other administrative functions.
+          </Text>
 
           <Text
             style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
@@ -1075,6 +1162,38 @@ const CreateEmployeeScreen = () => {
     >
       <AppHeader title="Create Employee" showBackButton />
 
+      {/* Network status banner */}
+      <Banner
+        visible={!isOnline}
+        icon="wifi-off"
+        actions={[
+          {
+            label: "Retry",
+            onPress: async () => {
+              const networkAvailable = await isNetworkAvailable();
+              setIsOnline(networkAvailable);
+            },
+          },
+        ]}
+      >
+        You are currently offline. Please check your connection to create a new
+        employee.
+      </Banner>
+
+      {/* Error banner for important errors */}
+      <Banner
+        visible={errorBannerVisible}
+        icon="alert"
+        actions={[
+          {
+            label: "Dismiss",
+            onPress: () => setErrorBannerVisible(false),
+          },
+        ]}
+      >
+        {errorBannerMessage}
+      </Banner>
+
       {companyIdLoading ? (
         <CreateEmployeeFormSkeleton />
       ) : (
@@ -1103,7 +1222,7 @@ const CreateEmployeeScreen = () => {
       <Snackbar
         visible={snackbarVisible}
         onDismiss={() => setSnackbarVisible(false)}
-        duration={3000}
+        duration={5000}
         action={{
           label: "OK",
           onPress: () => setSnackbarVisible(false),
@@ -1165,6 +1284,21 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
+  },
+  adminToggleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+    paddingVertical: 8,
+  },
+  adminToggleLabel: {
+    fontSize: 16,
+  },
+  helperText: {
+    fontSize: 14,
+    opacity: 0.7,
+    marginBottom: 16,
   },
 });
 

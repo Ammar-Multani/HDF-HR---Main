@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   StyleSheet,
   View,
@@ -15,13 +15,20 @@ import {
   SegmentedButtons,
   Snackbar,
   HelperText,
+  Banner,
+  Switch,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { useForm, Controller } from "react-hook-form";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { format } from "date-fns";
-import { supabase } from "../../lib/supabase";
+import {
+  supabase,
+  cachedQuery,
+  clearCache,
+  isNetworkAvailable,
+} from "../../lib/supabase";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import {
@@ -30,6 +37,7 @@ import {
   IDType,
   EmploymentType,
   CompanyUser,
+  UserRole,
 } from "../../types";
 
 type EditEmployeeRouteParams = {
@@ -63,7 +71,128 @@ interface EmployeeFormData {
   iban: string;
   swift_code: string;
   comments: string;
+  is_admin: boolean;
 }
+
+// Skeleton component for form loading state
+const EditEmployeeFormSkeleton = () => {
+  const theme = useTheme();
+
+  const SkeletonBlock = ({
+    width,
+    height,
+    style,
+  }: {
+    width: string | number;
+    height: number;
+    style?: any;
+  }) => (
+    <View
+      style={[
+        {
+          width,
+          height,
+          backgroundColor: theme.colors.surfaceVariant,
+          borderRadius: 4,
+          opacity: 0.3,
+        },
+        style,
+      ]}
+    />
+  );
+
+  return (
+    <ScrollView
+      style={styles.scrollView}
+      contentContainerStyle={styles.scrollContent}
+    >
+      <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+        Personal Information
+      </Text>
+
+      <View style={styles.row}>
+        <View style={styles.halfInput}>
+          <SkeletonBlock width="100%" height={56} style={{ marginBottom: 8 }} />
+          <SkeletonBlock width="70%" height={16} style={{ marginBottom: 16 }} />
+        </View>
+
+        <View style={styles.halfInput}>
+          <SkeletonBlock width="100%" height={56} style={{ marginBottom: 8 }} />
+          <SkeletonBlock width="70%" height={16} style={{ marginBottom: 16 }} />
+        </View>
+      </View>
+
+      <SkeletonBlock width="100%" height={16} style={{ marginBottom: 16 }} />
+
+      <SkeletonBlock width="100%" height={56} style={{ marginBottom: 8 }} />
+      <SkeletonBlock width="70%" height={16} style={{ marginBottom: 16 }} />
+
+      <Text style={styles.inputLabel}>Date of Birth *</Text>
+      <SkeletonBlock width="100%" height={40} style={{ marginBottom: 16 }} />
+
+      <Text style={styles.inputLabel}>Gender *</Text>
+      <SkeletonBlock width="100%" height={40} style={{ marginBottom: 16 }} />
+
+      <SkeletonBlock width="100%" height={56} style={{ marginBottom: 16 }} />
+
+      <Text style={styles.inputLabel}>Marital Status *</Text>
+      <SkeletonBlock width="100%" height={40} style={{ marginBottom: 16 }} />
+
+      <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+        Employment Details
+      </Text>
+
+      <SkeletonBlock width="100%" height={56} style={{ marginBottom: 16 }} />
+
+      <Text style={styles.inputLabel}>Employment Type *</Text>
+      <SkeletonBlock width="100%" height={40} style={{ marginBottom: 16 }} />
+
+      <SkeletonBlock width="100%" height={56} style={{ marginBottom: 16 }} />
+
+      <Text style={styles.inputLabel}>Employment Date(s) *</Text>
+      <SkeletonBlock width="100%" height={40} style={{ marginBottom: 16 }} />
+      <SkeletonBlock width="100%" height={40} style={{ marginBottom: 16 }} />
+
+      <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+        Address
+      </Text>
+
+      <SkeletonBlock width="100%" height={56} style={{ marginBottom: 16 }} />
+      <SkeletonBlock width="100%" height={56} style={{ marginBottom: 16 }} />
+
+      <View style={styles.row}>
+        <View style={styles.halfInput}>
+          <SkeletonBlock
+            width="100%"
+            height={56}
+            style={{ marginBottom: 16 }}
+          />
+        </View>
+        <View style={styles.halfInput}>
+          <SkeletonBlock
+            width="100%"
+            height={56}
+            style={{ marginBottom: 16 }}
+          />
+        </View>
+      </View>
+
+      <Text style={styles.inputLabel}>Employment Start Date *</Text>
+      <SkeletonBlock width="100%" height={40} style={{ marginBottom: 16 }} />
+      <SkeletonBlock width="100%" height={40} style={{ marginBottom: 16 }} />
+
+      <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+        Access Level
+      </Text>
+      <SkeletonBlock width="100%" height={40} style={{ marginBottom: 8 }} />
+      <SkeletonBlock width="70%" height={16} style={{ marginBottom: 16 }} />
+
+      <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
+        Address
+      </Text>
+    </ScrollView>
+  );
+};
 
 const EditEmployeeScreen = () => {
   const theme = useTheme();
@@ -81,6 +210,8 @@ const EditEmployeeScreen = () => {
   const [hasEndDate, setHasEndDate] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [networkStatus, setNetworkStatus] = useState<boolean | null>(true);
 
   const {
     control,
@@ -116,39 +247,131 @@ const EditEmployeeScreen = () => {
       iban: "",
       swift_code: "",
       comments: "",
+      is_admin: false,
     },
   });
 
   const dateOfBirth = watch("date_of_birth");
   const employmentStartDate = watch("employment_start_date");
   const employmentEndDate = watch("employment_end_date");
+  const isAdmin = watch("is_admin");
 
-  const fetchEmployeeDetails = async () => {
+  // Confirm admin role change handler
+  const handleAdminToggle = (newValue: boolean) => {
+    if (newValue) {
+      // If turning on admin privileges, confirm with the user
+      Alert.alert(
+        "Confirm Admin Privileges",
+        "This will grant full administrative access to this employee. They will be able to manage company settings, employees, and other admin functions. Are you sure?",
+        [
+          {
+            text: "Cancel",
+            style: "cancel",
+          },
+          {
+            text: "Confirm",
+            onPress: () => setValue("is_admin", true),
+          },
+        ]
+      );
+    } else {
+      // If removing admin privileges, also confirm
+      Alert.alert(
+        "Remove Admin Privileges",
+        "This employee will no longer have administrative access. Are you sure?",
+        [
+          {
+            text: "Cancel",
+            style: "cancel",
+          },
+          {
+            text: "Confirm",
+            onPress: () => setValue("is_admin", false),
+          },
+        ]
+      );
+    }
+  };
+
+  // Check network status
+  const checkNetworkStatus = useCallback(async () => {
+    try {
+      const isAvailable = await isNetworkAvailable();
+      setNetworkStatus(isAvailable);
+      return isAvailable;
+    } catch (e) {
+      console.warn("Error checking network status:", e);
+      // Default to assuming we're online if check fails
+      return true;
+    }
+  }, []);
+
+  useEffect(() => {
+    // Check network on mount
+    checkNetworkStatus();
+  }, [checkNetworkStatus]);
+
+  const fetchEmployeeDetails = useCallback(async () => {
     try {
       setLoading(true);
+      setError(null);
 
-      const { data, error } = await supabase
-        .from("company_user")
-        .select("*")
-        .eq("id", employeeId)
-        .single();
+      // Check network status
+      const networkAvailable = await checkNetworkStatus();
 
-      if (error) {
-        console.error("Error fetching employee details:", error);
-        return;
+      // Create a cache key for this specific employee
+      const cacheKey = `employee_edit_${employeeId}`;
+
+      // Define the data fetching function
+      const fetchData = async () => {
+        const { data, error } = await supabase
+          .from("company_user")
+          .select("*")
+          .eq("id", employeeId)
+          .single();
+
+        if (error) {
+          console.error("Error fetching employee details:", error);
+          return { data: null, error };
+        }
+
+        return { data, error: null };
+      };
+
+      // Use cached query with appropriate options
+      const result = await cachedQuery<any>(fetchData, cacheKey, {
+        forceRefresh: networkAvailable, // Only force refresh if we're online
+        cacheTtl: 30 * 60 * 1000, // 30 minute cache
+        criticalData: true, // This is critical data for editing
+      });
+
+      if (result.error && !result.fromCache) {
+        console.error("Error fetching employee details:", result.error);
+        throw new Error(
+          result.error.message || "Failed to fetch employee details"
+        );
       }
 
-      setEmployee(data);
+      // Check if we're using stale data
+      if (result.fromCache && !networkAvailable) {
+        setError("You're offline. Using cached data which may be outdated.");
+      }
+
+      if (!result.data) {
+        throw new Error("Employee not found");
+      }
+
+      setEmployee(result.data);
 
       // Set form values
-      setValue("first_name", data.first_name || "");
-      setValue("last_name", data.last_name || "");
-      setValue("phone_number", data.phone_number || "");
+      setValue("first_name", result.data.first_name || "");
+      setValue("last_name", result.data.last_name || "");
+      setValue("phone_number", result.data.phone_number || "");
 
       // Handle date of birth with validation
       try {
-        if (data.date_of_birth) {
-          const dobDate = new Date(data.date_of_birth);
+        if (result.data.date_of_birth) {
+          const dobDate = new Date(result.data.date_of_birth);
           if (!isNaN(dobDate.getTime())) {
             setValue("date_of_birth", dobDate);
           } else {
@@ -161,25 +384,30 @@ const EditEmployeeScreen = () => {
         setValue("date_of_birth", new Date());
       }
 
-      setValue("gender", data.gender || Gender.MALE);
-      setValue("nationality", data.nationality || "");
-      setValue("marital_status", data.marital_status || MaritalStatus.SINGLE);
-      setValue("id_type", data.id_type || IDType.ID_CARD);
-      setValue("ahv_number", data.ahv_number || "");
-      setValue("job_title", data.job_title || "");
+      setValue("gender", result.data.gender || Gender.MALE);
+      setValue("nationality", result.data.nationality || "");
+      setValue(
+        "marital_status",
+        result.data.marital_status || MaritalStatus.SINGLE
+      );
+      setValue("id_type", result.data.id_type || IDType.ID_CARD);
+      setValue("ahv_number", result.data.ahv_number || "");
+      setValue("job_title", result.data.job_title || "");
       setValue(
         "employment_type",
-        data.employment_type || EmploymentType.FULL_TIME
+        result.data.employment_type || EmploymentType.FULL_TIME
       );
       setValue(
         "workload_percentage",
-        data.workload_percentage ? data.workload_percentage.toString() : "100"
+        result.data.workload_percentage
+          ? result.data.workload_percentage.toString()
+          : "100"
       );
 
       // Handle employment start date with validation
       try {
-        if (data.employment_start_date) {
-          const startDate = new Date(data.employment_start_date);
+        if (result.data.employment_start_date) {
+          const startDate = new Date(result.data.employment_start_date);
           if (!isNaN(startDate.getTime())) {
             setValue("employment_start_date", startDate);
           } else {
@@ -193,9 +421,9 @@ const EditEmployeeScreen = () => {
       }
 
       // Handle employment end date with validation
-      if (data.employment_end_date) {
+      if (result.data.employment_end_date) {
         try {
-          const endDate = new Date(data.employment_end_date);
+          const endDate = new Date(result.data.employment_end_date);
           if (!isNaN(endDate.getTime())) {
             setValue("employment_end_date", endDate);
             setHasEndDate(true);
@@ -205,25 +433,25 @@ const EditEmployeeScreen = () => {
         }
       }
 
-      setValue("education", data.education || "");
+      setValue("education", result.data.education || "");
 
       // Set address values - reading from JSONB address object
-      if (data.address) {
-        setValue("address_line1", data.address.line1 || "");
-        setValue("address_line2", data.address.line2 || "");
-        setValue("address_city", data.address.city || "");
-        setValue("address_state", data.address.state || "");
-        setValue("address_postal_code", data.address.postal_code || "");
-        setValue("address_country", data.address.country || "");
+      if (result.data.address) {
+        setValue("address_line1", result.data.address.line1 || "");
+        setValue("address_line2", result.data.address.line2 || "");
+        setValue("address_city", result.data.address.city || "");
+        setValue("address_state", result.data.address.state || "");
+        setValue("address_postal_code", result.data.address.postal_code || "");
+        setValue("address_country", result.data.address.country || "");
       }
 
       // Set bank details - reading from JSONB bank_details object
-      if (data.bank_details) {
+      if (result.data.bank_details) {
         // Handle bank_details as both string or object
         const bankDetails =
-          typeof data.bank_details === "string"
-            ? JSON.parse(data.bank_details)
-            : data.bank_details;
+          typeof result.data.bank_details === "string"
+            ? JSON.parse(result.data.bank_details)
+            : result.data.bank_details;
 
         setValue("bank_name", bankDetails.bank_name || "");
         setValue("account_number", bankDetails.account_number || "");
@@ -231,17 +459,21 @@ const EditEmployeeScreen = () => {
         setValue("swift_code", bankDetails.swift_code || "");
       }
 
-      setValue("comments", data.comments || "");
-    } catch (error) {
+      setValue("comments", result.data.comments || "");
+
+      // Set admin status based on role
+      setValue("is_admin", result.data.role === UserRole.COMPANY_ADMIN);
+    } catch (error: any) {
       console.error("Error fetching employee details:", error);
+      setError(error.message || "Failed to load employee details");
     } finally {
       setLoading(false);
     }
-  };
+  }, [employeeId, setValue, checkNetworkStatus]);
 
   useEffect(() => {
     fetchEmployeeDetails();
-  }, [employeeId]);
+  }, [fetchEmployeeDetails]);
 
   const handleDobChange = (event: any, selectedDate?: Date) => {
     setShowDobPicker(false);
@@ -266,6 +498,14 @@ const EditEmployeeScreen = () => {
 
   const onSubmit = async (data: EmployeeFormData) => {
     try {
+      // First check network connection
+      const isOnline = await checkNetworkStatus();
+      if (!isOnline) {
+        setSnackbarMessage("Cannot update employee while offline");
+        setSnackbarVisible(true);
+        return;
+      }
+
       if (!employee) {
         setSnackbarMessage("Employee information not available");
         setSnackbarVisible(true);
@@ -273,6 +513,7 @@ const EditEmployeeScreen = () => {
       }
 
       setSubmitting(true);
+      setError(null);
 
       // Validate workload percentage
       const workloadPercentage = parseInt(data.workload_percentage);
@@ -305,6 +546,7 @@ const EditEmployeeScreen = () => {
           ahv_number: data.ahv_number,
           marital_status: data.marital_status,
           gender: data.gender,
+          role: data.is_admin ? UserRole.COMPANY_ADMIN : UserRole.EMPLOYEE,
           employment_start_date: data.employment_start_date.toISOString(),
           employment_end_date:
             hasEndDate && data.employment_end_date
@@ -336,7 +578,22 @@ const EditEmployeeScreen = () => {
         throw error;
       }
 
-      setSnackbarMessage("Employee updated successfully");
+      // Clear cache for this employee
+      await clearCache(`employee_edit_${employeeId}`);
+      await clearCache(`employee_details_${employeeId}`);
+      await clearCache(`employees_*`); // Clear employee list caches
+
+      // Create appropriate success message
+      const isRoleChanged =
+        (employee.role === UserRole.COMPANY_ADMIN) !== data.is_admin;
+      let successMessage = "Employee updated successfully";
+      if (isRoleChanged) {
+        successMessage = data.is_admin
+          ? "Employee updated and granted admin access"
+          : "Employee updated and admin access removed";
+      }
+
+      setSnackbarMessage(successMessage);
       setSnackbarVisible(true);
 
       // Navigate back after a short delay
@@ -347,41 +604,17 @@ const EditEmployeeScreen = () => {
       console.error("Error updating employee:", error);
       setSnackbarMessage(error.message || "Failed to update employee");
       setSnackbarVisible(true);
+      setError(error.message || "Failed to update employee");
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (loading) {
-    return <LoadingIndicator />;
-  }
+  // Create memoized form content to prevent unnecessary rerenders
+  const formContent = useMemo(() => {
+    if (!employee) return null;
 
-  if (!employee) {
     return (
-      <SafeAreaView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
-        <AppHeader title="Edit Employee" showBackButton />
-        <View style={styles.errorContainer}>
-          <Text style={{ color: theme.colors.error }}>Employee not found</Text>
-          <Button
-            mode="contained"
-            onPress={() => navigation.goBack()}
-            style={styles.button}
-          >
-            Go Back
-          </Button>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
-      <AppHeader title="Edit Employee" showBackButton />
-
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardAvoidingView}
@@ -709,6 +942,35 @@ const EditEmployeeScreen = () => {
           <Text
             style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
           >
+            Access Level
+          </Text>
+
+          <View style={styles.adminToggleContainer}>
+            <Text style={styles.adminToggleLabel}>
+              Company Administrator Access
+            </Text>
+            <Controller
+              control={control}
+              render={({ field: { value } }) => (
+                <Switch
+                  value={value}
+                  onValueChange={handleAdminToggle}
+                  disabled={submitting}
+                />
+              )}
+              name="is_admin"
+            />
+          </View>
+
+          <Text style={styles.helperText}>
+            {isAdmin
+              ? "This employee has full administrative access to manage company settings, employees, and other administrative functions."
+              : "Toggle to grant this employee administrative access."}
+          </Text>
+
+          <Text
+            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
+          >
             Identification
           </Text>
 
@@ -1024,12 +1286,113 @@ const EditEmployeeScreen = () => {
             onPress={handleSubmit(onSubmit)}
             style={styles.submitButton}
             loading={submitting}
-            disabled={submitting}
+            disabled={submitting || networkStatus === false}
           >
             Update Employee
           </Button>
         </ScrollView>
       </KeyboardAvoidingView>
+    );
+  }, [
+    employee,
+    control,
+    errors,
+    submitting,
+    theme.colors.onBackground,
+    dateOfBirth,
+    employmentStartDate,
+    employmentEndDate,
+    hasEndDate,
+    handleSubmit,
+    onSubmit,
+    networkStatus,
+    isAdmin,
+  ]);
+
+  const renderContent = () => {
+    if (loading) {
+      return <EditEmployeeFormSkeleton />;
+    }
+
+    if (error && !employee) {
+      return (
+        <View style={styles.errorContainer}>
+          <Text style={{ color: theme.colors.error }}>{error}</Text>
+          <Button
+            mode="contained"
+            onPress={fetchEmployeeDetails}
+            style={styles.button}
+          >
+            Retry
+          </Button>
+          <Button
+            mode="outlined"
+            onPress={() => navigation.goBack()}
+            style={[styles.button, { marginTop: 8 }]}
+          >
+            Go Back
+          </Button>
+        </View>
+      );
+    }
+
+    if (!employee) {
+      return (
+        <View style={styles.errorContainer}>
+          <Text style={{ color: theme.colors.error }}>Employee not found</Text>
+          <Button
+            mode="contained"
+            onPress={() => navigation.goBack()}
+            style={styles.button}
+          >
+            Go Back
+          </Button>
+        </View>
+      );
+    }
+
+    return formContent;
+  };
+
+  return (
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
+      <AppHeader title="Edit Employee" showBackButton />
+
+      {/* Show offline banner if offline */}
+      {networkStatus === false && (
+        <Banner
+          visible={true}
+          icon="wifi-off"
+          actions={[
+            {
+              label: "Retry",
+              onPress: checkNetworkStatus,
+            },
+          ]}
+        >
+          You are offline. Some features may be limited.
+        </Banner>
+      )}
+
+      {/* Show error banner for non-critical errors */}
+      {error && employee && (
+        <Banner
+          visible={true}
+          icon="alert-circle"
+          actions={[
+            {
+              label: "Dismiss",
+              onPress: () => setError(null),
+            },
+          ]}
+        >
+          {error}
+        </Banner>
+      )}
+
+      {renderContent()}
 
       <Snackbar
         visible={snackbarVisible}
@@ -1111,6 +1474,21 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: 16,
+  },
+  adminToggleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+    paddingVertical: 8,
+  },
+  adminToggleLabel: {
+    fontSize: 16,
+  },
+  helperText: {
+    marginBottom: 16,
+    fontSize: 14,
+    opacity: 0.7,
   },
 });
 

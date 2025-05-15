@@ -599,7 +599,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   searchbar: {
-    elevation: 2,
+    elevation: 0,
   },
   listContent: {
     padding: 16,
@@ -607,7 +607,7 @@ const styles = StyleSheet.create({
   },
   card: {
     marginBottom: 16,
-    elevation: 2,
+    elevation: 0,
   },
   cardHeader: {
     flexDirection: "row",

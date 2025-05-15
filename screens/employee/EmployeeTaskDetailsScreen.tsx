@@ -277,7 +277,7 @@ const styles = StyleSheet.create({
   },
   card: {
     marginBottom: 16,
-    elevation: 2,
+    elevation: 0,
   },
   headerRow: {
     flexDirection: "row",

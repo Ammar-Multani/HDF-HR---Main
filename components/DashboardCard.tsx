@@ -1,8 +1,7 @@
-
-import React from 'react';
-import { StyleSheet, View, TouchableOpacity } from 'react-native';
-import { Card, Text, useTheme } from 'react-native-paper';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import React from "react";
+import { StyleSheet, View, TouchableOpacity } from "react-native";
+import { Card, Text, useTheme } from "react-native-paper";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 interface DashboardCardProps {
   title: string;
@@ -12,14 +11,22 @@ interface DashboardCardProps {
   onPress: () => void;
 }
 
-const DashboardCard = ({ title, count, icon, color, onPress }: DashboardCardProps) => {
+const DashboardCard = ({
+  title,
+  count,
+  icon,
+  color,
+  onPress,
+}: DashboardCardProps) => {
   const theme = useTheme();
 
   return (
     <TouchableOpacity onPress={onPress} style={styles.cardContainer}>
       <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
         <Card.Content style={styles.content}>
-          <View style={[styles.iconContainer, { backgroundColor: color + '20' }]}>
+          <View
+            style={[styles.iconContainer, { backgroundColor: color + "20" }]}
+          >
             <MaterialCommunityIcons name={icon} size={24} color={color} />
           </View>
           <View style={styles.textContainer}>
@@ -34,11 +41,11 @@ const DashboardCard = ({ title, count, icon, color, onPress }: DashboardCardProp
 
 const styles = StyleSheet.create({
   cardContainer: {
-    width: '48%',
+    width: "48%",
     marginBottom: 16,
   },
   card: {
-    elevation: 2,
+    elevation: 0,
     borderRadius: 12,
   },
   content: {
@@ -48,8 +55,8 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     marginBottom: 12,
   },
   textContainer: {
@@ -57,7 +64,7 @@ const styles = StyleSheet.create({
   },
   count: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 4,
   },
   title: {

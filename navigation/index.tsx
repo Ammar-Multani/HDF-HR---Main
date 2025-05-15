@@ -1,4 +1,4 @@
-import React, { createRef, useEffect, useState } from "react";
+import React, { createRef, useEffect } from "react";
 import {
   NavigationContainer,
   useNavigationContainerRef,
@@ -15,7 +15,6 @@ import LoginScreen from "../screens/auth/LoginScreen";
 import RegisterScreen from "../screens/auth/RegisterScreen";
 import ForgotPasswordScreen from "../screens/auth/ForgotPasswordScreen";
 import ResetPasswordScreen from "../screens/auth/ResetPasswordScreen";
-import LoadingScreen from "../screens/auth/LoadingScreen";
 
 // Super Admin Screens
 import SuperAdminDashboard from "../screens/superadmin/SuperAdminDashboard";
@@ -61,8 +60,6 @@ const CompanyAdminStack = createNativeStackNavigator();
 const EmployeeStack = createNativeStackNavigator();
 const RootStack = createNativeStackNavigator();
 
-// Key to prevent showing loading screen right after login
-const SKIP_LOADING_KEY = "skip_loading_after_login";
 // Key for navigation request from auth context
 const NAVIGATE_TO_DASHBOARD_KEY = "NAVIGATE_TO_DASHBOARD";
 
@@ -70,10 +67,10 @@ const NAVIGATE_TO_DASHBOARD_KEY = "NAVIGATE_TO_DASHBOARD";
 export const navigationRef = createRef();
 
 // Helper function to navigate to dashboard based on user role
-export const navigateToDashboard = (role) => {
+export const navigateToDashboard = (role: string) => {
   if (!navigationRef.current) return;
 
-  const nav = navigationRef.current;
+  const nav = navigationRef.current as any;
 
   // Reset navigation stack and go directly to the dashboard
   const resetAction = StackActions.replace("Dashboard");
@@ -237,15 +234,12 @@ const EmployeeNavigator = () => (
 
 // Main Navigator - enhanced with initialAuthState for faster load times
 export const AppNavigator = ({ initialAuthState = null }) => {
-  const { user, userRole, loading } = useAuth();
+  const { user, userRole } = useAuth();
   const navRef = useNavigationContainerRef();
-  const [showLoading, setShowLoading] = useState(true);
-  const [initialRoute, setInitialRoute] = useState("Dashboard");
-  const [skipLoading, setSkipLoading] = useState(false);
 
   // Set the navigationRef for use outside of the component
   useEffect(() => {
-    navigationRef.current = navRef;
+    (navigationRef as any).current = navRef;
   }, [navRef]);
 
   // Check for navigation requests from auth context
@@ -279,63 +273,6 @@ export const AppNavigator = ({ initialAuthState = null }) => {
     return () => clearInterval(intervalId);
   }, [navRef]);
 
-  // Check if we should skip loading screens (after login)
-  useEffect(() => {
-    const checkSkipLoading = async () => {
-      try {
-        const shouldSkip = await AsyncStorage.getItem(SKIP_LOADING_KEY);
-        if (shouldSkip === "true") {
-          console.log("Skipping loading screens due to direct login flow");
-          setSkipLoading(true);
-          // Clear the flag once used
-          await AsyncStorage.removeItem(SKIP_LOADING_KEY);
-        }
-      } catch (error) {
-        console.error("Error checking skip loading flag:", error);
-      }
-    };
-
-    checkSkipLoading();
-  }, []);
-
-  // Determine if we need to show loading screen based on auth status and skip flag
-  useEffect(() => {
-    if (skipLoading) {
-      // If coming from login, skip loading screen entirely
-      setShowLoading(false);
-    } else if (loading) {
-      // Only show loading if not coming from login
-      setShowLoading(true);
-    } else if (initialAuthState === false) {
-      // If we know user is not authenticated, skip loading screen
-      setShowLoading(false);
-    } else if (user) {
-      // Once we have user data, remove loading screen
-      setShowLoading(false);
-    } else {
-      // Add a small timeout for smoother transitions
-      const timeoutId = setTimeout(() => {
-        setShowLoading(false);
-      }, 300);
-      return () => clearTimeout(timeoutId);
-    }
-  }, [loading, user, initialAuthState, skipLoading]);
-
-  console.log("Navigation state:", {
-    isLoading: loading,
-    showLoadingScreen: showLoading,
-    skipLoading,
-    hasUser: !!user,
-    userRole,
-    initialAuthState,
-  });
-
-  // Show loading screen only during actual loading states and when not skipping
-  if (showLoading && loading && !skipLoading) {
-    console.log("Showing loading screen");
-    return <LoadingScreen />;
-  }
-
   // For debugging - show what screen will be displayed
   if (!user) {
     console.log("No user found, showing auth navigator");
@@ -350,11 +287,7 @@ export const AppNavigator = ({ initialAuthState = null }) => {
   }
 
   return (
-    <NavigationContainer
-      ref={navRef}
-      linking={linking}
-      fallback={skipLoading ? null : <LoadingScreen />}
-    >
+    <NavigationContainer ref={navRef} linking={linking}>
       {!user ? (
         <AuthNavigator />
       ) : (

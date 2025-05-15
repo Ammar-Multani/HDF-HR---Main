@@ -12,8 +12,8 @@ export const hashPassword = async (password: string): Promise<string> => {
     .map(b => b.toString(16).padStart(2, '0'))
     .join('');
   
-  // Use PBKDF2 with SHA-256 and 1000 iterations (balanced for mobile security/performance)
-  const iterations = 1000;
+  // Use PBKDF2 with SHA-256 and 200 iterations (balanced for mobile security/performance)
+  const iterations = 200;
   
   // Hash with optimized PBKDF2
   const derivedKey = await pbkdf2(password, salt, iterations, 32);
