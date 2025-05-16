@@ -100,8 +100,8 @@ const CreateIllnessReportScreen = () => {
     try {
       setUploadingDocument(true);
       const documentUrl = await pickAndUploadDocument(
-        "medical_certificates",
-        `illness_reports/${user?.id}`,
+        "illness-documents",
+        `${user?.id}`,
         { type: ["application/pdf", "image/*"] }
       );
 
@@ -130,13 +130,14 @@ const CreateIllnessReportScreen = () => {
 
       setLoading(true);
 
-      // Create illness report
+      // Create illness report - make medical_certificate optional
       const { error } = await supabase.from("illness_report").insert([
         {
           employee_id: user.id,
           company_id: companyId,
           date_of_onset_leave: data.date_of_onset_leave.toISOString(),
           leave_description: data.leave_description,
+          // Allow medical_certificate to be null or empty string
           medical_certificate: data.medical_certificate || null,
           status: FormStatus.PENDING,
           submission_date: new Date().toISOString(),

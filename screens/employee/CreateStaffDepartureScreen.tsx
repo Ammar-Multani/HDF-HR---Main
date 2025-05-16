@@ -116,7 +116,7 @@ const CreateStaffDepartureScreen = () => {
       const formattedType = documentType.toLowerCase().replace(/_/g, "-");
 
       const documentUrl = await pickAndUploadDocument(
-        "departure_documents",
+        "departure-documents",
         `${formattedType}/${user?.id}`,
         {
           type: [

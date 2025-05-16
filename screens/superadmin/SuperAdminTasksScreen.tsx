@@ -33,8 +33,13 @@ const SuperAdminTasksScreen = () => {
       setLoading(true);
 
       const { data, error } = await supabase
-        .from("task")
-        .select("*")
+        .from("tasks")
+        .select(
+          `
+          *,
+          company:company_id(id, company_name)
+        `
+        )
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -42,8 +47,51 @@ const SuperAdminTasksScreen = () => {
         return;
       }
 
-      setTasks(data || []);
-      setFilteredTasks(data || []);
+      // For each task, fetch the assigned users separately if needed
+      const tasksWithAssignedUsers = await Promise.all(
+        (data || []).map(async (task) => {
+          if (task.assigned_to && task.assigned_to.length > 0) {
+            // Fetch company users
+            const { data: companyUsers } = await supabase
+              .from("company_user")
+              .select("id, first_name, last_name, email, role")
+              .in("id", task.assigned_to);
+
+            // Fetch admin users
+            const { data: adminUsers } = await supabase
+              .from("admin")
+              .select("id, name, email, role")
+              .in("id", task.assigned_to);
+
+            const formattedCompanyUsers = (companyUsers || []).map((user) => ({
+              id: user.id,
+              name: `${user.first_name} ${user.last_name}`,
+              email: user.email,
+              role: user.role,
+            }));
+
+            const formattedAdminUsers = (adminUsers || []).map((admin) => ({
+              id: admin.id,
+              name: admin.name,
+              email: admin.email,
+              role: admin.role,
+            }));
+
+            return {
+              ...task,
+              assignedUserDetails: [
+                ...formattedCompanyUsers,
+                ...formattedAdminUsers,
+              ],
+            };
+          }
+
+          return task;
+        })
+      );
+
+      setTasks(tasksWithAssignedUsers || []);
+      setFilteredTasks(tasksWithAssignedUsers || []);
     } catch (error) {
       console.error("Error fetching tasks:", error);
     } finally {

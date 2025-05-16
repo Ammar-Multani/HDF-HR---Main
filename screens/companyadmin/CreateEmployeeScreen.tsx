@@ -65,10 +65,8 @@ interface EmployeeFormData {
   swift_code: string;
   comments: string;
   is_admin: boolean;
+  password: string;
 }
-
-// Default password for new employees - they will change it via reset password flow
-const DEFAULT_PASSWORD = "Password123!";
 
 // Skeleton component for form loading state
 const CreateEmployeeFormSkeleton = () => {
@@ -233,6 +231,7 @@ const CreateEmployeeScreen = () => {
       swift_code: "",
       comments: "",
       is_admin: false,
+      password: "",
     },
   });
 
@@ -377,6 +376,14 @@ const CreateEmployeeScreen = () => {
         return;
       }
 
+      // Validate password strength
+      if (data.password.length < 8) {
+        setSnackbarMessage("Password must be at least 8 characters long");
+        setSnackbarVisible(true);
+        setLoading(false);
+        return;
+      }
+
       // Convert employment_type to boolean (true for full-time/part-time, false for contract/temporary)
       const isEmployeeType =
         data.employment_type === EmploymentType.FULL_TIME ||
@@ -400,7 +407,7 @@ const CreateEmployeeScreen = () => {
       // Performance optimization: Hash password in parallel with checking for existing user
       // This avoids the sequential bottleneck
       const [hashedPassword, existingUserResult] = await Promise.all([
-        hashPassword(DEFAULT_PASSWORD),
+        hashPassword(data.password),
         supabase
           .from("users")
           .select("id")
@@ -510,12 +517,10 @@ const CreateEmployeeScreen = () => {
         );
       }
 
-      console.log(
-        `Employee created with email: ${data.email} and temporary password: ${DEFAULT_PASSWORD}`
-      );
+      console.log(`Employee created with email: ${data.email}`);
 
       setSnackbarMessage(
-        `${data.is_admin ? "Company admin" : "Employee"} created successfully! Temporary password is: ${DEFAULT_PASSWORD}`
+        `${data.is_admin ? "Company admin" : "Employee"} created successfully!`
       );
       setSnackbarVisible(true);
 
@@ -1130,6 +1135,39 @@ const CreateEmployeeScreen = () => {
             )}
             name="comments"
           />
+
+          <Controller
+            control={control}
+            rules={{
+              required: "Password is required",
+              minLength: {
+                value: 8,
+                message: "Password must be at least 8 characters long",
+              },
+            }}
+            render={({ field: { onChange, onBlur, value } }) => (
+              <TextInput
+                label="Password *"
+                mode="outlined"
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                error={!!errors.password}
+                style={styles.input}
+                secureTextEntry
+                disabled={loading}
+              />
+            )}
+            name="password"
+          />
+          {errors.password && (
+            <HelperText type="error">{errors.password.message}</HelperText>
+          )}
+
+          <Text style={styles.helperText}>
+            The password will be included in the invitation email sent to the
+            employee.
+          </Text>
 
           <Button
             mode="contained"

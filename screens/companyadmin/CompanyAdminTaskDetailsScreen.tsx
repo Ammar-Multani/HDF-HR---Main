@@ -52,7 +52,7 @@ const CompanyAdminTaskDetailsScreen = () => {
 
       // Fetch task details
       const { data: taskData, error: taskError } = await supabase
-        .from("task")
+        .from("tasks")
         .select("*")
         .eq("id", taskId)
         .single();
@@ -66,7 +66,7 @@ const CompanyAdminTaskDetailsScreen = () => {
 
       // Fetch task comments
       const { data: commentsData, error: commentsError } = await supabase
-        .from("task_comment")
+        .from("task_comments")
         .select("*")
         .eq("task_id", taskId)
         .order("created_at", { ascending: true });
@@ -75,28 +75,81 @@ const CompanyAdminTaskDetailsScreen = () => {
         setComments(commentsData || []);
       }
 
-      // Fetch assigned users
-      if (taskData.assigned_users && taskData.assigned_users.length > 0) {
-        const { data: assignedUsersData, error: assignedUsersError } =
+      // Fetch assigned users using a separate query if assigned_users array exists
+      if (taskData.assigned_to && taskData.assigned_to.length > 0) {
+        // First check if the assigned users are in company_user table
+        const { data: assignedCompanyUsers, error: companyUserError } =
           await supabase
             .from("company_user")
-            .select("id, first_name, last_name, email")
-            .in("id", taskData.assigned_users);
+            .select("id, first_name, last_name, email, role")
+            .in("id", taskData.assigned_to);
 
-        if (!assignedUsersError) {
-          setAssignedUsers(assignedUsersData || []);
+        // Then check if any are in admin table
+        const { data: assignedAdmins, error: adminError } = await supabase
+          .from("admin")
+          .select("id, name, email, role")
+          .in("id", taskData.assigned_to);
+
+        if (!companyUserError && !adminError) {
+          // Format and combine the results
+          const formattedCompanyUsers = (assignedCompanyUsers || []).map(
+            (user) => ({
+              id: user.id,
+              first_name: user.first_name,
+              last_name: user.last_name,
+              email: user.email,
+              role: user.role,
+            })
+          );
+
+          const formattedAdmins = (assignedAdmins || []).map((admin) => ({
+            id: admin.id,
+            first_name: admin.name?.split(" ")[0] || "",
+            last_name: admin.name?.split(" ").slice(1).join(" ") || "",
+            email: admin.email,
+            role: admin.role,
+          }));
+
+          setAssignedUsers([...formattedCompanyUsers, ...formattedAdmins]);
         }
       }
 
       // Fetch followers
       if (taskData.followers && taskData.followers.length > 0) {
-        const { data: followersData, error: followersError } = await supabase
-          .from("company_user")
-          .select("id, first_name, last_name, email")
+        // First check if the followers are in company_user table
+        const { data: followerCompanyUsers, error: companyUserError } =
+          await supabase
+            .from("company_user")
+            .select("id, first_name, last_name, email, role")
+            .in("id", taskData.followers);
+
+        // Then check if any are in admin table
+        const { data: followerAdmins, error: adminError } = await supabase
+          .from("admin")
+          .select("id, name, email, role")
           .in("id", taskData.followers);
 
-        if (!followersError) {
-          setFollowers(followersData || []);
+        if (!companyUserError && !adminError) {
+          // Format and combine the results
+          const formattedCompanyUsers = (followerCompanyUsers || []).map(
+            (user) => ({
+              id: user.id,
+              first_name: user.first_name,
+              last_name: user.last_name,
+              email: user.email,
+              role: user.role,
+            })
+          );
+
+          const formattedAdmins = (followerAdmins || []).map((admin) => ({
+            id: admin.id,
+            first_name: admin.name?.split(" ")[0] || "",
+            last_name: admin.name?.split(" ").slice(1).join(" ") || "",
+            email: admin.email,
+            role: admin.role,
+          }));
+
+          setFollowers([...formattedCompanyUsers, ...formattedAdmins]);
         }
       }
     } catch (error) {
@@ -111,6 +164,22 @@ const CompanyAdminTaskDetailsScreen = () => {
     fetchTaskDetails();
   }, [taskId]);
 
+  // Helper function to determine user role label
+  const getUserRoleLabel = (senderId: string) => {
+    if (senderId === user?.id) return "You";
+
+    // Check in assignedUsers array first
+    const assignedUser = assignedUsers.find((u) => u.id === senderId);
+    if (assignedUser) {
+      if (assignedUser.role === "SUPER_ADMIN") return "Super Admin";
+      if (assignedUser.role === "COMPANY_ADMIN") return "Company Admin";
+      return "User";
+    }
+
+    // Default fallback
+    return "User";
+  };
+
   const onRefresh = () => {
     setRefreshing(true);
     fetchTaskDetails();
@@ -122,11 +191,12 @@ const CompanyAdminTaskDetailsScreen = () => {
     try {
       setSubmittingComment(true);
 
-      const { error } = await supabase.from("task_comment").insert([
+      const { error } = await supabase.from("task_comments").insert([
         {
           task_id: taskId,
-          user_id: user.id,
-          comment: newComment.trim(),
+          sender_id: user.id,
+          company_id: task?.company_id,
+          message: newComment.trim(),
         },
       ]);
 
@@ -136,7 +206,7 @@ const CompanyAdminTaskDetailsScreen = () => {
 
       // Refresh comments
       const { data: commentsData, error: commentsError } = await supabase
-        .from("task_comment")
+        .from("task_comments")
         .select("*")
         .eq("task_id", taskId)
         .order("created_at", { ascending: true });
@@ -161,7 +231,7 @@ const CompanyAdminTaskDetailsScreen = () => {
       setLoading(true);
 
       const { error } = await supabase
-        .from("task")
+        .from("tasks")
         .update({ status: newStatus })
         .eq("id", task.id);
 
@@ -438,7 +508,7 @@ const CompanyAdminTaskDetailsScreen = () => {
                 <View key={comment.id} style={styles.commentContainer}>
                   <View style={styles.commentHeader}>
                     <Text style={styles.commentUser}>
-                      {comment.user_id === user?.id ? "You" : "User"}
+                      {getUserRoleLabel(comment.sender_id)}
                     </Text>
                     <Text style={styles.commentDate}>
                       {format(
@@ -447,7 +517,7 @@ const CompanyAdminTaskDetailsScreen = () => {
                       )}
                     </Text>
                   </View>
-                  <Text style={styles.commentText}>{comment.comment}</Text>
+                  <Text style={styles.commentText}>{comment.message}</Text>
                 </View>
               ))
             ) : (

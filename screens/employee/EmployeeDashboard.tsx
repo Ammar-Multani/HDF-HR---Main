@@ -176,6 +176,12 @@ const EmployeeDashboard = () => {
     return <LoadingIndicator />;
   }
 
+  const getGradientColors = () => {
+    return theme.dark
+      ? (["#151729", "#2a2e43"] as const)
+      : (["#f0f8ff", "#e6f2ff"] as const);
+  };
+
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}

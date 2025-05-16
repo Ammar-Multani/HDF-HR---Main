@@ -21,9 +21,6 @@ import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
 import { hashPassword } from "../../utils/auth";
 
-// Default password for new company admins - they will change it via reset password flow
-const DEFAULT_PASSWORD = "Password123!";
-
 interface CompanyFormData {
   company_name: string;
   registration_number: string;
@@ -36,6 +33,7 @@ interface CompanyFormData {
   address_postal_code: string;
   address_country: string;
   admin_email: string;
+  admin_password: string;
   vat_type: string;
   stakeholder_name: string;
   stakeholder_percentage: string;
@@ -71,6 +69,7 @@ const CreateCompanyScreen = () => {
       address_postal_code: "",
       address_country: "",
       admin_email: "",
+      admin_password: "",
       vat_type: "",
       stakeholder_name: "",
       stakeholder_percentage: "",
@@ -143,10 +142,18 @@ const CreateCompanyScreen = () => {
         return;
       }
 
+      // Validate password strength
+      if (data.admin_password.length < 8) {
+        setSnackbarMessage("Password must be at least 8 characters long");
+        setSnackbarVisible(true);
+        setLoading(false);
+        return;
+      }
+
       // Performance optimization: Hash password in parallel with checking for existing user
       // This avoids the sequential bottleneck
       const [hashedPassword, existingUserResult] = await Promise.all([
-        hashPassword(DEFAULT_PASSWORD),
+        hashPassword(data.admin_password),
         supabase
           .from("users")
           .select("id")
@@ -248,14 +255,9 @@ const CreateCompanyScreen = () => {
         throw companyUserError;
       }
 
-      console.log(
-        `Company admin created with email: ${data.admin_email} and temporary password: ${DEFAULT_PASSWORD}`
-      );
+      console.log(`Company admin created with email: ${data.admin_email}`);
 
-      setSnackbarMessage(
-        "Company created successfully! Company admin password is: " +
-          DEFAULT_PASSWORD
-      );
+      setSnackbarMessage("Company created successfully!");
       setSnackbarVisible(true);
 
       // Navigate back to companies list after a short delay
@@ -666,11 +668,42 @@ const CreateCompanyScreen = () => {
             <Text style={styles.errorText}>{errors.admin_email.message}</Text>
           )}
 
+          <Controller
+            control={control}
+            rules={{
+              required: "Admin password is required",
+              minLength: {
+                value: 8,
+                message: "Password must be at least 8 characters long",
+              },
+            }}
+            render={({ field: { onChange, onBlur, value } }) => (
+              <TextInput
+                label="Admin Password *"
+                mode="outlined"
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                error={!!errors.admin_password}
+                style={styles.input}
+                secureTextEntry
+                disabled={loading}
+              />
+            )}
+            name="admin_password"
+          />
+          {errors.admin_password && (
+            <Text style={styles.errorText}>
+              {errors.admin_password.message}
+            </Text>
+          )}
+
           <Text style={styles.helperText}>
             An invitation will be sent to this email to set up the company admin
             account. The admin will need to complete their profile after first
             login. Please use a valid email address (e.g., name@company.com,
-            name@gmail.com).
+            name@gmail.com). The password you set will be included in the
+            invitation email.
           </Text>
 
           <Button

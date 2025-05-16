@@ -118,7 +118,7 @@ const CreateAccidentReportScreen = () => {
 
       setLoading(true);
 
-      // Create accident report
+      // Create accident report - make medical_certificate optional
       const { error } = await supabase.from("accident_report").insert([
         {
           employee_id: user.id,
@@ -131,6 +131,7 @@ const CreateAccidentReportScreen = () => {
           objects_involved: data.objects_involved,
           injuries: data.injuries,
           accident_type: data.accident_type,
+          // Allow medical_certificate to be null or empty string
           medical_certificate: data.medical_certificate || null,
           status: FormStatus.PENDING,
         },
@@ -160,8 +161,8 @@ const CreateAccidentReportScreen = () => {
     try {
       setUploadingDocument(true);
       const documentUrl = await pickAndUploadDocument(
-        "medical_certificates",
-        `accident_reports/${user?.id}`,
+        "accident-documents",
+        `${user?.id}`,
         {
           type: [
             "application/pdf",

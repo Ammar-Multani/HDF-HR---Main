@@ -60,3 +60,56 @@ For future improvements, consider:
 - Implementing server-side pagination for very large datasets
 - Adding more specific indexes for your most common queries
 - Setting up a periodic job to vacuum and analyze the database tables
+
+## Task Management System
+
+This directory also contains scripts to set up the task management system in the Supabase database.
+
+### Creating Task Tables
+
+To create the task management tables (tasks, task_comments, task_attachments):
+
+1. Make sure you have admin access to your Supabase project.
+
+2. Add the Supabase service key to your `.env` file if you haven't already:
+
+   ```
+   SUPABASE_SERVICE_KEY=your_service_key_here
+   ```
+
+3. First, set up the exec_sql stored procedure (required for running SQL scripts):
+
+   ```
+   cd scripts
+   node apply-exec-sql-procedure.js
+   ```
+
+4. Run the task tables creation script:
+
+   ```
+   cd scripts
+   node apply-task-tables.js
+   ```
+
+### Setting Up Storage for Task Attachments
+
+To set up the Supabase storage bucket for task attachments:
+
+1. Run the storage bucket creation script:
+
+   ```
+   cd scripts
+   node create-storage-buckets.js
+   ```
+
+This will create a storage bucket named 'task-attachments' with appropriate permissions for authenticated users.
+
+### Schema Details
+
+The task management system consists of three main tables:
+
+1. **tasks** - Stores task information including title, description, assignments, deadlines, and status
+2. **task_comments** - Stores comments/conversations about tasks
+3. **task_attachments** - Stores metadata about files attached to tasks
+
+File attachments are stored in the 'task-attachments' Supabase storage bucket, with a 10MB file size limit.
