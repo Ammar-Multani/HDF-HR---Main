@@ -13,18 +13,18 @@ export enum UserStatus {
 
 // Task priority
 export enum TaskPriority {
-  LOW = "low",
-  MEDIUM = "medium",
-  HIGH = "high",
+  LOW = "Low",
+  MEDIUM = "Medium",
+  HIGH = "High",
 }
 
 // Task status
 export enum TaskStatus {
-  OPEN = "open",
-  IN_PROGRESS = "in_progress",
-  AWAITING_RESPONSE = "awaiting_response",
-  COMPLETED = "completed",
-  OVERDUE = "overdue",
+  OPEN = "Open",
+  IN_PROGRESS = "In Progress",
+  AWAITING_RESPONSE = "Awaiting Response",
+  COMPLETED = "Completed",
+  OVERDUE = "Overdue",
 }
 
 // Form status
@@ -175,23 +175,23 @@ export interface Task {
   id: string;
   title: string;
   description: string;
-  assigned_users: string[]; // Array of user IDs
+  assigned_to: string | string[]; // User ID
   deadline: string;
   priority: TaskPriority;
   status: TaskStatus;
   created_by: string;
   created_at: string;
   updated_at: string;
-  followers: string[]; // Array of user IDs
-  reminder_days: number;
+  reminder_days_before: number;
 }
 
 // Task Comment interface
 export interface TaskComment {
   id: string;
   task_id: string;
-  user_id: string;
-  comment: string;
+  sender_id: string;
+  company_id: string;
+  message: string;
   created_at: string;
 }
 

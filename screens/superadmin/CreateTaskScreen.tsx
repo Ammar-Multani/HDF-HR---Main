@@ -25,14 +25,14 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
-import { TaskPriority, UserRole } from "../../types";
+import { TaskPriority, UserRole, TaskStatus } from "../../types";
 
 interface TaskFormData {
   title: string;
   description: string;
   deadline: Date;
   priority: TaskPriority;
-  reminder_days: string;
+  reminder_days_before: string;
 }
 
 const CreateTaskScreen = () => {
@@ -47,7 +47,6 @@ const CreateTaskScreen = () => {
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [availableUsers, setAvailableUsers] = useState<any[]>([]);
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
-  const [selectedFollowers, setSelectedFollowers] = useState<string[]>([]);
 
   const {
     control,
@@ -61,7 +60,7 @@ const CreateTaskScreen = () => {
       description: "",
       deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 1 week from now
       priority: TaskPriority.MEDIUM,
-      reminder_days: "1",
+      reminder_days_before: "1",
     },
   });
 
@@ -131,14 +130,6 @@ const CreateTaskScreen = () => {
     }
   };
 
-  const toggleFollower = (userId: string) => {
-    if (selectedFollowers.includes(userId)) {
-      setSelectedFollowers(selectedFollowers.filter((id) => id !== userId));
-    } else {
-      setSelectedFollowers([...selectedFollowers, userId]);
-    }
-  };
-
   const onSubmit = async (data: TaskFormData) => {
     try {
       if (!user) {
@@ -155,9 +146,11 @@ const CreateTaskScreen = () => {
 
       setLoading(true);
 
-      const reminderDays = parseInt(data.reminder_days);
-      if (isNaN(reminderDays) || reminderDays < 0) {
-        setSnackbarMessage("Please enter a valid reminder days value");
+      const reminderDays = parseInt(data.reminder_days_before);
+      if (isNaN(reminderDays) || reminderDays < 0 || reminderDays > 365) {
+        setSnackbarMessage(
+          "Please enter a valid reminder days value between 0 and 365"
+        );
         setSnackbarVisible(true);
         setLoading(false);
         return;
@@ -172,11 +165,13 @@ const CreateTaskScreen = () => {
             description: data.description,
             deadline: data.deadline.toISOString(),
             priority: data.priority,
-            status: "open",
-            assigned_to: selectedAssignees,
-            followers: selectedFollowers,
+            status: TaskStatus.OPEN,
+            assigned_to:
+              selectedAssignees.length === 1
+                ? selectedAssignees[0]
+                : selectedAssignees,
             created_by: user.id,
-            reminder_days: reminderDays,
+            reminder_days_before: reminderDays,
           },
         ])
         .select()
@@ -320,9 +315,11 @@ const CreateTaskScreen = () => {
             rules={{
               required: "Reminder days is required",
               validate: (value) =>
-                !isNaN(parseInt(value)) && parseInt(value) >= 0
+                !isNaN(parseInt(value)) &&
+                parseInt(value) >= 0 &&
+                parseInt(value) <= 365
                   ? true
-                  : "Please enter a valid number of days",
+                  : "Please enter a value between 0 and 365 days",
             }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
@@ -331,16 +328,18 @@ const CreateTaskScreen = () => {
                 value={value}
                 onChangeText={onChange}
                 onBlur={onBlur}
-                error={!!errors.reminder_days}
+                error={!!errors.reminder_days_before}
                 style={styles.input}
                 keyboardType="numeric"
                 disabled={loading}
               />
             )}
-            name="reminder_days"
+            name="reminder_days_before"
           />
-          {errors.reminder_days && (
-            <Text style={styles.errorText}>{errors.reminder_days.message}</Text>
+          {errors.reminder_days_before && (
+            <Text style={styles.errorText}>
+              {errors.reminder_days_before.message}
+            </Text>
           )}
 
           <Text
@@ -359,32 +358,6 @@ const CreateTaskScreen = () => {
                 key={`assignee-${user.id}`}
                 selected={selectedAssignees.includes(user.id)}
                 onPress={() => toggleAssignee(user.id)}
-                style={styles.userChip}
-                showSelectedCheck
-                mode="outlined"
-              >
-                {user.name} (
-                {user.role === UserRole.SUPER_ADMIN ? "Super Admin" : "Admin"})
-              </Chip>
-            ))}
-          </View>
-
-          <Text
-            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
-          >
-            Add Followers
-          </Text>
-
-          <Text style={styles.helperText}>
-            Select users who should follow this task (optional)
-          </Text>
-
-          <View style={styles.usersContainer}>
-            {availableUsers.map((user) => (
-              <Chip
-                key={`follower-${user.id}`}
-                selected={selectedFollowers.includes(user.id)}
-                onPress={() => toggleFollower(user.id)}
                 style={styles.userChip}
                 showSelectedCheck
                 mode="outlined"

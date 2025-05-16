@@ -44,7 +44,6 @@ const CompanyAdminTaskDetailsScreen = () => {
   const [newComment, setNewComment] = useState("");
   const [submittingComment, setSubmittingComment] = useState(false);
   const [assignedUsers, setAssignedUsers] = useState<any[]>([]);
-  const [followers, setFollowers] = useState<any[]>([]);
 
   const fetchTaskDetails = async () => {
     try {
@@ -73,9 +72,56 @@ const CompanyAdminTaskDetailsScreen = () => {
 
       if (!commentsError) {
         setComments(commentsData || []);
+
+        // Fetch comment sender details
+        const senderIds =
+          commentsData?.map((comment) => comment.sender_id) || [];
+        if (senderIds.length > 0) {
+          // Fetch from company_user table
+          const { data: companyUsers } = await supabase
+            .from("company_user")
+            .select("id, first_name, last_name, email, role")
+            .in("id", senderIds);
+
+          // Fetch from admin table
+          const { data: admins } = await supabase
+            .from("admin")
+            .select("id, name, email, role")
+            .in("id", senderIds);
+
+          // Store user details for comments
+          const userDetails = new Map();
+
+          // Add company users to the map
+          (companyUsers || []).forEach((user) => {
+            userDetails.set(user.id, {
+              name: `${user.first_name} ${user.last_name}`,
+              email: user.email,
+              role: user.role,
+            });
+          });
+
+          // Add admins to the map
+          (admins || []).forEach((admin) => {
+            userDetails.set(admin.id, {
+              name: admin.name,
+              email: admin.email,
+              role: admin.role,
+            });
+          });
+
+          // Attach user details to comments
+          const commentsWithUserDetails =
+            commentsData?.map((comment) => ({
+              ...comment,
+              senderDetails: userDetails.get(comment.sender_id) || null,
+            })) || [];
+
+          setComments(commentsWithUserDetails);
+        }
       }
 
-      // Fetch assigned users using a separate query if assigned_users array exists
+      // Fetch assigned users using a separate query if assigned_to array exists
       if (taskData.assigned_to && taskData.assigned_to.length > 0) {
         // First check if the assigned users are in company_user table
         const { data: assignedCompanyUsers, error: companyUserError } =
@@ -113,45 +159,6 @@ const CompanyAdminTaskDetailsScreen = () => {
           setAssignedUsers([...formattedCompanyUsers, ...formattedAdmins]);
         }
       }
-
-      // Fetch followers
-      if (taskData.followers && taskData.followers.length > 0) {
-        // First check if the followers are in company_user table
-        const { data: followerCompanyUsers, error: companyUserError } =
-          await supabase
-            .from("company_user")
-            .select("id, first_name, last_name, email, role")
-            .in("id", taskData.followers);
-
-        // Then check if any are in admin table
-        const { data: followerAdmins, error: adminError } = await supabase
-          .from("admin")
-          .select("id, name, email, role")
-          .in("id", taskData.followers);
-
-        if (!companyUserError && !adminError) {
-          // Format and combine the results
-          const formattedCompanyUsers = (followerCompanyUsers || []).map(
-            (user) => ({
-              id: user.id,
-              first_name: user.first_name,
-              last_name: user.last_name,
-              email: user.email,
-              role: user.role,
-            })
-          );
-
-          const formattedAdmins = (followerAdmins || []).map((admin) => ({
-            id: admin.id,
-            first_name: admin.name?.split(" ")[0] || "",
-            last_name: admin.name?.split(" ").slice(1).join(" ") || "",
-            email: admin.email,
-            role: admin.role,
-          }));
-
-          setFollowers([...formattedCompanyUsers, ...formattedAdmins]);
-        }
-      }
     } catch (error) {
       console.error("Error fetching task details:", error);
     } finally {
@@ -165,11 +172,19 @@ const CompanyAdminTaskDetailsScreen = () => {
   }, [taskId]);
 
   // Helper function to determine user role label
-  const getUserRoleLabel = (senderId: string) => {
-    if (senderId === user?.id) return "You";
+  const getUserRoleLabel = (comment) => {
+    if (comment.sender_id === user?.id) return "You";
 
-    // Check in assignedUsers array first
-    const assignedUser = assignedUsers.find((u) => u.id === senderId);
+    if (comment.senderDetails) {
+      if (comment.senderDetails.role === "superadmin")
+        return `Super Admin (${comment.senderDetails.name})`;
+      if (comment.senderDetails.role === "admin")
+        return `Company Admin (${comment.senderDetails.name})`;
+      return comment.senderDetails.name;
+    }
+
+    // Check in assignedUsers array if sender details not attached to comment
+    const assignedUser = assignedUsers.find((u) => u.id === comment.sender_id);
     if (assignedUser) {
       if (assignedUser.role === "SUPER_ADMIN") return "Super Admin";
       if (assignedUser.role === "COMPANY_ADMIN") return "Company Admin";
@@ -245,10 +260,7 @@ const CompanyAdminTaskDetailsScreen = () => {
         status: newStatus,
       });
 
-      Alert.alert(
-        "Success",
-        `Task status updated to ${newStatus.replace("_", " ")}`
-      );
+      Alert.alert("Success", `Task status updated to ${newStatus}`);
     } catch (error: any) {
       console.error("Error updating task status:", error);
       Alert.alert("Error", error.message || "Failed to update task status");
@@ -359,7 +371,7 @@ const CompanyAdminTaskDetailsScreen = () => {
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Reminder:</Text>
               <Text style={styles.detailValue}>
-                {task.reminder_days} days before deadline
+                {task.reminder_days_before} days before deadline
               </Text>
             </View>
 
@@ -382,27 +394,6 @@ const CompanyAdminTaskDetailsScreen = () => {
               </View>
             ) : (
               <Text style={styles.noUsersText}>No users assigned</Text>
-            )}
-
-            <Divider style={styles.divider} />
-
-            <Text style={styles.sectionTitle}>Followers</Text>
-
-            {followers.length > 0 ? (
-              <View style={styles.usersContainer}>
-                {followers.map((user) => (
-                  <Chip
-                    key={user.id}
-                    icon="eye"
-                    style={styles.userChip}
-                    mode="outlined"
-                  >
-                    {renderUserName(user)}
-                  </Chip>
-                ))}
-              </View>
-            ) : (
-              <Text style={styles.noUsersText}>No followers</Text>
             )}
           </Card.Content>
         </Card>
@@ -508,7 +499,7 @@ const CompanyAdminTaskDetailsScreen = () => {
                 <View key={comment.id} style={styles.commentContainer}>
                   <View style={styles.commentHeader}>
                     <Text style={styles.commentUser}>
-                      {getUserRoleLabel(comment.sender_id)}
+                      {getUserRoleLabel(comment)}
                     </Text>
                     <Text style={styles.commentDate}>
                       {format(
