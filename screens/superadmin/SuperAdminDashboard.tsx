@@ -20,6 +20,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { LinearGradient } from "expo-linear-gradient";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LineChart } from "react-native-chart-kit";
+import OnboardingChart from "../../components/OnboardingChart";
 
 const { width } = Dimensions.get("window");
 
@@ -184,7 +185,7 @@ const SuperAdminDashboard = () => {
           }));
       }
 
-      // Calculate monthly onboarded companies for the last 5 months
+      // Calculate monthly onboarded companies for all months of the current year
       const today = new Date();
       const monthNames = [
         "Jan",
@@ -202,12 +203,11 @@ const SuperAdminDashboard = () => {
       ];
       const monthlyData: MonthlyData[] = [];
 
-      // Get data for the last 5 months
-      for (let i = 4; i >= 0; i--) {
-        const date = new Date();
-        date.setMonth(today.getMonth() - i);
-        const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
-        const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+      // Get data for all 12 months of the current year
+      const currentYear = today.getFullYear();
+      for (let month = 0; month < 12; month++) {
+        const monthStart = new Date(currentYear, month, 1);
+        const monthEnd = new Date(currentYear, month + 1, 0);
 
         const { count, error } = await supabase
           .from("company")
@@ -219,7 +219,7 @@ const SuperAdminDashboard = () => {
           console.error("Error fetching monthly data:", error);
         } else {
           monthlyData.push({
-            month: monthNames[date.getMonth()],
+            month: monthNames[month],
             count: count || 0,
           });
         }
@@ -291,62 +291,169 @@ const SuperAdminDashboard = () => {
     fetchDashboardData();
   };
 
-  if (loading && !refreshing) {
-    return (
-      <SafeAreaView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
-        <AppHeader
-          showProfileMenu={true}
-          userEmail={user?.email || ""}
-          isAdmin={true}
-          onSignOut={signOut}
-          showHelpButton={false}
-          title="Dashboard"
-        />
-        <LoadingIndicator />
-      </SafeAreaView>
-    );
-  }
+  // if (loading && !refreshing) {
+  //   return (
+  //     <SafeAreaView
+  //       style={[styles.container, { backgroundColor: theme.colors.background }]}
+  //     >
+  //       <AppHeader
+  //         showProfileMenu={true}
+  //         userEmail={user?.email || ""}
+  //         isAdmin={true}
+  //         onSignOut={signOut}
+  //         showHelpButton={false}
+  //         title="Dashboard"
+  //       />
+  //       <LoadingIndicator />
+  //     </SafeAreaView>
+  //   );
+  // }
 
   const chartConfig = {
     backgroundGradientFrom: "#ffffff",
     backgroundGradientTo: "#ffffff",
-    color: (opacity = 1) => `rgba(66, 133, 244, ${opacity})`,
+    color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
     strokeWidth: 2,
     barPercentage: 0.5,
     useShadowColorFromDataset: false,
     decimalPlaces: 0,
     propsForDots: {
-      r: "4",
+      r: "5",
       strokeWidth: "2",
-      stroke: "#4285F4",
+      stroke: "#3b82f6",
     },
     propsForBackgroundLines: {
-      strokeDasharray: "5, 5",
+      strokeDasharray: "", // Solid lines instead of dashed
       strokeWidth: 1,
-      stroke: "#e0e0e0",
+      stroke: "#e5e7eb",
     },
-    fillShadowGradient: "#4285F4",
-    fillShadowGradientOpacity: 0.2,
+    fillShadowGradient: "#3b82f6",
+    fillShadowGradientOpacity: 0.1,
+    labelColor: (opacity = 1) => `rgba(75, 85, 99, ${opacity})`,
+    style: {
+      borderRadius: 16,
+    },
+    propsForLabels: {
+      fontSize: 11,
+      fontWeight: "400",
+      fill: "#6b7280",
+    },
+  };
+
+  // Calculate the dynamic y-axis max value based on the current data
+  const calculateYAxisMax = (data: number[]) => {
+    if (!data || data.length === 0) return 2;
+
+    const maxValue = Math.max(...data);
+
+    // If max value is 0, return a default of 2
+    if (maxValue === 0) return 2;
+
+    // For very small values (≤2), use exactly 2
+    if (maxValue <= 2) return 2;
+
+    // For small values, round up to the next integer
+    if (maxValue <= 5) return Math.ceil(maxValue);
+
+    // For medium values, use multiples of 2
+    if (maxValue <= 10) return Math.ceil(maxValue / 2) * 2;
+
+    // For larger values, use multiples of 5
+    if (maxValue <= 30) return Math.ceil(maxValue / 5) * 5;
+
+    // For even larger values, use multiples of 10
+    if (maxValue <= 100) return Math.ceil(maxValue / 10) * 10;
+
+    // For even larger values, use multiples of 100
+    return Math.ceil(maxValue / 100) * 100;
+  };
+
+  // Get dynamic y-axis max
+  const yAxisMax = calculateYAxisMax(stats.monthlyOnboarded);
+
+  // Create clean y-axis with even divisions
+  const getYAxisLabels = (max: number) => {
+    const result = [];
+    let step;
+
+    if (max <= 2) step = 1;
+    else if (max <= 5) step = 1;
+    else if (max <= 10) step = 2;
+    else if (max <= 30) step = 5;
+    else if (max <= 100) step = 10;
+    else step = 100;
+
+    for (let i = 0; i <= max; i += step) {
+      result.push(i);
+    }
+    return result;
+  };
+
+  const yAxisLabels = getYAxisLabels(yAxisMax);
+
+  // Group months into quarters for display
+  const getQuarterlyLabels = (labels: string[], data: number[]) => {
+    // Return quarter labels with month ranges
+    return ["Jan-Mar", "Apr-Jun", "Jul-Sep", "Oct-Dec"];
+  };
+
+  // Aggregate monthly data into quarterly data
+  const getQuarterlyData = (monthlyData: number[]) => {
+    if (!monthlyData.length) {
+      // Sample quarterly data if no data is available
+      return [35, 55, 70, 85];
+    }
+
+    // If we have less than 12 months, pad the array
+    const paddedData = [...monthlyData];
+    while (paddedData.length < 12) {
+      paddedData.push(0);
+    }
+
+    // Group into quarters (sum of values in each quarter)
+    const quarterlyData = [
+      paddedData[0] + paddedData[1] + paddedData[2],
+      paddedData[3] + paddedData[4] + paddedData[5],
+      paddedData[6] + paddedData[7] + paddedData[8],
+      paddedData[9] + paddedData[10] + paddedData[11],
+    ];
+
+    return quarterlyData;
+  };
+
+  // For better grid appearance with small numbers
+  const getSegmentCount = (max: number) => {
+    if (max <= 2) return 2;
+    if (max <= 5) return max;
+    return 5;
+  };
+
+  // Add max value to chart config with custom formatter to prevent repeating labels
+  const dynamicChartConfig = {
+    ...chartConfig,
+    max: yAxisMax,
+    formatYLabel: (value: string) => {
+      const num = parseInt(value, 10);
+      // Only return labels that are in our calculated set
+      return yAxisLabels.includes(num) ? num.toString() : "";
+    },
+    // Adjust the number of decimals for small values
+    decimalPlaces: yAxisMax <= 2 ? 0 : 0,
   };
 
   const chartData = {
-    labels:
-      stats.monthLabels.length > 0
-        ? stats.monthLabels
-        : ["Jan", "Feb", "Mar", "Apr", "May"],
+    labels: getQuarterlyLabels(stats.monthLabels, stats.monthlyOnboarded),
     datasets: [
       {
-        data:
-          stats.monthlyOnboarded.length > 0
-            ? stats.monthlyOnboarded
-            : [0, 0, 0, 0, 0],
-        color: (opacity = 1) => `rgba(66, 133, 244, ${opacity})`,
+        data: getQuarterlyData(stats.monthlyOnboarded),
+        color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
         strokeWidth: 2,
       },
     ],
   };
+
+  // Change the title back to "by Month" to match the screenshot
+  const chartTitle = "Companies Onboarded by Month";
 
   return (
     <SafeAreaView
@@ -360,7 +467,6 @@ const SuperAdminDashboard = () => {
           isAdmin={true}
           onSignOut={signOut}
           showHelpButton={false}
-          title="Dashboard"
         />
 
         <ScrollView
@@ -402,34 +508,12 @@ const SuperAdminDashboard = () => {
           </View>
 
           <View style={styles.chartCard}>
-            <Text style={styles.chartTitle}>Companies Onboarded</Text>
-            {stats.monthlyOnboarded.some((count) => count > 0) ? (
-              <LineChart
-                data={chartData}
-                width={width - 48}
-                height={200}
-                chartConfig={chartConfig}
-                bezier
-                style={styles.chart}
-                withHorizontalLines={true}
-                withVerticalLines={true}
-                withDots={true}
-                withShadow={false}
-                withInnerLines={true}
-                fromZero={true}
-              />
-            ) : (
-              <View style={styles.emptyChartContainer}>
-                <MaterialCommunityIcons
-                  name="chart-line"
-                  size={48}
-                  color={theme.colors.outlineVariant}
-                />
-                <Text style={styles.emptyStateText}>
-                  No onboarding data available
-                </Text>
-              </View>
-            )}
+            <Text style={styles.chartTitle}>Companies Onboarded by Month</Text>
+            <OnboardingChart
+              monthlyData={stats.monthlyOnboarded}
+              monthLabels={stats.monthLabels}
+              width={width - 5}
+            />
           </View>
 
           <Text style={styles.sectionTitle}>Top Companies</Text>
@@ -459,59 +543,6 @@ const SuperAdminDashboard = () => {
             </View>
           )}
         </ScrollView>
-
-        <View style={styles.tabBar}>
-          <View style={[styles.tabItem, styles.activeTab]}>
-            <MaterialCommunityIcons
-              name="home"
-              size={24}
-              color={theme.colors.primary}
-            />
-            <Text style={[styles.tabText, styles.activeTabText]}>
-              Dashboard
-            </Text>
-          </View>
-
-          <View
-            style={styles.tabItem}
-            onTouchEnd={() => navigation.navigate("Companies" as never)}
-          >
-            <MaterialCommunityIcons name="domain" size={24} color="#777" />
-            <Text style={styles.tabText}>Companies</Text>
-          </View>
-
-          <View
-            style={styles.tabItem}
-            onTouchEnd={() => navigation.navigate("Tasks" as never)}
-          >
-            <MaterialCommunityIcons
-              name="clipboard-text"
-              size={24}
-              color="#777"
-            />
-            <Text style={styles.tabText}>Tasks</Text>
-          </View>
-
-          <View
-            style={styles.tabItem}
-            onTouchEnd={() => navigation.navigate("Forms" as never)}
-          >
-            <MaterialCommunityIcons
-              name="file-document"
-              size={24}
-              color="#777"
-            />
-            <Text style={styles.tabText}>Forms</Text>
-          </View>
-
-          <View
-            style={styles.tabItem}
-            onTouchEnd={() => navigation.navigate("Settings" as never)}
-          >
-            <MaterialCommunityIcons name="cog" size={24} color="#777" />
-            <Text style={styles.tabText}>Settings</Text>
-          </View>
-        </View>
       </View>
     </SafeAreaView>
   );
@@ -526,26 +557,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
     paddingVertical: 16,
     paddingBottom: 100,
   },
   statsCard: {
     backgroundColor: "#fff",
     borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    padding: 16,
+    marginBottom: 11,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
   },
   statRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 5,
   },
   statLabel: {
     fontSize: 16,
@@ -561,7 +589,7 @@ const styles = StyleSheet.create({
     color: "#F44336",
   },
   statValue: {
-    fontSize: 32,
+    fontSize: 25,
     fontWeight: "bold",
     color: "#111",
   },
@@ -569,13 +597,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderRadius: 16,
     padding: 16,
-    marginVertical: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-    minHeight: 250,
+    paddingBottom: 5,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
   },
   chartTitle: {
     fontSize: 16,
@@ -583,21 +607,15 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     color: "#333",
   },
-  chart: {
-    borderRadius: 12,
-    paddingRight: 16,
-  },
-  emptyChartContainer: {
+  emptyState: {
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 40,
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
+  emptyStateText: {
     marginTop: 8,
-    marginBottom: 16,
-    color: "#333",
+    fontSize: 16,
+    color: "#999",
   },
   companyCard: {
     flexDirection: "row",
@@ -631,48 +649,12 @@ const styles = StyleSheet.create({
     color: "#4CAF50",
     fontWeight: "bold",
   },
-  emptyState: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 40,
-  },
-  emptyStateText: {
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
     marginTop: 8,
-    fontSize: 16,
-    color: "#999",
-  },
-  tabBar: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    borderTopWidth: 1,
-    borderTopColor: "#eaeaea",
-    paddingVertical: 10,
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 65,
-  },
-  tabItem: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  activeTab: {
-    borderBottomWidth: 2,
-    borderBottomColor: "#4285F4",
-  },
-  tabText: {
-    fontSize: 12,
-    color: "#777",
-    marginTop: 2,
-  },
-  activeTabText: {
-    color: "#4285F4",
-    fontWeight: "600",
+    marginBottom: 16,
+    color: "#333",
   },
 });
 

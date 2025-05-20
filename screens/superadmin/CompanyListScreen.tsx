@@ -466,7 +466,7 @@ const CompanyListScreen = () => {
     >
       <AppHeader
         showLogo={false}
-        showBackButton={true}
+        showBackButton={false}
         title="Companies"
         showHelpButton={true}
         absolute={false}

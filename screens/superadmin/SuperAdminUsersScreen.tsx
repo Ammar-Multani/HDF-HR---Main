@@ -13,6 +13,7 @@ import {
   useTheme,
   FAB,
   Avatar,
+  Chip,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -20,7 +21,6 @@ import { supabase } from "../../lib/supabase";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import EmptyState from "../../components/EmptyState";
-import StatusBadge from "../../components/StatusBadge";
 import { Admin, UserStatus } from "../../types";
 
 const SuperAdminUsersScreen = () => {
@@ -90,14 +90,42 @@ const SuperAdminUsersScreen = () => {
     );
   };
 
+  // Render a status chip instead of using StatusBadge component
+  const renderStatusChip = (status?: UserStatus) => {
+    if (!status) return null;
+
+    let color;
+    switch (status) {
+      case UserStatus.ACTIVE:
+        color = "#4CAF50"; // Green
+        break;
+      case UserStatus.INACTIVE:
+        color = "#757575"; // Grey
+        break;
+      default:
+        color = theme.colors.primary;
+    }
+
+    return (
+      <Chip
+        style={{ backgroundColor: color + "20" }}
+        textStyle={{ color: color }}
+      >
+        {typeof status === "string" && status.length > 0
+          ? status.charAt(0).toUpperCase() + status.slice(1).toLowerCase()
+          : "Unknown"}
+      </Chip>
+    );
+  };
+
   const renderAdminItem = ({ item }: { item: Admin }) => (
     <TouchableOpacity
-      onPress={() =>
-        navigation.navigate(
-          "SuperAdminDetails" as never,
-          { adminId: item.id } as never
-        )
-      }
+      onPress={() => {
+        // We need to fix the navigation type - this is a temporary workaround
+        // TODO: Add a SuperAdminDetails screen and proper navigation type
+        console.log("Admin selected:", item.id);
+        // navigation.navigate("SuperAdminDetails", { adminId: item.id });
+      }}
     >
       <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
         <Card.Content>
@@ -115,7 +143,7 @@ const SuperAdminUsersScreen = () => {
                 <Text style={styles.userEmail}>{item.email}</Text>
               </View>
             </View>
-            <StatusBadge status={item.status} />
+            {item.status ? renderStatusChip(item.status) : null}
           </View>
         </Card.Content>
       </Card>
@@ -130,7 +158,7 @@ const SuperAdminUsersScreen = () => {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <AppHeader title="Super Admins" showBackButton />
+      <AppHeader title="Super Admins" showBackButton={false} />
 
       <View style={styles.searchContainer}>
         <Searchbar

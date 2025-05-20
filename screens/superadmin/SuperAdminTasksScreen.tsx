@@ -240,7 +240,7 @@ const SuperAdminTasksScreen = () => {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <AppHeader title="Tasks" showBackButton />
+      <AppHeader title="Tasks" showBackButton={false} />
 
       <View style={styles.searchContainer}>
         <Searchbar

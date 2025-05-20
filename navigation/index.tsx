@@ -5,6 +5,9 @@ import {
   StackActions,
 } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useTheme } from "react-native-paper";
 import { useAuth } from "../contexts/AuthContext";
 import { UserRole } from "../types";
 import * as Linking from "expo-linking";
@@ -59,6 +62,8 @@ const SuperAdminStack = createNativeStackNavigator();
 const CompanyAdminStack = createNativeStackNavigator();
 const EmployeeStack = createNativeStackNavigator();
 const RootStack = createNativeStackNavigator();
+// Tab navigator for SuperAdmin
+const SuperAdminTab = createBottomTabNavigator();
 
 // Key for navigation request from auth context
 const NAVIGATE_TO_DASHBOARD_KEY = "NAVIGATE_TO_DASHBOARD";
@@ -124,36 +129,120 @@ const AuthNavigator = () => (
 );
 
 // Super Admin Navigator
-const SuperAdminNavigator = () => (
-  <SuperAdminStack.Navigator screenOptions={{ headerShown: false }}>
-    <SuperAdminStack.Screen name="Dashboard" component={SuperAdminDashboard} />
-    <SuperAdminStack.Screen name="Companies" component={CompanyListScreen} />
-    <SuperAdminStack.Screen
-      name="CompanyDetails"
-      component={CompanyDetailsScreen}
-    />
-    <SuperAdminStack.Screen
-      name="CreateCompany"
-      component={CreateCompanyScreen}
-    />
-    <SuperAdminStack.Screen name="EditCompany" component={EditCompanyScreen} />
-    <SuperAdminStack.Screen name="Tasks" component={SuperAdminTasksScreen} />
-    <SuperAdminStack.Screen
-      name="TaskDetails"
-      component={SuperAdminTaskDetailsScreen}
-    />
-    <SuperAdminStack.Screen name="CreateTask" component={CreateTaskScreen} />
-    <SuperAdminStack.Screen
-      name="Profile"
-      component={SuperAdminProfileScreen}
-    />
-    <SuperAdminStack.Screen name="Users" component={SuperAdminUsersScreen} />
-    <SuperAdminStack.Screen
-      name="CreateSuperAdmin"
-      component={CreateSuperAdminScreen}
-    />
-  </SuperAdminStack.Navigator>
-);
+const SuperAdminNavigator = () => {
+  const theme = useTheme();
+
+  return (
+    <SuperAdminStack.Navigator screenOptions={{ headerShown: false }}>
+      <SuperAdminStack.Screen
+        name="SuperAdminTabs"
+        component={SuperAdminTabNavigator}
+      />
+      <SuperAdminStack.Screen
+        name="CompanyDetails"
+        component={CompanyDetailsScreen}
+      />
+      <SuperAdminStack.Screen
+        name="CreateCompany"
+        component={CreateCompanyScreen}
+      />
+      <SuperAdminStack.Screen
+        name="EditCompany"
+        component={EditCompanyScreen}
+      />
+      <SuperAdminStack.Screen
+        name="TaskDetails"
+        component={SuperAdminTaskDetailsScreen}
+      />
+      <SuperAdminStack.Screen name="CreateTask" component={CreateTaskScreen} />
+      <SuperAdminStack.Screen
+        name="CreateSuperAdmin"
+        component={CreateSuperAdminScreen}
+      />
+    </SuperAdminStack.Navigator>
+  );
+};
+
+// Tab Navigator for SuperAdmin
+const SuperAdminTabNavigator = () => {
+  const theme = useTheme();
+
+  return (
+    <SuperAdminTab.Navigator
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: theme.colors.primary,
+        tabBarInactiveTintColor: "#777",
+        tabBarStyle: {
+          height: 65,
+          paddingTop: 5,
+          paddingBottom: 10,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+        },
+      }}
+    >
+      <SuperAdminTab.Screen
+        name="Dashboard"
+        component={SuperAdminDashboard}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="home" color={color} size={24} />
+          ),
+        }}
+      />
+      <SuperAdminTab.Screen
+        name="Companies"
+        component={CompanyListScreen}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="domain" color={color} size={24} />
+          ),
+        }}
+      />
+      <SuperAdminTab.Screen
+        name="Tasks"
+        component={SuperAdminTasksScreen}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons
+              name="clipboard-text"
+              color={color}
+              size={24}
+            />
+          ),
+        }}
+      />
+      <SuperAdminTab.Screen
+        name="Users"
+        component={SuperAdminUsersScreen}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons
+              name="account-group"
+              color={color}
+              size={24}
+            />
+          ),
+        }}
+      />
+      <SuperAdminTab.Screen
+        name="Profile"
+        component={SuperAdminProfileScreen}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons
+              name="account-circle"
+              color={color}
+              size={24}
+            />
+          ),
+        }}
+      />
+    </SuperAdminTab.Navigator>
+  );
+};
 
 // Company Admin Navigator
 const CompanyAdminNavigator = () => (
