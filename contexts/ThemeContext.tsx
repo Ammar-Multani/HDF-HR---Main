@@ -1,24 +1,35 @@
-import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
-import { useColorScheme } from 'react-native';
-import { MD3LightTheme, MD3DarkTheme, Provider as PaperProvider } from 'react-native-paper';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, {
+  createContext,
+  useState,
+  useContext,
+  ReactNode,
+  useEffect,
+} from "react";
+import { useColorScheme } from "react-native";
+import {
+  MD3LightTheme,
+  MD3DarkTheme,
+  Provider as PaperProvider,
+} from "react-native-paper";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as NavigationBar from "expo-navigation-bar";
 
 // Define custom theme colors
 const lightTheme = {
   ...MD3LightTheme,
   colors: {
     ...MD3LightTheme.colors,
-    primary: '#3b5998',
-    secondary: '#0EA5E9',
-    tertiary: '#7C3AED',
-    background: '#F8FAFC',
-    surface: '#FFFFFF',
-    error: '#EF4444',
-    onSurface: '#1F2937',
-    onBackground: '#1F2937',
-    onSurfaceVariant: '#64748B',
-    text: '#000000',
-
+    primary: "#3b5998",
+    secondary: "#0EA5E9",
+    tertiary: "#7C3AED",
+    background: "#F8FAFC",
+    surface: "#FFFFFF",
+    error: "#EF4444",
+    onSurface: "#1F2937",
+    onBackground: "#1F2937",
+    onSurfaceVariant: "#64748B",
+    text: "#000000",
+    navigationBar: "#FFFFFF",
   },
 };
 
@@ -26,20 +37,21 @@ const darkTheme = {
   ...MD3DarkTheme,
   colors: {
     ...MD3DarkTheme.colors,
-    primary: '#3B82F6',
-    secondary: '#38BDF8',
-    tertiary: '#8B5CF6',
-    background: 'rgb(30, 30, 50)',
-    surface: '#1E293B',
-    error: '#F87171',
-    onSurface: '#F1F5F9',
-    onBackground: '#F1F5F9',
-    onSurfaceVariant: '#94A3B8',
-    text: '#FFFFFF',
+    primary: "#3B82F6",
+    secondary: "#38BDF8",
+    tertiary: "#8B5CF6",
+    background: "rgb(30, 30, 50)",
+    surface: "#1E293B",
+    error: "#F87171",
+    onSurface: "#F1F5F9",
+    onBackground: "#F1F5F9",
+    onSurfaceVariant: "#94A3B8",
+    text: "#FFFFFF",
+    navigationBar: "#1E293B",
   },
 };
 
-type ThemeType = 'light' | 'dark' | 'system';
+type ThemeType = "light" | "dark" | "system";
 
 interface ThemeContextType {
   theme: typeof lightTheme | typeof darkTheme;
@@ -52,40 +64,54 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const colorScheme = useColorScheme();
-  const [themeType, setThemeType] = useState<ThemeType>('system');
-  
+  const [themeType, setThemeType] = useState<ThemeType>("light");
+
   useEffect(() => {
     // Load saved theme preference
     const loadTheme = async () => {
       try {
-        const savedTheme = await AsyncStorage.getItem('themePreference');
+        const savedTheme = await AsyncStorage.getItem("themePreference");
         if (savedTheme) {
           setThemeType(savedTheme as ThemeType);
         }
       } catch (error) {
-        console.error('Failed to load theme preference:', error);
+        console.error("Failed to load theme preference:", error);
       }
     };
-    
+
     loadTheme();
   }, []);
-  
+
   const setThemeTypeAndSave = async (newTheme: ThemeType) => {
     setThemeType(newTheme);
     try {
-      await AsyncStorage.setItem('themePreference', newTheme);
+      await AsyncStorage.setItem("themePreference", newTheme);
     } catch (error) {
-      console.error('Failed to save theme preference:', error);
+      console.error("Failed to save theme preference:", error);
     }
   };
-  
+
   // Determine if dark mode based on theme type and system preference
-  const isDarkMode = 
-    themeType === 'dark' || (themeType === 'system' && colorScheme === 'dark');
-  
+  const isDarkMode =
+    themeType === "dark" || (themeType === "system" && colorScheme === "dark");
+
   // Select the appropriate theme object
   const theme = isDarkMode ? darkTheme : lightTheme;
-  
+
+  // Update navigation bar when theme changes
+  useEffect(() => {
+    const updateNavigationBar = async () => {
+      try {
+        await NavigationBar.setBackgroundColorAsync(theme.colors.navigationBar);
+        await NavigationBar.setButtonStyleAsync(isDarkMode ? "light" : "dark");
+      } catch (error) {
+        console.error("Failed to update navigation bar:", error);
+      }
+    };
+
+    updateNavigationBar();
+  }, [theme, isDarkMode]);
+
   return (
     <ThemeContext.Provider
       value={{
@@ -95,9 +121,7 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
         isDarkMode,
       }}
     >
-      <PaperProvider theme={theme}>
-        {children}
-      </PaperProvider>
+      <PaperProvider theme={theme}>{children}</PaperProvider>
     </ThemeContext.Provider>
   );
 };
@@ -105,7 +129,7 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
 export const useTheme = () => {
   const context = useContext(ThemeContext);
   if (context === undefined) {
-    throw new Error('useTheme must be used within a ThemeProvider');
+    throw new Error("useTheme must be used within a ThemeProvider");
   }
   return context;
 };
