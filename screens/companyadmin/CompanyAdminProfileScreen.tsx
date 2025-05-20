@@ -149,8 +149,15 @@ const CompanyAdminProfileScreen = () => {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <AppHeader title="Profile" showBackButton />
-
+      <AppHeader
+        title="Profile"
+        showBackButton={false}
+        showHelpButton={true}
+        onHelpPress={() => {
+          navigation.navigate("Help" as never);
+        }}
+        showLogo={false}
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardAvoidingView}

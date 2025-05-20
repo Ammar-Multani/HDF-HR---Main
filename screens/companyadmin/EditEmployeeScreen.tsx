@@ -1358,7 +1358,15 @@ const EditEmployeeScreen = () => {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <AppHeader title="Edit Employee" showBackButton />
+      <AppHeader
+        title="Edit Employee"
+        showBackButton={true}
+        showHelpButton={true}
+        onHelpPress={() => {
+          navigation.navigate("Help" as never);
+        }}
+        showLogo={false}
+      />  
 
       {/* Show offline banner if offline */}
       {networkStatus === false && (

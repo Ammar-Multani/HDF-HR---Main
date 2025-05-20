@@ -236,8 +236,15 @@ const CompanyAdminCreateTaskScreen = () => {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <AppHeader title="Create Task" showBackButton />
-
+      <AppHeader
+        title="Create Task"
+        showBackButton={true}
+        showHelpButton={true}
+        onHelpPress={() => {
+          navigation.navigate("Help" as never);
+        }}
+        showLogo={false}
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardAvoidingView}

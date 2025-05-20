@@ -363,7 +363,15 @@ const FormDetailsScreen = () => {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <AppHeader title={getFormTitle()} showBackButton />
+      <AppHeader
+        title={getFormTitle()}
+        showBackButton={true}
+        showHelpButton={true}
+        onHelpPress={() => {
+          navigation.navigate("Help" as never);
+        }}
+        showLogo={false}
+      />
 
       <ScrollView
         style={styles.scrollView}

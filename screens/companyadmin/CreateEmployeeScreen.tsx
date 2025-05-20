@@ -1198,7 +1198,16 @@ const CreateEmployeeScreen = () => {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <AppHeader title="Create Employee" showBackButton />
+      <AppHeader
+        title="Create Employee"
+        showBackButton={true}
+        showHelpButton={true}
+        onHelpPress={() => {
+          navigation.navigate("Help" as never);
+        }}  
+        showLogo={false}
+      />
+
 
       {/* Network status banner */}
       <Banner

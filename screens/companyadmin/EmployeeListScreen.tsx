@@ -241,8 +241,8 @@ const EmployeeListScreen = () => {
         let query = supabase
           .from("company_user")
           .select(
-            // Only select fields needed for the list view instead of *
-            "id, first_name, last_name, email, job_title, active, created_at, position, profile_picture",
+            // Select fields from the company_user table
+            "id, company_id, first_name, last_name, email, phone_number, role, active_status, created_by, created_at, updated_at, address, date_of_birth, nationality, id_type, ahv_number, marital_status, gender, employment_start_date, employment_end_date, employment_type, workload_percentage, job_title, education, ahv_card_path, id_card_path, bank_details, comments",
             { count: "exact" }
           )
           .eq("company_id", currentCompanyId);
@@ -533,7 +533,16 @@ const EmployeeListScreen = () => {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <AppHeader title="Employees" showBackButton />
+      <AppHeader
+        title="Employees"
+        subtitle="Manage your employees"
+        showBackButton={false}
+        showHelpButton={true}
+        onHelpPress={() => {
+          navigation.navigate("Help" as never);
+        }}
+        showLogo={false}
+      />
 
       {networkStatus === false && (
         <Banner
@@ -653,7 +662,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     margin: 16,
     right: 0,
-    bottom: 0,
+    bottom: 80,
   },
   loadingFooter: {
     paddingVertical: 20,

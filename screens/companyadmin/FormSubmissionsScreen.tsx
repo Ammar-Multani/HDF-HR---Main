@@ -384,7 +384,15 @@ const FormSubmissionsScreen = () => {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <AppHeader title="Form Submissions" showBackButton />
+      <AppHeader
+        title="Form Submissions"
+        showBackButton={false}
+        showHelpButton={true}
+        onHelpPress={() => {
+          navigation.navigate("Help" as never);
+        }}
+        showLogo={false}
+      />
 
       <View style={styles.searchContainer}>
         <Searchbar

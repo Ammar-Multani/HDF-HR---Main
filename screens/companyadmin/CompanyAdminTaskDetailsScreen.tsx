@@ -317,7 +317,15 @@ const CompanyAdminTaskDetailsScreen = () => {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <AppHeader title="Task Details" showBackButton />
+      <AppHeader
+        title="Task Details"
+        showBackButton={true}
+        showHelpButton={true}
+        onHelpPress={() => {
+          navigation.navigate("Help" as never);
+        }}
+        showLogo={false}
+      />
 
       <ScrollView
         style={styles.scrollView}

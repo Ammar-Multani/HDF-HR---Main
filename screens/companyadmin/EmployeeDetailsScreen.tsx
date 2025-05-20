@@ -793,7 +793,15 @@ const EmployeeDetailsScreen = () => {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <AppHeader title="Employee Details" showBackButton />
+      <AppHeader
+        title="Employee Details"
+        showBackButton={true}
+        showHelpButton={true}
+        onHelpPress={() => {
+          navigation.navigate("Help" as never);
+        }}
+        showLogo={false}
+      />
       {networkStatus === false && (
         <View style={styles.offlineBanner}>
           <Text style={styles.offlineText}>You are currently offline</Text>
