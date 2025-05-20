@@ -96,7 +96,14 @@ const CreateSuperAdminScreen = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <AppHeader title="Create Super Admin" showBackButton />
+      <AppHeader
+        title="Create Super Admin"
+        showBackButton={false}
+        showHelpButton={false}
+        showProfileMenu={false}
+        showLogo={false}
+        showTitle={true}
+      />
       
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

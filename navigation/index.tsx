@@ -3,6 +3,7 @@ import {
   NavigationContainer,
   useNavigationContainerRef,
   StackActions,
+  CommonActions,
 } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
@@ -12,6 +13,18 @@ import { useAuth } from "../contexts/AuthContext";
 import { UserRole } from "../types";
 import * as Linking from "expo-linking";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  View,
+  StyleSheet,
+  Platform,
+  Dimensions,
+  Pressable,
+  Image,
+} from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
+import Text from "../components/Text";
+import { globalStyles } from "../utils/globalStyles";
 
 // Auth Screens
 import LoginScreen from "../screens/auth/LoginScreen";
@@ -103,7 +116,7 @@ const linking = {
       ResetPassword: {
         path: "reset-password",
         parse: {
-          token: (token) => token,
+          token: (token: string) => token,
         },
       },
       Login: "login",
@@ -166,21 +179,205 @@ const SuperAdminNavigator = () => {
 // Tab Navigator for SuperAdmin
 const SuperAdminTabNavigator = () => {
   const theme = useTheme();
+  const isWeb = Platform.OS === "web";
+  const windowWidth = Dimensions.get("window").width;
+  const isLargeScreen = isWeb && windowWidth > 768;
+  const nav = useNavigationContainerRef();
 
+  const renderTabBarBackground = () => {
+    return (
+      <View
+        style={{
+          borderRadius: 25,
+          borderWidth: 1,
+          borderColor: "rgb(207, 207, 207)",
+          overflow: "hidden",
+          ...StyleSheet.absoluteFillObject,
+        }}
+      >
+        <LinearGradient
+          colors={[
+            "rgba(6,169,169,255)",
+            "rgba(38,127,161,255)",
+            "rgba(54,105,157,255)",
+            "rgba(74,78,153,255)",
+            "rgba(94,52,149,255)",
+          ]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+    );
+  };
+
+  // Use conditional rendering based on platform/screen size
+  if (isLargeScreen) {
+    // Web with large screen: Use custom sidebar layout
+    return (
+      <View style={{ flexDirection: "row", height: "100%" }}>
+        {/* Sidebar Navigation */}
+        <View
+          style={{
+            width: 220,
+            height: "100%",
+            backgroundColor: "transparent",
+            paddingTop: 20,
+            paddingBottom: 20,
+            borderRightWidth: 0,
+            position: "relative",
+          }}
+        >
+          {/* Background gradient */}
+          <LinearGradient
+            colors={[
+              "rgba(6,169,169,255)",
+              "rgba(38,127,161,255)",
+              "rgba(54,105,157,255)",
+              "rgba(74,78,153,255)",
+              "rgba(94,52,149,255)",
+            ]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+
+          {/* Logo at the top */}
+          <View
+            style={{
+              paddingHorizontal: 20,
+              paddingVertical: 24,
+              marginBottom: 10,
+              alignItems: "center",
+              borderBottomWidth: 1,
+              borderBottomColor: "rgba(255, 255, 255, 0.1)",
+            }}
+          >
+            <View
+              style={{
+                width: 150,
+                height: 50,
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              {/* Option 1: Use an image logo */}
+              <Image
+                source={require("../assets/splash-icon-mono.png")}
+                style={{
+                  width: 160,
+                  height: 120,
+                  resizeMode: "contain",
+                  alignSelf: "center",
+                }}
+              />
+
+              {/* Option 2: Text logo (currently used) */}
+              {/* <Text
+                variant={"bold"}
+                style={{
+                  color: "#fff",
+                  fontSize: 24,
+                  textAlign: "center",
+                }}
+              >
+                HDF-HR
+              </Text> */}
+            </View>
+          </View>
+
+          {/* Navigation Items */}
+          <View style={{ paddingLeft: 20, paddingRight: 20, marginTop: 20 }}>
+            <NavItem
+              icon="home"
+              label="Dashboard"
+              onPress={() => {
+                if (nav?.isReady()) {
+                  nav.dispatch(CommonActions.navigate("Dashboard"));
+                }
+              }}
+            />
+            <NavItem
+              icon="domain"
+              label="Companies"
+              onPress={() => {
+                if (nav?.isReady()) {
+                  nav.dispatch(CommonActions.navigate("Companies"));
+                }
+              }}
+            />
+            <NavItem
+              icon="clipboard-text"
+              label="Tasks"
+              onPress={() => {
+                if (nav?.isReady()) {
+                  nav.dispatch(CommonActions.navigate("Tasks"));
+                }
+              }}
+            />
+            <NavItem
+              icon="account-group"
+              label="Users"
+              onPress={() => {
+                if (nav?.isReady()) {
+                  nav.dispatch(CommonActions.navigate("Users"));
+                }
+              }}
+            />
+            <NavItem
+              icon="account-circle"
+              label="Profile"
+              onPress={() => {
+                if (nav?.isReady()) {
+                  nav.dispatch(CommonActions.navigate("Profile"));
+                }
+              }}
+            />
+          </View>
+        </View>
+
+        {/* Main Content */}
+        <View style={{ flex: 1 }}>
+          <SuperAdminDashboard />
+        </View>
+      </View>
+    );
+  }
+
+  // Mobile or small screen: Use bottom tabs
   return (
     <SuperAdminTab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: theme.colors.primary,
-        tabBarInactiveTintColor: "#777",
         tabBarStyle: {
-          height: 65,
-          paddingTop: 5,
+          position: "absolute",
+          elevation: 7,
+          backgroundColor: "transparent",
+          borderTopWidth: 0,
+          height: 70,
+          paddingTop: 7.5,
           paddingBottom: 10,
+          paddingHorizontal: 5,
+          marginHorizontal: 13,
+          marginBottom: 10,
+          borderRadius: 25,
+
+          shadowColor: "#000",
+          shadowOffset: {
+            width: 0,
+            height: 2,
+          },
+          shadowOpacity: 0.25,
+          shadowRadius: 3.84,
         },
+        tabBarBackground: renderTabBarBackground,
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: 10,
+          fontFamily: "Poppins-Medium",
+          color: "#fff",
         },
+        tabBarActiveTintColor: "#fff",
+        tabBarInactiveTintColor: "rgba(255, 255, 255, 0.7)",
       }}
     >
       <SuperAdminTab.Screen
@@ -241,6 +438,49 @@ const SuperAdminTabNavigator = () => {
         }}
       />
     </SuperAdminTab.Navigator>
+  );
+};
+
+// Custom navigation item component for sidebar
+interface NavItemProps {
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  label: string;
+  onPress: () => void;
+}
+
+const NavItem = ({ icon, label, onPress }: NavItemProps) => {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        paddingVertical: 16,
+        borderRadius: 10,
+        marginBottom: 10,
+      }}
+    >
+      <MaterialCommunityIcons
+        name={icon}
+        color="#fff"
+        size={24}
+        style={{ marginRight: 16 }}
+      />
+      <View
+        style={{
+          // backgroundColor: "rgba(255, 255, 255, 0.15)",
+          height: 36,
+          flex: 1,
+          borderRadius: 8,
+          justifyContent: "center",
+          paddingHorizontal: 12,
+        }}
+      >
+        <Text variant={"semibold"} style={{ fontSize: 16, color: "#fff" }}>
+          {label}
+        </Text>
+      </View>
+    </Pressable>
   );
 };
 

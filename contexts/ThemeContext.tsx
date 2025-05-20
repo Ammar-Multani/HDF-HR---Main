@@ -10,9 +10,29 @@ import {
   MD3LightTheme,
   MD3DarkTheme,
   Provider as PaperProvider,
+  configureFonts,
 } from "react-native-paper";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as NavigationBar from "expo-navigation-bar";
+
+// Define the font configuration
+const fontConfig = {
+  fontFamily: "Poppins-Regular",
+  fonts: {
+    regular: {
+      fontFamily: "Poppins-Regular",
+    },
+    medium: {
+      fontFamily: "Poppins-Medium",
+    },
+    light: {
+      fontFamily: "Poppins-Light",
+    },
+    thin: {
+      fontFamily: "Poppins-Light",
+    },
+  },
+};
 
 // Define custom theme colors
 const lightTheme = {
@@ -31,6 +51,7 @@ const lightTheme = {
     text: "#000000",
     navigationBar: "#FFFFFF",
   },
+  fonts: configureFonts({ config: fontConfig }),
 };
 
 const darkTheme = {
@@ -49,6 +70,7 @@ const darkTheme = {
     text: "#FFFFFF",
     navigationBar: "#1E293B",
   },
+  fonts: configureFonts({ config: fontConfig }),
 };
 
 type ThemeType = "light" | "dark" | "system";

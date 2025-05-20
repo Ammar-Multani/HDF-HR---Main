@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   Dimensions,
 } from "react-native";
-import { Text, useTheme, Avatar } from "react-native-paper";
+import { useTheme, Avatar } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { supabase, isNetworkAvailable } from "../../lib/supabase";
@@ -21,6 +21,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LineChart } from "react-native-chart-kit";
 import OnboardingChart from "../../components/OnboardingChart";
+import Text from "../../components/Text";
+import { globalStyles, createTextStyle } from "../../utils/globalStyles";
 
 const { width } = Dimensions.get("window");
 
@@ -476,22 +478,35 @@ const SuperAdminDashboard = () => {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
         >
+          <View style={styles.welcomeHeader}>
+            <Text variant={"bold"} style={styles.welcomeTitle}>
+              Welcome to HDF Dashboard
+            </Text>
+            <Text style={styles.welcomeSubtitle}>
+              Monitor and manage your platform
+            </Text>
+          </View>
           <View style={styles.statsCard}>
             <View style={styles.statRow}>
-              <Text style={styles.statLabel}>Total Companies</Text>
-              <Text style={styles.statGrowth}>
+              <Text variant={"medium"} style={styles.statLabel}>
+                Total Companies
+              </Text>
+              <Text variant={"bold"} style={styles.statGrowth}>
                 {stats.totalCompaniesGrowth}
               </Text>
             </View>
-            <Text style={styles.statValue}>
+            <Text variant={"bold"} style={styles.statValue}>
               {stats.totalCompanies.toLocaleString()}
             </Text>
           </View>
 
           <View style={styles.statsCard}>
             <View style={styles.statRow}>
-              <Text style={styles.statLabel}>Tasks</Text>
+              <Text variant={"medium"} style={styles.statLabel}>
+                Tasks
+              </Text>
               <Text
+                variant={"bold"}
                 style={[
                   styles.statGrowth,
                   stats.tasksGrowth.startsWith("-")
@@ -502,13 +517,15 @@ const SuperAdminDashboard = () => {
                 {stats.tasksGrowth}
               </Text>
             </View>
-            <Text style={styles.statValue}>
+            <Text variant={"bold"} style={styles.statValue}>
               {stats.totalTasks.toLocaleString()}
             </Text>
           </View>
 
           <View style={styles.chartCard}>
-            <Text style={styles.chartTitle}>Companies Onboarded by Month</Text>
+            <Text variant={"bold"}  style={styles.sectionTitle}>
+              Companies Onboarded by Month
+            </Text>
             <OnboardingChart
               monthlyData={stats.monthlyOnboarded}
               monthLabels={stats.monthLabels}
@@ -516,32 +533,47 @@ const SuperAdminDashboard = () => {
             />
           </View>
 
-          <Text style={styles.sectionTitle}>Top Companies</Text>
+          <View style={styles.topCompaniesContainer}>
+            <Text variant={"bold"} style={styles.sectionTitle}>
+              Top Companies
+            </Text>
 
-          {stats.topCompanies.map((company, index) => (
-            <View key={index} style={styles.companyCard}>
-              <View style={styles.companyInfo}>
-                <Text style={styles.companyName}>{company.name}</Text>
-                <Text style={styles.companyEmployees}>
-                  {company.employee_count} employees
+            {stats.topCompanies.map((company, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.companyCard,
+                  index === stats.topCompanies.length - 1 && {
+                    borderBottomWidth: 0,
+                    marginBottom: 0,
+                  },
+                ]}
+              >
+                <View style={styles.companyInfo}>
+                  <Text variant={"bold"} style={styles.companyName}>
+                    {company.name}
+                  </Text>
+                  <Text style={styles.companyEmployees}>
+                    {company.employee_count} employees
+                  </Text>
+                </View>
+                <Text variant={"bold"} style={styles.companyGrowth}>
+                  {company.growth_percentage}
                 </Text>
               </View>
-              <Text style={styles.companyGrowth}>
-                {company.growth_percentage}
-              </Text>
-            </View>
-          ))}
+            ))}
 
-          {stats.topCompanies.length === 0 && (
-            <View style={styles.emptyState}>
-              <MaterialCommunityIcons
-                name="domain"
-                size={48}
-                color={theme.colors.outlineVariant}
-              />
-              <Text style={styles.emptyStateText}>No companies found</Text>
-            </View>
-          )}
+            {stats.topCompanies.length === 0 && (
+              <View style={styles.emptyState}>
+                <MaterialCommunityIcons
+                  name="domain"
+                  size={48}
+                  color={theme.colors.outlineVariant}
+                />
+                <Text style={styles.emptyStateText}>No companies found</Text>
+              </View>
+            )}
+          </View>
         </ScrollView>
       </View>
     </SafeAreaView>
@@ -559,7 +591,21 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingVertical: 16,
-    paddingBottom: 100,
+    paddingBottom: 90,
+  },
+  welcomeHeader: {
+    marginBottom: 16,
+    marginTop: 5,
+    marginLeft: 5,
+  },
+  welcomeTitle: {
+    fontSize: 22,
+    color: "#333",
+    paddingBottom: 3,
+  },
+  welcomeSubtitle: {
+    fontSize: 14,
+    color: "#666",
   },
   statsCard: {
     backgroundColor: "#fff",
@@ -578,32 +624,29 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 16,
     color: "#333",
-    fontWeight: "500",
   },
   statGrowth: {
     fontSize: 14,
     color: "#4CAF50",
-    fontWeight: "bold",
   },
   negativeGrowth: {
     color: "#F44336",
   },
   statValue: {
     fontSize: 25,
-    fontWeight: "bold",
     color: "#111",
   },
   chartCard: {
     backgroundColor: "#fff",
     borderRadius: 16,
     padding: 16,
-    paddingBottom: 5,
+    paddingBottom: 10,
+    minHeight: 280,
     borderWidth: 1,
     borderColor: "#e0e0e0",
   },
   chartTitle: {
     fontSize: 16,
-    fontWeight: "bold",
     marginBottom: 16,
     color: "#333",
   },
@@ -622,21 +665,16 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     backgroundColor: "#fff",
-    borderRadius: 16,
     padding: 16,
-    marginBottom: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
+    marginBottom: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
   },
   companyInfo: {
     flex: 1,
   },
   companyName: {
     fontSize: 16,
-    fontWeight: "bold",
     color: "#333",
     marginBottom: 4,
   },
@@ -647,14 +685,19 @@ const styles = StyleSheet.create({
   companyGrowth: {
     fontSize: 14,
     color: "#4CAF50",
-    fontWeight: "bold",
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    marginTop: 8,
+    fontSize: 18,
     marginBottom: 16,
     color: "#333",
+  },
+  topCompaniesContainer: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
   },
 });
 

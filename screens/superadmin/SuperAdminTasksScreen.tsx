@@ -7,9 +7,13 @@ import {
   RefreshControl,
   ScrollView,
 } from "react-native";
-import { Text, Card, Searchbar, useTheme, FAB, Chip } from "react-native-paper";
+import { Card, Searchbar, useTheme, FAB, Chip } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
+import {
+  useNavigation,
+  ParamListBase,
+  NavigationProp,
+} from "@react-navigation/native";
 import { format } from "date-fns";
 import { supabase } from "../../lib/supabase";
 import AppHeader from "../../components/AppHeader";
@@ -17,10 +21,12 @@ import LoadingIndicator from "../../components/LoadingIndicator";
 import EmptyState from "../../components/EmptyState";
 import StatusBadge from "../../components/StatusBadge";
 import { Task, TaskPriority, TaskStatus } from "../../types";
+import Text from "../../components/Text";
+import { LinearGradient } from "expo-linear-gradient";
 
 const SuperAdminTasksScreen = () => {
   const theme = useTheme();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -134,7 +140,7 @@ const SuperAdminTasksScreen = () => {
       case TaskPriority.HIGH:
         return theme.colors.error;
       case TaskPriority.MEDIUM:
-        return theme.colors.warning || "#F59E0B";
+        return "#F59E0B"; // Fixed warning color
       case TaskPriority.LOW:
         return theme.colors.primary;
       default:
@@ -144,17 +150,23 @@ const SuperAdminTasksScreen = () => {
 
   const renderTaskItem = ({ item }: { item: Task }) => (
     <TouchableOpacity
-      onPress={() =>
-        navigation.navigate(
-          "TaskDetails" as never,
-          { taskId: item.id } as never
-        )
-      }
+      onPress={() => navigation.navigate("TaskDetails", { taskId: item.id })}
     >
-      <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+      <Card
+        style={[
+          styles.card,
+          {
+            backgroundColor: "#FFFFFF",
+            shadowColor: "transparent",
+          },
+        ]}
+        elevation={0}
+      >
         <Card.Content>
           <View style={styles.cardHeader}>
-            <Text style={styles.taskTitle}>{item.title}</Text>
+            <Text variant="bold" style={styles.taskTitle}>
+              {item.title}
+            </Text>
             <StatusBadge status={item.status} />
           </View>
 
@@ -169,12 +181,15 @@ const SuperAdminTasksScreen = () => {
                 styles.priorityChip,
                 { backgroundColor: getPriorityColor(item.priority) + "20" },
               ]}
-              textStyle={{ color: getPriorityColor(item.priority) }}
+              textStyle={{
+                color: getPriorityColor(item.priority),
+                fontFamily: "Poppins-Medium",
+              }}
             >
               {item.priority.charAt(0).toUpperCase() + item.priority.slice(1)}
             </Chip>
 
-            <Text style={styles.deadline}>
+            <Text variant="medium" style={styles.deadline}>
               Due: {format(new Date(item.deadline), "MMM d, yyyy")}
             </Text>
           </View>
@@ -189,42 +204,87 @@ const SuperAdminTasksScreen = () => {
         <Chip
           selected={statusFilter === "all"}
           onPress={() => setStatusFilter("all")}
-          style={styles.filterChip}
+          style={[
+            styles.filterChip,
+            statusFilter === "all" ? styles.selectedChip : {},
+          ]}
+          textStyle={{
+            fontFamily: "Poppins-Medium",
+            color: statusFilter === "all" ? "#fff" : "#666",
+          }}
         >
           All
         </Chip>
         <Chip
           selected={statusFilter === TaskStatus.OPEN}
           onPress={() => setStatusFilter(TaskStatus.OPEN)}
-          style={styles.filterChip}
+          style={[
+            styles.filterChip,
+            statusFilter === TaskStatus.OPEN ? styles.selectedChip : {},
+          ]}
+          textStyle={{
+            fontFamily: "Poppins-Medium",
+            color: statusFilter === TaskStatus.OPEN ? "#fff" : "#666",
+          }}
         >
           Open
         </Chip>
         <Chip
           selected={statusFilter === TaskStatus.IN_PROGRESS}
           onPress={() => setStatusFilter(TaskStatus.IN_PROGRESS)}
-          style={styles.filterChip}
+          style={[
+            styles.filterChip,
+            statusFilter === TaskStatus.IN_PROGRESS ? styles.selectedChip : {},
+          ]}
+          textStyle={{
+            fontFamily: "Poppins-Medium",
+            color: statusFilter === TaskStatus.IN_PROGRESS ? "#fff" : "#666",
+          }}
         >
           In Progress
         </Chip>
         <Chip
           selected={statusFilter === TaskStatus.AWAITING_RESPONSE}
           onPress={() => setStatusFilter(TaskStatus.AWAITING_RESPONSE)}
-          style={styles.filterChip}
+          style={[
+            styles.filterChip,
+            statusFilter === TaskStatus.AWAITING_RESPONSE
+              ? styles.selectedChip
+              : {},
+          ]}
+          textStyle={{
+            fontFamily: "Poppins-Medium",
+            color:
+              statusFilter === TaskStatus.AWAITING_RESPONSE ? "#fff" : "#666",
+          }}
         >
           Awaiting Response
         </Chip>
         <Chip
           selected={statusFilter === TaskStatus.COMPLETED}
           onPress={() => setStatusFilter(TaskStatus.COMPLETED)}
-          style={styles.filterChip}
+          style={[
+            styles.filterChip,
+            statusFilter === TaskStatus.COMPLETED ? styles.selectedChip : {},
+          ]}
+          textStyle={{
+            fontFamily: "Poppins-Medium",
+            color: statusFilter === TaskStatus.COMPLETED ? "#fff" : "#666",
+          }}
         >
           Completed
         </Chip>
         <Chip
           selected={statusFilter === TaskStatus.OVERDUE}
           onPress={() => setStatusFilter(TaskStatus.OVERDUE)}
-          style={styles.filterChip}
+          style={[
+            styles.filterChip,
+            statusFilter === TaskStatus.OVERDUE ? styles.selectedChip : {},
+          ]}
+          textStyle={{
+            fontFamily: "Poppins-Medium",
+            color: statusFilter === TaskStatus.OVERDUE ? "#fff" : "#666",
+          }}
         >
           Overdue
         </Chip>
@@ -240,8 +300,14 @@ const SuperAdminTasksScreen = () => {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <AppHeader title="Tasks" showBackButton={false} />
-
+      <AppHeader
+        title="Tasks"
+        showBackButton={false}
+        showHelpButton={false}
+        showProfileMenu={false}
+        showLogo={false}
+        showTitle={true}
+      />
       <View style={styles.searchContainer}>
         <Searchbar
           placeholder="Search tasks..."
@@ -272,7 +338,7 @@ const SuperAdminTasksScreen = () => {
               setSearchQuery("");
               setStatusFilter("all");
             } else {
-              navigation.navigate("CreateTask" as never);
+              navigation.navigate("CreateTask");
             }
           }}
         />
@@ -291,7 +357,7 @@ const SuperAdminTasksScreen = () => {
       <FAB
         icon="plus"
         style={[styles.fab, { backgroundColor: theme.colors.primary }]}
-        onPress={() => navigation.navigate("CreateTask" as never)}
+        onPress={() => navigation.navigate("CreateTask")}
         color={theme.colors.surface}
       />
     </SafeAreaView>
@@ -308,6 +374,11 @@ const styles = StyleSheet.create({
   },
   searchbar: {
     elevation: 0,
+    borderRadius: 18,
+    height: 60,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
   },
   filterContainer: {
     paddingHorizontal: 16,
@@ -315,14 +386,25 @@ const styles = StyleSheet.create({
   },
   filterChip: {
     marginRight: 8,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    backgroundColor: "#fff",
+  },
+  selectedChip: {
+    borderWidth: 0,
+    backgroundColor: "rgba(54,105,157,255)",
   },
   listContent: {
     padding: 16,
     paddingTop: 8,
+    paddingBottom: 100,
   },
   card: {
     marginBottom: 16,
     elevation: 0,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
   },
   cardHeader: {
     flexDirection: "row",
@@ -331,14 +413,15 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   taskTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
+    fontSize: 16,
     flex: 1,
     marginRight: 8,
+    color: "#333",
   },
   taskDescription: {
     marginBottom: 16,
     opacity: 0.7,
+    color: "#666",
   },
   cardFooter: {
     flexDirection: "row",
@@ -351,12 +434,13 @@ const styles = StyleSheet.create({
   deadline: {
     opacity: 0.7,
     fontSize: 14,
+    color: "#666",
   },
   fab: {
     position: "absolute",
     margin: 16,
     right: 0,
-    bottom: 0,
+    bottom: 80,
   },
 });
 

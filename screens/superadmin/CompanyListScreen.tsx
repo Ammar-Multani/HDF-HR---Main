@@ -10,7 +10,6 @@ import {
   AppStateStatus,
 } from "react-native";
 import {
-  Text,
   Card,
   Searchbar,
   useTheme,
@@ -35,12 +34,24 @@ import AppHeader from "../../components/AppHeader";
 import EmptyState from "../../components/EmptyState";
 import StatusBadge from "../../components/StatusBadge";
 import { Company, UserStatus } from "../../types";
+import Text from "../../components/Text";
+import { globalStyles } from "../../utils/globalStyles";
+import { LinearGradient } from "expo-linear-gradient";
 
 // Component for skeleton loading UI
 const CompanyItemSkeleton = () => {
   const theme = useTheme();
   return (
-    <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+    <Card
+      style={[
+        styles.card,
+        {
+          backgroundColor: "#FFFFFF",
+          shadowColor: "transparent",
+        },
+      ]}
+      elevation={0}
+    >
       <Card.Content>
         <View style={styles.cardHeader}>
           <View
@@ -363,10 +374,21 @@ const CompanyListScreen = () => {
         navigation.navigate("CompanyDetails", { companyId: item.id });
       }}
     >
-      <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+      <Card
+        style={[
+          styles.card,
+          {
+            backgroundColor: "#FFFFFF",
+            shadowColor: "transparent",
+          },
+        ]}
+        elevation={0}
+      >
         <Card.Content>
           <View style={styles.cardHeader}>
-            <Text style={styles.companyName}>{item.company_name}</Text>
+            <Text variant="bold" style={styles.companyName}>
+              {item.company_name}
+            </Text>
             <StatusBadge
               status={item.active ? UserStatus.ACTIVE : UserStatus.INACTIVE}
             />
@@ -374,17 +396,23 @@ const CompanyListScreen = () => {
 
           <View style={styles.cardDetails}>
             <View style={styles.detailItem}>
-              <Text style={styles.detailLabel}>Registration:</Text>
+              <Text variant="medium" style={styles.detailLabel}>
+                Registration:
+              </Text>
               <Text style={styles.detailValue}>{item.registration_number}</Text>
             </View>
 
             <View style={styles.detailItem}>
-              <Text style={styles.detailLabel}>Industry:</Text>
+              <Text variant="medium" style={styles.detailLabel}>
+                Industry:
+              </Text>
               <Text style={styles.detailValue}>{item.industry_type}</Text>
             </View>
 
             <View style={styles.detailItem}>
-              <Text style={styles.detailLabel}>Contact:</Text>
+              <Text variant="medium" style={styles.detailLabel}>
+                Contact:
+              </Text>
               <Text style={styles.detailValue}>{item.contact_number}</Text>
             </View>
           </View>
@@ -467,7 +495,8 @@ const CompanyListScreen = () => {
       <AppHeader
         showLogo={false}
         showBackButton={false}
-        title="Companies"
+        title="Manage Companies"
+        subtitle="View, add, and update company information"
         showHelpButton={true}
         absolute={false}
       />
@@ -548,20 +577,64 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 100,
+  },
+  welcomeHeader: {
+    paddingHorizontal: 16,
+    marginBottom: 8,
+    marginTop: 5,
+  },
+  welcomeTitle: {
+    fontSize: 22,
+    color: "#333",
+    paddingBottom: 3,
+  },
+  welcomeSubtitle: {
+    fontSize: 14,
+    color: "#666",
+  },
   searchContainer: {
     padding: 16,
+    paddingTop: 10,
     paddingBottom: 8,
   },
   searchbar: {
     elevation: 0,
+    borderRadius: 18,
+    height: 60,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   listContent: {
     padding: 16,
     paddingTop: 8,
+    paddingBottom: 100,
   },
   card: {
     marginBottom: 16,
     elevation: 0,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    shadowColor: "transparent",
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
   },
   cardHeader: {
     flexDirection: "row",
@@ -570,9 +643,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   companyName: {
-    fontSize: 18,
-    fontWeight: "bold",
+    fontSize: 16,
     flex: 1,
+    color: "#333",
   },
   cardDetails: {
     marginTop: 8,
@@ -582,19 +655,20 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   detailLabel: {
-    fontWeight: "500",
     marginRight: 8,
     opacity: 0.7,
     width: 100,
+    color: "#333",
   },
   detailValue: {
     flex: 1,
+    color: "#666",
   },
   fab: {
     position: "absolute",
     margin: 16,
     right: 0,
-    bottom: 0,
+    bottom: 80,
   },
   loadingFooter: {
     paddingVertical: 20,
@@ -624,7 +698,7 @@ const styles = StyleSheet.create({
   },
   resultsCount: {
     textAlign: "center",
-    marginBottom: 8,
+    marginBottom: 10,
     opacity: 0.7,
     fontSize: 12,
   },

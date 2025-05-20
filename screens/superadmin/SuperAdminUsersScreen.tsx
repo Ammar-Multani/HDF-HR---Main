@@ -7,7 +7,6 @@ import {
   RefreshControl,
 } from "react-native";
 import {
-  Text,
   Card,
   Searchbar,
   useTheme,
@@ -16,16 +15,22 @@ import {
   Chip,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
+import {
+  useNavigation,
+  NavigationProp,
+  ParamListBase,
+} from "@react-navigation/native";
 import { supabase } from "../../lib/supabase";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import EmptyState from "../../components/EmptyState";
 import { Admin, UserStatus } from "../../types";
+import Text from "../../components/Text";
+import { LinearGradient } from "expo-linear-gradient";
 
 const SuperAdminUsersScreen = () => {
   const theme = useTheme();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [admins, setAdmins] = useState<Admin[]>([]);
@@ -109,7 +114,7 @@ const SuperAdminUsersScreen = () => {
     return (
       <Chip
         style={{ backgroundColor: color + "20" }}
-        textStyle={{ color: color }}
+        textStyle={{ color: color, fontFamily: "Poppins-Medium" }}
       >
         {typeof status === "string" && status.length > 0
           ? status.charAt(0).toUpperCase() + status.slice(1).toLowerCase()
@@ -127,17 +132,26 @@ const SuperAdminUsersScreen = () => {
         // navigation.navigate("SuperAdminDetails", { adminId: item.id });
       }}
     >
-      <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+      <Card
+        style={[
+          styles.card,
+          {
+            backgroundColor: "#FFFFFF",
+            shadowColor: "transparent",
+          },
+        ]}
+        elevation={0}
+      >
         <Card.Content>
           <View style={styles.cardHeader}>
             <View style={styles.userInfo}>
               <Avatar.Text
                 size={40}
                 label={getInitials(item.name || "", item.email)}
-                style={{ backgroundColor: theme.colors.primary }}
+                style={{ backgroundColor: "rgba(54,105,157,255)" }}
               />
               <View style={styles.userTextContainer}>
-                <Text style={styles.userName}>
+                <Text variant="bold" style={styles.userName}>
                   {item.name || "Unnamed Admin"}
                 </Text>
                 <Text style={styles.userEmail}>{item.email}</Text>
@@ -158,7 +172,12 @@ const SuperAdminUsersScreen = () => {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <AppHeader title="Super Admins" showBackButton={false} />
+      <AppHeader
+        title="Super Admins"
+        showBackButton={false}
+        showLogo={false}
+        subtitle="Manage super admin users"
+      />
 
       <View style={styles.searchContainer}>
         <Searchbar
@@ -183,7 +202,7 @@ const SuperAdminUsersScreen = () => {
             if (searchQuery) {
               setSearchQuery("");
             } else {
-              navigation.navigate("CreateSuperAdmin" as never);
+              navigation.navigate("CreateSuperAdmin");
             }
           }}
         />
@@ -202,7 +221,7 @@ const SuperAdminUsersScreen = () => {
       <FAB
         icon="plus"
         style={[styles.fab, { backgroundColor: theme.colors.primary }]}
-        onPress={() => navigation.navigate("CreateSuperAdmin" as never)}
+        onPress={() => navigation.navigate("CreateSuperAdmin")}
         color={theme.colors.surface}
       />
     </SafeAreaView>
@@ -219,14 +238,23 @@ const styles = StyleSheet.create({
   },
   searchbar: {
     elevation: 0,
+    borderRadius: 18,
+    height: 60,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
   },
   listContent: {
     padding: 16,
     paddingTop: 8,
+    paddingBottom: 100,
   },
   card: {
     marginBottom: 16,
     elevation: 0,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
   },
   cardHeader: {
     flexDirection: "row",
@@ -244,16 +272,17 @@ const styles = StyleSheet.create({
   },
   userName: {
     fontSize: 16,
-    fontWeight: "bold",
+    color: "#333",
   },
   userEmail: {
     opacity: 0.7,
+    color: "#666",
   },
   fab: {
     position: "absolute",
     margin: 16,
     right: 0,
-    bottom: 0,
+    bottom: 80,
   },
 });
 

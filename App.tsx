@@ -14,6 +14,7 @@ import {
   resetCacheMetrics,
 } from "./lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFonts } from "expo-font";
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -31,6 +32,16 @@ export default function App() {
   const [appIsReady, setAppIsReady] = useState(false);
   const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
   const [preAuthCheck, setPreAuthCheck] = useState<boolean | null>(null);
+
+  // Load fonts
+  const [fontsLoaded] = useFonts({
+    "Poppins-Regular": require("./assets/fonts/Poppins-Regular.ttf"),
+    "Poppins-Medium": require("./assets/fonts/Poppins-Medium.ttf"),
+    "Poppins-SemiBold": require("./assets/fonts/Poppins-SemiBold.ttf"),
+    "Poppins-Bold": require("./assets/fonts/Poppins-Bold.ttf"),
+    "Poppins-Light": require("./assets/fonts/Poppins-Light.ttf"),
+    "Poppins-Italic": require("./assets/fonts/Poppins-Italic.ttf"),
+  });
 
   // Fast pre-check for auth state to speed up app loading
   useEffect(() => {
@@ -179,7 +190,7 @@ export default function App() {
 
   // Hide splash screen once the app is ready
   useEffect(() => {
-    if (appIsReady && hasCheckedAuth) {
+    if (appIsReady && hasCheckedAuth && fontsLoaded) {
       const hideSplash = async () => {
         // Wait a moment to ensure auth context has initialized
         await new Promise((resolve) => setTimeout(resolve, 100));
@@ -187,7 +198,7 @@ export default function App() {
       };
       hideSplash();
     }
-  }, [appIsReady, hasCheckedAuth]);
+  }, [appIsReady, hasCheckedAuth, fontsLoaded]);
 
   // Function to handle deep links
   const handleDeepLink = useCallback(async (event) => {
@@ -239,7 +250,7 @@ export default function App() {
   }, [handleDeepLink]);
 
   // If pre-auth check hasn't completed yet, we're still loading
-  if (!hasCheckedAuth) {
+  if (!hasCheckedAuth || !fontsLoaded) {
     return null; // Keep splash screen visible
   }
 

@@ -6,21 +6,26 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  TouchableOpacity,
 } from "react-native";
 import {
-  Text,
   TextInput,
   Button,
   Avatar,
   useTheme,
   Divider,
   Snackbar,
+  Card,
+  IconButton,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
+import Text from "../../components/Text";
+import { LinearGradient } from "expo-linear-gradient";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 const SuperAdminProfileScreen = () => {
   const theme = useTheme();
@@ -33,6 +38,15 @@ const SuperAdminProfileScreen = () => {
   const [email, setEmail] = useState("");
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
+
+  // Gradient colors used across the app
+  const gradientColors = [
+    "rgba(6,169,169,255)",
+    "rgba(38,127,161,255)",
+    "rgba(54,105,157,255)",
+    "rgba(74,78,153,255)",
+    "rgba(94,52,149,255)",
+  ];
 
   const fetchAdminData = async () => {
     try {
@@ -142,7 +156,12 @@ const SuperAdminProfileScreen = () => {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <AppHeader title="Profile" showBackButton />
+      {/* <AppHeader
+        title="Profile"
+        showBackButton={false}
+        showLogo={false}
+        subtitle="Manage your account"
+      /> */}
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -152,22 +171,42 @@ const SuperAdminProfileScreen = () => {
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
         >
-          <View style={styles.profileHeader}>
-            <Avatar.Text
-              size={80}
-              label={getInitials()}
-              style={{ backgroundColor: theme.colors.primary }}
-            />
-            <Text style={[styles.role, { color: theme.colors.primary }]}>
-              Super Admin
-            </Text>
+          {/* Profile Header with Gradient */}
+          <View style={styles.profileHeaderContainer}>
+            <View style={styles.profileHeader}>
+
+              <Avatar.Text
+                size={100}
+                label={getInitials()}
+                style={styles.avatar}
+              />
+              <Text variant="bold" style={styles.userName}>
+                {name || "Super Admin"}
+              </Text>
+              <Text variant="medium" style={styles.userEmail}>
+                {email}
+              </Text>
+              <View style={styles.roleBadge}>
+                <Text variant="medium" style={styles.roleText}>
+                  Super Admin
+                </Text>
+              </View>
+            </View>
           </View>
 
-          <Card
-            style={[styles.card, { backgroundColor: theme.colors.surface }]}
-          >
+          {/* Personal Information Section */}
+          <Card style={styles.card} elevation={0}>
             <Card.Content>
-              <Text style={styles.sectionTitle}>Personal Information</Text>
+              <View style={styles.sectionTitleContainer}>
+                <MaterialCommunityIcons
+                  name="account-edit"
+                  size={24}
+                  color="rgba(54,105,157,255)"
+                />
+                <Text variant="bold" style={styles.sectionTitle}>
+                  Personal Information
+                </Text>
+              </View>
 
               <TextInput
                 label="Name"
@@ -176,6 +215,11 @@ const SuperAdminProfileScreen = () => {
                 mode="outlined"
                 style={styles.input}
                 disabled={updating}
+                outlineStyle={{ borderRadius: 12 }}
+                theme={{
+                  colors: { primary: "rgba(54,105,157,255)" },
+                  fonts: { regular: { fontFamily: "Poppins-Regular" } },
+                }}
               />
 
               <TextInput
@@ -184,48 +228,91 @@ const SuperAdminProfileScreen = () => {
                 mode="outlined"
                 style={styles.input}
                 disabled={true}
-                right={<TextInput.Icon icon="lock" />}
+                outlineStyle={{ borderRadius: 12 }}
+                right={<TextInput.Icon icon="email-lock" />}
+                theme={{
+                  colors: { primary: "rgba(54,105,157,255)" },
+                  fonts: { regular: { fontFamily: "Poppins-Regular" } },
+                }}
               />
 
               <Button
                 mode="contained"
                 onPress={handleUpdateProfile}
                 style={styles.updateButton}
+                buttonColor="rgba(54,105,157,255)"
                 loading={updating}
                 disabled={updating}
+                labelStyle={{ fontFamily: "Poppins-Medium" }}
               >
                 Update Profile
               </Button>
             </Card.Content>
           </Card>
 
-          <Card
-            style={[styles.card, { backgroundColor: theme.colors.surface }]}
-          >
+          {/* Account Settings Section */}
+          <Card style={styles.card} elevation={0}>
             <Card.Content>
-              <Text style={styles.sectionTitle}>Account</Text>
+              <View style={styles.sectionTitleContainer}>
+                <MaterialCommunityIcons
+                  name="account-cog"
+                  size={24}
+                  color="rgba(54,105,157,255)"
+                />
+                <Text variant="bold" style={styles.sectionTitle}>
+                  Account Settings
+                </Text>
+              </View>
 
-              <Button
-                mode="outlined"
+              <TouchableOpacity
+                style={styles.settingItem}
                 onPress={() => {
                   setSnackbarMessage("Password reset link sent to your email");
                   setSnackbarVisible(true);
                 }}
-                style={styles.accountButton}
-                icon="lock-reset"
               >
-                Reset Password
-              </Button>
+                <View style={styles.settingItemContent}>
+                  <MaterialCommunityIcons
+                    name="lock-reset"
+                    size={24}
+                    color="rgba(54,105,157,255)"
+                  />
+                  <Text variant="medium" style={styles.settingText}>
+                    Reset Password
+                  </Text>
+                </View>
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={24}
+                  color="#999"
+                />
+              </TouchableOpacity>
 
-              <Button
-                mode="outlined"
+              <Divider style={styles.divider} />
+
+              <TouchableOpacity
+                style={styles.settingItem}
                 onPress={handleSignOut}
-                style={styles.accountButton}
-                icon="logout"
-                textColor={theme.colors.error}
               >
-                Sign Out
-              </Button>
+                <View style={styles.settingItemContent}>
+                  <MaterialCommunityIcons
+                    name="logout"
+                    size={24}
+                    color={theme.colors.error}
+                  />
+                  <Text
+                    variant="medium"
+                    style={[styles.settingText, { color: theme.colors.error }]}
+                  >
+                    Sign Out
+                  </Text>
+                </View>
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={24}
+                  color="#999"
+                />
+              </TouchableOpacity>
             </Card.Content>
           </Card>
         </ScrollView>
@@ -257,51 +344,105 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 80,
+  },
+  profileHeaderContainer: {
+    position: "relative",
+    height: 200,
+    marginBottom: 80,
+  },
+  headerGradient: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 160,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
   },
   profileHeader: {
     alignItems: "center",
-    marginBottom: 24,
+    position: "absolute",
+    top: 30,
+    left: 0,
+    right: 0,
   },
-  role: {
+  avatar: {
+   
+    borderWidth: 4,
+    borderColor: "#fff",
+  },
+  userName: {
+    fontSize: 22,
+    color: "#000",
     marginTop: 8,
-    fontSize: 16,
-    fontWeight: "500",
+  },
+  userEmail: {
+    fontSize: 14,
+    color: "#000",
+    opacity: 0.8,
+    marginBottom: 12,
+  },
+  roleBadge: {
+    backgroundColor: "#ffffff",
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: "rgba(54,105,157,255)",
+  },
+  roleText: {
+    fontSize: 14,
+    color: "rgba(54,105,157,255)",
   },
   card: {
+    marginHorizontal: 16,
     marginBottom: 16,
     elevation: 0,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    backgroundColor: "#FFFFFF",
+  },
+  sectionTitleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 20,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 16,
+    color: "#333",
+    marginLeft: 8,
   },
   input: {
     marginBottom: 16,
+    backgroundColor: "#fff",
   },
   updateButton: {
-    marginTop: 8,
+    marginTop: 16,
+    borderRadius: 12,
+    paddingVertical: 4,
   },
-  accountButton: {
-    marginBottom: 12,
+  settingItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+  },
+  settingItemContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  settingText: {
+    fontSize: 16,
+    marginLeft: 16,
+    color: "#333",
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "#e0e0e0",
   },
 });
-
-// Missing Card component
-const Card = ({ children, style }: any) => {
-  return (
-    <View
-      style={[{ borderRadius: 8, overflow: "hidden", marginBottom: 16 }, style]}
-    >
-      {children}
-    </View>
-  );
-};
-
-Card.Content = ({ children }: any) => {
-  return <View style={{ padding: 16 }}>{children}</View>;
-};
 
 export default SuperAdminProfileScreen;

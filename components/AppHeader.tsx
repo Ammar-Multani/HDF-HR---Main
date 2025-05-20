@@ -7,7 +7,6 @@ import {
   StatusBar,
 } from "react-native";
 import {
-  Text,
   useTheme,
   IconButton,
   Tooltip,
@@ -17,12 +16,16 @@ import {
 } from "react-native-paper";
 import { useNavigation } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Text from "./Text";
+import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
 
 interface AppHeaderProps {
   showBackButton?: boolean;
   showHelpButton?: boolean;
   showProfileMenu?: boolean;
   title?: string;
+  subtitle?: string;
   rightComponent?: React.ReactNode;
   onBackPress?: () => void;
   onHelpPress?: () => void;
@@ -41,6 +44,7 @@ const AppHeader = ({
   showHelpButton = false,
   showProfileMenu = false,
   title = "",
+  subtitle = "",
   rightComponent,
   onBackPress,
   onHelpPress,
@@ -107,7 +111,18 @@ const AppHeader = ({
   };
 
   const headerContent = (
-    <View style={[styles.headerContainer, absolute && styles.headerAbsolute, { backgroundColor: theme.colors.background,borderColor: theme.colors.outlineVariant, }]}>
+    
+    <View
+      style={[
+        styles.headerContainer,
+        absolute && styles.headerAbsolute,
+        {
+          backgroundColor: theme.colors.background,
+          borderColor: theme.colors.outlineVariant,
+        },
+      ]}
+    >
+
       <View style={styles.leftSection}>
         {showBackButton && (
           <IconButton
@@ -131,12 +146,24 @@ const AppHeader = ({
             />
           )}
           {showTitle && (
-            <Text
-              variant="headlineSmall"
-              style={[styles.logoText, { color: theme.colors.text }]}
-            >
-              {title}
-            </Text>
+            <View style={styles.titleContainer}>
+              <Text
+                variant="bold"
+                style={[styles.logoText, { color: theme.colors.onBackground }]}
+              >
+                {title}
+              </Text>
+              {subtitle ? (
+                <Text
+                  style={[
+                    styles.subtitleText,
+                    { color: theme.colors.onSurfaceVariant },
+                  ]}
+                >
+                  {subtitle}
+                </Text>
+              ) : null}
+            </View>
           )}
         </View>
       </View>
@@ -160,15 +187,22 @@ const AppHeader = ({
             onDismiss={() => setMenuVisible(false)}
             anchor={
               <TouchableOpacity onPress={() => setMenuVisible(true)}>
-                <Avatar.Text
-                  size={40}
-                  label={getInitials()}
-                  style={[
-                    styles.avatar,
-                    { backgroundColor: theme.colors.primary },
-                  ]}
-                  labelStyle={{ color: theme.colors.onPrimary }}
-                />
+                <View style={styles.avatarContainer}>
+                  <LinearGradient
+                    colors={[
+                      "rgba(6,169,169,255)",
+                      "rgba(38,127,161,255)",
+                      "rgba(54,105,157,255)",
+                      "rgba(74,78,153,255)",
+                      "rgba(94,52,149,255)",
+                    ]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={[styles.avatarGradient]}
+                  >
+                    <Text style={styles.avatarText}>{getInitials()}</Text>
+                  </LinearGradient>
+                </View>
               </TouchableOpacity>
             }
           >
@@ -228,7 +262,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     height: 70,
     borderBottomWidth: 0.4,
-    
   },
   headerAbsolute: {
     position: "absolute",
@@ -253,8 +286,17 @@ const styles = StyleSheet.create({
     width: 120,
     height: 100,
   },
+  titleContainer: {
+    flexDirection: "column",
+    justifyContent: "center",
+  },
   logoText: {
-    fontWeight: "bold",
+    fontSize: 22,
+    marginLeft: 10,
+  },
+  subtitleText: {
+    fontSize: 14,
+    marginLeft: 10,
   },
   backButton: {
     margin: 0,
@@ -263,8 +305,23 @@ const styles = StyleSheet.create({
   helpButton: {
     margin: 0,
   },
-  avatar: {
+  avatarContainer: {
     marginLeft: 8,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    overflow: "hidden",
+  },
+  avatarGradient: {
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarText: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontFamily: "Poppins-Bold",
   },
 });
 

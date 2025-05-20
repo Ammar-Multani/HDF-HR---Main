@@ -1,8 +1,10 @@
 import React from "react";
-import { StyleSheet, View, Text, Dimensions, Animated } from "react-native";
+import { StyleSheet, View, Dimensions, Animated } from "react-native";
 import { LineChart } from "react-native-chart-kit";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useTheme } from "react-native-paper";
+import Text from "./Text";
+import { LinearGradient } from "expo-linear-gradient";
 
 interface OnboardingChartProps {
   monthlyData: number[];
@@ -17,10 +19,23 @@ const OnboardingChart: React.FC<OnboardingChartProps> = ({
 }) => {
   const theme = useTheme();
 
+  // Gradient colors used across the app
+  const gradientColors = [
+    "rgba(6,169,169,255)",
+    "rgba(38,127,161,255)",
+    "rgba(54,105,157,255)",
+    "rgba(74,78,153,255)",
+    "rgba(94,52,149,255)",
+  ];
+
+  // Primary color from the gradient
+  const primaryColor = "rgba(54,105,157,255)";
+
   const chartConfig = {
     backgroundGradientFrom: "#ffffff",
     backgroundGradientTo: "#ffffff",
-    color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
+    color: (opacity = 1) =>
+      primaryColor.replace("255", (opacity * 255).toString()),
     strokeWidth: 3, // Increased stroke width for better visibility
     barPercentage: 0.5,
     useShadowColorFromDataset: false,
@@ -28,14 +43,14 @@ const OnboardingChart: React.FC<OnboardingChartProps> = ({
     propsForDots: {
       r: "6", // Slightly larger dots
       strokeWidth: "2",
-      stroke: "#3b82f6",
+      stroke: primaryColor,
     },
     propsForBackgroundLines: {
       strokeDasharray: "", // Solid lines instead of dashed
       strokeWidth: 1,
       stroke: "#e5e7eb",
     },
-    fillShadowGradient: "#3b82f6",
+    fillShadowGradient: primaryColor,
     fillShadowGradientOpacity: 0.2, // Increased opacity for better area fill
     labelColor: (opacity = 1) => `rgba(75, 85, 99, ${opacity})`,
     style: {
@@ -43,7 +58,7 @@ const OnboardingChart: React.FC<OnboardingChartProps> = ({
     },
     propsForLabels: {
       fontSize: 12, // Slightly larger font
-      fontWeight: "500", // Bolder font
+      fontFamily: "Poppins-Medium",
       fill: "#4b5563", // Darker color for better readability
     },
   };
@@ -154,7 +169,8 @@ const OnboardingChart: React.FC<OnboardingChartProps> = ({
     datasets: [
       {
         data: getQuarterlyData(monthlyData),
-        color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
+        color: (opacity = 1) =>
+          primaryColor.replace("255", (opacity * 255).toString()),
         strokeWidth: 3, // Match the stroke width from config
       },
     ],
@@ -168,7 +184,9 @@ const OnboardingChart: React.FC<OnboardingChartProps> = ({
           size={64} // Increased icon size
           color={theme.colors.outlineVariant}
         />
-        <Text style={styles.emptyStateText}>No onboarding data available</Text>
+        <Text variant="medium" style={styles.emptyStateText}>
+          No onboarding data available
+        </Text>
       </View>
     );
   }
@@ -185,7 +203,7 @@ const OnboardingChart: React.FC<OnboardingChartProps> = ({
         withHorizontalLines={true}
         withVerticalLines={true}
         withDots={true}
-        withShadow={true}
+        withShadow={false} // Remove shadows for flat design
         withInnerLines={true}
         fromZero={true}
         yAxisSuffix=""
@@ -196,6 +214,18 @@ const OnboardingChart: React.FC<OnboardingChartProps> = ({
               key={x}
               style={[styles.valueBubble, { top: y - 25, left: x - 10 }]}
             >
+              <LinearGradient
+                colors={[
+                  "rgba(6,169,169,255)",
+                  "rgba(38,127,161,255)",
+                  "rgba(54,105,157,255)",
+                  "rgba(74,78,153,255)",
+                  "rgba(94,52,149,255)",
+                ]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={StyleSheet.absoluteFill}
+              />
               <Text style={styles.valueText}>{indexData}</Text>
             </View>
           ) : null
@@ -205,15 +235,15 @@ const OnboardingChart: React.FC<OnboardingChartProps> = ({
           return label;
         }}
         getDotColor={(dataPoint, dataPointIndex) => {
-          return dataPoint > 0 ? "#3b82f6" : "transparent";
+          return dataPoint > 0 ? primaryColor : "transparent";
         }}
         getDotProps={(dataPoint, dataPointIndex) => {
           const isHighlight = dataPoint > 0;
           return {
             r: isHighlight ? "6" : "4",
             strokeWidth: "2",
-            stroke: "#3b82f6",
-            fill: isHighlight ? "#3b82f6" : "#ffffff",
+            stroke: primaryColor,
+            fill: isHighlight ? primaryColor : "#ffffff",
           };
         }}
       />
@@ -222,11 +252,13 @@ const OnboardingChart: React.FC<OnboardingChartProps> = ({
 };
 
 const styles = StyleSheet.create({
-  chartContainer: {},
+  chartContainer: {
+    marginVertical: 10,
+  },
   chart: {
     borderRadius: 12,
     paddingRight: 30,
-    paddingTop: 15, // Increased padding top for value bubbles
+    paddingTop: 12, // Increased padding top for value bubbles
     marginVertical: 0,
     paddingLeft: 0,
     overflow: "hidden",
@@ -236,27 +268,27 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingVertical: 60, // Increased padding for empty state
     borderRadius: 16,
-    marginVertical: 10,
+    marginVertical: 9,
   },
   emptyStateText: {
     marginTop: 12,
     fontSize: 16,
-    fontWeight: "500",
-    color: "#6b7280",
+    color: "#666",
   },
   valueBubble: {
     position: "absolute",
-    backgroundColor: "#3b82f6",
-    borderRadius: 12,
-    paddingHorizontal: 6,
+    borderRadius: 25,
+    marginTop: 15,
+    paddingHorizontal: 3,
     paddingVertical: 2,
     minWidth: 20,
     alignItems: "center",
+    overflow: "hidden",
   },
   valueText: {
     color: "white",
     fontSize: 12,
-    fontWeight: "600",
+    fontFamily: "Poppins-Medium",
   },
 });
 
