@@ -1,13 +1,34 @@
+import React from "react";
+import { StyleSheet, View } from "react-native";
+import { ActivityIndicator, Text, useTheme } from "react-native-paper";
 
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
-import { ActivityIndicator, Text, useTheme } from 'react-native-paper';
-
+/**
+ * Props for the LoadingIndicator component
+ * @interface LoadingIndicatorProps
+ * @property {string} [message='Loading...'] - Optional message to display below the loading spinner
+ */
 interface LoadingIndicatorProps {
   message?: string;
 }
 
-const LoadingIndicator = ({ message = 'Loading...' }: LoadingIndicatorProps) => {
+/**
+ * LoadingIndicator component
+ *
+ * A reusable loading indicator that displays a spinner with an optional message.
+ * Used throughout the application to indicate loading states.
+ *
+ * @component
+ * @example
+ * // Basic usage with default message
+ * <LoadingIndicator />
+ *
+ * @example
+ * // Custom message
+ * <LoadingIndicator message="Fetching data..." />
+ */
+const LoadingIndicator = ({
+  message = "Loading...",
+}: LoadingIndicatorProps) => {
   const theme = useTheme();
 
   return (
@@ -20,11 +41,14 @@ const LoadingIndicator = ({ message = 'Loading...' }: LoadingIndicatorProps) => 
   );
 };
 
+/**
+ * Component styles
+ */
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: 20,
   },
   message: {

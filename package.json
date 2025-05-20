@@ -14,11 +14,7 @@
     "build:preview:ios": "eas build --platform ios --profile preview",
     "build:dev:android": "eas build --platform android --profile development",
     "build:dev:ios": "eas build --platform ios --profile development",
-    "postinstall": "patch-package",
-    "setup:tasks": "node scripts/setup-tasks-system.js",
-    "db:create-task-tables": "node scripts/apply-task-tables.js",
-    "db:create-storage": "node scripts/create-storage-buckets.js",
-    "db:create-exec-sql": "node scripts/apply-exec-sql-procedure.js"
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
