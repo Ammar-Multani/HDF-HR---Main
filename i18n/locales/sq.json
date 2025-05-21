@@ -1,0 +1,32 @@
+{
+  "common": {
+    "email": "Email",
+    "password": "Fjalëkalimi",
+    "contactUs": "Na kontaktoni",
+    "forgotPassword": "Keni harruar fjalëkalimin?",
+    "dontHaveAccount": "Nuk keni një llogari?",
+    "signIn": "Hyni",
+    "loading": "Duke u ngarkuar..."
+  },
+  "login": {
+    "welcomeBack": "Mirë se u kthyet",
+    "signInToAccess": "Identifikohuni për të hyrë në llogarinë tuaj",
+    "authenticating": "Duke vërtetuar...",
+    "verifyingCredentials": "Duke verifikuar kredencialet...",
+    "success": "Sukses! Duke ridrejtuar...",
+    "emailRequired": "Emaili është i nevojshëm",
+    "validEmail": "Ju lutemi, vendosni një adresë emaili të vlefshme",
+    "passwordRequired": "Fjalëkalimi është i nevojshëm",
+    "passwordLength": "Fjalëkalimi duhet të ketë të paktën 6 karaktere",
+    "failedSignIn": "Hyrja dështoi",
+    "unexpectedError": "Ndodhi një gabim i papritur"
+  },
+  "language": {
+    "english": "Anglisht",
+    "german": "Gjermanisht",
+    "french": "Frëngjisht",
+    "italian": "Italisht",
+    "albanian": "Shqip",
+    "selectLanguage": "Zgjidh gjuhën"
+  }
+}

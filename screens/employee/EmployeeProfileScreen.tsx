@@ -143,7 +143,14 @@ const EmployeeProfileScreen = () => {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <AppHeader title="Profile" showBackButton />
+      <AppHeader
+        title="Profile"
+        showBackButton={false}
+        showHelpButton={false}
+        showProfileMenu={false}
+        showLogo={false}
+        showTitle={true}
+      />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -191,12 +198,15 @@ const EmployeeProfileScreen = () => {
                 <Text style={styles.infoLabel}>Employment:</Text>
                 <Text style={styles.infoValue}>
                   {employeeData?.employment_type
-                    ?.split("_")
-                    .map(
-                      (word: string) =>
-                        word.charAt(0).toUpperCase() + word.slice(1)
-                    )
-                    .join(" ") || "N/A"}
+                    ? employeeData.employment_type
+                        .toString()
+                        .split("_")
+                        .map(
+                          (word: string) =>
+                            word.charAt(0).toUpperCase() + word.slice(1)
+                        )
+                        .join(" ")
+                    : "N/A"}
                 </Text>
               </View>
 

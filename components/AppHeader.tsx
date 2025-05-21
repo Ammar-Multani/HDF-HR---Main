@@ -105,13 +105,22 @@ const AppHeader = ({
     }
   };
 
+  const handleAvatarPress = () => {
+    if (onProfilePress) {
+      onProfilePress();
+    } else if (navigationObject) {
+      navigationObject.navigate("SuperAdminProfileScreen" as never);
+    } else {
+      console.log("Navigation not available");
+    }
+  };
+
   const getInitials = () => {
     if (!userEmail) return "?";
     return userEmail.charAt(0).toUpperCase();
   };
 
   const headerContent = (
-    
     <View
       style={[
         styles.headerContainer,
@@ -122,7 +131,6 @@ const AppHeader = ({
         },
       ]}
     >
-
       <View style={styles.leftSection}>
         {showBackButton && (
           <IconButton
@@ -159,8 +167,12 @@ const AppHeader = ({
                     styles.subtitleText,
                     { color: theme.colors.onSurfaceVariant },
                   ]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
                 >
-                  {subtitle}
+                  {subtitle.length > 20
+                    ? `${subtitle.substring(0, 55)}...`
+                    : subtitle}
                 </Text>
               ) : null}
             </View>
@@ -182,54 +194,24 @@ const AppHeader = ({
           </Tooltip>
         )}
         {showProfileMenu && (
-          <Menu
-            visible={menuVisible}
-            onDismiss={() => setMenuVisible(false)}
-            anchor={
-              <TouchableOpacity onPress={() => setMenuVisible(true)}>
-                <View style={styles.avatarContainer}>
-                  <LinearGradient
-                    colors={[
-                      "rgba(6,169,169,255)",
-                      "rgba(38,127,161,255)",
-                      "rgba(54,105,157,255)",
-                      "rgba(74,78,153,255)",
-                      "rgba(94,52,149,255)",
-                    ]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={[styles.avatarGradient]}
-                  >
-                    <Text style={styles.avatarText}>{getInitials()}</Text>
-                  </LinearGradient>
-                </View>
-              </TouchableOpacity>
-            }
-          >
-            <Menu.Item
-              leadingIcon="account"
-              onPress={handleProfilePress}
-              title="Profile"
-            />
-            {isAdmin && (
-              <Menu.Item
-                leadingIcon="account-cog"
-                onPress={() => {
-                  setMenuVisible(false);
-                  if (navigationObject) {
-                    navigationObject.navigate("AdminPanel" as never);
-                  }
-                }}
-                title="Admin Panel"
-              />
-            )}
-            <Divider />
-            <Menu.Item
-              leadingIcon="logout"
-              onPress={handleSignOut}
-              title="Sign Out"
-            />
-          </Menu>
+          <TouchableOpacity onPress={handleAvatarPress}>
+            <View style={styles.avatarContainer}>
+              <LinearGradient
+                colors={[
+                  "rgba(6,169,169,255)",
+                  "rgba(38,127,161,255)",
+                  "rgba(54,105,157,255)",
+                  "rgba(74,78,153,255)",
+                  "rgba(94,52,149,255)",
+                ]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={[styles.avatarGradient]}
+              >
+                <Text style={styles.avatarText}>{getInitials()}</Text>
+              </LinearGradient>
+            </View>
+          </TouchableOpacity>
         )}
       </View>
     </View>
@@ -291,11 +273,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   logoText: {
-    fontSize: 22,
+    fontSize: 20,
     marginLeft: 10,
   },
   subtitleText: {
-    fontSize: 14,
+    fontSize: 11,
     marginLeft: 10,
   },
   backButton: {

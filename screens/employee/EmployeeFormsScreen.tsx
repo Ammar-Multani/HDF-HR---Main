@@ -306,8 +306,14 @@ const EmployeeFormsScreen = () => {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <AppHeader title="My Forms" showBackButton />
-
+      <AppHeader
+        title="My Forms"
+        showBackButton={false}
+        showHelpButton={false}
+        showProfileMenu={false}
+        showLogo={false}
+        showTitle={true}
+      />
       <View style={styles.searchContainer}>
         <Searchbar
           placeholder="Search forms..."
@@ -377,7 +383,7 @@ const EmployeeFormsScreen = () => {
           },
         ]}
         onStateChange={() => {}}
-        fabStyle={{ backgroundColor: theme.colors.primary }}
+        fabStyle={{ backgroundColor: theme.colors.primary, bottom: 100 }}
       />
     </SafeAreaView>
   );

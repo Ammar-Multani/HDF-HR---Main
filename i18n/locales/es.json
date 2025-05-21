@@ -1,0 +1,31 @@
+{
+  "common": {
+    "email": "Correo electrónico",
+    "password": "Contraseña",
+    "contactUs": "Contáctenos",
+    "forgotPassword": "¿Olvidó su contraseña?",
+    "dontHaveAccount": "¿No tiene una cuenta?",
+    "signIn": "Iniciar sesión",
+    "loading": "Cargando..."
+  },
+  "login": {
+    "welcomeBack": "Bienvenido de nuevo",
+    "signInToAccess": "Inicie sesión para acceder a su cuenta",
+    "authenticating": "Autenticando...",
+    "verifyingCredentials": "Verificando credenciales...",
+    "success": "¡Éxito! Redirigiendo...",
+    "emailRequired": "El correo electrónico es obligatorio",
+    "validEmail": "Por favor, introduzca una dirección de correo electrónico válida",
+    "passwordRequired": "La contraseña es obligatoria",
+    "passwordLength": "La contraseña debe tener al menos 6 caracteres",
+    "failedSignIn": "Error al iniciar sesión",
+    "unexpectedError": "Se produjo un error inesperado"
+  },
+  "language": {
+    "english": "Inglés",
+    "spanish": "Español",
+    "french": "Francés",
+    "arabic": "Árabe",
+    "selectLanguage": "Seleccionar idioma"
+  }
+}

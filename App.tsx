@@ -3,6 +3,7 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { LanguageProvider } from "./contexts/LanguageContext";
 import { AppNavigator } from "./navigation";
 import * as SplashScreen from "expo-splash-screen";
 import * as Linking from "expo-linking";
@@ -249,18 +250,20 @@ export default function App() {
     };
   }, [handleDeepLink]);
 
-  // If pre-auth check hasn't completed yet, we're still loading
-  if (!hasCheckedAuth || !fontsLoaded) {
-    return null; // Keep splash screen visible
+  // If not ready, show nothing
+  if (!appIsReady || !hasCheckedAuth || !fontsLoaded) {
+    return null;
   }
 
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <AuthProvider>
-          <AppNavigator initialAuthState={preAuthCheck} />
-          <StatusBar style="auto" />
-        </AuthProvider>
+        <LanguageProvider>
+          <AuthProvider initialAuthState={preAuthCheck}>
+            <StatusBar style="auto" />
+            <AppNavigator />
+          </AuthProvider>
+        </LanguageProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );

@@ -15,6 +15,7 @@ import {
   Chip,
   SegmentedButtons,
   Snackbar,
+  Menu,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -42,11 +43,16 @@ const CreateTaskScreen = () => {
 
   const [loading, setLoading] = useState(false);
   const [loadingUsers, setLoadingUsers] = useState(true);
+  const [loadingCompanies, setLoadingCompanies] = useState(true);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [availableUsers, setAvailableUsers] = useState<any[]>([]);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
+  const [companies, setCompanies] = useState<any[]>([]);
+  const [selectedCompany, setSelectedCompany] = useState<any>(null);
+  const [menuVisible, setMenuVisible] = useState(false);
 
   const {
     control,
@@ -66,6 +72,27 @@ const CreateTaskScreen = () => {
 
   const deadline = watch("deadline");
 
+  const fetchCompanies = async () => {
+    try {
+      setLoadingCompanies(true);
+      const { data, error } = await supabase
+        .from("company")
+        .select("id, company_name, active")
+        .eq("active", true);
+
+      if (error) {
+        console.error("Error fetching companies:", error);
+        return;
+      }
+
+      setCompanies(data || []);
+    } catch (error) {
+      console.error("Error fetching companies:", error);
+    } finally {
+      setLoadingCompanies(false);
+    }
+  };
+
   const fetchUsers = async () => {
     try {
       setLoadingUsers(true);
@@ -81,7 +108,7 @@ const CreateTaskScreen = () => {
         .from("admin")
         .select("id, name, email, role")
         .eq("role", UserRole.SUPER_ADMIN)
-        .eq("status", "active");
+        .eq("status", true);
 
       if (companyAdminsError || superAdminsError) {
         console.error("Error fetching users:", {
@@ -110,7 +137,13 @@ const CreateTaskScreen = () => {
         role: admin.role,
       }));
 
-      setAvailableUsers([...formattedCompanyAdmins, ...formattedSuperAdmins]);
+      // Store all users first, we'll filter them when a company is selected
+      const allUsersCombined = [
+        ...formattedCompanyAdmins,
+        ...formattedSuperAdmins,
+      ];
+      setAllUsers(allUsersCombined);
+      setAvailableUsers(allUsersCombined);
     } catch (error) {
       console.error("Error fetching users:", error);
     } finally {
@@ -118,8 +151,28 @@ const CreateTaskScreen = () => {
     }
   };
 
+  // Filter users based on selected company
+  useEffect(() => {
+    if (selectedCompany) {
+      // Filter users who belong to the selected company or super admins
+      const filteredUsers = allUsers.filter(
+        (user) =>
+          user.role === UserRole.SUPER_ADMIN ||
+          user.company_id === selectedCompany.id
+      );
+
+      // Clear selected assignees when company changes
+      setSelectedAssignees([]);
+      setAvailableUsers(filteredUsers);
+    } else {
+      // If no company selected, show all users
+      setAvailableUsers(allUsers);
+    }
+  }, [selectedCompany, allUsers]);
+
   useEffect(() => {
     fetchUsers();
+    fetchCompanies();
   }, []);
 
   const toggleAssignee = (userId: string) => {
@@ -144,6 +197,12 @@ const CreateTaskScreen = () => {
         return;
       }
 
+      if (!selectedCompany) {
+        setSnackbarMessage("Please select a company for this task");
+        setSnackbarVisible(true);
+        return;
+      }
+
       setLoading(true);
 
       const reminderDays = parseInt(data.reminder_days_before);
@@ -156,24 +215,47 @@ const CreateTaskScreen = () => {
         return;
       }
 
+      // Find a company admin to use as created_by
+      // Get first admin of the selected company
+      const { data: companyAdmin, error: companyAdminError } = await supabase
+        .from("company_user")
+        .select("id")
+        .eq("company_id", selectedCompany.id)
+        .eq("role", UserRole.COMPANY_ADMIN)
+        .eq("active_status", "active")
+        .limit(1)
+        .single();
+
+      if (companyAdminError || !companyAdmin) {
+        console.error("Error finding company admin:", companyAdminError);
+        setSnackbarMessage(
+          "Cannot create task: No active admin found for this company"
+        );
+        setSnackbarVisible(true);
+        setLoading(false);
+        return;
+      }
+
+      // Create task using the company admin as created_by
+      const taskData = {
+        title: data.title,
+        description: data.description,
+        deadline: data.deadline.toISOString(),
+        priority: data.priority,
+        status: TaskStatus.OPEN,
+        assigned_to:
+          selectedAssignees.length === 1
+            ? selectedAssignees[0]
+            : selectedAssignees,
+        created_by: companyAdmin.id, // Using a company admin ID
+        reminder_days_before: reminderDays,
+        company_id: selectedCompany.id,
+      };
+
       // Create task
-      const { data: taskData, error } = await supabase
+      const { data: createdTask, error } = await supabase
         .from("tasks")
-        .insert([
-          {
-            title: data.title,
-            description: data.description,
-            deadline: data.deadline.toISOString(),
-            priority: data.priority,
-            status: TaskStatus.OPEN,
-            assigned_to:
-              selectedAssignees.length === 1
-                ? selectedAssignees[0]
-                : selectedAssignees,
-            created_by: user.id,
-            reminder_days_before: reminderDays,
-          },
-        ])
+        .insert([taskData])
         .select()
         .single();
 
@@ -204,7 +286,7 @@ const CreateTaskScreen = () => {
     }
   };
 
-  if (loadingUsers) {
+  if (loadingUsers || loadingCompanies) {
     return <LoadingIndicator />;
   }
 
@@ -227,6 +309,35 @@ const CreateTaskScreen = () => {
           >
             Task Details
           </Text>
+
+          <Text style={styles.inputLabel}>Select Company *</Text>
+          <View style={styles.companySelector}>
+            <Button
+              mode="outlined"
+              onPress={() => setMenuVisible(true)}
+              style={styles.companyButton}
+            >
+              {selectedCompany
+                ? selectedCompany.company_name
+                : "Select Company"}
+            </Button>
+            <Menu
+              visible={menuVisible}
+              onDismiss={() => setMenuVisible(false)}
+              anchor={{ x: 0, y: 0 }}
+            >
+              {companies.map((company) => (
+                <Menu.Item
+                  key={company.id}
+                  title={company.company_name}
+                  onPress={() => {
+                    setSelectedCompany(company);
+                    setMenuVisible(false);
+                  }}
+                />
+              ))}
+            </Menu>
+          </View>
 
           <Controller
             control={control}
@@ -452,6 +563,13 @@ const styles = StyleSheet.create({
   submitButton: {
     marginTop: 24,
     paddingVertical: 6,
+  },
+  companySelector: {
+    marginBottom: 16,
+    zIndex: 1000,
+  },
+  companyButton: {
+    width: "100%",
   },
 });
 

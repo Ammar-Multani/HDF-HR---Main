@@ -193,7 +193,7 @@ const EditCompanyScreen = () => {
   if (!company) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        <AppHeader title="Edit Company" showBackButton />
+        <AppHeader title="Edit Company" showBackButton={true} showLogo={false} />
         <View style={styles.errorContainer}>
           <Text style={{ color: theme.colors.error }}>Company not found</Text>
           <Button mode="contained" onPress={() => navigation.goBack()} style={styles.button}>
@@ -206,7 +206,7 @@ const EditCompanyScreen = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <AppHeader title="Edit Company" showBackButton />
+      <AppHeader title="Edit Company" showBackButton={true} showLogo={false} />
       
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   Dimensions,
 } from "react-native";
-import { useTheme, Avatar } from "react-native-paper";
+import { useTheme, Avatar, Divider } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { supabase, isNetworkAvailable } from "../../lib/supabase";
@@ -23,6 +23,8 @@ import { LineChart } from "react-native-chart-kit";
 import OnboardingChart from "../../components/OnboardingChart";
 import Text from "../../components/Text";
 import { globalStyles, createTextStyle } from "../../utils/globalStyles";
+import { useTranslation } from "react-i18next";
+import Animated, { FadeIn } from "react-native-reanimated";
 
 const { width } = Dimensions.get("window");
 
@@ -41,6 +43,7 @@ const SuperAdminDashboard = () => {
   const theme = useTheme();
   const navigation = useNavigation();
   const { user, signOut } = useAuth();
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [networkStatus, setNetworkStatus] = useState<boolean | null>(null);
@@ -73,7 +76,7 @@ const SuperAdminDashboard = () => {
       // Check network status
       const networkAvailable = await checkNetworkStatus();
       if (!networkAvailable) {
-        setError("You're offline. Dashboard data may be outdated.");
+        setError(t("superAdmin.dashboard.offline"));
       }
 
       // Fetch companies count
@@ -285,7 +288,7 @@ const SuperAdminDashboard = () => {
   const onRefresh = async () => {
     const isConnected = await checkNetworkStatus();
     if (!isConnected) {
-      setError("Cannot refresh while offline");
+      setError(t("superAdmin.dashboard.offline"));
       return;
     }
 
@@ -293,23 +296,121 @@ const SuperAdminDashboard = () => {
     fetchDashboardData();
   };
 
-  // if (loading && !refreshing) {
-  //   return (
-  //     <SafeAreaView
-  //       style={[styles.container, { backgroundColor: theme.colors.background }]}
-  //     >
-  //       <AppHeader
-  //         showProfileMenu={true}
-  //         userEmail={user?.email || ""}
-  //         isAdmin={true}
-  //         onSignOut={signOut}
-  //         showHelpButton={false}
-  //         title="Dashboard"
-  //       />
-  //       <LoadingIndicator />
-  //     </SafeAreaView>
-  //   );
-  // }
+  if (loading && !refreshing) {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
+        <StatusBar barStyle={theme.dark ? "light-content" : "dark-content"} />
+        <AppHeader
+          showProfileMenu={true}
+          userEmail={user?.email || ""}
+          isAdmin={true}
+          onSignOut={signOut}
+          showHelpButton={false}
+          showLogo={true}
+        />
+
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {/* Skeleton header */}
+          <View style={styles.welcomeHeader}>
+            <View
+              style={[styles.skeleton, styles.skeletonTitle, { width: "60%" }]}
+            />
+            <View
+              style={[
+                styles.skeleton,
+                styles.skeletonSubtitle,
+                { width: "80%" },
+              ]}
+            />
+          </View>
+
+          {/* Skeleton stats cards */}
+          <View style={styles.statsCard}>
+            <View style={styles.statRow}>
+              <View style={[styles.skeleton, { width: "40%", height: 18 }]} />
+              <View style={[styles.skeleton, { width: "15%", height: 16 }]} />
+            </View>
+            <View
+              style={[
+                styles.skeleton,
+                { width: "25%", height: 30, marginTop: 5 },
+              ]}
+            />
+          </View>
+
+          <View style={styles.statsCard}>
+            <View style={styles.statRow}>
+              <View style={[styles.skeleton, { width: "40%", height: 18 }]} />
+              <View style={[styles.skeleton, { width: "15%", height: 16 }]} />
+            </View>
+            <View
+              style={[
+                styles.skeleton,
+                { width: "25%", height: 30, marginTop: 5 },
+              ]}
+            />
+          </View>
+
+          {/* Skeleton chart */}
+          <View style={styles.chartCard}>
+            <View
+              style={[
+                styles.skeleton,
+                { width: "50%", height: 22, marginBottom: 20 },
+              ]}
+            />
+            <View
+              style={[
+                styles.skeleton,
+                { width: "100%", height: 200, borderRadius: 8 },
+              ]}
+            />
+          </View>
+
+          {/* Skeleton companies list */}
+          <View style={styles.topCompaniesContainer}>
+            <View
+              style={[
+                styles.skeleton,
+                { width: "40%", height: 22, marginBottom: 20 },
+              ]}
+            />
+
+            {[1, 2, 3, 4, 5].map((_, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.companyCard,
+                  index === 4 && {
+                    borderBottomWidth: 0,
+                    marginBottom: 0,
+                  },
+                ]}
+              >
+                <View style={styles.companyInfo}>
+                  <View
+                    style={[
+                      styles.skeleton,
+                      { width: "60%", height: 18, marginBottom: 8 },
+                    ]}
+                  />
+                  <View
+                    style={[styles.skeleton, { width: "40%", height: 16 }]}
+                  />
+                </View>
+                <View style={[styles.skeleton, { width: "15%", height: 16 }]} />
+              </View>
+            ))}
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   const chartConfig = {
     backgroundGradientFrom: "#ffffff",
@@ -469,112 +570,118 @@ const SuperAdminDashboard = () => {
           isAdmin={true}
           onSignOut={signOut}
           showHelpButton={false}
+          showLogo={true}
         />
 
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-        >
-          <View style={styles.welcomeHeader}>
-            <Text variant={"bold"} style={styles.welcomeTitle}>
-              Welcome to HDF Dashboard
-            </Text>
-            <Text style={styles.welcomeSubtitle}>
-              Monitor and manage your platform
-            </Text>
-          </View>
-          <View style={styles.statsCard}>
-            <View style={styles.statRow}>
-              <Text variant={"medium"} style={styles.statLabel}>
-                Total Companies
+        <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+          >
+            <View style={styles.welcomeHeader}>
+              <Text variant={"bold"} style={styles.welcomeTitle}>
+                {t("superAdmin.dashboard.title")}
               </Text>
-              <Text variant={"bold"} style={styles.statGrowth}>
-                {stats.totalCompaniesGrowth}
+              <Text style={styles.welcomeSubtitle}>
+                {t("superAdmin.dashboard.overview")}
               </Text>
             </View>
-            <Text variant={"bold"} style={styles.statValue}>
-              {stats.totalCompanies.toLocaleString()}
-            </Text>
-          </View>
-
-          <View style={styles.statsCard}>
-            <View style={styles.statRow}>
-              <Text variant={"medium"} style={styles.statLabel}>
-                Tasks
-              </Text>
-              <Text
-                variant={"bold"}
-                style={[
-                  styles.statGrowth,
-                  stats.tasksGrowth.startsWith("-")
-                    ? styles.negativeGrowth
-                    : {},
-                ]}
-              >
-                {stats.tasksGrowth}
-              </Text>
-            </View>
-            <Text variant={"bold"} style={styles.statValue}>
-              {stats.totalTasks.toLocaleString()}
-            </Text>
-          </View>
-
-          <View style={styles.chartCard}>
-            <Text variant={"bold"}  style={styles.sectionTitle}>
-              Companies Onboarded by Month
-            </Text>
-            <OnboardingChart
-              monthlyData={stats.monthlyOnboarded}
-              monthLabels={stats.monthLabels}
-              width={width - 5}
-            />
-          </View>
-
-          <View style={styles.topCompaniesContainer}>
-            <Text variant={"bold"} style={styles.sectionTitle}>
-              Top Companies
-            </Text>
-
-            {stats.topCompanies.map((company, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.companyCard,
-                  index === stats.topCompanies.length - 1 && {
-                    borderBottomWidth: 0,
-                    marginBottom: 0,
-                  },
-                ]}
-              >
-                <View style={styles.companyInfo}>
-                  <Text variant={"bold"} style={styles.companyName}>
-                    {company.name}
-                  </Text>
-                  <Text style={styles.companyEmployees}>
-                    {company.employee_count} employees
-                  </Text>
-                </View>
-                <Text variant={"bold"} style={styles.companyGrowth}>
-                  {company.growth_percentage}
+            <View style={styles.statsCard}>
+              <View style={styles.statRow}>
+                <Text variant={"medium"} style={styles.statLabel}>
+                  {t("superAdmin.dashboard.totalCompanies")}
+                </Text>
+                <Text variant={"bold"} style={styles.statGrowth}>
+                  {stats.totalCompaniesGrowth}
                 </Text>
               </View>
-            ))}
+              <Text variant={"bold"} style={styles.statValue}>
+                {stats.totalCompanies.toLocaleString()}
+              </Text>
+            </View>
 
-            {stats.topCompanies.length === 0 && (
-              <View style={styles.emptyState}>
-                <MaterialCommunityIcons
-                  name="domain"
-                  size={48}
-                  color={theme.colors.outlineVariant}
-                />
-                <Text style={styles.emptyStateText}>No companies found</Text>
+            <View style={styles.statsCard}>
+              <View style={styles.statRow}>
+                <Text variant={"medium"} style={styles.statLabel}>
+                  {t("superAdmin.dashboard.tasks")}
+                </Text>
+                <Text
+                  variant={"bold"}
+                  style={[
+                    styles.statGrowth,
+                    stats.tasksGrowth.startsWith("-")
+                      ? styles.negativeGrowth
+                      : {},
+                  ]}
+                >
+                  {stats.tasksGrowth}
+                </Text>
               </View>
-            )}
-          </View>
-        </ScrollView>
+              <Text variant={"bold"} style={styles.statValue}>
+                {stats.totalTasks.toLocaleString()}
+              </Text>
+            </View>
+
+            <View style={styles.chartCard}>
+              <Text variant={"bold"} style={styles.sectionTitle}>
+                {t("superAdmin.dashboard.monthlyOnboarded")}
+              </Text>
+              <OnboardingChart
+                monthlyData={stats.monthlyOnboarded}
+                monthLabels={stats.monthLabels}
+                width={width - 5}
+              />
+            </View>
+
+            <View style={styles.topCompaniesContainer}>
+              <Text variant={"bold"} style={styles.sectionTitle}>
+                {t("superAdmin.dashboard.topCompanies")}
+              </Text>
+
+              {stats.topCompanies.map((company, index) => (
+                <View
+                  key={index}
+                  style={[
+                    styles.companyCard,
+                    index === stats.topCompanies.length - 1 && {
+                      borderBottomWidth: 0,
+                      marginBottom: 0,
+                    },
+                  ]}
+                >
+                  <View style={styles.companyInfo}>
+                    <Text variant={"bold"} style={styles.companyName}>
+                      {company.name}
+                    </Text>
+                    <Text style={styles.companyEmployees}>
+                      {company.employee_count}{" "}
+                      {t("superAdmin.dashboard.employeeCount")}
+                    </Text>
+                  </View>
+                  <Text variant={"bold"} style={styles.companyGrowth}>
+                    {company.growth_percentage}
+                  </Text>
+                </View>
+              ))}
+
+              {stats.topCompanies.length === 0 && (
+                <View style={styles.emptyState}>
+                  <MaterialCommunityIcons
+                    name="domain"
+                    size={48}
+                    color={theme.colors.outlineVariant}
+                  />
+                  <Text style={styles.emptyStateText}>
+                    {t("superAdmin.companies.title")} {t("common.notFound")}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </ScrollView>
+        </Animated.View>
       </View>
     </SafeAreaView>
   );
@@ -698,6 +805,20 @@ const styles = StyleSheet.create({
     marginTop: 16,
     borderWidth: 1,
     borderColor: "#e0e0e0",
+  },
+  // Skeleton styles
+  skeleton: {
+    backgroundColor: "#E1E9EE",
+    borderRadius: 4,
+    overflow: "hidden",
+    position: "relative",
+  },
+  skeletonTitle: {
+    height: 22,
+    marginBottom: 5,
+  },
+  skeletonSubtitle: {
+    height: 14,
   },
 });
 

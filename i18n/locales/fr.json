@@ -1,0 +1,32 @@
+{
+  "common": {
+    "email": "E-mail",
+    "password": "Mot de passe",
+    "contactUs": "Contactez-nous",
+    "forgotPassword": "Mot de passe oublié ?",
+    "dontHaveAccount": "Vous n'avez pas de compte ?",
+    "signIn": "Se connecter",
+    "loading": "Chargement..."
+  },
+  "login": {
+    "welcomeBack": "Bienvenue",
+    "signInToAccess": "Connectez-vous pour accéder à votre compte",
+    "authenticating": "Authentification...",
+    "verifyingCredentials": "Vérification des identifiants...",
+    "success": "Succès ! Redirection...",
+    "emailRequired": "L'e-mail est requis",
+    "validEmail": "Veuillez entrer une adresse e-mail valide",
+    "passwordRequired": "Le mot de passe est requis",
+    "passwordLength": "Le mot de passe doit comporter au moins 6 caractères",
+    "failedSignIn": "Échec de la connexion",
+    "unexpectedError": "Une erreur inattendue s'est produite"
+  },
+  "language": {
+    "english": "Anglais",
+    "german": "Allemand",
+    "french": "Français",
+    "italian": "Italien",
+    "albanian": "Albanais",
+    "selectLanguage": "Sélectionner la langue"
+  }
+}

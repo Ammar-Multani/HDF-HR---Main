@@ -11,6 +11,7 @@ import {
   Dimensions,
   Animated,
   StatusBar,
+  Linking,
 } from "react-native";
 import {
   Text,
@@ -34,6 +35,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import AppHeader from "../../components/AppHeader";
+import { useTranslation } from "react-i18next";
+import LanguageSelector from "../../components/LanguageSelector";
 
 // Key to prevent showing loading screen right after login
 const SKIP_LOADING_KEY = "skip_loading_after_login";
@@ -43,6 +46,7 @@ const LoginScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
   const { signIn } = useAuth();
+  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -51,7 +55,6 @@ const LoginScreen = () => {
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [statusMessage, setStatusMessage] = useState("");
 
   // Animation values
   const fadeAnim = useState(new Animated.Value(0))[0];
@@ -75,10 +78,10 @@ const LoginScreen = () => {
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email) {
-      setEmailError("Email is required");
+      setEmailError(t("login.emailRequired"));
       return false;
     } else if (!emailRegex.test(email)) {
-      setEmailError("Please enter a valid email address");
+      setEmailError(t("login.validEmail"));
       return false;
     }
     setEmailError("");
@@ -87,10 +90,10 @@ const LoginScreen = () => {
 
   const validatePassword = (password: string) => {
     if (!password) {
-      setPasswordError("Password is required");
+      setPasswordError(t("login.passwordRequired"));
       return false;
     } else if (password.length < 6) {
-      setPasswordError("Password must be at least 6 characters");
+      setPasswordError(t("login.passwordLength"));
       return false;
     }
     setPasswordError("");
@@ -107,66 +110,54 @@ const LoginScreen = () => {
 
     try {
       setIsLoggingIn(true);
-      setStatusMessage("Authenticating...");
       await AsyncStorage.setItem(SKIP_LOADING_KEY, "true");
-
-      const timer = setTimeout(() => {
-        if (isLoggingIn) {
-          setStatusMessage("Verifying credentials...");
-        }
-      }, 1000);
 
       const { error } = await signIn(email, password);
 
-      clearTimeout(timer);
-
       if (error) {
-        setSnackbarMessage(error.message || "Failed to sign in");
-        setSnackbarVisible(true);
+        // Handle specific error types
+        if (
+          error.code === "auth/invalid-password" ||
+          error.code === "auth/wrong-password" ||
+          error.message?.toLowerCase().includes("password") ||
+          error.message?.toLowerCase().includes("invalid credentials")
+        ) {
+          setPasswordError(
+            t("login.invalidPassword") || "Invalid password. Please try again."
+          );
+          setPassword("");
+        } else if (
+          error.code === "auth/user-not-found" ||
+          error.message?.toLowerCase().includes("user") ||
+          error.message?.toLowerCase().includes("email")
+        ) {
+          setEmailError(
+            t("login.userNotFound") ||
+              "User not found. Please check your email."
+          );
+        } else {
+          // General error handling
+          setSnackbarMessage(error.message || t("login.failedSignIn"));
+          setSnackbarVisible(true);
+        }
+
         await AsyncStorage.removeItem(SKIP_LOADING_KEY);
-      } else {
-        setStatusMessage("Success! Redirecting...");
       }
     } catch (err) {
-      setSnackbarMessage("An unexpected error occurred");
+      setSnackbarMessage(t("login.unexpectedError"));
       setSnackbarVisible(true);
       await AsyncStorage.removeItem(SKIP_LOADING_KEY);
     } finally {
-      if (snackbarVisible) {
-        setIsLoggingIn(false);
-        setStatusMessage("");
-      }
+      setIsLoggingIn(false);
     }
-  };
-
-  const navigateToRegister = () => {
-    navigation.navigate("Register" as never);
   };
 
   const navigateToForgotPassword = () => {
     navigation.navigate("ForgotPassword" as never);
   };
 
-  const renderLoadingOverlay = () => {
-    if (!isLoggingIn) return null;
-
-    return (
-      <BlurView
-        intensity={70}
-        tint={theme.dark ? "dark" : "light"}
-        style={[
-          styles.loadingOverlay,
-          {
-            backgroundColor: theme.dark
-              ? "rgba(30, 30, 50, 0.75)"
-              : "rgba(255, 255, 255, 0.75)",
-          },
-        ]}
-      >
-        <ActivityIndicator size="small" color={theme.colors.primary} />
-        <Text style={styles.loadingText}>{statusMessage}</Text>
-      </BlurView>
-    );
+  const handleContactUs = () => {
+    Linking.openURL("mailto:support@yourdomain.com?subject=Support%20Request");
   };
 
   const getGradientColors = () => {
@@ -227,7 +218,7 @@ const LoginScreen = () => {
                   variant="headlineMedium"
                   style={[styles.title, { color: theme.colors.onBackground }]}
                 >
-                  Welcome Back
+                  {t("login.welcomeBack")}
                 </Text>
                 <Text
                   variant="bodyLarge"
@@ -236,10 +227,10 @@ const LoginScreen = () => {
                     { color: theme.colors.onSurfaceVariant },
                   ]}
                 >
-                  Sign in to access your account
+                  {t("login.signInToAccess")}
                 </Text>
                 <TextInput
-                  label="Email"
+                  label={t("common.email")}
                   value={email}
                   onChangeText={(text) => {
                     setEmail(text);
@@ -250,10 +241,6 @@ const LoginScreen = () => {
                   autoCapitalize="none"
                   style={styles.input}
                   disabled={isLoggingIn}
-                  // error={!!emailError}
-                  // left={
-                  //   <TextInput.Icon icon="email" color={theme.colors.primary} />
-                  // }
                   theme={{
                     colors: {
                       background: "transparent",
@@ -267,7 +254,7 @@ const LoginScreen = () => {
                 ) : null}
 
                 <TextInput
-                  label="Password"
+                  label={t("common.password")}
                   value={password}
                   onChangeText={(text) => {
                     setPassword(text);
@@ -278,12 +265,6 @@ const LoginScreen = () => {
                   style={styles.input}
                   disabled={isLoggingIn}
                   error={!!passwordError}
-                  // left={
-                  //   <TextInput.Icon
-                  //     icon="lock"
-                  //     color={theme.colors.text}
-                  //   />
-                  // }
                   right={
                     <TextInput.Icon
                       icon={passwordVisible ? "eye-off-outline" : "eye-outline"}
@@ -315,7 +296,7 @@ const LoginScreen = () => {
                       { color: theme.colors.primary },
                     ]}
                   >
-                    Forgot Password?
+                    {t("common.forgotPassword")}
                   </Text>
                 </TouchableOpacity>
 
@@ -342,7 +323,9 @@ const LoginScreen = () => {
                     {isLoggingIn ? (
                       <ActivityIndicator size="small" color="#ffffff" />
                     ) : (
-                      <Text style={styles.buttonLabel}>Sign in</Text>
+                      <Text style={styles.buttonLabel}>
+                        {t("common.signIn")}
+                      </Text>
                     )}
                   </LinearGradient>
                 </TouchableOpacity>
@@ -371,29 +354,33 @@ const LoginScreen = () => {
                 <Divider style={styles.divider} />
               </View>
 
-              <View style={styles.registerContainer}>
-                <Text style={{ color: theme.colors.onSurfaceVariant }}>
-                  Don't have an account?
-                </Text>
+              <View style={styles.contactContainer}>
                 <TouchableOpacity
-                  onPress={navigateToRegister}
+                  onPress={handleContactUs}
                   disabled={isLoggingIn}
+                  style={styles.contactButton}
                 >
-                  <Text
-                    style={[
-                      styles.registerText,
-                      { color: theme.colors.primary },
-                    ]}
-                  >
-                    {" Register"}
+                  <Text style={{ color: theme.colors.primary }}>
+                    {t("common.dontHaveAccount")}{" "}
+                    <Text
+                      style={[
+                        styles.contactText,
+                        { color: theme.colors.primary },
+                      ]}
+                    >
+                      {t("common.contactUs")}
+                    </Text>
                   </Text>
                 </TouchableOpacity>
+              </View>
+
+              {/* Language Selector */}
+              <View style={styles.languageSelectorContainer}>
+                <LanguageSelector />
               </View>
             </Animated.View>
           </ScrollView>
         </KeyboardAvoidingView>
-
-        {renderLoadingOverlay()}
 
         <Snackbar
           visible={snackbarVisible}
@@ -439,7 +426,6 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 16,
     borderWidth: 0.3,
-
     overflow: "hidden",
   },
   input: {
@@ -519,35 +505,22 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontSize: 14,
   },
-  registerContainer: {
+  contactContainer: {
     flexDirection: "row",
     justifyContent: "center",
     marginTop: 24,
   },
-  registerText: {
+  contactButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  contactText: {
     fontWeight: "bold",
+    fontSize: 16,
   },
-  loadingOverlay: {
-    position: "absolute",
-    bottom: 40,
-    alignSelf: "center",
-    flexDirection: "row",
+  languageSelectorContainer: {
+    marginTop: 20,
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 30,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.2)",
-  },
-  loadingText: {
-    marginLeft: 12,
-    fontSize: 14,
-    fontWeight: "600",
   },
   snackbar: {
     marginBottom: 16,

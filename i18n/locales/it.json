@@ -1,0 +1,32 @@
+{
+  "common": {
+    "email": "Email",
+    "password": "Password",
+    "contactUs": "Contattaci",
+    "forgotPassword": "Password dimenticata?",
+    "dontHaveAccount": "Non hai un account?",
+    "signIn": "Accedi",
+    "loading": "Caricamento..."
+  },
+  "login": {
+    "welcomeBack": "Bentornato",
+    "signInToAccess": "Accedi per accedere al tuo account",
+    "authenticating": "Autenticazione in corso...",
+    "verifyingCredentials": "Verifica delle credenziali...",
+    "success": "Successo! Reindirizzamento...",
+    "emailRequired": "L'email è obbligatoria",
+    "validEmail": "Inserisci un indirizzo email valido",
+    "passwordRequired": "La password è obbligatoria",
+    "passwordLength": "La password deve contenere almeno 6 caratteri",
+    "failedSignIn": "Accesso non riuscito",
+    "unexpectedError": "Si è verificato un errore imprevisto"
+  },
+  "language": {
+    "english": "Inglese",
+    "german": "Tedesco",
+    "french": "Francese",
+    "italian": "Italiano",
+    "albanian": "Albanese",
+    "selectLanguage": "Seleziona lingua"
+  }
+}

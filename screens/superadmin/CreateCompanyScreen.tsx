@@ -20,6 +20,7 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
 import { hashPassword } from "../../utils/auth";
+import { useTranslation } from "react-i18next";
 
 interface CompanyFormData {
   company_name: string;
@@ -43,6 +44,7 @@ const CreateCompanyScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
   const { user } = useAuth();
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
@@ -81,14 +83,16 @@ const CreateCompanyScreen = () => {
 
   const addStakeholder = () => {
     if (!stakeholderName || !stakeholderPercentage) {
-      setSnackbarMessage("Please enter both stakeholder name and percentage");
+      setSnackbarMessage(
+        t("superAdmin.companies.stakeholderNameAndPercentRequired")
+      );
       setSnackbarVisible(true);
       return;
     }
 
     const percentage = parseFloat(stakeholderPercentage);
     if (isNaN(percentage) || percentage <= 0 || percentage > 100) {
-      setSnackbarMessage("Percentage must be between 0 and 100");
+      setSnackbarMessage(t("superAdmin.companies.percentageBetween"));
       setSnackbarVisible(true);
       return;
     }
@@ -120,7 +124,7 @@ const CreateCompanyScreen = () => {
         );
 
         if (totalPercentage > 100) {
-          setSnackbarMessage("Total stakeholder percentage cannot exceed 100%");
+          setSnackbarMessage(t("superAdmin.companies.totalPercentageExceeds"));
           setSnackbarVisible(true);
           setLoading(false);
           return;
@@ -134,9 +138,7 @@ const CreateCompanyScreen = () => {
         !emailParts[1].includes(".") ||
         emailParts[1].length < 3
       ) {
-        setSnackbarMessage(
-          "Please enter a valid email address with a proper domain"
-        );
+        setSnackbarMessage(t("superAdmin.companies.invalidEmailDomain"));
         setSnackbarVisible(true);
         setLoading(false);
         return;
@@ -144,7 +146,7 @@ const CreateCompanyScreen = () => {
 
       // Validate password strength
       if (data.admin_password.length < 8) {
-        setSnackbarMessage("Password must be at least 8 characters long");
+        setSnackbarMessage(t("superAdmin.companies.passwordLength"));
         setSnackbarVisible(true);
         setLoading(false);
         return;
@@ -163,7 +165,7 @@ const CreateCompanyScreen = () => {
 
       // Check if user already exists
       if (existingUserResult.data) {
-        throw new Error("A user with this email already exists");
+        throw new Error(t("superAdmin.companies.emailAlreadyExists"));
       }
 
       // Prepare company data
@@ -239,9 +241,9 @@ const CreateCompanyScreen = () => {
         role: "admin",
         active_status: "active",
         created_by: user?.id,
-        phone_number: "Not provided",
+        phone_number: t("superAdmin.companies.notProvided"),
         date_of_birth: new Date().toISOString(),
-        nationality: "Not provided",
+        nationality: t("superAdmin.companies.notProvided"),
       };
 
       const { error: companyUserError } = await supabase
@@ -257,7 +259,7 @@ const CreateCompanyScreen = () => {
 
       console.log(`Company admin created with email: ${data.admin_email}`);
 
-      setSnackbarMessage("Company created successfully!");
+      setSnackbarMessage(t("superAdmin.companies.companyCreatedSuccess"));
       setSnackbarVisible(true);
 
       // Navigate back to companies list after a short delay
@@ -266,7 +268,9 @@ const CreateCompanyScreen = () => {
       }, 5000);
     } catch (error: any) {
       console.error("Error creating company:", error);
-      setSnackbarMessage(error.message || "Failed to create company");
+      setSnackbarMessage(
+        error.message || t("superAdmin.companies.failedToCreate")
+      );
       setSnackbarVisible(true);
     } finally {
       setLoading(false);
@@ -280,7 +284,7 @@ const CreateCompanyScreen = () => {
       <AppHeader
         showLogo={false}
         showBackButton={true}
-        title="Create Company"
+        title={t("superAdmin.companies.createCompany")}
         showHelpButton={true}
         absolute={false}
       />
@@ -296,15 +300,15 @@ const CreateCompanyScreen = () => {
           <Text
             style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
           >
-            Company Information
+            {t("superAdmin.companies.companyInformation")}
           </Text>
 
           <Controller
             control={control}
-            rules={{ required: "Company name is required" }}
+            rules={{ required: t("superAdmin.companies.companyNameRequired") }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
-                label="Company Name *"
+                label={`${t("superAdmin.companies.companyName")} *`}
                 mode="outlined"
                 value={value}
                 onChangeText={onChange}
@@ -322,10 +326,12 @@ const CreateCompanyScreen = () => {
 
           <Controller
             control={control}
-            rules={{ required: "Registration number is required" }}
+            rules={{
+              required: t("superAdmin.companies.registrationNumberRequired"),
+            }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
-                label="Registration Number *"
+                label={`${t("superAdmin.companies.registrationNumber")} *`}
                 mode="outlined"
                 value={value}
                 onChangeText={onChange}
@@ -345,10 +351,10 @@ const CreateCompanyScreen = () => {
 
           <Controller
             control={control}
-            rules={{ required: "Industry type is required" }}
+            rules={{ required: t("superAdmin.companies.industryTypeRequired") }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
-                label="Industry Type *"
+                label={`${t("superAdmin.companies.industryType")} *`}
                 mode="outlined"
                 value={value}
                 onChangeText={onChange}
@@ -366,10 +372,12 @@ const CreateCompanyScreen = () => {
 
           <Controller
             control={control}
-            rules={{ required: "Contact number is required" }}
+            rules={{
+              required: t("superAdmin.companies.contactNumberRequired"),
+            }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
-                label="Contact Number *"
+                label={`${t("superAdmin.companies.contactNumber")} *`}
                 mode="outlined"
                 value={value}
                 onChangeText={onChange}
@@ -390,10 +398,10 @@ const CreateCompanyScreen = () => {
 
           <Controller
             control={control}
-            rules={{ required: "VAT type is required" }}
+            rules={{ required: t("superAdmin.companies.vatTypeRequired") }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
-                label="VAT Type *"
+                label={`${t("superAdmin.companies.vatType")} *`}
                 mode="outlined"
                 value={value}
                 onChangeText={onChange}
@@ -412,15 +420,15 @@ const CreateCompanyScreen = () => {
           <Text
             style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
           >
-            Company Address
+            {t("superAdmin.companies.address")}
           </Text>
 
           <Controller
             control={control}
-            rules={{ required: "Address line 1 is required" }}
+            rules={{ required: t("superAdmin.companies.addressLine1Required") }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
-                label="Address Line 1 *"
+                label={`${t("superAdmin.companies.addressLine1")} *`}
                 mode="outlined"
                 value={value}
                 onChangeText={onChange}
@@ -440,7 +448,7 @@ const CreateCompanyScreen = () => {
             control={control}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
-                label="Address Line 2"
+                label={t("superAdmin.companies.addressLine2")}
                 mode="outlined"
                 value={value}
                 onChangeText={onChange}
@@ -456,10 +464,10 @@ const CreateCompanyScreen = () => {
             <View style={styles.halfInput}>
               <Controller
                 control={control}
-                rules={{ required: "City is required" }}
+                rules={{ required: t("superAdmin.companies.cityRequired") }}
                 render={({ field: { onChange, onBlur, value } }) => (
                   <TextInput
-                    label="City *"
+                    label={`${t("superAdmin.companies.city")} *`}
                     mode="outlined"
                     value={value}
                     onChangeText={onChange}
@@ -481,10 +489,10 @@ const CreateCompanyScreen = () => {
             <View style={styles.halfInput}>
               <Controller
                 control={control}
-                rules={{ required: "State is required" }}
+                rules={{ required: t("superAdmin.companies.stateRequired") }}
                 render={({ field: { onChange, onBlur, value } }) => (
                   <TextInput
-                    label="State/Province *"
+                    label={`${t("superAdmin.companies.stateProvince")} *`}
                     mode="outlined"
                     value={value}
                     onChangeText={onChange}
@@ -508,10 +516,12 @@ const CreateCompanyScreen = () => {
             <View style={styles.halfInput}>
               <Controller
                 control={control}
-                rules={{ required: "Postal code is required" }}
+                rules={{
+                  required: t("superAdmin.companies.postalCodeRequired"),
+                }}
                 render={({ field: { onChange, onBlur, value } }) => (
                   <TextInput
-                    label="Postal Code *"
+                    label={`${t("superAdmin.companies.postalCode")} *`}
                     mode="outlined"
                     value={value}
                     onChangeText={onChange}
@@ -533,10 +543,10 @@ const CreateCompanyScreen = () => {
             <View style={styles.halfInput}>
               <Controller
                 control={control}
-                rules={{ required: "Country is required" }}
+                rules={{ required: t("superAdmin.companies.countryRequired") }}
                 render={({ field: { onChange, onBlur, value } }) => (
                   <TextInput
-                    label="Country *"
+                    label={`${t("superAdmin.companies.country")} *`}
                     mode="outlined"
                     value={value}
                     onChangeText={onChange}
@@ -559,7 +569,7 @@ const CreateCompanyScreen = () => {
           <Text
             style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
           >
-            Stakeholders
+            {t("superAdmin.companies.stakeholders")}
           </Text>
 
           <View style={styles.stakeholdersContainer}>
@@ -573,14 +583,14 @@ const CreateCompanyScreen = () => {
                   onPress={() => removeStakeholder(index)}
                   disabled={loading}
                 >
-                  Remove
+                  {t("superAdmin.companies.remove")}
                 </Button>
               </View>
             ))}
 
             {stakeholders.length === 0 && (
               <Text style={styles.noStakeholdersText}>
-                No stakeholders added yet. Please add at least one.
+                {t("superAdmin.companies.noStakeholdersAdded")}
               </Text>
             )}
           </View>
@@ -591,7 +601,7 @@ const CreateCompanyScreen = () => {
                 control={control}
                 render={({ field: { onChange, onBlur, value } }) => (
                   <TextInput
-                    label="Stakeholder Name"
+                    label={t("superAdmin.companies.stakeholderName")}
                     mode="outlined"
                     value={value}
                     onChangeText={onChange}
@@ -609,7 +619,7 @@ const CreateCompanyScreen = () => {
                 control={control}
                 render={({ field: { onChange, onBlur, value } }) => (
                   <TextInput
-                    label="Percentage"
+                    label={t("superAdmin.companies.percentage")}
                     mode="outlined"
                     value={value}
                     onChangeText={onChange}
@@ -630,27 +640,27 @@ const CreateCompanyScreen = () => {
             style={styles.addButton}
             disabled={loading}
           >
-            Add Stakeholder
+            {t("superAdmin.companies.addStakeholder")}
           </Button>
 
           <Text
             style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
           >
-            Company Admin
+            {t("superAdmin.companies.companyAdmin")}
           </Text>
 
           <Controller
             control={control}
             rules={{
-              required: "Admin email is required",
+              required: t("superAdmin.companies.adminEmailRequired"),
               pattern: {
                 value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                message: "Invalid email address",
+                message: t("superAdmin.companies.invalidEmail"),
               },
             }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
-                label="Admin Email *"
+                label={`${t("superAdmin.companies.adminEmail")} *`}
                 mode="outlined"
                 value={value}
                 onChangeText={onChange}
@@ -671,15 +681,15 @@ const CreateCompanyScreen = () => {
           <Controller
             control={control}
             rules={{
-              required: "Admin password is required",
+              required: t("superAdmin.companies.adminPasswordRequired"),
               minLength: {
                 value: 8,
-                message: "Password must be at least 8 characters long",
+                message: t("superAdmin.companies.passwordLength"),
               },
             }}
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
-                label="Admin Password *"
+                label={`${t("superAdmin.companies.adminPassword")} *`}
                 mode="outlined"
                 value={value}
                 onChangeText={onChange}
@@ -699,11 +709,7 @@ const CreateCompanyScreen = () => {
           )}
 
           <Text style={styles.helperText}>
-            An invitation will be sent to this email to set up the company admin
-            account. The admin will need to complete their profile after first
-            login. Please use a valid email address (e.g., name@company.com,
-            name@gmail.com). The password you set will be included in the
-            invitation email.
+            {t("superAdmin.companies.adminInviteHelper")}
           </Text>
 
           <Button
@@ -713,7 +719,7 @@ const CreateCompanyScreen = () => {
             loading={loading}
             disabled={loading}
           >
-            Create Company
+            {t("superAdmin.companies.createCompany")}
           </Button>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -723,7 +729,7 @@ const CreateCompanyScreen = () => {
         onDismiss={() => setSnackbarVisible(false)}
         duration={3000}
         action={{
-          label: "OK",
+          label: t("common.ok"),
           onPress: () => setSnackbarVisible(false),
         }}
       >

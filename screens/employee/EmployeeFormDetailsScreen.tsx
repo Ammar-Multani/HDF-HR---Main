@@ -277,7 +277,15 @@ const EmployeeFormDetailsScreen = () => {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <AppHeader title={getFormTitle()} showBackButton />
+      <AppHeader
+        title={getFormTitle()}
+        showBackButton={true}
+        showHelpButton={false}
+        showProfileMenu={false}
+        showLogo={false}
+        showTitle={true}
+      />
+
 
       <ScrollView
         style={styles.scrollView}

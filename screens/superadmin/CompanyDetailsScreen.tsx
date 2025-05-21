@@ -35,6 +35,7 @@ import {
 import AppHeader from "../../components/AppHeader";
 import StatusBadge from "../../components/StatusBadge";
 import { Company, UserStatus, CompanyUser, UserRole } from "../../types";
+import { useTranslation } from "react-i18next";
 
 type CompanyDetailsRouteParams = {
   companyId: string;
@@ -162,6 +163,7 @@ const CompanyDetailsScreen = () => {
   const route =
     useRoute<RouteProp<Record<string, CompanyDetailsRouteParams>, string>>();
   const { companyId } = route.params;
+  const { t } = useTranslation();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -331,9 +333,7 @@ const CompanyDetailsScreen = () => {
       // Check if we're using stale data
       if (result.fromCache && result.error) {
         // Show a gentle warning about using stale data
-        setError(
-          "You're viewing cached data. Some information may be outdated."
-        );
+        setError(t("superAdmin.companies.cachedData"));
       }
 
       // Safely extract data from the result
@@ -419,12 +419,12 @@ const CompanyDetailsScreen = () => {
       const isAvailable = await isNetworkAvailable();
       if (!isAvailable) {
         Alert.alert(
-          "Network Check",
-          "Your network connection might be limited. Do you want to try anyway?",
+          t("superAdmin.companies.networkCheck"),
+          t("superAdmin.companies.limitedConnection"),
           [
-            { text: "Cancel", style: "cancel" },
+            { text: t("superAdmin.profile.cancel"), style: "cancel" },
             {
-              text: "Try Anyway",
+              text: t("superAdmin.companies.tryAnyway"),
               onPress: () => performToggleStatus(company),
             },
           ]
@@ -443,15 +443,22 @@ const CompanyDetailsScreen = () => {
   // Move the actual toggle logic to a separate function
   const performToggleStatus = (company: Company) => {
     Alert.alert(
-      company.active ? "Deactivate Company" : "Activate Company",
-      `Are you sure you want to ${company.active ? "deactivate" : "activate"} ${company.company_name}?`,
+      company.active
+        ? t("superAdmin.companies.deactivateCompany")
+        : t("superAdmin.companies.activateCompany"),
+      t("superAdmin.companies.confirmToggleStatus", {
+        action: company.active
+          ? t("superAdmin.companies.deactivate")
+          : t("superAdmin.companies.activate"),
+        name: company.company_name,
+      }),
       [
         {
-          text: "Cancel",
+          text: t("superAdmin.profile.cancel"),
           style: "cancel",
         },
         {
-          text: "Confirm",
+          text: t("common.confirm"),
           onPress: async () => {
             try {
               setLoadingAction(true);
@@ -478,14 +485,18 @@ const CompanyDetailsScreen = () => {
               await clearCache(`companies_*`);
 
               Alert.alert(
-                "Success",
-                `Company ${company.active ? "deactivated" : "activated"} successfully.`
+                t("common.success"),
+                t("superAdmin.companies.statusUpdateSuccess", {
+                  action: company.active
+                    ? t("superAdmin.companies.deactivated")
+                    : t("superAdmin.companies.activated"),
+                })
               );
             } catch (error: any) {
               console.error("Error toggling company status:", error);
               Alert.alert(
-                "Error",
-                error.message || "Failed to update company status"
+                t("common.error"),
+                error.message || t("superAdmin.companies.statusUpdateFailed")
               );
             } finally {
               setLoadingAction(false);
@@ -503,7 +514,7 @@ const CompanyDetailsScreen = () => {
       return (
         <View style={styles.offlineContainer}>
           <Text style={{ color: theme.colors.error, marginBottom: 16 }}>
-            You are currently offline. Some actions will be unavailable.
+            {t("superAdmin.companies.offlineActionsUnavailable")}
           </Text>
           {company ? (
             // Show cached data if available
@@ -528,7 +539,7 @@ const CompanyDetailsScreen = () => {
               onPress={() => fetchCompanyDetails()}
               style={styles.button}
             >
-              Retry
+              {t("common.retry")}
             </Button>
           )}
         </View>
@@ -545,14 +556,14 @@ const CompanyDetailsScreen = () => {
             onPress={() => fetchCompanyDetails()}
             style={styles.button}
           >
-            Retry
+            {t("common.retry")}
           </Button>
           <Button
             mode="outlined"
             onPress={() => navigation.goBack()}
             style={[styles.button, { marginTop: 8 }]}
           >
-            Go Back
+            {t("superAdmin.companies.goBack")}
           </Button>
         </View>
       );
@@ -599,13 +610,15 @@ const CompanyDetailsScreen = () => {
     if (!company) {
       return (
         <View style={styles.errorContainer}>
-          <Text style={{ color: theme.colors.error }}>Company not found</Text>
+          <Text style={{ color: theme.colors.error }}>
+            {t("superAdmin.companies.companyNotFound")}
+          </Text>
           <Button
             mode="contained"
             onPress={() => navigation.goBack()}
             style={styles.button}
           >
-            Go Back
+            {t("superAdmin.companies.goBack")}
           </Button>
         </View>
       );
@@ -644,52 +657,72 @@ const CompanyDetailsScreen = () => {
             <View style={styles.statsRow}>
               <View style={styles.statItem}>
                 <Text style={styles.statValue}>{employeeCount}</Text>
-                <Text style={styles.statLabel}>Total Employees</Text>
+                <Text style={styles.statLabel}>
+                  {t("superAdmin.companies.totalEmployees")}
+                </Text>
               </View>
 
               <View style={styles.statItem}>
                 <Text style={styles.statValue}>{activeEmployeeCount}</Text>
-                <Text style={styles.statLabel}>Active Employees</Text>
+                <Text style={styles.statLabel}>
+                  {t("superAdmin.companies.activeEmployees")}
+                </Text>
               </View>
 
               <View style={styles.statItem}>
                 <Text style={styles.statValue}>{companyAdmins.length}</Text>
-                <Text style={styles.statLabel}>Admins</Text>
+                <Text style={styles.statLabel}>
+                  {t("superAdmin.companies.admins")}
+                </Text>
               </View>
             </View>
 
             <Divider style={styles.divider} />
 
-            <Text style={styles.sectionTitle}>Company Information</Text>
+            <Text style={styles.sectionTitle}>
+              {t("superAdmin.companies.companyInformation")}
+            </Text>
 
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Registration Number:</Text>
+              <Text style={styles.infoLabel}>
+                {t("superAdmin.companies.registrationNumber")}:
+              </Text>
               <Text style={styles.infoValue}>
                 {company.registration_number}
               </Text>
             </View>
 
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Industry Type:</Text>
+              <Text style={styles.infoLabel}>
+                {t("superAdmin.companies.industryType")}:
+              </Text>
               <Text style={styles.infoValue}>{company.industry_type}</Text>
             </View>
 
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Contact Number:</Text>
+              <Text style={styles.infoLabel}>
+                {t("superAdmin.companies.contactNumber")}:
+              </Text>
               <Text style={styles.infoValue}>{company.contact_number}</Text>
             </View>
 
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>VAT Type:</Text>
+              <Text style={styles.infoLabel}>
+                {t("superAdmin.companies.vatType")}:
+              </Text>
               <Text style={styles.infoValue}>{company.vat_type}</Text>
             </View>
 
             <Divider style={styles.divider} />
 
-            <Text style={styles.sectionTitle}>Address</Text>
+            <Text style={styles.sectionTitle}>
+              {t("superAdmin.companies.address")}
+            </Text>
 
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Street:</Text>
+              <Text style={styles.infoLabel}>
+                {t("superAdmin.companies.street")}:
+              </Text>
               <Text style={styles.infoValue}>
                 {company.address.line1}
                 {company.address.line2 ? `, ${company.address.line2}` : ""}
@@ -697,30 +730,40 @@ const CompanyDetailsScreen = () => {
             </View>
 
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>City:</Text>
+              <Text style={styles.infoLabel}>
+                {t("superAdmin.companies.city")}:
+              </Text>
               <Text style={styles.infoValue}>{company.address.city}</Text>
             </View>
 
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>State/Province:</Text>
+              <Text style={styles.infoLabel}>
+                {t("superAdmin.companies.stateProvince")}:
+              </Text>
               <Text style={styles.infoValue}>{company.address.state}</Text>
             </View>
 
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Postal Code:</Text>
+              <Text style={styles.infoLabel}>
+                {t("superAdmin.companies.postalCode")}:
+              </Text>
               <Text style={styles.infoValue}>
                 {company.address.postal_code}
               </Text>
             </View>
 
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Country:</Text>
+              <Text style={styles.infoLabel}>
+                {t("superAdmin.companies.country")}:
+              </Text>
               <Text style={styles.infoValue}>{company.address.country}</Text>
             </View>
 
             <Divider style={styles.divider} />
 
-            <Text style={styles.sectionTitle}>Stakeholders</Text>
+            <Text style={styles.sectionTitle}>
+              {t("superAdmin.companies.stakeholders")}
+            </Text>
 
             <View style={styles.stakeholdersContainer}>
               {company.stakeholders && company.stakeholders.length > 0 ? (
@@ -735,14 +778,16 @@ const CompanyDetailsScreen = () => {
                 ))
               ) : (
                 <Text style={{ fontStyle: "italic", opacity: 0.7 }}>
-                  No stakeholders found
+                  {t("superAdmin.companies.noStakeholders")}
                 </Text>
               )}
             </View>
 
             <Divider style={styles.divider} />
 
-            <Text style={styles.sectionTitle}>Company Admins</Text>
+            <Text style={styles.sectionTitle}>
+              {t("superAdmin.companies.companyAdmins")}
+            </Text>
 
             {companyAdmins.length > 0 ? (
               companyAdmins.map((admin) => (
@@ -766,7 +811,9 @@ const CompanyDetailsScreen = () => {
                 </Card>
               ))
             ) : (
-              <Text style={styles.noAdminsText}>No company admins found</Text>
+              <Text style={styles.noAdminsText}>
+                {t("superAdmin.companies.noAdmins")}
+              </Text>
             )}
           </Card.Content>
         </Card>
@@ -781,7 +828,7 @@ const CompanyDetailsScreen = () => {
             style={[styles.button, { backgroundColor: theme.colors.primary }]}
             disabled={loadingAction || networkStatus === false}
           >
-            Edit Company
+            {t("superAdmin.companies.editCompany")}
           </Button>
 
           <Button
@@ -794,7 +841,9 @@ const CompanyDetailsScreen = () => {
             loading={loadingAction}
             disabled={loadingAction || networkStatus === false}
           >
-            {company.active ? "Deactivate Company" : "Activate Company"}
+            {company.active
+              ? t("superAdmin.companies.deactivateCompany")
+              : t("superAdmin.companies.activateCompany")}
           </Button>
         </View>
       </ScrollView>
@@ -808,13 +857,15 @@ const CompanyDetailsScreen = () => {
       <AppHeader
         showLogo={false}
         showBackButton={true}
-        title="Company Details"
+        title={t("superAdmin.companies.companyDetails")}
         showHelpButton={true}
         absolute={false}
       />
       {networkStatus === false && (
         <View style={styles.offlineBanner}>
-          <Text style={styles.offlineText}>You are currently offline</Text>
+          <Text style={styles.offlineText}>
+            {t("superAdmin.companies.currentlyOffline")}
+          </Text>
         </View>
       )}
       {renderContent()}

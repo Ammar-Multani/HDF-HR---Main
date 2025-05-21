@@ -5,40 +5,56 @@ import {
   ScrollView,
   RefreshControl,
   StatusBar,
+  Dimensions,
 } from "react-native";
-import { Text, Card, Button, useTheme, Divider } from "react-native-paper";
+import { Card, Button, useTheme } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { format } from "date-fns";
-import { supabase } from "../../lib/supabase";
+import { supabase, isNetworkAvailable } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
-import DashboardCard from "../../components/DashboardCard";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import StatusBadge from "../../components/StatusBadge";
-import { FormStatus, TaskStatus } from "../../types";
-import { LinearGradient } from "expo-linear-gradient";
+import { FormStatus } from "../../types";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import Text from "../../components/Text";
+
+const { width } = Dimensions.get("window");
 
 const EmployeeDashboard = () => {
   const theme = useTheme();
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const { user, signOut } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [employeeData, setEmployeeData] = useState<any>(null);
   const [companyData, setCompanyData] = useState<any>(null);
+  const [networkStatus, setNetworkStatus] = useState<boolean | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState({
     totalForms: 0,
     pendingForms: 0,
-    totalTasks: 0,
-    pendingTasks: 0,
+    formsGrowth: "+0%",
   });
-  const [recentTasks, setRecentTasks] = useState<any[]>([]);
   const [recentForms, setRecentForms] = useState<any[]>([]);
+
+  const checkNetworkStatus = async () => {
+    const isAvailable = await isNetworkAvailable();
+    setNetworkStatus(isAvailable);
+    return isAvailable;
+  };
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
+      setError(null);
+
+      // Check network status
+      const networkAvailable = await checkNetworkStatus();
+      if (!networkAvailable) {
+        setError("You're offline. Dashboard data may be outdated.");
+      }
 
       if (!user) return;
 
@@ -57,27 +73,9 @@ const EmployeeDashboard = () => {
       setEmployeeData(userData);
       setCompanyData(userData.company);
 
-      // Fetch tasks assigned to employee
-      const { data: tasksData, error: tasksError } = await supabase
-        .from("task")
-        .select("*")
-        .contains("assigned_users", [user.id])
-        .order("created_at", { ascending: false });
-
-      if (!tasksError) {
-        const tasks = tasksData || [];
-        const pendingTasks = tasks.filter(
-          (task) => task.status !== TaskStatus.COMPLETED
-        );
-
-        setStats((prev) => ({
-          ...prev,
-          totalTasks: tasks.length,
-          pendingTasks: pendingTasks.length,
-        }));
-
-        setRecentTasks(tasks.slice(0, 3));
-      }
+      // Calculate last month date for growth calculations
+      const lastMonthDate = new Date();
+      lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
 
       // Fetch forms submitted by employee
       const { data: accidentData, error: accidentError } = await supabase
@@ -97,6 +95,25 @@ const EmployeeDashboard = () => {
         .select("*")
         .eq("employee_id", user.id)
         .order("created_at", { ascending: false });
+
+      // Fetch last month's forms
+      const { data: lastMonthAccidentData } = await supabase
+        .from("accident_report")
+        .select("*")
+        .eq("employee_id", user.id)
+        .lt("created_at", lastMonthDate.toISOString());
+
+      const { data: lastMonthIllnessData } = await supabase
+        .from("illness_report")
+        .select("*")
+        .eq("employee_id", user.id)
+        .lt("submission_date", lastMonthDate.toISOString());
+
+      const { data: lastMonthDepartureData } = await supabase
+        .from("staff_departure_report")
+        .select("*")
+        .eq("employee_id", user.id)
+        .lt("created_at", lastMonthDate.toISOString());
 
       if (!accidentError && !illnessError && !departureError) {
         const accidentForms = (accidentData || []).map((form) => ({
@@ -134,16 +151,34 @@ const EmployeeDashboard = () => {
             form.status !== FormStatus.DECLINED
         );
 
-        setStats((prev) => ({
-          ...prev,
+        // Calculate forms growth
+        const lastMonthForms = [
+          ...(lastMonthAccidentData || []),
+          ...(lastMonthIllnessData || []),
+          ...(lastMonthDepartureData || []),
+        ];
+
+        let formsGrowth = "+0%";
+        if (lastMonthForms.length > 0) {
+          const growthRate =
+            ((allForms.length - lastMonthForms.length) /
+              lastMonthForms.length) *
+            100;
+          formsGrowth =
+            (growthRate >= 0 ? "+" : "") + growthRate.toFixed(1) + "%";
+        }
+
+        setStats({
           totalForms: allForms.length,
           pendingForms: pendingForms.length,
-        }));
+          formsGrowth: formsGrowth,
+        });
 
-        setRecentForms(allForms.slice(0, 3));
+        setRecentForms(allForms.slice(0, 5));
       }
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
+      setError("Failed to fetch dashboard data");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -154,256 +189,169 @@ const EmployeeDashboard = () => {
     fetchDashboardData();
   }, [user]);
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
+    const isConnected = await checkNetworkStatus();
+    if (!isConnected) {
+      setError("Cannot refresh while offline");
+      return;
+    }
+
     setRefreshing(true);
     fetchDashboardData();
-  };
-
-  const getFormTypeIcon = (type: string) => {
-    switch (type) {
-      case "accident":
-        return "alert-circle";
-      case "illness":
-        return "medical-bag";
-      case "departure":
-        return "account-arrow-right";
-      default:
-        return "file-document";
-    }
   };
 
   if (loading && !refreshing) {
     return <LoadingIndicator />;
   }
 
-  const getGradientColors = () => {
-    return theme.dark
-      ? (["#151729", "#2a2e43"] as const)
-      : (["#f0f8ff", "#e6f2ff"] as const);
-  };
-
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
+      edges={["top"]}
     >
       <StatusBar barStyle={theme.dark ? "light-content" : "dark-content"} />
-      <LinearGradient
-        colors={getGradientColors()}
-        style={styles.container}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+      <AppHeader
+        showProfileMenu={true}
+        userEmail={user?.email || ""}
+        isAdmin={false}
+        onSignOut={signOut}
+        showHelpButton={false}
+      />
+
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
-        <AppHeader
-          showProfileMenu={true}
-          userEmail={user?.email || ""}
-          isAdmin={true} // Always true since this is SuperAdmin dashboard
-          onSignOut={signOut}
-          showHelpButton={false}
-        />
-
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-        >
-          <Card
-            style={[
-              styles.welcomeCard,
-              { backgroundColor: theme.colors.primary },
-            ]}
-          >
-            <Card.Content>
-              <Text style={styles.welcomeText}>
-                Welcome, {employeeData?.first_name || "Employee"}!
-              </Text>
-              <Text style={styles.companyText}>
-                {companyData?.company_name || "Your Company"}
-              </Text>
-            </Card.Content>
-          </Card>
-
-          <View style={styles.statsContainer}>
-            <DashboardCard
-              title="My Forms"
-              count={stats.totalForms}
-              icon="file-document"
-              color={theme.colors.primary}
-              onPress={() => navigation.navigate("Forms" as never)}
-            />
-
-            <DashboardCard
-              title="Pending Forms"
-              count={stats.pendingForms}
-              icon="file-clock"
-              color="#F59E0B" // Amber
-              onPress={() => navigation.navigate("Forms" as never)}
-            />
-
-            <DashboardCard
-              title="My Tasks"
-              count={stats.totalTasks}
-              icon="clipboard-list"
-              color={theme.colors.primary}
-              onPress={() => navigation.navigate("Tasks" as never)}
-            />
-
-            <DashboardCard
-              title="Pending Tasks"
-              count={stats.pendingTasks}
-              icon="clipboard-clock"
-              color="#F59E0B" // Amber
-              onPress={() => navigation.navigate("Tasks" as never)}
-            />
-          </View>
-
-          <Text
-            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
-          >
-            Quick Actions
+        <View style={styles.welcomeHeader}>
+          <Text variant="bold" style={styles.welcomeTitle}>
+            Welcome, {employeeData?.first_name || "Employee"}!
           </Text>
+          <Text style={styles.welcomeSubtitle}>
+            {companyData?.company_name || "Your Company"}
+          </Text>
+        </View>
 
-          <View style={styles.actionsContainer}>
-            <Button
-              mode="contained-tonal"
-              icon="alert-circle"
-              onPress={() =>
-                navigation.navigate("CreateAccidentReport" as never)
-              }
-              style={styles.actionButton}
+        {/* Forms Section */}
+        <Text variant="bold" style={styles.sectionTitle}>
+          Forms
+        </Text>
+        <View style={styles.statsCard}>
+          <View style={styles.statRow}>
+            <Text variant="medium" style={styles.statLabel}>
+              Total Forms
+            </Text>
+            <Text
+              variant="bold"
+              style={[
+                styles.statGrowth,
+                stats.formsGrowth.startsWith("-") ? styles.negativeGrowth : {},
+              ]}
             >
-              Report Accident
-            </Button>
-
-            <Button
-              mode="contained-tonal"
-              icon="medical-bag"
-              onPress={() =>
-                navigation.navigate("CreateIllnessReport" as never)
-              }
-              style={styles.actionButton}
-            >
-              Report Illness
-            </Button>
-
-            <Button
-              mode="contained-tonal"
-              icon="account-arrow-right"
-              onPress={() =>
-                navigation.navigate("CreateStaffDeparture" as never)
-              }
-              style={styles.actionButton}
-            >
-              Staff Departure
-            </Button>
+              {stats.formsGrowth}
+            </Text>
           </View>
+          <Text variant="bold" style={styles.statValue}>
+            {stats.totalForms.toLocaleString()}
+          </Text>
+        </View>
 
-          {recentTasks.length > 0 && (
-            <>
-              <View style={styles.sectionHeader}>
-                <Text
-                  style={[
-                    styles.sectionTitle,
-                    { color: theme.colors.onBackground },
-                  ]}
-                >
-                  Recent Tasks
-                </Text>
-                <Button
-                  mode="text"
-                  onPress={() => navigation.navigate("Tasks" as never)}
-                >
-                  View All
-                </Button>
-              </View>
+        <View style={styles.statsCard}>
+          <View style={styles.statRow}>
+            <Text variant="medium" style={styles.statLabel}>
+              Pending Forms
+            </Text>
+          </View>
+          <Text variant="bold" style={styles.statValue}>
+            {stats.pendingForms.toLocaleString()}
+          </Text>
+        </View>
 
-              {recentTasks.map((task, index) => (
-                <Card
-                  key={task.id}
-                  style={[
-                    styles.itemCard,
-                    { backgroundColor: theme.colors.surface },
-                  ]}
-                  onPress={() =>
-                    navigation.navigate(
-                      "TaskDetails" as never,
-                      { taskId: task.id } as never
-                    )
-                  }
-                >
-                  <Card.Content>
-                    <View style={styles.cardHeader}>
-                      <Text style={styles.cardTitle} numberOfLines={1}>
-                        {task.title}
+        <Text variant="bold" style={styles.sectionTitle}>
+          Quick Actions
+        </Text>
+
+        <View style={styles.actionsContainer}>
+          <Button
+            mode="contained-tonal"
+            icon="alert-circle"
+            onPress={() => navigation.navigate("CreateAccidentReport")}
+            style={styles.actionButton}
+          >
+            Report Accident
+          </Button>
+
+          <Button
+            mode="contained-tonal"
+            icon="medical-bag"
+            onPress={() => navigation.navigate("CreateIllnessReport")}
+            style={styles.actionButton}
+          >
+            Report Illness
+          </Button>
+
+          <Button
+            mode="contained-tonal"
+            icon="account-arrow-right"
+            onPress={() => navigation.navigate("CreateStaffDeparture")}
+            style={styles.actionButton}
+          >
+            Staff Departure
+          </Button>
+        </View>
+
+        {recentForms.length > 0 && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text variant="bold" style={styles.sectionTitle}>
+                Recent Forms
+              </Text>
+              <Button mode="text" onPress={() => navigation.navigate("Forms")}>
+                View All
+              </Button>
+            </View>
+
+            {recentForms.map((form) => (
+              <Card
+                key={`${form.type}-${form.id}`}
+                style={styles.itemCard}
+                onPress={() =>
+                  navigation.navigate("FormDetails", {
+                    formId: form.id,
+                    formType: form.type,
+                  })
+                }
+              >
+                <Card.Content>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.formTitleContainer}>
+                      <Text variant="bold" style={styles.formType}>
+                        {form.title}
                       </Text>
-                      <StatusBadge status={task.status} size="small" />
+                      <StatusBadge status={form.status} size="small" />
                     </View>
-                    <Text style={styles.cardDescription} numberOfLines={1}>
-                      {task.description}
-                    </Text>
-                    <Text style={styles.cardDate}>
-                      Due: {format(new Date(task.deadline), "MMM d, yyyy")}
-                    </Text>
-                  </Card.Content>
-                </Card>
-              ))}
-            </>
-          )}
+                  </View>
+                  <Text style={styles.cardDate}>
+                    Submitted: {format(new Date(form.date), "MMM d, yyyy")}
+                  </Text>
+                </Card.Content>
+              </Card>
+            ))}
+          </>
+        )}
 
-          {recentForms.length > 0 && (
-            <>
-              <View style={styles.sectionHeader}>
-                <Text
-                  style={[
-                    styles.sectionTitle,
-                    { color: theme.colors.onBackground },
-                  ]}
-                >
-                  Recent Forms
-                </Text>
-                <Button
-                  mode="text"
-                  onPress={() => navigation.navigate("Forms" as never)}
-                >
-                  View All
-                </Button>
-              </View>
+        {networkStatus === false && (
+          <View style={styles.offlineNotice}>
+            <MaterialCommunityIcons name="wifi-off" size={20} color="#666" />
+            <Text style={styles.offlineText}>You're currently offline</Text>
+          </View>
+        )}
 
-              {recentForms.map((form, index) => (
-                <Card
-                  key={`${form.type}-${form.id}`}
-                  style={[
-                    styles.itemCard,
-                    { backgroundColor: theme.colors.surface },
-                  ]}
-                  onPress={() =>
-                    navigation.navigate(
-                      "FormDetails" as never,
-                      {
-                        formId: form.id,
-                        formType: form.type,
-                      } as never
-                    )
-                  }
-                >
-                  <Card.Content>
-                    <View style={styles.cardHeader}>
-                      <View style={styles.formTitleContainer}>
-                        <Text style={styles.formType}>{form.title}</Text>
-                        <StatusBadge status={form.status} size="small" />
-                      </View>
-                    </View>
-                    <Text style={styles.cardDate}>
-                      Submitted: {format(new Date(form.date), "MMM d, yyyy")}
-                    </Text>
-                  </Card.Content>
-                </Card>
-              ))}
-            </>
-          )}
-        </ScrollView>
-      </LinearGradient>
+        {/* Extra padding at the bottom for tab bar */}
+        <View style={styles.tabBarSpacer} />
+      </ScrollView>
     </SafeAreaView>
   );
 };
@@ -411,45 +359,72 @@ const EmployeeDashboard = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#f5f7fa",
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    paddingBottom: 120,
   },
-  welcomeCard: {
+  welcomeHeader: {
     marginBottom: 16,
-    elevation: 0,
+    marginTop: 5,
+    marginLeft: 5,
   },
-  welcomeText: {
+  welcomeTitle: {
     fontSize: 22,
-    fontWeight: "bold",
-    color: "white",
+    color: "#333",
+    paddingBottom: 3,
   },
-  companyText: {
-    fontSize: 16,
-    color: "white",
-    opacity: 0.9,
-  },
-  statsContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    marginBottom: 16,
+  welcomeSubtitle: {
+    fontSize: 14,
+    color: "#666",
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: "bold",
-    marginTop: 8,
+    marginTop: 16,
     marginBottom: 12,
+    color: "#333",
+    marginLeft: 5,
+  },
+  statsCard: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 11,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+  },
+  statRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 5,
+  },
+  statLabel: {
+    fontSize: 16,
+    color: "#333",
+  },
+  statGrowth: {
+    fontSize: 14,
+    color: "#4CAF50",
+  },
+  negativeGrowth: {
+    color: "#F44336",
+  },
+  statValue: {
+    fontSize: 25,
+    color: "#111",
   },
   actionsContainer: {
     marginBottom: 24,
   },
   actionButton: {
     marginBottom: 8,
+    borderRadius: 12,
   },
   sectionHeader: {
     flexDirection: "row",
@@ -460,6 +435,10 @@ const styles = StyleSheet.create({
   itemCard: {
     marginBottom: 12,
     elevation: 0,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
   },
   cardHeader: {
     flexDirection: "row",
@@ -469,17 +448,20 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: 16,
-    fontWeight: "bold",
     flex: 1,
     marginRight: 8,
+    color: "#333",
   },
   cardDescription: {
     opacity: 0.7,
     marginBottom: 4,
+    fontSize: 14,
+    color: "#666",
   },
   cardDate: {
     fontSize: 12,
     opacity: 0.7,
+    color: "#666",
   },
   formTitleContainer: {
     flexDirection: "row",
@@ -489,7 +471,29 @@ const styles = StyleSheet.create({
   },
   formType: {
     fontSize: 16,
-    fontWeight: "bold",
+    color: "#333",
+  },
+  offlineNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#f8f9fa",
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  offlineText: {
+    marginLeft: 8,
+    color: "#666",
+  },
+  statsContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  tabBarSpacer: {
+    height: 90, // Space for the tab bar
   },
 });
 

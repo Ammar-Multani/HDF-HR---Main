@@ -37,6 +37,7 @@ import { Company, UserStatus } from "../../types";
 import Text from "../../components/Text";
 import { globalStyles } from "../../utils/globalStyles";
 import { LinearGradient } from "expo-linear-gradient";
+import { useTranslation } from "react-i18next";
 
 // Component for skeleton loading UI
 const CompanyItemSkeleton = () => {
@@ -97,6 +98,7 @@ const CompanyItemSkeleton = () => {
 const CompanyListScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -222,9 +224,7 @@ const CompanyListScreen = () => {
       // Check if we're using stale data
       if (result.fromCache && result.error) {
         // Show a gentle warning about using stale data
-        setError(
-          "You're viewing cached data. Some information may be outdated."
-        );
+        setError(t("superAdmin.companies.cachedData"));
       }
 
       const { data, error } = result;
@@ -279,7 +279,7 @@ const CompanyListScreen = () => {
     } catch (error) {
       console.error("Error fetching companies:", error);
       if (!networkStatus) {
-        setError("You're offline. Some features may be unavailable.");
+        setError(t("common.offline"));
       } else {
         setError(
           error instanceof Error ? error.message : "Failed to load companies"
@@ -330,7 +330,7 @@ const CompanyListScreen = () => {
       debounceTimeout = setTimeout(() => {
         // Don't try to search when offline
         if (networkStatus === false && searchQuery.trim() !== "") {
-          setError("Search is unavailable while offline");
+          setError(t("common.searchUnavailable"));
           setRefreshing(false);
           return;
         }
@@ -353,7 +353,7 @@ const CompanyListScreen = () => {
 
   const onRefresh = () => {
     if (networkStatus === false) {
-      setError("Cannot refresh while offline");
+      setError(t("superAdmin.dashboard.offline"));
       return;
     }
 
@@ -397,21 +397,21 @@ const CompanyListScreen = () => {
           <View style={styles.cardDetails}>
             <View style={styles.detailItem}>
               <Text variant="medium" style={styles.detailLabel}>
-                Registration:
+                {t("superAdmin.companies.registration")}
               </Text>
               <Text style={styles.detailValue}>{item.registration_number}</Text>
             </View>
 
             <View style={styles.detailItem}>
               <Text variant="medium" style={styles.detailLabel}>
-                Industry:
+                {t("superAdmin.companies.industry")}
               </Text>
               <Text style={styles.detailValue}>{item.industry_type}</Text>
             </View>
 
             <View style={styles.detailItem}>
               <Text variant="medium" style={styles.detailLabel}>
-                Contact:
+                {t("superAdmin.companies.contact")}
               </Text>
               <Text style={styles.detailValue}>{item.contact_number}</Text>
             </View>
@@ -427,13 +427,17 @@ const CompanyListScreen = () => {
       return (
         <EmptyState
           icon="domain-off"
-          title="No Companies Found"
+          title={t("superAdmin.companies.noCompanies")}
           message={
             searchQuery
-              ? "No companies match your search criteria."
-              : "You haven't added any companies yet."
+              ? t("superAdmin.companies.noCompaniesSearch")
+              : t("superAdmin.companies.noCompaniesYet")
           }
-          buttonTitle={searchQuery ? "Clear Search" : "Add Company"}
+          buttonTitle={
+            searchQuery
+              ? t("common.clearSearch")
+              : t("superAdmin.companies.addCompany")
+          }
           onButtonPress={() => {
             if (searchQuery) {
               setSearchQuery("");
@@ -473,7 +477,9 @@ const CompanyListScreen = () => {
         ListHeaderComponent={
           totalCount > 0 ? (
             <Text style={styles.resultsCount}>
-              Showing {filteredCompanies.length} of {totalCount} companies
+              {t("superAdmin.companies.showing")} {filteredCompanies.length}{" "}
+              {t("superAdmin.companies.of")} {totalCount}{" "}
+              {t("superAdmin.companies.companies")}
             </Text>
           ) : null
         }
@@ -495,8 +501,8 @@ const CompanyListScreen = () => {
       <AppHeader
         showLogo={false}
         showBackButton={false}
-        title="Manage Companies"
-        subtitle="View, add, and update company information"
+        title={t("superAdmin.companies.manage")}
+        subtitle={t("superAdmin.companies.subtitle")}
         showHelpButton={true}
         absolute={false}
       />
@@ -507,7 +513,7 @@ const CompanyListScreen = () => {
           icon="wifi-off"
           actions={[
             {
-              label: "Retry",
+              label: t("common.retry"),
               onPress: async () => {
                 const isAvailable = await isNetworkAvailable();
                 setNetworkStatus(isAvailable);
@@ -519,29 +525,28 @@ const CompanyListScreen = () => {
             },
           ]}
         >
-          You are offline. Some features may be limited.
+          {t("common.offline")}
         </Banner>
       )}
 
-      {error &&
-        error !== "You're offline. Some features may be unavailable." && (
-          <Banner
-            visible={true}
-            icon="alert-circle"
-            actions={[
-              {
-                label: "Dismiss",
-                onPress: () => setError(null),
-              },
-            ]}
-          >
-            {error}
-          </Banner>
-        )}
+      {error && error !== t("common.offline") && (
+        <Banner
+          visible={true}
+          icon="alert-circle"
+          actions={[
+            {
+              label: t("common.dismiss"),
+              onPress: () => setError(null),
+            },
+          ]}
+        >
+          {error}
+        </Banner>
+      )}
 
       <View style={styles.searchContainer}>
         <Searchbar
-          placeholder="Search companies..."
+          placeholder={t("superAdmin.companies.search")}
           onChangeText={networkStatus === false ? undefined : setSearchQuery}
           value={searchQuery}
           style={[

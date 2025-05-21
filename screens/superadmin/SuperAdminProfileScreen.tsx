@@ -26,10 +26,15 @@ import LoadingIndicator from "../../components/LoadingIndicator";
 import Text from "../../components/Text";
 import { LinearGradient } from "expo-linear-gradient";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useTranslation } from "react-i18next";
+import { useLanguage } from "../../contexts/LanguageContext";
+import LanguageSelector from "../../components/LanguageSelector";
 
 const SuperAdminProfileScreen = () => {
   const theme = useTheme();
   const { user, signOut } = useAuth();
+  const { t } = useTranslation();
+  const { currentLanguage } = useLanguage();
 
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
@@ -87,7 +92,7 @@ const SuperAdminProfileScreen = () => {
 
       // Validate inputs
       if (!name.trim()) {
-        setSnackbarMessage("Name is required");
+        setSnackbarMessage(t("superAdmin.profile.nameRequired"));
         setSnackbarVisible(true);
         setUpdating(false);
         return;
@@ -103,14 +108,14 @@ const SuperAdminProfileScreen = () => {
         throw error;
       }
 
-      setSnackbarMessage("Profile updated successfully");
+      setSnackbarMessage(t("superAdmin.profile.updateSuccess"));
       setSnackbarVisible(true);
 
       // Refresh admin data
       fetchAdminData();
     } catch (error: any) {
       console.error("Error updating profile:", error);
-      setSnackbarMessage(error.message || "Failed to update profile");
+      setSnackbarMessage(error.message || t("superAdmin.profile.updateFailed"));
       setSnackbarVisible(true);
     } finally {
       setUpdating(false);
@@ -118,22 +123,26 @@ const SuperAdminProfileScreen = () => {
   };
 
   const handleSignOut = async () => {
-    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
-      {
-        text: "Cancel",
-        style: "cancel",
-      },
-      {
-        text: "Sign Out",
-        onPress: async () => {
-          try {
-            await signOut();
-          } catch (error) {
-            console.error("Error signing out:", error);
-          }
+    Alert.alert(
+      t("superAdmin.profile.signOut"),
+      t("superAdmin.profile.confirmSignOut"),
+      [
+        {
+          text: t("superAdmin.profile.cancel"),
+          style: "cancel",
         },
-      },
-    ]);
+        {
+          text: t("superAdmin.profile.signOut"),
+          onPress: async () => {
+            try {
+              await signOut();
+            } catch (error) {
+              console.error("Error signing out:", error);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const getInitials = () => {
@@ -156,12 +165,12 @@ const SuperAdminProfileScreen = () => {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      {/* <AppHeader
+      <AppHeader
         title="Profile"
-        showBackButton={false}
+        showBackButton={true}
         showLogo={false}
         subtitle="Manage your account"
-      /> */}
+      />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -174,7 +183,6 @@ const SuperAdminProfileScreen = () => {
           {/* Profile Header with Gradient */}
           <View style={styles.profileHeaderContainer}>
             <View style={styles.profileHeader}>
-
               <Avatar.Text
                 size={100}
                 label={getInitials()}
@@ -204,12 +212,12 @@ const SuperAdminProfileScreen = () => {
                   color="rgba(54,105,157,255)"
                 />
                 <Text variant="bold" style={styles.sectionTitle}>
-                  Personal Information
+                  {t("superAdmin.profile.personalInfo")}
                 </Text>
               </View>
 
               <TextInput
-                label="Name"
+                label={t("superAdmin.profile.name")}
                 value={name}
                 onChangeText={setName}
                 mode="outlined"
@@ -223,7 +231,7 @@ const SuperAdminProfileScreen = () => {
               />
 
               <TextInput
-                label="Email"
+                label={t("superAdmin.profile.email")}
                 value={email}
                 mode="outlined"
                 style={styles.input}
@@ -245,7 +253,7 @@ const SuperAdminProfileScreen = () => {
                 disabled={updating}
                 labelStyle={{ fontFamily: "Poppins-Medium" }}
               >
-                Update Profile
+                {t("superAdmin.profile.updateProfile")}
               </Button>
             </Card.Content>
           </Card>
@@ -260,14 +268,35 @@ const SuperAdminProfileScreen = () => {
                   color="rgba(54,105,157,255)"
                 />
                 <Text variant="bold" style={styles.sectionTitle}>
-                  Account Settings
+                  {t("superAdmin.profile.accountSettings")}
                 </Text>
               </View>
+
+              {/* Language Selector */}
+              <View style={styles.settingItem}>
+                <View style={styles.settingItemContent}>
+                  <MaterialCommunityIcons
+                    name="translate"
+                    size={24}
+                    color="rgba(54,105,157,255)"
+                  />
+                  <Text variant="medium" style={styles.settingText}>
+                    {t("superAdmin.profile.language")}
+                  </Text>
+                </View>
+                <View style={styles.languageSelectorContainer}>
+                  <LanguageSelector />
+                </View>
+              </View>
+
+              <Divider style={styles.divider} />
 
               <TouchableOpacity
                 style={styles.settingItem}
                 onPress={() => {
-                  setSnackbarMessage("Password reset link sent to your email");
+                  setSnackbarMessage(
+                    t("superAdmin.profile.resetPasswordSuccess")
+                  );
                   setSnackbarVisible(true);
                 }}
               >
@@ -278,7 +307,7 @@ const SuperAdminProfileScreen = () => {
                     color="rgba(54,105,157,255)"
                   />
                   <Text variant="medium" style={styles.settingText}>
-                    Reset Password
+                    {t("superAdmin.profile.resetPassword")}
                   </Text>
                 </View>
                 <MaterialCommunityIcons
@@ -304,7 +333,7 @@ const SuperAdminProfileScreen = () => {
                     variant="medium"
                     style={[styles.settingText, { color: theme.colors.error }]}
                   >
-                    Sign Out
+                    {t("superAdmin.profile.signOut")}
                   </Text>
                 </View>
                 <MaterialCommunityIcons
@@ -368,7 +397,6 @@ const styles = StyleSheet.create({
     right: 0,
   },
   avatar: {
-   
     borderWidth: 4,
     borderColor: "#fff",
   },
@@ -442,6 +470,9 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: "#e0e0e0",
+  },
+  languageSelectorContainer: {
+    marginLeft: "auto",
   },
 });
 

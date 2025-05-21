@@ -24,10 +24,19 @@ import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import StatusBadge from "../../components/StatusBadge";
 import { Task, TaskStatus, TaskPriority, TaskComment } from "../../types";
+import { useTranslation } from "react-i18next";
 
 type TaskDetailsRouteParams = {
   taskId: string;
 };
+
+interface CommentWithSender extends TaskComment {
+  senderDetails?: {
+    name: string;
+    email: string;
+    role: string;
+  } | null;
+}
 
 const SuperAdminTaskDetailsScreen = () => {
   const theme = useTheme();
@@ -36,11 +45,12 @@ const SuperAdminTaskDetailsScreen = () => {
     useRoute<RouteProp<Record<string, TaskDetailsRouteParams>, string>>();
   const { taskId } = route.params;
   const { user } = useAuth();
+  const { t } = useTranslation();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [task, setTask] = useState<Task | null>(null);
-  const [comments, setComments] = useState<TaskComment[]>([]);
+  const [comments, setComments] = useState<CommentWithSender[]>([]);
   const [newComment, setNewComment] = useState("");
   const [submittingComment, setSubmittingComment] = useState(false);
   const [assignedUsers, setAssignedUsers] = useState<any[]>([]);
@@ -172,27 +182,33 @@ const SuperAdminTaskDetailsScreen = () => {
   }, [taskId]);
 
   // Helper function to determine user role label
-  const getUserRoleLabel = (comment) => {
-    if (comment.sender_id === user?.id) return "You";
+  const getUserRoleLabel = (comment: CommentWithSender) => {
+    if (comment.sender_id === user?.id) return t("superAdmin.tasks.you");
 
     if (comment.senderDetails) {
       if (comment.senderDetails.role === "superadmin")
-        return `Super Admin (${comment.senderDetails.name})`;
+        return t("superAdmin.tasks.superAdminWithName", {
+          name: comment.senderDetails.name,
+        });
       if (comment.senderDetails.role === "admin")
-        return `Company Admin (${comment.senderDetails.name})`;
+        return t("superAdmin.tasks.companyAdminWithName", {
+          name: comment.senderDetails.name,
+        });
       return comment.senderDetails.name;
     }
 
     // Check in assignedUsers array if sender details not attached to comment
     const assignedUser = assignedUsers.find((u) => u.id === comment.sender_id);
     if (assignedUser) {
-      if (assignedUser.role === "SUPER_ADMIN") return "Super Admin";
-      if (assignedUser.role === "COMPANY_ADMIN") return "Company Admin";
-      return "User";
+      if (assignedUser.role === "SUPER_ADMIN")
+        return t("superAdmin.tasks.superAdmin");
+      if (assignedUser.role === "COMPANY_ADMIN")
+        return t("superAdmin.tasks.companyAdmin");
+      return t("superAdmin.tasks.user");
     }
 
     // Default fallback
-    return "User";
+    return t("superAdmin.tasks.user");
   };
 
   const onRefresh = () => {
@@ -206,14 +222,21 @@ const SuperAdminTaskDetailsScreen = () => {
     try {
       setSubmittingComment(true);
 
-      const { error } = await supabase.from("task_comments").insert([
-        {
-          task_id: taskId,
-          sender_id: user.id,
-          company_id: task?.company_id,
-          message: newComment.trim(),
-        },
-      ]);
+      // Create a comment object without explicitly accessing company_id
+      const commentData: any = {
+        task_id: taskId,
+        sender_id: user.id,
+        message: newComment.trim(),
+      };
+
+      // Only add company_id if it exists in the task
+      if (task && "company_id" in task) {
+        commentData.company_id = (task as any).company_id;
+      }
+
+      const { error } = await supabase
+        .from("task_comments")
+        .insert([commentData]);
 
       if (error) {
         throw error;
@@ -233,7 +256,10 @@ const SuperAdminTaskDetailsScreen = () => {
       setNewComment("");
     } catch (error: any) {
       console.error("Error adding comment:", error);
-      Alert.alert("Error", error.message || "Failed to add comment");
+      Alert.alert(
+        t("common.error"),
+        error.message || t("superAdmin.tasks.failedToAddComment")
+      );
     } finally {
       setSubmittingComment(false);
     }
@@ -260,10 +286,18 @@ const SuperAdminTaskDetailsScreen = () => {
         status: newStatus,
       });
 
-      Alert.alert("Success", `Task status updated to ${newStatus}`);
+      Alert.alert(
+        t("common.success"),
+        t("superAdmin.tasks.statusUpdated", {
+          status: getTranslatedStatus(newStatus),
+        })
+      );
     } catch (error: any) {
       console.error("Error updating task status:", error);
-      Alert.alert("Error", error.message || "Failed to update task status");
+      Alert.alert(
+        t("common.error"),
+        error.message || t("superAdmin.tasks.failedToUpdateStatus")
+      );
     } finally {
       setLoading(false);
     }
@@ -274,11 +308,41 @@ const SuperAdminTaskDetailsScreen = () => {
       case TaskPriority.HIGH:
         return theme.colors.error;
       case TaskPriority.MEDIUM:
-        return theme.colors.warning || "#F59E0B";
+        return "#F59E0B"; // Fixed warning color
       case TaskPriority.LOW:
         return theme.colors.primary;
       default:
         return theme.colors.primary;
+    }
+  };
+
+  const getTranslatedPriority = (priority: TaskPriority) => {
+    switch (priority) {
+      case TaskPriority.HIGH:
+        return t("superAdmin.tasks.high");
+      case TaskPriority.MEDIUM:
+        return t("superAdmin.tasks.medium");
+      case TaskPriority.LOW:
+        return t("superAdmin.tasks.low");
+      default:
+        return t("superAdmin.tasks.medium");
+    }
+  };
+
+  const getTranslatedStatus = (status: TaskStatus) => {
+    switch (status) {
+      case TaskStatus.OPEN:
+        return t("superAdmin.tasks.open");
+      case TaskStatus.IN_PROGRESS:
+        return t("superAdmin.tasks.inProgress");
+      case TaskStatus.AWAITING_RESPONSE:
+        return t("superAdmin.tasks.awaitingResponse");
+      case TaskStatus.COMPLETED:
+        return t("superAdmin.tasks.completed");
+      case TaskStatus.OVERDUE:
+        return t("superAdmin.tasks.overdue");
+      default:
+        return status;
     }
   };
 
@@ -298,15 +362,23 @@ const SuperAdminTaskDetailsScreen = () => {
       <SafeAreaView
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
-        <AppHeader title="Task Details" showBackButton />
+        <AppHeader
+          title={t("superAdmin.tasks.taskDetails")}
+          showLogo={false}
+          showTitle={true}
+          showHelpButton={false}
+          showBackButton={true}
+        />
         <View style={styles.errorContainer}>
-          <Text style={{ color: theme.colors.error }}>Task not found</Text>
+          <Text style={{ color: theme.colors.error }}>
+            {t("superAdmin.tasks.taskNotFound")}
+          </Text>
           <Button
             mode="contained"
             onPress={() => navigation.goBack()}
             style={styles.button}
           >
-            Go Back
+            {t("superAdmin.companies.goBack")}
           </Button>
         </View>
       </SafeAreaView>
@@ -317,7 +389,13 @@ const SuperAdminTaskDetailsScreen = () => {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <AppHeader title="Task Details" showBackButton />
+      <AppHeader
+        title={t("superAdmin.tasks.taskDetails")}
+        showLogo={false}
+        showTitle={true}
+        showHelpButton={false}
+        showBackButton={true}
+      />
 
       <ScrollView
         style={styles.scrollView}
@@ -341,43 +419,57 @@ const SuperAdminTaskDetailsScreen = () => {
               ]}
               textStyle={{ color: getPriorityColor(task.priority) }}
             >
-              {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}{" "}
-              Priority
+              {getTranslatedPriority(task.priority)}{" "}
+              {t("superAdmin.tasks.priority")}
             </Chip>
 
             <Divider style={styles.divider} />
 
-            <Text style={styles.sectionTitle}>Description</Text>
+            <Text style={styles.sectionTitle}>
+              {t("superAdmin.tasks.description")}
+            </Text>
             <Text style={styles.description}>{task.description}</Text>
 
             <Divider style={styles.divider} />
 
-            <Text style={styles.sectionTitle}>Details</Text>
+            <Text style={styles.sectionTitle}>
+              {t("superAdmin.tasks.details")}
+            </Text>
 
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Deadline:</Text>
+              <Text style={styles.detailLabel}>
+                {t("superAdmin.tasks.deadline")}:
+              </Text>
               <Text style={styles.detailValue}>
                 {format(new Date(task.deadline), "MMMM d, yyyy")}
               </Text>
             </View>
 
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Created:</Text>
+              <Text style={styles.detailLabel}>
+                {t("superAdmin.tasks.created")}:
+              </Text>
               <Text style={styles.detailValue}>
                 {format(new Date(task.created_at), "MMMM d, yyyy")}
               </Text>
             </View>
 
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Reminder:</Text>
+              <Text style={styles.detailLabel}>
+                {t("superAdmin.tasks.reminder")}:
+              </Text>
               <Text style={styles.detailValue}>
-                {task.reminder_days_before} days before deadline
+                {t("superAdmin.tasks.daysBeforeDeadline", {
+                  days: task.reminder_days_before,
+                })}
               </Text>
             </View>
 
             <Divider style={styles.divider} />
 
-            <Text style={styles.sectionTitle}>Assigned Users</Text>
+            <Text style={styles.sectionTitle}>
+              {t("superAdmin.tasks.assignedUsers")}
+            </Text>
 
             {assignedUsers.length > 0 ? (
               <View style={styles.usersContainer}>
@@ -393,14 +485,18 @@ const SuperAdminTaskDetailsScreen = () => {
                 ))}
               </View>
             ) : (
-              <Text style={styles.noUsersText}>No users assigned</Text>
+              <Text style={styles.noUsersText}>
+                {t("superAdmin.tasks.noUsersAssigned")}
+              </Text>
             )}
           </Card.Content>
         </Card>
 
         <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
           <Card.Content>
-            <Text style={styles.sectionTitle}>Update Status</Text>
+            <Text style={styles.sectionTitle}>
+              {t("superAdmin.tasks.updateStatus")}
+            </Text>
 
             <View style={styles.statusButtonsContainer}>
               <Button
@@ -416,7 +512,7 @@ const SuperAdminTaskDetailsScreen = () => {
                     : undefined
                 }
               >
-                Open
+                {t("superAdmin.tasks.open")}
               </Button>
 
               <Button
@@ -433,7 +529,7 @@ const SuperAdminTaskDetailsScreen = () => {
                     : undefined
                 }
               >
-                In Progress
+                {t("superAdmin.tasks.inProgress")}
               </Button>
 
               <Button
@@ -450,7 +546,7 @@ const SuperAdminTaskDetailsScreen = () => {
                     : undefined
                 }
               >
-                Awaiting
+                {t("superAdmin.tasks.awaiting")}
               </Button>
 
               <Button
@@ -467,7 +563,7 @@ const SuperAdminTaskDetailsScreen = () => {
                     : undefined
                 }
               >
-                Completed
+                {t("superAdmin.tasks.completed")}
               </Button>
 
               <Button
@@ -484,7 +580,7 @@ const SuperAdminTaskDetailsScreen = () => {
                     : undefined
                 }
               >
-                Overdue
+                {t("superAdmin.tasks.overdue")}
               </Button>
             </View>
           </Card.Content>
@@ -492,7 +588,9 @@ const SuperAdminTaskDetailsScreen = () => {
 
         <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
           <Card.Content>
-            <Text style={styles.sectionTitle}>Comments</Text>
+            <Text style={styles.sectionTitle}>
+              {t("superAdmin.tasks.comments")}
+            </Text>
 
             {comments.length > 0 ? (
               comments.map((comment) => (
@@ -512,12 +610,14 @@ const SuperAdminTaskDetailsScreen = () => {
                 </View>
               ))
             ) : (
-              <Text style={styles.noCommentsText}>No comments yet</Text>
+              <Text style={styles.noCommentsText}>
+                {t("superAdmin.tasks.noCommentsYet")}
+              </Text>
             )}
 
             <View style={styles.addCommentContainer}>
               <TextInput
-                label="Add a comment"
+                label={t("superAdmin.tasks.addComment")}
                 value={newComment}
                 onChangeText={setNewComment}
                 mode="outlined"
@@ -532,7 +632,7 @@ const SuperAdminTaskDetailsScreen = () => {
                 loading={submittingComment}
                 disabled={submittingComment || !newComment.trim()}
               >
-                Add Comment
+                {t("superAdmin.tasks.addComment")}
               </Button>
             </View>
           </Card.Content>
@@ -541,15 +641,13 @@ const SuperAdminTaskDetailsScreen = () => {
         <View style={styles.buttonContainer}>
           <Button
             mode="contained"
-            onPress={() =>
-              navigation.navigate(
-                "EditTask" as never,
-                { taskId: task.id } as never
-              )
-            }
+            onPress={() => {
+              // @ts-ignore - Navigation typing can be complex
+              navigation.navigate("EditTask", { taskId: task.id });
+            }}
             style={[styles.button, { backgroundColor: theme.colors.primary }]}
           >
-            Edit Task
+            {t("superAdmin.tasks.editTask")}
           </Button>
         </View>
       </ScrollView>

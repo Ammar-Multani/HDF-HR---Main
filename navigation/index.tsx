@@ -44,6 +44,11 @@ import CreateTaskScreen from "../screens/superadmin/CreateTaskScreen";
 import SuperAdminProfileScreen from "../screens/superadmin/SuperAdminProfileScreen";
 import SuperAdminUsersScreen from "../screens/superadmin/SuperAdminUsersScreen";
 import CreateSuperAdminScreen from "../screens/superadmin/CreateSuperAdminScreen";
+import SuperAdminDetailsScreen from "../screens/superadmin/SuperAdminDetailsScreen";
+import CompanyAdminDetailsScreen from "../screens/superadmin/CompanyAdminDetailsScreen";
+import EmployeeDetailedScreen from "../screens/superadmin/EmployeeDetailedScreen";
+import EditSuperAdminScreen from "../screens/superadmin/EditSuperAdminScreen";
+import EditCompanyAdminScreen from "../screens/superadmin/EditCompanyAdminScreen";
 
 // Company Admin Screens
 import CompanyAdminDashboard from "../screens/companyadmin/CompanyAdminDashboard";
@@ -79,6 +84,8 @@ const RootStack = createNativeStackNavigator();
 const SuperAdminTab = createBottomTabNavigator();
 // Tab navigator for CompanyAdmin
 const CompanyAdminTab = createBottomTabNavigator();
+// Tab navigator for Employee
+const EmployeeTab = createBottomTabNavigator();
 
 // Key for navigation request from auth context
 const NAVIGATE_TO_DASHBOARD_KEY = "NAVIGATE_TO_DASHBOARD";
@@ -174,6 +181,30 @@ const SuperAdminNavigator = () => {
         name="CreateSuperAdmin"
         component={CreateSuperAdminScreen}
       />
+      <SuperAdminStack.Screen
+        name="SuperAdminDetailsScreen"
+        component={SuperAdminDetailsScreen}
+      />
+      <SuperAdminStack.Screen
+        name="SuperAdminProfileScreen"
+        component={SuperAdminProfileScreen}
+      />
+      <SuperAdminStack.Screen
+        name="EditSuperAdmin"
+        component={EditSuperAdminScreen}
+      />
+      <SuperAdminStack.Screen
+        name="CompanyAdminDetailsScreen"
+        component={CompanyAdminDetailsScreen}
+      />
+      <SuperAdminStack.Screen
+        name="EditCompanyAdmin"
+        component={EditCompanyAdminScreen}
+      />
+      <SuperAdminStack.Screen
+        name="EmployeeDetailedScreen"
+        component={EmployeeDetailedScreen}
+      />
     </SuperAdminStack.Navigator>
   );
 };
@@ -185,6 +216,7 @@ const SuperAdminTabNavigator = () => {
   const windowWidth = Dimensions.get("window").width;
   const isLargeScreen = isWeb && windowWidth > 768;
   const nav = useNavigationContainerRef();
+  const [activeScreen, setActiveScreen] = React.useState("Dashboard");
 
   const renderTabBarBackground = () => {
     return (
@@ -273,18 +305,6 @@ const SuperAdminTabNavigator = () => {
                   alignSelf: "center",
                 }}
               />
-
-              {/* Option 2: Text logo (currently used) */}
-              {/* <Text
-                variant={"bold"}
-                style={{
-                  color: "#fff",
-                  fontSize: 24,
-                  textAlign: "center",
-                }}
-              >
-                HDF-HR
-              </Text> */}
             </View>
           </View>
 
@@ -293,54 +313,43 @@ const SuperAdminTabNavigator = () => {
             <NavItem
               icon="home"
               label="Dashboard"
-              onPress={() => {
-                if (nav?.isReady()) {
-                  nav.dispatch(CommonActions.navigate("Dashboard"));
-                }
-              }}
+              isActive={activeScreen === "Dashboard"}
+              onPress={() => setActiveScreen("Dashboard")}
             />
             <NavItem
               icon="domain"
               label="Companies"
-              onPress={() => {
-                if (nav?.isReady()) {
-                  nav.dispatch(CommonActions.navigate("Companies"));
-                }
-              }}
+              isActive={activeScreen === "Companies"}
+              onPress={() => setActiveScreen("Companies")}
             />
             <NavItem
               icon="clipboard-text"
               label="Tasks"
-              onPress={() => {
-                if (nav?.isReady()) {
-                  nav.dispatch(CommonActions.navigate("Tasks"));
-                }
-              }}
+              isActive={activeScreen === "Tasks"}
+              onPress={() => setActiveScreen("Tasks")}
             />
             <NavItem
               icon="account-group"
               label="Users"
-              onPress={() => {
-                if (nav?.isReady()) {
-                  nav.dispatch(CommonActions.navigate("Users"));
-                }
-              }}
+              isActive={activeScreen === "Users"}
+              onPress={() => setActiveScreen("Users")}
             />
             <NavItem
               icon="account-circle"
               label="Profile"
-              onPress={() => {
-                if (nav?.isReady()) {
-                  nav.dispatch(CommonActions.navigate("Profile"));
-                }
-              }}
+              isActive={activeScreen === "Profile"}
+              onPress={() => setActiveScreen("Profile")}
             />
           </View>
         </View>
 
         {/* Main Content */}
         <View style={{ flex: 1 }}>
-          <SuperAdminDashboard />
+          {activeScreen === "Dashboard" && <SuperAdminDashboard />}
+          {activeScreen === "Companies" && <CompanyListScreen />}
+          {activeScreen === "Tasks" && <SuperAdminTasksScreen />}
+          {activeScreen === "Users" && <SuperAdminUsersScreen />}
+          {activeScreen === "Profile" && <SuperAdminProfileScreen />}
         </View>
       </View>
     );
@@ -448,9 +457,10 @@ interface NavItemProps {
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
   label: string;
   onPress: () => void;
+  isActive?: boolean;
 }
 
-const NavItem = ({ icon, label, onPress }: NavItemProps) => {
+const NavItem = ({ icon, label, onPress, isActive = false }: NavItemProps) => {
   return (
     <Pressable
       onPress={onPress}
@@ -458,8 +468,10 @@ const NavItem = ({ icon, label, onPress }: NavItemProps) => {
         flexDirection: "row",
         alignItems: "center",
         paddingVertical: 16,
+        paddingHorizontal: 16,
         borderRadius: 10,
         marginBottom: 10,
+        backgroundColor: isActive ? "rgba(255, 255, 255, 0.15)" : "transparent",
       }}
     >
       <MaterialCommunityIcons
@@ -470,12 +482,10 @@ const NavItem = ({ icon, label, onPress }: NavItemProps) => {
       />
       <View
         style={{
-          // backgroundColor: "rgba(255, 255, 255, 0.15)",
           height: 36,
           flex: 1,
           borderRadius: 8,
           justifyContent: "center",
-          paddingHorizontal: 12,
         }}
       >
         <Text variant={"semibold"} style={{ fontSize: 16, color: "#fff" }}>
@@ -527,6 +537,7 @@ const CompanyAdminTabNavigator = () => {
   const windowWidth = Dimensions.get("window").width;
   const isLargeScreen = isWeb && windowWidth > 768;
   const nav = useNavigationContainerRef();
+  const [activeScreen, setActiveScreen] = React.useState("Dashboard");
 
   const renderTabBarBackground = () => {
     return (
@@ -623,54 +634,43 @@ const CompanyAdminTabNavigator = () => {
             <NavItem
               icon="home"
               label="Dashboard"
-              onPress={() => {
-                if (nav?.isReady()) {
-                  nav.dispatch(CommonActions.navigate("Dashboard"));
-                }
-              }}
+              isActive={activeScreen === "Dashboard"}
+              onPress={() => setActiveScreen("Dashboard")}
             />
             <NavItem
               icon="account-group"
               label="Employees"
-              onPress={() => {
-                if (nav?.isReady()) {
-                  nav.dispatch(CommonActions.navigate("Employees"));
-                }
-              }}
+              isActive={activeScreen === "Employees"}
+              onPress={() => setActiveScreen("Employees")}
             />
             <NavItem
               icon="clipboard-text"
               label="Tasks"
-              onPress={() => {
-                if (nav?.isReady()) {
-                  nav.dispatch(CommonActions.navigate("Tasks"));
-                }
-              }}
+              isActive={activeScreen === "Tasks"}
+              onPress={() => setActiveScreen("Tasks")}
             />
             <NavItem
               icon="file-document"
               label="Forms"
-              onPress={() => {
-                if (nav?.isReady()) {
-                  nav.dispatch(CommonActions.navigate("FormSubmissions"));
-                }
-              }}
+              isActive={activeScreen === "FormSubmissions"}
+              onPress={() => setActiveScreen("FormSubmissions")}
             />
             <NavItem
               icon="account-circle"
               label="Profile"
-              onPress={() => {
-                if (nav?.isReady()) {
-                  nav.dispatch(CommonActions.navigate("Profile"));
-                }
-              }}
+              isActive={activeScreen === "Profile"}
+              onPress={() => setActiveScreen("Profile")}
             />
           </View>
         </View>
 
         {/* Main Content */}
         <View style={{ flex: 1 }}>
-          <CompanyAdminDashboard />
+          {activeScreen === "Dashboard" && <CompanyAdminDashboard />}
+          {activeScreen === "Employees" && <EmployeeListScreen />}
+          {activeScreen === "Tasks" && <CompanyAdminTasksScreen />}
+          {activeScreen === "FormSubmissions" && <FormSubmissionsScreen />}
+          {activeScreen === "Profile" && <CompanyAdminProfileScreen />}
         </View>
       </View>
     );
@@ -726,7 +726,11 @@ const CompanyAdminTabNavigator = () => {
         component={EmployeeListScreen}
         options={{
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="account-group" color={color} size={24} />
+            <MaterialCommunityIcons
+              name="account-group"
+              color={color}
+              size={24}
+            />
           ),
         }}
       />
@@ -777,7 +781,10 @@ const CompanyAdminTabNavigator = () => {
 // Employee Navigator
 const EmployeeNavigator = () => (
   <EmployeeStack.Navigator screenOptions={{ headerShown: false }}>
-    <EmployeeStack.Screen name="Dashboard" component={EmployeeDashboard} />
+    <EmployeeStack.Screen
+      name="EmployeeTabs"
+      component={EmployeeTabNavigator}
+    />
     <EmployeeStack.Screen
       name="CreateAccidentReport"
       component={CreateAccidentReportScreen}
@@ -790,19 +797,223 @@ const EmployeeNavigator = () => (
       name="CreateStaffDeparture"
       component={CreateStaffDepartureScreen}
     />
-    <EmployeeStack.Screen name="Forms" component={EmployeeFormsScreen} />
     <EmployeeStack.Screen
       name="FormDetails"
       component={EmployeeFormDetailsScreen}
     />
-    <EmployeeStack.Screen name="Tasks" component={EmployeeTasksScreen} />
-    <EmployeeStack.Screen
+    {/* <EmployeeStack.Screen
       name="TaskDetails"
       component={EmployeeTaskDetailsScreen}
-    />
-    <EmployeeStack.Screen name="Profile" component={EmployeeProfileScreen} />
+    /> */}
   </EmployeeStack.Navigator>
 );
+
+// Tab Navigator for Employee
+const EmployeeTabNavigator = () => {
+  const theme = useTheme();
+  const isWeb = Platform.OS === "web";
+  const windowWidth = Dimensions.get("window").width;
+  const isLargeScreen = isWeb && windowWidth > 768;
+  const nav = useNavigationContainerRef();
+  const [activeScreen, setActiveScreen] = React.useState("Dashboard");
+
+  const renderTabBarBackground = () => {
+    return (
+      <View
+        style={{
+          borderRadius: 25,
+          borderWidth: 1,
+          borderColor: "rgb(207, 207, 207)",
+          overflow: "hidden",
+          ...StyleSheet.absoluteFillObject,
+        }}
+      >
+        <LinearGradient
+          colors={[
+            "rgba(6,169,169,255)",
+            "rgba(38,127,161,255)",
+            "rgba(54,105,157,255)",
+            "rgba(74,78,153,255)",
+            "rgba(94,52,149,255)",
+          ]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
+    );
+  };
+
+  // Use conditional rendering based on platform/screen size
+  if (isLargeScreen) {
+    // Web with large screen: Use custom sidebar layout
+    return (
+      <View style={{ flexDirection: "row", height: "100%" }}>
+        {/* Sidebar Navigation */}
+        <View
+          style={{
+            width: 220,
+            height: "100%",
+            backgroundColor: "transparent",
+            paddingTop: 20,
+            paddingBottom: 20,
+            borderRightWidth: 0,
+            position: "relative",
+          }}
+        >
+          {/* Background gradient */}
+          <LinearGradient
+            colors={[
+              "rgba(6,169,169,255)",
+              "rgba(38,127,161,255)",
+              "rgba(54,105,157,255)",
+              "rgba(74,78,153,255)",
+              "rgba(94,52,149,255)",
+            ]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+
+          {/* Logo at the top */}
+          <View
+            style={{
+              paddingHorizontal: 20,
+              paddingVertical: 24,
+              marginBottom: 10,
+              alignItems: "center",
+              borderBottomWidth: 1,
+              borderBottomColor: "rgba(255, 255, 255, 0.1)",
+            }}
+          >
+            <View
+              style={{
+                width: 150,
+                height: 50,
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              {/* Logo image */}
+              <Image
+                source={require("../assets/splash-icon-mono.png")}
+                style={{
+                  width: 160,
+                  height: 120,
+                  resizeMode: "contain",
+                  alignSelf: "center",
+                }}
+              />
+            </View>
+          </View>
+
+          {/* Navigation Items */}
+          <View style={{ paddingLeft: 20, paddingRight: 20, marginTop: 20 }}>
+            <NavItem
+              icon="home"
+              label="Dashboard"
+              isActive={activeScreen === "Dashboard"}
+              onPress={() => setActiveScreen("Dashboard")}
+            />
+            <NavItem
+              icon="file-document"
+              label="Forms"
+              isActive={activeScreen === "Forms"}
+              onPress={() => setActiveScreen("Forms")}
+            />
+            <NavItem
+              icon="account-circle"
+              label="Profile"
+              isActive={activeScreen === "Profile"}
+              onPress={() => setActiveScreen("Profile")}
+            />
+          </View>
+        </View>
+
+        {/* Main Content */}
+        <View style={{ flex: 1 }}>
+          {activeScreen === "Dashboard" && <EmployeeDashboard />}
+          {activeScreen === "Forms" && <EmployeeFormsScreen />}
+          {activeScreen === "Profile" && <EmployeeProfileScreen />}
+        </View>
+      </View>
+    );
+  }
+
+  // Mobile or small screen: Use bottom tabs
+  return (
+    <EmployeeTab.Navigator
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: {
+          position: "absolute",
+          elevation: 7,
+          backgroundColor: "transparent",
+          borderTopWidth: 0,
+          height: 70,
+          paddingTop: 7.5,
+          paddingBottom: 10,
+          paddingHorizontal: 5,
+          marginHorizontal: 13,
+          marginBottom: 10,
+          borderRadius: 25,
+
+          shadowColor: "#000",
+          shadowOffset: {
+            width: 0,
+            height: 2,
+          },
+          shadowOpacity: 0.25,
+          shadowRadius: 3.84,
+        },
+        tabBarBackground: renderTabBarBackground,
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontFamily: "Poppins-Medium",
+          color: "#fff",
+        },
+        tabBarActiveTintColor: "#fff",
+        tabBarInactiveTintColor: "rgba(255, 255, 255, 0.7)",
+      }}
+    >
+      <EmployeeTab.Screen
+        name="Dashboard"
+        component={EmployeeDashboard}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="home" color={color} size={24} />
+          ),
+        }}
+      />
+      <EmployeeTab.Screen
+        name="Forms"
+        component={EmployeeFormsScreen}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons
+              name="file-document"
+              color={color}
+              size={24}
+            />
+          ),
+        }}
+      />
+      <EmployeeTab.Screen
+        name="Profile"
+        component={EmployeeProfileScreen}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons
+              name="account-circle"
+              color={color}
+              size={24}
+            />
+          ),
+        }}
+      />
+    </EmployeeTab.Navigator>
+  );
+};
 
 // Main Navigator - enhanced with initialAuthState for faster load times
 export const AppNavigator = ({ initialAuthState = null }) => {

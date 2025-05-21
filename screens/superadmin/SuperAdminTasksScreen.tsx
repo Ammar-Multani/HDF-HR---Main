@@ -23,10 +23,12 @@ import StatusBadge from "../../components/StatusBadge";
 import { Task, TaskPriority, TaskStatus } from "../../types";
 import Text from "../../components/Text";
 import { LinearGradient } from "expo-linear-gradient";
+import { useTranslation } from "react-i18next";
 
 const SuperAdminTasksScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -148,6 +150,20 @@ const SuperAdminTasksScreen = () => {
     }
   };
 
+  const getTranslatedPriority = (priority: TaskPriority) => {
+    switch (priority) {
+      case TaskPriority.HIGH:
+        return t("superAdmin.tasks.high");
+      case TaskPriority.MEDIUM:
+        return t("superAdmin.tasks.medium");
+      case TaskPriority.LOW:
+        return t("superAdmin.tasks.low");
+      default:
+        // Fall back to a safe default translation
+        return t("superAdmin.tasks.medium");
+    }
+  };
+
   const renderTaskItem = ({ item }: { item: Task }) => (
     <TouchableOpacity
       onPress={() => navigation.navigate("TaskDetails", { taskId: item.id })}
@@ -186,11 +202,12 @@ const SuperAdminTasksScreen = () => {
                 fontFamily: "Poppins-Medium",
               }}
             >
-              {item.priority.charAt(0).toUpperCase() + item.priority.slice(1)}
+              {getTranslatedPriority(item.priority)}
             </Chip>
 
             <Text variant="medium" style={styles.deadline}>
-              Due: {format(new Date(item.deadline), "MMM d, yyyy")}
+              {t("superAdmin.tasks.due")}:{" "}
+              {format(new Date(item.deadline), "MMM d, yyyy")}
             </Text>
           </View>
         </Card.Content>
@@ -213,7 +230,7 @@ const SuperAdminTasksScreen = () => {
             color: statusFilter === "all" ? "#fff" : "#666",
           }}
         >
-          All
+          {t("superAdmin.tasks.all")}
         </Chip>
         <Chip
           selected={statusFilter === TaskStatus.OPEN}
@@ -227,7 +244,7 @@ const SuperAdminTasksScreen = () => {
             color: statusFilter === TaskStatus.OPEN ? "#fff" : "#666",
           }}
         >
-          Open
+          {t("superAdmin.tasks.open")}
         </Chip>
         <Chip
           selected={statusFilter === TaskStatus.IN_PROGRESS}
@@ -241,7 +258,7 @@ const SuperAdminTasksScreen = () => {
             color: statusFilter === TaskStatus.IN_PROGRESS ? "#fff" : "#666",
           }}
         >
-          In Progress
+          {t("superAdmin.tasks.inProgress")}
         </Chip>
         <Chip
           selected={statusFilter === TaskStatus.AWAITING_RESPONSE}
@@ -258,7 +275,7 @@ const SuperAdminTasksScreen = () => {
               statusFilter === TaskStatus.AWAITING_RESPONSE ? "#fff" : "#666",
           }}
         >
-          Awaiting Response
+          {t("superAdmin.tasks.awaitingResponse")}
         </Chip>
         <Chip
           selected={statusFilter === TaskStatus.COMPLETED}
@@ -272,7 +289,7 @@ const SuperAdminTasksScreen = () => {
             color: statusFilter === TaskStatus.COMPLETED ? "#fff" : "#666",
           }}
         >
-          Completed
+          {t("superAdmin.tasks.completed")}
         </Chip>
         <Chip
           selected={statusFilter === TaskStatus.OVERDUE}
@@ -286,7 +303,7 @@ const SuperAdminTasksScreen = () => {
             color: statusFilter === TaskStatus.OVERDUE ? "#fff" : "#666",
           }}
         >
-          Overdue
+          {t("superAdmin.tasks.overdue")}
         </Chip>
       </ScrollView>
     </View>
@@ -301,7 +318,7 @@ const SuperAdminTasksScreen = () => {
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
       <AppHeader
-        title="Tasks"
+        title={t("superAdmin.tasks.title")}
         showBackButton={false}
         showHelpButton={false}
         showProfileMenu={false}
@@ -310,7 +327,7 @@ const SuperAdminTasksScreen = () => {
       />
       <View style={styles.searchContainer}>
         <Searchbar
-          placeholder="Search tasks..."
+          placeholder={t("superAdmin.tasks.search")}
           onChangeText={setSearchQuery}
           value={searchQuery}
           style={styles.searchbar}
@@ -322,16 +339,16 @@ const SuperAdminTasksScreen = () => {
       {filteredTasks.length === 0 ? (
         <EmptyState
           icon="clipboard-text-off"
-          title="No Tasks Found"
+          title={t("superAdmin.tasks.noTasksFound")}
           message={
             searchQuery || statusFilter !== "all"
-              ? "No tasks match your search criteria."
-              : "You haven't created any tasks yet."
+              ? t("superAdmin.tasks.noTasksMatch")
+              : t("superAdmin.tasks.noTasksCreated")
           }
           buttonTitle={
             searchQuery || statusFilter !== "all"
-              ? "Clear Filters"
-              : "Create Task"
+              ? t("superAdmin.tasks.clearFilters")
+              : t("superAdmin.tasks.createTask")
           }
           onButtonPress={() => {
             if (searchQuery || statusFilter !== "all") {
