@@ -238,6 +238,7 @@ const CompanyDetailsScreen = () => {
               registration_number, 
               industry_type, 
               contact_number, 
+              contact_email,
               address, 
               active, 
               vat_type, 
@@ -704,6 +705,15 @@ const CompanyDetailsScreen = () => {
                 {t("superAdmin.companies.contactNumber")}:
               </Text>
               <Text style={styles.infoValue}>{company.contact_number}</Text>
+            </View>
+
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>
+                {t("superAdmin.companies.contactEmail")}:
+              </Text>
+              <Text style={styles.infoValue}>
+                {company.contact_email || t("superAdmin.companies.notProvided")}
+              </Text>
             </View>
 
             <View style={styles.infoRow}>

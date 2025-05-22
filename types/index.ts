@@ -107,6 +107,7 @@ export interface Company {
   id: string;
   company_name: string;
   contact_number: string;
+  contact_email: string;
   address: {
     line1: string;
     line2?: string;

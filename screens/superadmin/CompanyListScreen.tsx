@@ -8,6 +8,8 @@ import {
   ActivityIndicator,
   AppState,
   AppStateStatus,
+  ScrollView,
+  Platform,
 } from "react-native";
 import {
   Card,
@@ -16,6 +18,12 @@ import {
   FAB,
   Divider,
   Banner,
+  IconButton,
+  Chip,
+  Portal,
+  Modal,
+  Menu,
+  RadioButton,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -112,6 +120,18 @@ const CompanyListScreen = () => {
   const [totalCount, setTotalCount] = useState<number>(0);
   const PAGE_SIZE = 10;
 
+  // Filter state
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [sortOrder, setSortOrder] = useState<string>("desc");
+  const [appliedFilters, setAppliedFilters] = useState<{
+    status: string | null;
+    sortOrder: string;
+  }>({
+    status: null,
+    sortOrder: "desc",
+  });
+
   // Check network status when screen focuses
   useFocusEffect(
     useCallback(() => {
@@ -167,7 +187,7 @@ const CompanyListScreen = () => {
       }
 
       // Generate a cache key based on search query and pagination
-      const cacheKey = `companies_${searchQuery.trim()}_page${page}_size${PAGE_SIZE}`;
+      const cacheKey = `companies_${searchQuery.trim()}_page${page}_size${PAGE_SIZE}_status${appliedFilters.status}_sort${appliedFilters.sortOrder}`;
 
       // Only force refresh when explicitly requested
       const forceRefresh = refresh;
@@ -190,27 +210,38 @@ const CompanyListScreen = () => {
       const fetchData = async () => {
         let query = supabase.from("company").select(
           // Select only the fields needed for the list view
-          "id, company_name, registration_number, industry_type, contact_number, active",
+          "id, company_name, registration_number, industry_type, contact_number, contact_email, active, created_at",
           { count: "exact" } // Get exact count for better pagination
         );
+
+        // Apply status filter if set
+        if (appliedFilters.status === "active") {
+          query = query.eq("active", true);
+        } else if (appliedFilters.status === "inactive") {
+          query = query.eq("active", false);
+        }
 
         // Apply optimization: use text_search for better performance when searching
         if (searchQuery.trim() !== "") {
           // Better performance using the pg_trgm index we've added
           if (searchQuery.length > 2) {
             query = query.or(
-              `company_name.ilike.%${searchQuery.toLowerCase()}%,registration_number.ilike.%${searchQuery.toLowerCase()}%,industry_type.ilike.%${searchQuery.toLowerCase()}%`
+              `company_name.ilike.%${searchQuery.toLowerCase()}%,registration_number.ilike.%${searchQuery.toLowerCase()}%,industry_type.ilike.%${searchQuery.toLowerCase()}%,contact_email.ilike.%${searchQuery.toLowerCase()}%,contact_number.ilike.%${searchQuery.toLowerCase()}%`
             );
           } else {
             // For very short queries, use exact matching for better performance
             query = query.or(
-              `company_name.ilike.${searchQuery.toLowerCase()}%,registration_number.ilike.${searchQuery.toLowerCase()}%,industry_type.ilike.${searchQuery.toLowerCase()}%`
+              `company_name.ilike.${searchQuery.toLowerCase()}%,registration_number.ilike.${searchQuery.toLowerCase()}%,industry_type.ilike.${searchQuery.toLowerCase()}%,contact_email.ilike.${searchQuery.toLowerCase()}%,contact_number.ilike.${searchQuery.toLowerCase()}%`
             );
           }
         }
 
-        // Add proper pagination with ordering for consistent results
-        query = query.order("created_at", { ascending: false }).range(from, to);
+        // Apply sorting based on the selected sort order
+        query = query
+          .order("created_at", {
+            ascending: appliedFilters.sortOrder === "asc",
+          })
+          .range(from, to);
 
         const result = await query;
         return result;
@@ -309,7 +340,7 @@ const CompanyListScreen = () => {
     let debounceTimeout: NodeJS.Timeout;
 
     // Only fetch when a search query is entered or cleared
-    if (searchQuery.trim() === "" || searchQuery.length > 2) {
+    if (searchQuery.trim() === "" || searchQuery.length > 0) {
       // Only show refresh indicator when actively searching
       if (searchQuery.length > 0) {
         setRefreshing(true);
@@ -327,6 +358,9 @@ const CompanyListScreen = () => {
         clearCache(`companies_${searchQuery.trim()}`);
       }
 
+      // Use different debounce times based on query length
+      const debounceTime = searchQuery.length < 3 ? 300 : 500;
+
       debounceTimeout = setTimeout(() => {
         // Don't try to search when offline
         if (networkStatus === false && searchQuery.trim() !== "") {
@@ -336,7 +370,7 @@ const CompanyListScreen = () => {
         }
 
         fetchCompanies(true);
-      }, 500);
+      }, debounceTime);
     }
 
     return () => {
@@ -386,6 +420,10 @@ const CompanyListScreen = () => {
       >
         <Card.Content>
           <View style={styles.cardHeader}>
+            <Text variant="medium" style={styles.detailLabel}>
+              {t("superAdmin.companies.company")}
+            </Text>
+            <Text>:</Text>
             <Text variant="bold" style={styles.companyName}>
               {item.company_name}
             </Text>
@@ -399,21 +437,36 @@ const CompanyListScreen = () => {
               <Text variant="medium" style={styles.detailLabel}>
                 {t("superAdmin.companies.registration")}
               </Text>
-              <Text style={styles.detailValue}>{item.registration_number}</Text>
+              <Text style={styles.detailValue}>
+                : {item.registration_number || "-"}
+              </Text>
             </View>
 
             <View style={styles.detailItem}>
               <Text variant="medium" style={styles.detailLabel}>
                 {t("superAdmin.companies.industry")}
               </Text>
-              <Text style={styles.detailValue}>{item.industry_type}</Text>
+              <Text style={styles.detailValue}>
+                : {item.industry_type || "-"}
+              </Text>
             </View>
 
             <View style={styles.detailItem}>
               <Text variant="medium" style={styles.detailLabel}>
-                {t("superAdmin.companies.contact")}
+                {t("superAdmin.companies.contactNumber")}
               </Text>
-              <Text style={styles.detailValue}>{item.contact_number}</Text>
+              <Text style={styles.detailValue}>
+                : {item.contact_number || "-"}
+              </Text>
+            </View>
+
+            <View style={styles.detailItem}>
+              <Text variant="medium" style={styles.detailLabel}>
+                {t("superAdmin.companies.contactEmail")}
+              </Text>
+              <Text style={styles.detailValue}>
+                : {item.contact_email || "-"}
+              </Text>
             </View>
           </View>
         </Card.Content>
@@ -430,7 +483,10 @@ const CompanyListScreen = () => {
           title={t("superAdmin.companies.noCompanies")}
           message={
             searchQuery
-              ? t("superAdmin.companies.noCompaniesSearch")
+              ? t("superAdmin.companies.noCompaniesSearch") +
+                (searchQuery.length < 3
+                  ? " " + t("superAdmin.companies.typeMoreChars")
+                  : "")
               : t("superAdmin.companies.noCompaniesYet")
           }
           buttonTitle={
@@ -474,23 +530,331 @@ const CompanyListScreen = () => {
         }
         onEndReached={loadMoreCompanies}
         onEndReachedThreshold={0.5}
-        ListHeaderComponent={
-          totalCount > 0 ? (
-            <Text style={styles.resultsCount}>
-              {t("superAdmin.companies.showing")} {filteredCompanies.length}{" "}
-              {t("superAdmin.companies.of")} {totalCount}{" "}
-              {t("superAdmin.companies.companies")}
-            </Text>
-          ) : null
-        }
-        ListFooterComponent={
-          loadingMore && hasMoreData ? (
-            <View style={styles.loadingFooter}>
-              <ActivityIndicator size="small" color={theme.colors.primary} />
-            </View>
-          ) : null
-        }
+        ListFooterComponent={() => (
+          <>
+            {totalCount > 0 && (
+              <Text style={styles.resultsCount}>
+                {t("superAdmin.companies.showing")} {filteredCompanies.length}{" "}
+                {t("superAdmin.companies.of")} {totalCount}{" "}
+                {t("superAdmin.companies.companies")}
+              </Text>
+            )}
+            {loadingMore && hasMoreData && (
+              <View style={styles.loadingFooter}>
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+              </View>
+            )}
+          </>
+        )}
       />
+    );
+  };
+
+  // Apply filters and refresh companies list
+  const applyFilters = () => {
+    // Close modal first
+    setFilterModalVisible(false);
+
+    // Force a complete reset and refresh with new filters
+    // This is a more direct approach that should work on first click
+    setCompanies([]);
+    setFilteredCompanies([]);
+    setLoading(true);
+    setRefreshing(true);
+    setPage(0);
+    setHasMoreData(true);
+
+    // Apply new filters directly and immediately
+    const newFilters = {
+      status: activeFilter,
+      sortOrder: sortOrder,
+    };
+
+    // Set applied filters and then immediately force a fetch
+    setAppliedFilters(newFilters);
+
+    // Directly call fetch with current filters instead of using the state
+    // This bypasses any state update delay issues
+    const doFetch = async () => {
+      try {
+        // Clear any previous errors
+        setError(null);
+
+        // Generate a cache key based on search query and pagination
+        const cacheKey = `companies_${searchQuery.trim()}_page0_size${PAGE_SIZE}_status${activeFilter}_sort${sortOrder}`;
+
+        const from = 0;
+        const to = PAGE_SIZE - 1;
+
+        const fetchData = async () => {
+          let query = supabase
+            .from("company")
+            .select(
+              "id, company_name, registration_number, industry_type, contact_number, contact_email, active, created_at",
+              { count: "exact" }
+            );
+
+          // Apply status filter using the current activeFilter value
+          if (activeFilter === "active") {
+            query = query.eq("active", true);
+          } else if (activeFilter === "inactive") {
+            query = query.eq("active", false);
+          }
+
+          // Apply search if needed
+          if (searchQuery.trim() !== "") {
+            if (searchQuery.length > 2) {
+              query = query.or(
+                `company_name.ilike.%${searchQuery.toLowerCase()}%,registration_number.ilike.%${searchQuery.toLowerCase()}%,industry_type.ilike.%${searchQuery.toLowerCase()}%,contact_email.ilike.%${searchQuery.toLowerCase()}%,contact_number.ilike.%${searchQuery.toLowerCase()}%`
+              );
+            } else {
+              query = query.or(
+                `company_name.ilike.${searchQuery.toLowerCase()}%,registration_number.ilike.${searchQuery.toLowerCase()}%,industry_type.ilike.${searchQuery.toLowerCase()}%,contact_email.ilike.${searchQuery.toLowerCase()}%,contact_number.ilike.${searchQuery.toLowerCase()}%`
+              );
+            }
+          }
+
+          // Apply sorting based on the current sortOrder value
+          query = query
+            .order("created_at", { ascending: sortOrder === "asc" })
+            .range(from, to);
+
+          return await query;
+        };
+
+        const result = await cachedQuery<any>(fetchData, cacheKey, {
+          forceRefresh: true, // Always force fresh data when applying filters
+          criticalData: true,
+        });
+
+        const { data, error } = result;
+        const count = result.data?.length ? (result as any).count : 0;
+
+        if (error && !result.fromCache) {
+          throw new Error(error.message || "Failed to fetch companies");
+        }
+
+        if (count !== undefined) {
+          setTotalCount(count);
+          setHasMoreData(from + (data?.length || 0) < count);
+        } else if (data && data.length < PAGE_SIZE) {
+          setHasMoreData(false);
+        }
+
+        const typedData = (data as Company[]) || [];
+        setCompanies(typedData);
+        setFilteredCompanies(typedData);
+      } catch (error) {
+        console.error("Error fetching companies after filter:", error);
+        setError(
+          error instanceof Error ? error.message : "Failed to load companies"
+        );
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    };
+
+    // Execute the fetch immediately
+    doFetch();
+  };
+
+  // Clear all filters
+  const clearFilters = () => {
+    setActiveFilter(null);
+    setSortOrder("desc");
+
+    // Force a complete reset and refresh
+    setCompanies([]);
+    setFilteredCompanies([]);
+    setLoading(true);
+    setRefreshing(true);
+    setPage(0);
+    setHasMoreData(true);
+
+    // Clear applied filters
+    setAppliedFilters({
+      status: null,
+      sortOrder: "desc",
+    });
+
+    // Call the regular fetch after resetting everything
+    fetchCompanies(true);
+  };
+
+  // Check if we have any active filters
+  const hasActiveFilters = () => {
+    return (
+      appliedFilters.status !== null || appliedFilters.sortOrder !== "desc"
+    );
+  };
+
+  // Render active filter indicator
+  const renderActiveFilterIndicator = () => {
+    if (!hasActiveFilters()) return null;
+
+    return (
+      <View style={styles.activeFiltersContainer}>
+        <Text style={styles.activeFiltersText}>Active filters:</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filtersScrollView}
+        >
+          {appliedFilters.status && (
+            <Chip
+              mode="outlined"
+              onClose={() => {
+                setAppliedFilters({
+                  ...appliedFilters,
+                  status: null,
+                });
+                setActiveFilter(null);
+                setPage(0);
+                fetchCompanies(true);
+              }}
+              style={[
+                styles.activeFilterChip,
+                {
+                  backgroundColor: theme.colors.primary + "15",
+                  borderColor: theme.colors.primary,
+                },
+              ]}
+              textStyle={{ color: theme.colors.primary }}
+            >
+              Status:{" "}
+              {appliedFilters.status.charAt(0).toUpperCase() +
+                appliedFilters.status.slice(1)}
+            </Chip>
+          )}
+          {appliedFilters.sortOrder !== "desc" && (
+            <Chip
+              mode="outlined"
+              onClose={() => {
+                setAppliedFilters({
+                  ...appliedFilters,
+                  sortOrder: "desc",
+                });
+                setSortOrder("desc");
+                setPage(0);
+                fetchCompanies(true);
+              }}
+              style={[
+                styles.activeFilterChip,
+                {
+                  backgroundColor: theme.colors.primary + "15",
+                  borderColor: theme.colors.primary,
+                },
+              ]}
+              textStyle={{ color: theme.colors.primary }}
+            >
+              Date: Oldest first
+            </Chip>
+          )}
+        </ScrollView>
+      </View>
+    );
+  };
+
+  // Render the filter modal
+  const renderFilterModal = () => {
+    return (
+      <Portal>
+        <Modal
+          visible={filterModalVisible}
+          onDismiss={() => setFilterModalVisible(false)}
+          contentContainerStyle={styles.modalContainer}
+        >
+          <View style={styles.modalHeaderContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Filter Options</Text>
+              <IconButton
+                icon="close"
+                size={24}
+                onPress={() => setFilterModalVisible(false)}
+              />
+            </View>
+            <Divider style={styles.modalDivider} />
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            <View style={styles.modalSection}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Status</Text>
+              </View>
+              <RadioButton.Group
+                onValueChange={(value) => setActiveFilter(value)}
+                value={activeFilter || ""}
+              >
+                <View style={styles.radioItem}>
+                  <RadioButton.Android value="" color={theme.colors.primary} />
+                  <Text style={styles.radioLabel}>All</Text>
+                </View>
+                <View style={styles.radioItem}>
+                  <RadioButton.Android
+                    value="active"
+                    color={theme.colors.primary}
+                  />
+                  <Text style={styles.radioLabel}>Active</Text>
+                </View>
+                <View style={styles.radioItem}>
+                  <RadioButton.Android
+                    value="inactive"
+                    color={theme.colors.primary}
+                  />
+                  <Text style={styles.radioLabel}>Inactive</Text>
+                </View>
+              </RadioButton.Group>
+            </View>
+
+            <Divider style={styles.modalDivider} />
+
+            <View style={styles.modalSection}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Sort by creation date</Text>
+              </View>
+              <RadioButton.Group
+                onValueChange={(value) => setSortOrder(value)}
+                value={sortOrder}
+              >
+                <View style={styles.radioItem}>
+                  <RadioButton.Android
+                    value="desc"
+                    color={theme.colors.primary}
+                  />
+                  <Text style={styles.radioLabel}>Newest first</Text>
+                </View>
+                <View style={styles.radioItem}>
+                  <RadioButton.Android
+                    value="asc"
+                    color={theme.colors.primary}
+                  />
+                  <Text style={styles.radioLabel}>Oldest first</Text>
+                </View>
+              </RadioButton.Group>
+            </View>
+          </ScrollView>
+
+          <View style={styles.modalFooter}>
+            <TouchableOpacity
+              style={styles.footerButton}
+              onPress={clearFilters}
+            >
+              <Text style={styles.clearButtonText}>Clear Filters</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.footerButton,
+                styles.applyButton,
+                { backgroundColor: theme.colors.primary },
+              ]}
+              onPress={applyFilters}
+            >
+              <Text style={styles.applyButtonText}>Apply</Text>
+            </TouchableOpacity>
+          </View>
+        </Modal>
+      </Portal>
     );
   };
 
@@ -559,8 +923,43 @@ const CompanyListScreen = () => {
               setSearchQuery("");
             }
           }}
+          theme={{ colors: { primary: theme.colors.primary } }}
+          clearIcon={() =>
+            searchQuery ? (
+              <IconButton
+                icon="close-circle"
+                size={18}
+                onPress={() => setSearchQuery("")}
+              />
+            ) : null
+          }
+          icon="magnify"
         />
+        <View style={styles.filterButtonContainer}>
+          <IconButton
+            icon="filter-variant"
+            size={24}
+            style={[
+              styles.filterButton,
+              hasActiveFilters() && styles.activeFilterButton,
+            ]}
+            iconColor={hasActiveFilters() ? theme.colors.primary : undefined}
+            onPress={() => setFilterModalVisible(true)}
+          />
+          {hasActiveFilters() && <View style={styles.filterBadge} />}
+        </View>
       </View>
+
+      {searchQuery && searchQuery.length > 0 && searchQuery.length < 3 && (
+        <View style={styles.searchTips}>
+          <Text style={styles.searchTipsText}>
+            {t("superAdmin.companies.typeMoreChars")}
+          </Text>
+        </View>
+      )}
+
+      {renderActiveFilterIndicator()}
+      {renderFilterModal()}
 
       {renderContent()}
 
@@ -606,6 +1005,8 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingTop: 10,
     paddingBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
   },
   searchbar: {
     elevation: 0,
@@ -621,6 +1022,7 @@ const styles = StyleSheet.create({
     },
     shadowOpacity: 0.1,
     shadowRadius: 2,
+    flex: 1,
   },
   listContent: {
     padding: 16,
@@ -645,16 +1047,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
   },
   companyName: {
     fontSize: 16,
     flex: 1,
     color: "#333",
+    paddingLeft: 5,
   },
-  cardDetails: {
-    marginTop: 8,
-  },
+  cardDetails: {},
   detailItem: {
     flexDirection: "row",
     marginBottom: 4,
@@ -664,16 +1064,18 @@ const styles = StyleSheet.create({
     opacity: 0.7,
     width: 100,
     color: "#333",
+    fontSize: 11,
   },
   detailValue: {
     flex: 1,
     color: "#666",
+    fontSize: 14,
   },
   fab: {
     position: "absolute",
     margin: 16,
-    right: 0,
-    bottom: 80,
+    right: Platform.OS === "web" ? 15 : 0,
+    bottom: Platform.OS === "web" ? 10 : 80,
   },
   loadingFooter: {
     paddingVertical: 20,
@@ -706,6 +1108,147 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     opacity: 0.7,
     fontSize: 12,
+  },
+  // Filter styles
+  filterButtonContainer: {
+    position: "relative",
+    marginLeft: 8,
+  },
+  filterButton: {
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    borderRadius: 8,
+    backgroundColor: "#fff",
+  },
+  activeFilterButton: {
+    backgroundColor: "#E8F0FE",
+    borderWidth: 1,
+    borderColor: "#1a73e8",
+  },
+  filterBadge: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#ff5252",
+    position: "absolute",
+    top: 8,
+    right: 8,
+    zIndex: 2,
+  },
+  activeFiltersContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    marginTop: 8,
+    marginBottom: 12,
+    paddingHorizontal: 20,
+  },
+  activeFiltersText: {
+    fontSize: 14,
+    fontFamily: "Poppins-Regular",
+    color: "#616161",
+    marginRight: 8,
+  },
+  filtersScrollView: {
+    flexGrow: 0,
+    marginVertical: 4,
+  },
+  activeFilterChip: {
+    margin: 4,
+  },
+  // Modal styles
+  modalContainer: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    margin: 16,
+    overflow: "hidden",
+    maxHeight: "80%",
+    elevation: 5,
+  },
+  modalHeaderContainer: {
+    backgroundColor: "white",
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    zIndex: 1,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: "Poppins-SemiBold",
+    color: "#212121",
+  },
+  modalContent: {
+    padding: 16,
+    maxHeight: 400,
+  },
+  modalDivider: {
+    height: 1,
+    backgroundColor: "#E0E0E0",
+    marginVertical: 8,
+  },
+  modalSection: {
+    marginBottom: 20,
+  },
+  sectionHeader: {
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontFamily: "Poppins-SemiBold",
+    color: "#212121",
+  },
+  radioItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 4,
+  },
+  radioLabel: {
+    fontSize: 16,
+    marginLeft: 8,
+    fontFamily: "Poppins-Regular",
+    color: "#424242",
+  },
+  modalFooter: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#E0E0E0",
+  },
+  footerButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginLeft: 12,
+  },
+  applyButton: {
+    elevation: 2,
+  },
+  clearButtonText: {
+    fontSize: 14,
+    fontFamily: "Poppins-Medium",
+    color: "#616161",
+  },
+  applyButtonText: {
+    fontSize: 14,
+    fontFamily: "Poppins-Medium",
+    color: "#FFFFFF",
+  },
+  searchTips: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    paddingTop: 0,
+  },
+  searchTipsText: {
+    fontSize: 12,
+    color: "#666",
+    fontStyle: "italic",
   },
 });
 

@@ -7,6 +7,9 @@ import {
   Divider,
   useTheme,
   ActivityIndicator,
+  Chip,
+  Avatar,
+  IconButton,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
@@ -108,6 +111,45 @@ const EmployeeTaskDetailsScreen = () => {
     return format(new Date(dateString), "MMMM d, yyyy");
   };
 
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case "high":
+        return "#F44336";
+      case "medium":
+        return "#FF9800";
+      case "low":
+        return "#4CAF50";
+      default:
+        return theme.colors.primary;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case TaskStatus.COMPLETED:
+        return "#4CAF50";
+      case TaskStatus.IN_PROGRESS:
+        return "#2196F3";
+      case TaskStatus.PENDING:
+        return "#FF9800";
+      default:
+        return theme.colors.primary;
+    }
+  };
+
+  const getStatusBackgroundColor = (status: string) => {
+    switch (status) {
+      case TaskStatus.COMPLETED:
+        return "rgba(76, 175, 80, 0.1)";
+      case TaskStatus.IN_PROGRESS:
+        return "rgba(33, 150, 243, 0.1)";
+      case TaskStatus.PENDING:
+        return "rgba(255, 152, 0, 0.1)";
+      default:
+        return "rgba(0, 0, 0, 0.05)";
+    }
+  };
+
   if (loading) {
     return (
       <SafeAreaView
@@ -128,11 +170,25 @@ const EmployeeTaskDetailsScreen = () => {
       >
         <AppHeader title="Task Details" showBackButton />
         <View style={styles.errorContainer}>
-          <Text style={{ color: theme.colors.error }}>Task not found</Text>
+          <IconButton
+            icon="alert-circle-outline"
+            size={50}
+            iconColor={theme.colors.error}
+          />
+          <Text
+            style={{
+              color: theme.colors.error,
+              fontSize: 18,
+              fontWeight: "bold",
+              marginBottom: 16,
+            }}
+          >
+            Task not found
+          </Text>
           <Button
             mode="contained"
             onPress={() => navigation.goBack()}
-            style={styles.button}
+            style={[styles.button, { marginTop: 0 }]}
           >
             Go Back
           </Button>
@@ -142,112 +198,156 @@ const EmployeeTaskDetailsScreen = () => {
   }
 
   return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
+    <SafeAreaView style={[styles.container, { backgroundColor: "#F5F7FA" }]}>
       <AppHeader title="Task Details" showBackButton />
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
       >
-        <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+        <Card
+          style={[
+            styles.headerCard,
+            { backgroundColor: getStatusBackgroundColor(task.status) },
+          ]}
+        >
           <Card.Content>
-            <View style={styles.headerRow}>
-              <Text style={styles.taskTitle}>{task.title}</Text>
+            <View style={styles.statusContainer}>
               <StatusBadge status={task.status} />
             </View>
+            <Text style={styles.taskTitle}>{task.title}</Text>
 
+            <View style={styles.priorityContainer}>
+              <Chip
+                mode="outlined"
+                style={[
+                  styles.priorityChip,
+                  {
+                    borderColor: getPriorityColor(task.priority),
+                    backgroundColor: `${getPriorityColor(task.priority)}20`,
+                  },
+                ]}
+                textStyle={{ color: getPriorityColor(task.priority) }}
+              >
+                {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}{" "}
+                Priority
+              </Chip>
+            </View>
+          </Card.Content>
+        </Card>
+
+        <Card style={styles.card}>
+          <Card.Content>
+            <Text style={styles.sectionTitle}>Description</Text>
             <Text style={styles.description}>{task.description}</Text>
 
             <Divider style={styles.divider} />
 
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Priority:</Text>
-              <Text
-                style={[
-                  styles.infoValue,
-                  {
-                    color:
-                      task.priority === "high"
-                        ? theme.colors.error
-                        : task.priority === "medium"
-                          ? "#F59E0B"
-                          : theme.colors.primary,
-                  },
-                ]}
-              >
-                {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
-              </Text>
-            </View>
+            <Text style={styles.sectionTitle}>Timeline</Text>
 
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Due Date:</Text>
-              <Text style={styles.infoValue}>{formatDate(task.deadline)}</Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Created By:</Text>
-              <Text style={styles.infoValue}>
-                {task.creator?.first_name} {task.creator?.last_name}
-              </Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Created On:</Text>
-              <Text style={styles.infoValue}>
-                {formatDate(task.created_at)}
-              </Text>
-            </View>
-
-            {task.completed_at && (
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Completed On:</Text>
-                <Text style={styles.infoValue}>
-                  {formatDate(task.completed_at)}
-                </Text>
+            <View style={styles.timelineContainer}>
+              <View style={styles.timelineItem}>
+                <View style={styles.timelineDot} />
+                <View style={styles.timelineContent}>
+                  <Text style={styles.timelineTitle}>Created</Text>
+                  <Text style={styles.timelineDate}>
+                    {formatDate(task.created_at)}
+                  </Text>
+                </View>
               </View>
-            )}
+
+              {task.deadline && (
+                <View style={styles.timelineItem}>
+                  <View
+                    style={[styles.timelineDot, { backgroundColor: "#FF9800" }]}
+                  />
+                  <View style={styles.timelineContent}>
+                    <Text style={styles.timelineTitle}>Due Date</Text>
+                    <Text style={styles.timelineDate}>
+                      {formatDate(task.deadline)}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {task.completed_at && (
+                <View style={styles.timelineItem}>
+                  <View
+                    style={[styles.timelineDot, { backgroundColor: "#4CAF50" }]}
+                  />
+                  <View style={styles.timelineContent}>
+                    <Text style={styles.timelineTitle}>Completed</Text>
+                    <Text style={styles.timelineDate}>
+                      {formatDate(task.completed_at)}
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </View>
+
+            <Divider style={styles.divider} />
+
+            <Text style={styles.sectionTitle}>Assigned By</Text>
+            <View style={styles.assignedByContainer}>
+              <Avatar.Text
+                size={40}
+                label={`${task.creator?.first_name?.[0] || ""}${task.creator?.last_name?.[0] || ""}`}
+                style={{ backgroundColor: theme.colors.primary }}
+              />
+              <View style={styles.assignedByInfo}>
+                <Text style={styles.assignedByName}>
+                  {task.creator?.first_name} {task.creator?.last_name}
+                </Text>
+                <Text style={styles.assignedByRole}>Task Creator</Text>
+              </View>
+            </View>
           </Card.Content>
         </Card>
 
-        <View style={styles.buttonContainer}>
-          {task.status === TaskStatus.PENDING && (
-            <Button
-              mode="contained"
-              onPress={() => handleUpdateStatus(TaskStatus.IN_PROGRESS)}
-              style={[styles.button, { backgroundColor: theme.colors.primary }]}
-              loading={updating}
-              disabled={updating}
-            >
-              Start Task
-            </Button>
-          )}
+        <Card style={styles.actionsCard}>
+          <Card.Content>
+            <Text style={styles.sectionTitle}>Task Actions</Text>
 
-          {task.status === TaskStatus.IN_PROGRESS && (
-            <Button
-              mode="contained"
-              onPress={() => handleUpdateStatus(TaskStatus.COMPLETED)}
-              style={[styles.button, { backgroundColor: theme.colors.primary }]}
-              loading={updating}
-              disabled={updating}
-            >
-              Complete Task
-            </Button>
-          )}
+            {task.status === TaskStatus.PENDING && (
+              <Button
+                mode="contained"
+                onPress={() => handleUpdateStatus(TaskStatus.IN_PROGRESS)}
+                style={[styles.actionButton, { backgroundColor: "#2196F3" }]}
+                icon="play"
+                loading={updating}
+                disabled={updating}
+              >
+                Start Task
+              </Button>
+            )}
 
-          {task.status === TaskStatus.COMPLETED && (
-            <Button
-              mode="outlined"
-              onPress={() => handleUpdateStatus(TaskStatus.IN_PROGRESS)}
-              style={styles.button}
-              loading={updating}
-              disabled={updating}
-            >
-              Reopen Task
-            </Button>
-          )}
-        </View>
+            {task.status === TaskStatus.IN_PROGRESS && (
+              <Button
+                mode="contained"
+                onPress={() => handleUpdateStatus(TaskStatus.COMPLETED)}
+                style={[styles.actionButton, { backgroundColor: "#4CAF50" }]}
+                icon="check"
+                loading={updating}
+                disabled={updating}
+              >
+                Complete Task
+              </Button>
+            )}
+
+            {task.status === TaskStatus.COMPLETED && (
+              <Button
+                mode="outlined"
+                onPress={() => handleUpdateStatus(TaskStatus.IN_PROGRESS)}
+                style={styles.actionButton}
+                icon="refresh"
+                loading={updating}
+                disabled={updating}
+              >
+                Reopen Task
+              </Button>
+            )}
+          </Card.Content>
+        </Card>
       </ScrollView>
     </SafeAreaView>
   );
@@ -275,47 +375,135 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 20,
   },
+  headerCard: {
+    marginBottom: 16,
+    elevation: 0,
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.05)",
+  },
   card: {
     marginBottom: 16,
     elevation: 0,
+    backgroundColor: "white",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.05)",
   },
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
+  actionsCard: {
     marginBottom: 16,
+    elevation: 0,
+    backgroundColor: "white",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.05)",
   },
   taskTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: "bold",
-    flex: 1,
-    marginRight: 12,
+    marginBottom: 16,
+    color: "#333",
   },
   description: {
     fontSize: 16,
     lineHeight: 24,
-    marginBottom: 16,
+    marginBottom: 8,
+    color: "#555",
   },
   divider: {
-    marginVertical: 16,
+    marginVertical: 20,
+    backgroundColor: "rgba(0,0,0,0.05)",
+    height: 1,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    marginBottom: 12,
+    color: "#333",
+  },
+  timelineContainer: {
+    marginTop: 8,
+  },
+  timelineItem: {
+    flexDirection: "row",
+    marginBottom: 16,
+  },
+  timelineDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "#1976D2",
+    marginRight: 12,
+    marginTop: 4,
+  },
+  timelineContent: {
+    flex: 1,
+  },
+  timelineTitle: {
+    fontSize: 16,
+    fontWeight: "500",
+    marginBottom: 4,
+    color: "#333",
+  },
+  timelineDate: {
+    fontSize: 14,
+    color: "#666",
+  },
+  statusContainer: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginBottom: 12,
+  },
+  priorityContainer: {
+    flexDirection: "row",
+    marginBottom: 8,
+  },
+  priorityChip: {
+    height: 30,
+  },
+  assignedByContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 8,
+  },
+  assignedByInfo: {
+    marginLeft: 16,
+  },
+  assignedByName: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#333",
+  },
+  assignedByRole: {
+    fontSize: 14,
+    color: "#666",
+  },
+  actionButton: {
+    marginTop: 12,
+    borderRadius: 8,
+    paddingVertical: 8,
   },
   infoRow: {
     flexDirection: "row",
-    marginBottom: 8,
+    marginBottom: 12,
   },
   infoLabel: {
     fontWeight: "500",
     width: 100,
     opacity: 0.7,
+    fontSize: 14,
+    color: "#666",
   },
   infoValue: {
     flex: 1,
-  },
-  buttonContainer: {
-    marginTop: 8,
+    fontSize: 14,
+    color: "#333",
   },
   button: {
-    marginBottom: 12,
+    marginTop: 24,
+    paddingHorizontal: 16,
+    borderRadius: 8,
   },
 });
 

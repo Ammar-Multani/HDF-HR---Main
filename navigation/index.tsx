@@ -50,6 +50,9 @@ import EmployeeDetailedScreen from "../screens/superadmin/EmployeeDetailedScreen
 import EditSuperAdminScreen from "../screens/superadmin/EditSuperAdminScreen";
 import EditCompanyAdminScreen from "../screens/superadmin/EditCompanyAdminScreen";
 import CreateCompanyAdminScreen from "../screens/superadmin/CreateCompanyAdminScreen";
+import SuperAdminFormsScreen from "../screens/superadmin/SuperAdminFormsScreen";
+import SuperAdminUtilitiesScreen from "../screens/superadmin/SuperAdminUtilitiesScreen";
+import SuperAdminFormDetailsScreen from "../screens/superadmin/SuperAdminFormDetailsScreen";
 
 // Company Admin Screens
 import CompanyAdminDashboard from "../screens/companyadmin/CompanyAdminDashboard";
@@ -215,6 +218,22 @@ const SuperAdminNavigator = () => {
         name="CreateEmployee"
         component={CreateEmployeesScreen}
       />
+      <SuperAdminStack.Screen
+        name="SuperAdminFormsScreen"
+        component={SuperAdminFormsScreen}
+      />
+      <SuperAdminStack.Screen
+        name="SuperAdminFormDetailsScreen"
+        component={SuperAdminFormDetailsScreen}
+      />
+      <SuperAdminStack.Screen
+        name="SuperAdminUtilitiesScreen"
+        component={SuperAdminUtilitiesScreen}
+      />
+      <SuperAdminStack.Screen
+        name="SuperAdminTasksScreen"
+        component={SuperAdminTasksScreen}
+      />
     </SuperAdminStack.Navigator>
   );
 };
@@ -339,6 +358,12 @@ const SuperAdminTabNavigator = () => {
               onPress={() => setActiveScreen("Tasks")}
             />
             <NavItem
+              icon="file-document"
+              label="Forms"
+              isActive={activeScreen === "Forms"}
+              onPress={() => setActiveScreen("Forms")}
+            />
+            <NavItem
               icon="account-group"
               label="Users"
               isActive={activeScreen === "Users"}
@@ -358,6 +383,7 @@ const SuperAdminTabNavigator = () => {
           {activeScreen === "Dashboard" && <SuperAdminDashboard />}
           {activeScreen === "Companies" && <CompanyListScreen />}
           {activeScreen === "Tasks" && <SuperAdminTasksScreen />}
+          {activeScreen === "Forms" && <SuperAdminFormsScreen />}
           {activeScreen === "Users" && <SuperAdminUsersScreen />}
           {activeScreen === "Profile" && <SuperAdminProfileScreen />}
         </View>
@@ -420,15 +446,11 @@ const SuperAdminTabNavigator = () => {
         }}
       />
       <SuperAdminTab.Screen
-        name="Tasks"
-        component={SuperAdminTasksScreen}
+        name="Utilities"
+        component={SuperAdminUtilitiesScreen}
         options={{
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons
-              name="clipboard-text"
-              color={color}
-              size={24}
-            />
+            <MaterialCommunityIcons name="tools" color={color} size={24} />
           ),
         }}
       />

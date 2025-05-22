@@ -13,14 +13,12 @@ import {
   Card,
   Searchbar,
   useTheme,
-  FAB,
   Chip,
   IconButton,
   Portal,
   Modal,
   Divider,
   RadioButton,
-  Menu,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -35,30 +33,25 @@ import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import EmptyState from "../../components/EmptyState";
 import StatusBadge from "../../components/StatusBadge";
-import { Task, TaskPriority, TaskStatus } from "../../types";
+import { FormStatus } from "../../types";
 import Text from "../../components/Text";
-import { LinearGradient } from "expo-linear-gradient";
 import { useTranslation } from "react-i18next";
 
-// Define extended Task type with the properties needed for our UI
-interface ExtendedTask extends Task {
-  company?: {
-    id: string;
-    company_name: string;
-  };
-  assignedUserDetails?: Array<UserDetail>;
-}
-
-// Define user details interface
-interface UserDetail {
+// Define form interface with the properties needed for our UI
+interface FormItem {
   id: string;
-  name: string;
-  email: string;
-  role: string;
+  type: string;
+  title: string;
+  status: FormStatus;
+  created_at: string;
+  updated_at: string;
+  submitted_by: string;
+  company_name: string;
+  employee_name: string;
 }
 
 // Component for skeleton loading UI
-const TaskItemSkeleton = () => {
+const FormItemSkeleton = () => {
   return (
     <Card
       style={[
@@ -100,15 +93,6 @@ const TaskItemSkeleton = () => {
             }}
           />
         </View>
-
-        <View
-          style={{
-            height: 40,
-            backgroundColor: "#E0E0E0",
-            borderRadius: 4,
-            marginBottom: 16,
-          }}
-        />
 
         <View style={[styles.cardDetails, { borderLeftColor: "#E0E0E0" }]}>
           <View style={styles.detailItem}>
@@ -174,17 +158,18 @@ const TaskItemSkeleton = () => {
   );
 };
 
-const SuperAdminTasksScreen = () => {
+const SuperAdminFormsScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [tasks, setTasks] = useState<ExtendedTask[]>([]);
+  const [forms, setForms] = useState<FormItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filteredTasks, setFilteredTasks] = useState<ExtendedTask[]>([]);
-  const [statusFilter, setStatusFilter] = useState<TaskStatus | "all">("all");
+  const [filteredForms, setFilteredForms] = useState<FormItem[]>([]);
+  const [statusFilter, setStatusFilter] = useState<FormStatus | "all">("all");
+  const [formTypeFilter, setFormTypeFilter] = useState<string>("all");
   const [page, setPage] = useState(0);
   const [hasMoreData, setHasMoreData] = useState(true);
   const PAGE_SIZE = 10;
@@ -192,63 +177,60 @@ const SuperAdminTasksScreen = () => {
   // Filter modal state
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [sortOrder, setSortOrder] = useState<string>("desc");
-  const [priorityFilter, setPriorityFilter] = useState<TaskPriority | "all">(
-    "all"
-  );
   const [appliedFilters, setAppliedFilters] = useState<{
-    status: TaskStatus | "all";
-    priority: TaskPriority | "all";
+    status: FormStatus | "all";
+    formType: string;
     sortOrder: string;
   }>({
     status: "all",
-    priority: "all",
+    formType: "all",
     sortOrder: "desc",
   });
 
-  // Memoize filteredTasks to avoid unnecessary re-filtering
-  const memoizedFilteredTasks = useMemo(() => {
+  // Memoize filteredForms to avoid unnecessary re-filtering
+  const memoizedFilteredForms = useMemo(() => {
     try {
-      let filtered = tasks;
+      let filtered = forms;
 
       // Apply status filter
       if (appliedFilters.status !== "all") {
         filtered = filtered.filter(
-          (task) => task.status === appliedFilters.status
+          (form) => form.status === appliedFilters.status
         );
       }
 
-      // Apply priority filter
-      if (appliedFilters.priority !== "all") {
+      // Apply form type filter
+      if (appliedFilters.formType !== "all") {
         filtered = filtered.filter(
-          (task) => task.priority === appliedFilters.priority
+          (form) => form.type === appliedFilters.formType
         );
       }
 
-      // Apply search filter - safely check if description exists
+      // Apply search filter
       if (searchQuery.trim() !== "") {
         filtered = filtered.filter(
-          (task) =>
-            task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (typeof task.description === "string" &&
-              task.description
-                .toLowerCase()
-                .includes(searchQuery.toLowerCase()))
+          (form) =>
+            form.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            form.employee_name
+              .toLowerCase()
+              .includes(searchQuery.toLowerCase()) ||
+            form.company_name.toLowerCase().includes(searchQuery.toLowerCase())
         );
       }
 
       return filtered;
     } catch (error) {
-      console.error("Error filtering tasks:", error);
-      return tasks; // Return unfiltered tasks on error
+      console.error("Error filtering forms:", error);
+      return forms; // Return unfiltered forms on error
     }
-  }, [tasks, appliedFilters.status, appliedFilters.priority, searchQuery]);
+  }, [forms, appliedFilters.status, appliedFilters.formType, searchQuery]);
 
-  // Update filteredTasks when memoizedFilteredTasks changes
+  // Update filteredForms when memoizedFilteredForms changes
   useEffect(() => {
-    setFilteredTasks(memoizedFilteredTasks);
-  }, [memoizedFilteredTasks]);
+    setFilteredForms(memoizedFilteredForms);
+  }, [memoizedFilteredForms]);
 
-  const fetchTasks = async (refresh = false) => {
+  const fetchForms = async (refresh = false) => {
     try {
       if (refresh) {
         setPage(0);
@@ -262,178 +244,173 @@ const SuperAdminTasksScreen = () => {
       const from = currentPage * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      // First fetch tasks with joined company data
-      // This reduces the number of queries compared to separate fetches
-      let query = supabase.from("tasks").select(
-        `
-          id, 
-          title, 
-          description, 
-          status, 
-          priority, 
-          deadline, 
+      // Fetch accident reports
+      const { data: accidentData, error: accidentError } = await supabase
+        .from("accident_report")
+        .select(
+          `
+          id,
+          status,
           created_at,
-          assigned_to,
-          company:company_id (
-            id, 
-            company_name
+          employee:employee_id(
+            id,
+            first_name,
+            last_name,
+            company:company_id(
+              id,
+              company_name
+            )
           )
-        `,
-        { count: "exact" }
-      );
-
-      // Apply sorting based on the applied sort order
-      query = query
+        `
+        )
+        .neq("status", FormStatus.DRAFT)
         .order("created_at", {
           ascending: appliedFilters.sortOrder === "asc",
         })
         .range(from, to);
 
-      const { data, error, count } = await query;
-
-      if (error) {
-        console.error("Error fetching tasks:", error);
-        throw error;
-      }
-
-      if (!data) {
-        console.log("No task data returned");
-        if (refresh) {
-          setTasks([]);
-        }
-        setLoading(false);
-        setRefreshing(false);
-        setLoadingMore(false);
-        return;
-      }
-
-      try {
-        // Prepare assignedTo arrays for bulk fetching - safely handle non-array values
-        const allAssignedIds =
-          (data || [])
-            .filter(
-              (task) =>
-                Array.isArray(task.assigned_to) && task.assigned_to.length > 0
+      // Fetch illness reports
+      const { data: illnessData, error: illnessError } = await supabase
+        .from("illness_report")
+        .select(
+          `
+          id,
+          status,
+          submission_date,
+          employee:employee_id(
+            id,
+            first_name,
+            last_name,
+            company:company_id(
+              id,
+              company_name
             )
-            .flatMap((task) => task.assigned_to) || [];
+          )
+        `
+        )
+        .neq("status", FormStatus.DRAFT)
+        .order("submission_date", {
+          ascending: appliedFilters.sortOrder === "asc",
+        })
+        .range(from, to);
 
-        // Only fetch user details if there are assigned users
-        const uniqueAssignedIds = [...new Set(allAssignedIds)];
+      // Fetch staff departure reports
+      const { data: departureData, error: departureError } = await supabase
+        .from("staff_departure_report")
+        .select(
+          `
+          id,
+          status,
+          created_at,
+          employee:employee_id(
+            id,
+            first_name,
+            last_name,
+            company:company_id(
+              id,
+              company_name
+            )
+          )
+        `
+        )
+        .neq("status", FormStatus.DRAFT)
+        .order("created_at", {
+          ascending: appliedFilters.sortOrder === "asc",
+        })
+        .range(from, to);
 
-        let companyUsers: UserDetail[] = [];
-        let adminUsers: UserDetail[] = [];
-
-        if (uniqueAssignedIds.length > 0) {
-          try {
-            // Fetch all company users in one batch
-            const { data: companyUsersData, error: companyError } =
-              await supabase
-                .from("company_user")
-                .select("id, first_name, last_name, email, role")
-                .in("id", uniqueAssignedIds);
-
-            if (companyError) {
-              console.error("Error fetching company users:", companyError);
-            } else {
-              companyUsers = (companyUsersData || []).map((user) => ({
-                id: user.id,
-                name: `${user.first_name} ${user.last_name}`,
-                email: user.email,
-                role: user.role,
-              }));
-            }
-          } catch (userError) {
-            console.error("Error processing company users:", userError);
-          }
-
-          try {
-            // Fetch all admin users in one batch
-            const { data: adminUsersData, error: adminError } = await supabase
-              .from("admin")
-              .select("id, name, email, role")
-              .in("id", uniqueAssignedIds);
-
-            if (adminError) {
-              console.error("Error fetching admin users:", adminError);
-            } else {
-              adminUsers = (adminUsersData || []).map((admin) => ({
-                id: admin.id,
-                name: admin.name,
-                email: admin.email,
-                role: admin.role,
-              }));
-            }
-          } catch (adminError) {
-            console.error("Error processing admin users:", adminError);
-          }
-        }
-
-        // Create a lookup map for quick access to user details
-        const userDetailsMap: { [key: string]: UserDetail } = {};
-        [...companyUsers, ...adminUsers].forEach((user) => {
-          if (user && user.id) {
-            userDetailsMap[user.id] = user;
-          }
+      if (accidentError || illnessError || departureError) {
+        console.error("Error fetching forms:", {
+          accidentError,
+          illnessError,
+          departureError,
         });
-
-        // Now map task data with assigned users
-        const tasksWithAssignedUsers = data.map((task) => {
-          try {
-            // Make sure assigned_to exists and is an array
-            const assignedToArray = Array.isArray(task.assigned_to)
-              ? task.assigned_to
-              : [];
-
-            const assignedUserDetails =
-              assignedToArray.length > 0
-                ? assignedToArray
-                    .map((id: string) => userDetailsMap[id])
-                    .filter(Boolean) // Remove undefined entries
-                : [];
-
-            // First convert to unknown, then to ExtendedTask to satisfy TypeScript
-            return {
-              ...task,
-              assignedUserDetails,
-            } as unknown as ExtendedTask;
-          } catch (taskError) {
-            console.error("Error processing task:", taskError, task);
-            // Return task without assigned users on error
-            return {
-              ...task,
-              assignedUserDetails: [],
-            } as unknown as ExtendedTask;
-          }
-        });
-
-        // Check if we have more data
-        if (count !== null) {
-          setHasMoreData(from + (data?.length || 0) < count);
-        } else {
-          setHasMoreData(data?.length === PAGE_SIZE);
-        }
-
-        if (refresh) {
-          setTasks(tasksWithAssignedUsers);
-        } else {
-          setTasks((prev) => [...prev, ...tasksWithAssignedUsers]);
-        }
-      } catch (dataProcessingError) {
-        console.error("Error processing task data:", dataProcessingError);
-        // Still set the tasks without the user details if we have errors processing them
-        const basicTasks = data.map(
-          (task) =>
-            ({ ...task, assignedUserDetails: [] }) as unknown as ExtendedTask
-        );
-
-        if (refresh) {
-          setTasks(basicTasks);
-        } else {
-          setTasks((prev) => [...prev, ...basicTasks]);
-        }
+        throw new Error("Failed to fetch forms");
       }
+
+      // Format and combine all forms
+      const formattedAccidentForms = (accidentData || []).map((form) => {
+        // Ensure we handle the nested structure correctly
+        const employee = form.employee as any;
+        return {
+          id: form.id,
+          type: "accident",
+          title: "Accident Report",
+          status: form.status as FormStatus,
+          created_at: form.created_at,
+          updated_at: form.created_at,
+          submitted_by: "",
+          company_name: employee?.company?.company_name || "Unknown Company",
+          employee_name: employee
+            ? `${employee.first_name} ${employee.last_name}`
+            : "Unknown Employee",
+        };
+      });
+
+      const formattedIllnessForms = (illnessData || []).map((form) => {
+        // Ensure we handle the nested structure correctly
+        const employee = form.employee as any;
+        return {
+          id: form.id,
+          type: "illness",
+          title: "Illness Report",
+          status: form.status as FormStatus,
+          created_at: form.submission_date,
+          updated_at: form.submission_date,
+          submitted_by: "",
+          company_name: employee?.company?.company_name || "Unknown Company",
+          employee_name: employee
+            ? `${employee.first_name} ${employee.last_name}`
+            : "Unknown Employee",
+        };
+      });
+
+      const formattedDepartureForms = (departureData || []).map((form) => {
+        // Ensure we handle the nested structure correctly
+        const employee = form.employee as any;
+        return {
+          id: form.id,
+          type: "departure",
+          title: "Staff Departure Report",
+          status: form.status as FormStatus,
+          created_at: form.created_at,
+          updated_at: form.created_at,
+          submitted_by: "",
+          company_name: employee?.company?.company_name || "Unknown Company",
+          employee_name: employee
+            ? `${employee.first_name} ${employee.last_name}`
+            : "Unknown Employee",
+        };
+      });
+
+      // Combine all forms and sort by created date
+      const allForms = [
+        ...formattedAccidentForms,
+        ...formattedIllnessForms,
+        ...formattedDepartureForms,
+      ].sort((a, b) => {
+        if (appliedFilters.sortOrder === "asc") {
+          return (
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          );
+        } else {
+          return (
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          );
+        }
+      });
+
+      // Update forms state
+      if (refresh) {
+        setForms(allForms);
+      } else {
+        setForms((prevForms) => [...prevForms, ...allForms]);
+      }
+
+      // Check if we have more data
+      setHasMoreData(allForms.length >= PAGE_SIZE);
     } catch (error) {
-      console.error("Error fetching tasks:", error);
+      console.error("Error fetching forms:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -442,22 +419,22 @@ const SuperAdminTasksScreen = () => {
   };
 
   useEffect(() => {
-    fetchTasks(true);
-  }, []);
+    fetchForms(true);
+  }, [appliedFilters]);
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchTasks(true);
+    fetchForms(true);
   };
 
-  const loadMoreTasks = () => {
+  const loadMoreForms = () => {
     if (!loading && !loadingMore && hasMoreData) {
       setPage((prevPage) => prevPage + 1);
-      fetchTasks(false);
+      fetchForms(false);
     }
   };
 
-  // Apply filters and refresh tasks list
+  // Apply filters and refresh forms list
   const applyFilters = () => {
     // Close modal first
     setFilterModalVisible(false);
@@ -465,67 +442,64 @@ const SuperAdminTasksScreen = () => {
     // Apply new filters
     const newFilters = {
       status: statusFilter,
-      priority: priorityFilter,
+      formType: formTypeFilter,
       sortOrder: sortOrder,
     };
 
     // Set applied filters
     setAppliedFilters(newFilters);
-
-    // Fetch tasks with new filters
-    fetchTasks(true);
   };
 
   // Clear all filters
   const clearFilters = () => {
     setStatusFilter("all");
-    setPriorityFilter("all");
+    setFormTypeFilter("all");
     setSortOrder("desc");
 
     // Clear applied filters
     setAppliedFilters({
       status: "all",
-      priority: "all",
+      formType: "all",
       sortOrder: "desc",
     });
-
-    // Call the regular fetch after resetting everything
-    fetchTasks(true);
   };
 
   // Check if we have any active filters
   const hasActiveFilters = () => {
     return (
       appliedFilters.status !== "all" ||
-      appliedFilters.priority !== "all" ||
+      appliedFilters.formType !== "all" ||
       appliedFilters.sortOrder !== "desc"
     );
   };
 
-  const getPriorityColor = (priority: TaskPriority) => {
-    switch (priority) {
-      case TaskPriority.HIGH:
-        return "#F44336"; // Red for high priority
-      case TaskPriority.MEDIUM:
-        return "#F59E0B"; // Orange for medium priority
-      case TaskPriority.LOW:
-        return "#1a73e8"; // Blue for low priority
+  // Get appropriate color for form type
+  const getFormTypeColor = (formType: string) => {
+    switch (formType) {
+      case "accident":
+        return "#F44336"; // Red for accident reports
+      case "illness":
+        return "#FF9800"; // Orange for illness reports
+      case "departure":
+        return "#2196F3"; // Blue for departure reports
       default:
-        return "#1a73e8"; // Default blue
+        return "#9C27B0"; // Purple for unknown types
     }
   };
 
-  const getTranslatedPriority = (priority: TaskPriority) => {
-    switch (priority) {
-      case TaskPriority.HIGH:
-        return t("superAdmin.tasks.high");
-      case TaskPriority.MEDIUM:
-        return t("superAdmin.tasks.medium");
-      case TaskPriority.LOW:
-        return t("superAdmin.tasks.low");
+  // Get form type name for translation
+  const getFormTypeName = (formType: string) => {
+    switch (formType) {
+      case "accident":
+        return t("superAdmin.forms.accidentReport") || "Accident Report";
+      case "illness":
+        return t("superAdmin.forms.illnessReport") || "Illness Report";
+      case "departure":
+        return (
+          t("superAdmin.forms.departureReport") || "Staff Departure Report"
+        );
       default:
-        // Fall back to a safe default translation
-        return t("superAdmin.tasks.medium");
+        return t("superAdmin.forms.unknownType") || "Unknown Type";
     }
   };
 
@@ -536,7 +510,7 @@ const SuperAdminTasksScreen = () => {
     return (
       <View style={styles.activeFiltersContainer}>
         <Text style={styles.activeFiltersText}>
-          {t("superAdmin.tasks.activeFilters")}:
+          {t("superAdmin.forms.activeFilters")}:
         </Text>
         <ScrollView
           horizontal
@@ -552,7 +526,7 @@ const SuperAdminTasksScreen = () => {
                   status: "all",
                 });
                 setStatusFilter("all");
-                fetchTasks(true);
+                fetchForms(true);
               }}
               style={[
                 styles.activeFilterChip,
@@ -563,20 +537,19 @@ const SuperAdminTasksScreen = () => {
               ]}
               textStyle={{ color: "#1a73e8" }}
             >
-              {t("superAdmin.tasks.status")}:{" "}
-              {t(`superAdmin.tasks.${appliedFilters.status}`)}
+              {t("superAdmin.forms.status")}: {appliedFilters.status}
             </Chip>
           )}
-          {appliedFilters.priority !== "all" && (
+          {appliedFilters.formType !== "all" && (
             <Chip
               mode="outlined"
               onClose={() => {
                 setAppliedFilters({
                   ...appliedFilters,
-                  priority: "all",
+                  formType: "all",
                 });
-                setPriorityFilter("all");
-                fetchTasks(true);
+                setFormTypeFilter("all");
+                fetchForms(true);
               }}
               style={[
                 styles.activeFilterChip,
@@ -587,8 +560,8 @@ const SuperAdminTasksScreen = () => {
               ]}
               textStyle={{ color: "#1a73e8" }}
             >
-              {t("superAdmin.tasks.priority")}:{" "}
-              {getTranslatedPriority(appliedFilters.priority as TaskPriority)}
+              {t("superAdmin.forms.type")}:{" "}
+              {getFormTypeName(appliedFilters.formType)}
             </Chip>
           )}
           {appliedFilters.sortOrder !== "desc" && (
@@ -600,7 +573,7 @@ const SuperAdminTasksScreen = () => {
                   sortOrder: "desc",
                 });
                 setSortOrder("desc");
-                fetchTasks(true);
+                fetchForms(true);
               }}
               style={[
                 styles.activeFilterChip,
@@ -611,7 +584,7 @@ const SuperAdminTasksScreen = () => {
               ]}
               textStyle={{ color: "#1a73e8" }}
             >
-              {t("superAdmin.tasks.date")}: {t("superAdmin.tasks.oldestFirst")}
+              {t("superAdmin.forms.date")}: {t("superAdmin.forms.oldestFirst")}
             </Chip>
           )}
         </ScrollView>
@@ -631,7 +604,7 @@ const SuperAdminTasksScreen = () => {
           <View style={styles.modalHeaderContainer}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                {t("superAdmin.tasks.filterOptions")}
+                {t("superAdmin.forms.filterOptions")}
               </Text>
               <IconButton
                 icon="close"
@@ -646,27 +619,25 @@ const SuperAdminTasksScreen = () => {
             <View style={styles.modalSection}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>
-                  {t("superAdmin.tasks.status")}
+                  {t("superAdmin.forms.status")}
                 </Text>
               </View>
               <RadioButton.Group
                 onValueChange={(value) =>
-                  setStatusFilter(value as TaskStatus | "all")
+                  setStatusFilter(value as FormStatus | "all")
                 }
                 value={statusFilter}
               >
                 <View style={styles.radioItem}>
                   <RadioButton.Android value="all" color="#1a73e8" />
                   <Text style={styles.radioLabel}>
-                    {t("superAdmin.tasks.all")}
+                    {t("superAdmin.forms.all")}
                   </Text>
                 </View>
-                {Object.values(TaskStatus).map((status) => (
+                {Object.values(FormStatus).map((status) => (
                   <View key={status} style={styles.radioItem}>
                     <RadioButton.Android value={status} color="#1a73e8" />
-                    <Text style={styles.radioLabel}>
-                      {t(`superAdmin.tasks.${status}`)}
-                    </Text>
+                    <Text style={styles.radioLabel}>{status}</Text>
                   </View>
                 ))}
               </RadioButton.Group>
@@ -677,29 +648,37 @@ const SuperAdminTasksScreen = () => {
             <View style={styles.modalSection}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>
-                  {t("superAdmin.tasks.priority")}
+                  {t("superAdmin.forms.formType")}
                 </Text>
               </View>
               <RadioButton.Group
-                onValueChange={(value) =>
-                  setPriorityFilter(value as TaskPriority | "all")
-                }
-                value={priorityFilter}
+                onValueChange={(value) => setFormTypeFilter(value)}
+                value={formTypeFilter}
               >
                 <View style={styles.radioItem}>
                   <RadioButton.Android value="all" color="#1a73e8" />
                   <Text style={styles.radioLabel}>
-                    {t("superAdmin.tasks.all")}
+                    {t("superAdmin.forms.all")}
                   </Text>
                 </View>
-                {Object.values(TaskPriority).map((priority) => (
-                  <View key={priority} style={styles.radioItem}>
-                    <RadioButton.Android value={priority} color="#1a73e8" />
-                    <Text style={styles.radioLabel}>
-                      {getTranslatedPriority(priority)}
-                    </Text>
-                  </View>
-                ))}
+                <View style={styles.radioItem}>
+                  <RadioButton.Android value="accident" color="#1a73e8" />
+                  <Text style={styles.radioLabel}>
+                    {t("superAdmin.forms.accidentReport")}
+                  </Text>
+                </View>
+                <View style={styles.radioItem}>
+                  <RadioButton.Android value="illness" color="#1a73e8" />
+                  <Text style={styles.radioLabel}>
+                    {t("superAdmin.forms.illnessReport")}
+                  </Text>
+                </View>
+                <View style={styles.radioItem}>
+                  <RadioButton.Android value="departure" color="#1a73e8" />
+                  <Text style={styles.radioLabel}>
+                    {t("superAdmin.forms.departureReport")}
+                  </Text>
+                </View>
               </RadioButton.Group>
             </View>
 
@@ -708,7 +687,7 @@ const SuperAdminTasksScreen = () => {
             <View style={styles.modalSection}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>
-                  {t("superAdmin.tasks.sortByDate")}
+                  {t("superAdmin.forms.sortByDate")}
                 </Text>
               </View>
               <RadioButton.Group
@@ -718,13 +697,13 @@ const SuperAdminTasksScreen = () => {
                 <View style={styles.radioItem}>
                   <RadioButton.Android value="desc" color="#1a73e8" />
                   <Text style={styles.radioLabel}>
-                    {t("superAdmin.tasks.newestFirst")}
+                    {t("superAdmin.forms.newestFirst")}
                   </Text>
                 </View>
                 <View style={styles.radioItem}>
                   <RadioButton.Android value="asc" color="#1a73e8" />
                   <Text style={styles.radioLabel}>
-                    {t("superAdmin.tasks.oldestFirst")}
+                    {t("superAdmin.forms.oldestFirst")}
                   </Text>
                 </View>
               </RadioButton.Group>
@@ -737,7 +716,7 @@ const SuperAdminTasksScreen = () => {
               onPress={clearFilters}
             >
               <Text style={styles.clearButtonText}>
-                {t("superAdmin.tasks.clearFilters")}
+                {t("superAdmin.forms.clearFilters")}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -745,7 +724,7 @@ const SuperAdminTasksScreen = () => {
               onPress={applyFilters}
             >
               <Text style={styles.applyButtonText}>
-                {t("superAdmin.tasks.apply")}
+                {t("superAdmin.forms.apply")}
               </Text>
             </TouchableOpacity>
           </View>
@@ -754,11 +733,18 @@ const SuperAdminTasksScreen = () => {
     );
   };
 
-  // Create memoized renderTaskItem function to prevent unnecessary re-renders
-  const renderTaskItem = useCallback(
-    ({ item }: { item: ExtendedTask }) => (
+  // Create memoized renderFormItem function to prevent unnecessary re-renders
+  const renderFormItem = useCallback(
+    ({ item }: { item: FormItem }) => (
       <TouchableOpacity
-        onPress={() => navigation.navigate("TaskDetails", { taskId: item.id })}
+        onPress={() => {
+          // Navigate to form details screen based on form type
+          console.log("View form details for:", item.id, item.type);
+          navigation.navigate("SuperAdminFormDetailsScreen", {
+            formId: item.id,
+            formType: item.type,
+          });
+        }}
       >
         <Card
           style={[
@@ -773,39 +759,31 @@ const SuperAdminTasksScreen = () => {
           <Card.Content>
             <View style={styles.cardHeader}>
               <View style={styles.titleContainer}>
-                <Text variant="bold" style={styles.taskTitle}>
+                <Text variant="bold" style={styles.formTitle}>
                   {item.title}
                 </Text>
-                {item.company && (
-                  <View style={styles.detailItem}>
-                    <Text variant="medium" style={styles.detailLabel}>
-                      {t("superAdmin.companies.company")}
-                    </Text>
-                    <Text variant="medium" style={styles.companyName}>
-                      {item.company.company_name}
-                    </Text>
-                  </View>
-                )}
+                <View style={styles.detailItem}>
+                  <Text variant="medium" style={styles.detailLabel}>
+                    {t("superAdmin.forms.company")}
+                  </Text>
+                  <Text variant="medium" style={styles.companyName}>
+                    {item.company_name}
+                  </Text>
+                </View>
               </View>
               <StatusBadge status={item.status} />
             </View>
 
-            {item.assignedUserDetails &&
-              item.assignedUserDetails.length > 0 && (
-                <View style={styles.detailItem}>
-                  <Text variant="medium" style={styles.detailLabel}>
-                    {t("superAdmin.tasks.assignedTo")}
-                  </Text>
-                  <Text style={styles.detailValue}>
-                    : {item.assignedUserDetails[0].name}
-                    {item.assignedUserDetails.length > 1 &&
-                      ` +${item.assignedUserDetails.length - 1} ${t("superAdmin.tasks.more")}`}
-                  </Text>
-                </View>
-              )}
             <View style={styles.detailItem}>
               <Text variant="medium" style={styles.detailLabel}>
-                {t("superAdmin.tasks.created")}
+                {t("superAdmin.forms.submittedBy")}
+              </Text>
+              <Text style={styles.detailValue}>: {item.employee_name}</Text>
+            </View>
+
+            <View style={styles.detailItem}>
+              <Text variant="medium" style={styles.detailLabel}>
+                {t("superAdmin.forms.created")}
               </Text>
               <Text style={styles.detailValue}>
                 : {format(new Date(item.created_at), "MMM d, yyyy")}
@@ -814,52 +792,35 @@ const SuperAdminTasksScreen = () => {
 
             <View style={styles.cardFooter}>
               <Chip
-                icon="flag"
+                icon="file-document"
                 style={[
-                  styles.priorityChip,
+                  styles.formTypeChip,
                   {
-                    backgroundColor: getPriorityColor(item.priority) + "20",
-                    borderColor: getPriorityColor(item.priority),
+                    backgroundColor: getFormTypeColor(item.type) + "20",
+                    borderColor: getFormTypeColor(item.type),
                   },
                 ]}
                 textStyle={{
-                  color: getPriorityColor(item.priority),
+                  color: getFormTypeColor(item.type),
                   fontFamily: "Poppins-Regular",
                   fontSize: 12,
                 }}
               >
-                {getTranslatedPriority(item.priority)}
+                {getFormTypeName(item.type)}
               </Chip>
-
-              <Text
-                variant="medium"
-                style={[
-                  styles.deadline,
-                  {
-                    backgroundColor: "#f5f5f5",
-                    paddingVertical: 6,
-                    paddingHorizontal: 12,
-                    borderRadius: 4,
-                    fontSize: 12,
-                  },
-                ]}
-              >
-                {t("superAdmin.tasks.due")}:{" "}
-                {format(new Date(item.deadline), "MMM d, yyyy")}
-              </Text>
             </View>
           </Card.Content>
         </Card>
       </TouchableOpacity>
     ),
-    [t]
+    [t, navigation]
   );
 
   if (loading && !refreshing) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: "#F5F5F5" }]}>
         <AppHeader
-          title={t("superAdmin.tasks.title")}
+          title={t("superAdmin.forms.title")}
           showBackButton={true}
           showHelpButton={false}
           showProfileMenu={false}
@@ -876,7 +837,7 @@ const SuperAdminTasksScreen = () => {
         </View>
         <FlatList
           data={Array(3).fill(0)}
-          renderItem={() => <TaskItemSkeleton />}
+          renderItem={() => <FormItemSkeleton />}
           keyExtractor={(_, index) => `skeleton-${index}`}
           contentContainerStyle={styles.listContent}
         />
@@ -887,7 +848,7 @@ const SuperAdminTasksScreen = () => {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: "#F5F5F5" }]}>
       <AppHeader
-        title={t("superAdmin.tasks.title")}
+        title={t("superAdmin.forms.title")}
         showBackButton={true}
         showHelpButton={false}
         showProfileMenu={false}
@@ -896,7 +857,7 @@ const SuperAdminTasksScreen = () => {
       />
       <View style={styles.searchContainer}>
         <Searchbar
-          placeholder={t("superAdmin.tasks.search")}
+          placeholder={t("superAdmin.forms.search")}
           onChangeText={setSearchQuery}
           value={searchQuery}
           style={styles.searchbar}
@@ -930,61 +891,52 @@ const SuperAdminTasksScreen = () => {
       {renderActiveFilterIndicator()}
       {renderFilterModal()}
 
-      {filteredTasks.length === 0 ? (
+      {filteredForms.length === 0 ? (
         <EmptyState
-          icon="clipboard-text-off"
-          title={t("superAdmin.tasks.noTasksFound")}
+          icon="file-document-off"
+          title={t("superAdmin.forms.noFormsFound")}
           message={
             searchQuery || hasActiveFilters()
-              ? t("superAdmin.tasks.noTasksMatch")
-              : t("superAdmin.tasks.noTasksCreated")
+              ? t("superAdmin.forms.noFormsMatch")
+              : t("superAdmin.forms.noFormsSubmitted")
           }
           buttonTitle={
             searchQuery || hasActiveFilters()
-              ? t("superAdmin.tasks.clearFilters")
-              : t("superAdmin.tasks.createTask")
+              ? t("superAdmin.forms.clearFilters")
+              : undefined
           }
           onButtonPress={() => {
             if (searchQuery || hasActiveFilters()) {
               setSearchQuery("");
               clearFilters();
-            } else {
-              navigation.navigate("CreateTask");
             }
           }}
         />
       ) : (
         <FlatList
-          data={filteredTasks}
-          renderItem={renderTaskItem}
-          keyExtractor={(item) => item.id}
+          data={filteredForms}
+          renderItem={renderFormItem}
+          keyExtractor={(item) => `${item.type}-${item.id}`}
           contentContainerStyle={styles.listContent}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
-          onEndReached={loadMoreTasks}
+          onEndReached={loadMoreForms}
           onEndReachedThreshold={0.3}
           ListFooterComponent={() => (
             <View style={styles.loadingFooter}>
               {loadingMore && hasMoreData && (
                 <ActivityIndicator size="small" color="#1a73e8" />
               )}
-              {!hasMoreData && filteredTasks.length > 0 && (
+              {!hasMoreData && filteredForms.length > 0 && (
                 <Text style={styles.endListText}>
-                  {t("superAdmin.tasks.noMoreTasks")}
+                  {t("superAdmin.forms.noMoreForms")}
                 </Text>
               )}
             </View>
           )}
         />
       )}
-
-      <FAB
-        icon="plus"
-        style={[styles.fab, { backgroundColor: "#1a73e8" }]}
-        onPress={() => navigation.navigate("CreateTask")}
-        color="#FFFFFF"
-      />
     </SafeAreaView>
   );
 };
@@ -1091,19 +1043,13 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 8,
   },
-  taskTitle: {
+  formTitle: {
     fontSize: 16,
     color: "#333",
   },
   companyName: {
     fontSize: 14,
     color: "#666",
-  },
-  taskDescription: {
-    marginBottom: 16,
-    opacity: 0.7,
-    color: "#666",
-    lineHeight: 20,
   },
   cardDetails: {
     marginBottom: 16,
@@ -1134,21 +1080,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 4,
   },
-  priorityChip: {
+  formTypeChip: {
     height: 30,
     borderRadius: 25,
     borderWidth: 1,
-  },
-  deadline: {
-    opacity: 0.7,
-    fontSize: 14,
-    color: "#666",
-  },
-  fab: {
-    position: "absolute",
-    margin: 16,
-    right: Platform.OS === "web" ? 15 : 0,
-    bottom: Platform.OS === "web" ? 10 : 80,
   },
   // Modal styles
   modalContainer: {
@@ -1246,4 +1181,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default SuperAdminTasksScreen;
+export default SuperAdminFormsScreen;

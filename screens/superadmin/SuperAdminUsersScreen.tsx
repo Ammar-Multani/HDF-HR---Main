@@ -25,6 +25,7 @@ import {
   IconButton,
   Modal,
   Portal,
+  RadioButton,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -50,6 +51,12 @@ enum UserListType {
 enum UserStatus {
   ACTIVE = "active",
   INACTIVE = "inactive",
+}
+
+// Date sort options
+enum DateSortOrder {
+  NEWEST_FIRST = "desc",
+  OLDEST_FIRST = "asc",
 }
 
 // Admin type for super admins
@@ -106,6 +113,11 @@ const SuperAdminUsersScreen = () => {
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>("all");
   const [menuVisible, setMenuVisible] = useState(false);
 
+  // Date sort filter
+  const [sortOrder, setSortOrder] = useState<string>(
+    DateSortOrder.NEWEST_FIRST
+  );
+
   // Filter modal state
   const [filterModalVisible, setFilterModalVisible] = useState(false);
 
@@ -150,7 +162,9 @@ const SuperAdminUsersScreen = () => {
         .from("admin")
         .select("*")
         .eq("role", "superadmin")
-        .order("created_at", { ascending: false });
+        .order("created_at", {
+          ascending: sortOrder === DateSortOrder.OLDEST_FIRST,
+        });
 
       if (error) {
         console.error("Error fetching super admins:", error);
@@ -171,7 +185,9 @@ const SuperAdminUsersScreen = () => {
         .from("company_user")
         .select("*, company:company_id(company_name)")
         .eq("role", "admin")
-        .order("created_at", { ascending: false });
+        .order("created_at", {
+          ascending: sortOrder === DateSortOrder.OLDEST_FIRST,
+        });
 
       // Apply company filter if selected
       if (selectedCompanyIds.length > 0) {
@@ -201,7 +217,9 @@ const SuperAdminUsersScreen = () => {
         .from("company_user")
         .select("*, company:company_id(company_name)")
         .eq("role", "employee")
-        .order("created_at", { ascending: false })
+        .order("created_at", {
+          ascending: sortOrder === DateSortOrder.OLDEST_FIRST,
+        })
         .limit(100); // Limit to 100 employees for better performance
 
       // Apply company filter if selected
@@ -259,42 +277,80 @@ const SuperAdminUsersScreen = () => {
 
   // Filter users based on search query
   useEffect(() => {
-    if (searchQuery.trim() === "") {
-      setFilteredSuperAdmins(superAdmins);
-      setFilteredCompanyAdmins(companyAdmins);
-      setFilteredEmployees(employees);
-    } else {
+    // Clear the timeout on unmount or new search
+    let debounceTimeout: NodeJS.Timeout;
+
+    const performSearch = () => {
+      if (searchQuery.trim() === "") {
+        setFilteredSuperAdmins(superAdmins);
+        setFilteredCompanyAdmins(companyAdmins);
+        setFilteredEmployees(employees);
+        setRefreshing(false);
+        return;
+      }
+
+      // Set refreshing while searching
+      setRefreshing(true);
+
       const query = searchQuery.toLowerCase();
 
       // Filter super admins
       const filteredAdmins = superAdmins.filter(
         (admin) =>
           admin.name?.toLowerCase().includes(query) ||
-          admin.email.toLowerCase().includes(query)
+          admin.email.toLowerCase().includes(query) ||
+          admin.role?.toLowerCase().includes(query)
       );
       setFilteredSuperAdmins(filteredAdmins);
 
-      // Filter company admins
+      // Filter company admins with more comprehensive matching
       const filteredAdmins2 = companyAdmins.filter(
         (admin) =>
           admin.first_name?.toLowerCase().includes(query) ||
           admin.last_name?.toLowerCase().includes(query) ||
           admin.email.toLowerCase().includes(query) ||
-          (admin as any).company?.company_name?.toLowerCase().includes(query)
+          admin.phone_number?.toLowerCase().includes(query) ||
+          admin.job_title?.toLowerCase().includes(query) ||
+          admin.role?.toLowerCase().includes(query) ||
+          (admin as any).company?.company_name?.toLowerCase().includes(query) ||
+          // Add fuzzy matching for full name
+          `${admin.first_name} ${admin.last_name}`.toLowerCase().includes(query)
       );
       setFilteredCompanyAdmins(filteredAdmins2);
 
-      // Filter employees
+      // Filter employees with more comprehensive matching
       const filteredEmps = employees.filter(
         (emp) =>
           emp.first_name?.toLowerCase().includes(query) ||
           emp.last_name?.toLowerCase().includes(query) ||
           emp.email.toLowerCase().includes(query) ||
+          emp.phone_number?.toLowerCase().includes(query) ||
           emp.job_title?.toLowerCase().includes(query) ||
-          (emp as any).company?.company_name?.toLowerCase().includes(query)
+          emp.role?.toLowerCase().includes(query) ||
+          (emp as any).company?.company_name?.toLowerCase().includes(query) ||
+          // Add fuzzy matching for full name
+          `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(query)
       );
       setFilteredEmployees(filteredEmps);
+
+      // Turn off refreshing
+      setRefreshing(false);
+    };
+
+    // Use different debounce times based on query length
+    const debounceTime = searchQuery.length < 3 ? 300 : 500;
+
+    // Show refreshing indicator when actively searching
+    if (searchQuery.length > 0) {
+      setRefreshing(true);
     }
+
+    // Debounce the search
+    debounceTimeout = setTimeout(performSearch, debounceTime);
+
+    return () => {
+      if (debounceTimeout) clearTimeout(debounceTimeout);
+    };
   }, [searchQuery, superAdmins, companyAdmins, employees]);
 
   const onRefresh = () => {
@@ -308,14 +364,11 @@ const SuperAdminUsersScreen = () => {
   const handleClearFilters = () => {
     setSelectedCompanyIds([]);
     setSelectedCompanyId("all");
+    setSortOrder(DateSortOrder.NEWEST_FIRST);
     setSearchQuery("");
 
-    // Refetch data based on current tab
-    if (selectedTab === UserListType.COMPANY_ADMIN) {
-      fetchCompanyAdmins();
-    } else if (selectedTab === UserListType.EMPLOYEE) {
-      fetchEmployees();
-    }
+    // Use our direct approach for more reliable updates
+    applyFiltersDirect();
   };
 
   const getInitials = (name: string, email: string) => {
@@ -546,18 +599,7 @@ const SuperAdminUsersScreen = () => {
 
   // Indicator for active filters
   const renderActiveFilterIndicator = () => {
-    if (selectedCompanyIds.length === 0 && selectedCompanyId === "all")
-      return null;
-
-    // Get selected companies
-    const selectedCompanies =
-      selectedCompanyIds.length > 0
-        ? companies.filter((company) => selectedCompanyIds.includes(company.id))
-        : selectedCompanyId !== "all"
-          ? [
-              companies.find((company) => company.id === selectedCompanyId),
-            ].filter(Boolean)
-          : [];
+    if (!hasActiveFilters()) return null;
 
     return (
       <View style={styles.activeFiltersContainer}>
@@ -567,24 +609,37 @@ const SuperAdminUsersScreen = () => {
           showsHorizontalScrollIndicator={false}
           style={styles.filtersScrollView}
         >
-          {selectedCompanies.map((company) => (
+          {(selectedCompanyIds.length > 0 || selectedCompanyId !== "all") && (
             <Chip
-              key={company?.id}
               mode="outlined"
               onClose={() => {
-                if (selectedCompanyIds.length > 0) {
-                  toggleCompanySelection(company?.id || "");
-                } else {
-                  setSelectedCompanyId("all");
-                }
+                setSelectedCompanyIds([]);
+                setSelectedCompanyId("all");
+                applyFiltersDirect();
               }}
               style={localStyles.activeFilterChip}
               textStyle={{ color: theme.colors.primary }}
-              closeIconAccessibilityLabel="Clear filter"
             >
-              {company?.company_name || "Company"}
+              {selectedCompanyIds.length > 0
+                ? `${selectedCompanyIds.length} Companies`
+                : companies.find((c) => c.id === selectedCompanyId)
+                    ?.company_name || "Company"}
             </Chip>
-          ))}
+          )}
+
+          {sortOrder !== DateSortOrder.NEWEST_FIRST && (
+            <Chip
+              mode="outlined"
+              onClose={() => {
+                setSortOrder(DateSortOrder.NEWEST_FIRST);
+                applyFiltersDirect();
+              }}
+              style={localStyles.activeFilterChip}
+              textStyle={{ color: theme.colors.primary }}
+            >
+              Date: Oldest first
+            </Chip>
+          )}
         </ScrollView>
       </View>
     );
@@ -597,7 +652,10 @@ const SuperAdminUsersScreen = () => {
     let buttonTitle = "Clear Filters";
     let icon = "account-off";
 
-    if (
+    // Add search length guidance if search query is short
+    if (searchQuery && searchQuery.length < 3) {
+      message = "Try typing at least 3 characters for better search results.";
+    } else if (
       searchQuery === "" &&
       selectedCompanyIds.length === 0 &&
       selectedCompanyId === "all"
@@ -770,69 +828,102 @@ const SuperAdminUsersScreen = () => {
           </View>
 
           <ScrollView style={styles.modalContent}>
+            {/* Date Sort Section - Available for all tabs */}
             <View style={styles.modalSection}>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Companies</Text>
-                <View style={styles.selectionBadge}>
-                  <Text style={styles.selectionHint}>
-                    {selectedCompanyIds.length > 0
-                      ? `${selectedCompanyIds.length} selected`
-                      : selectedCompanyId !== "all"
-                        ? "1 selected"
-                        : "All"}
-                  </Text>
-                </View>
+                <Text style={styles.sectionTitle}>Sort by creation date</Text>
               </View>
-
-              <TouchableOpacity
-                ref={dropdownRef}
-                style={[
-                  styles.dropdownButton,
-                  (selectedCompanyIds.length > 0 ||
-                    selectedCompanyId !== "all") &&
-                    styles.activeDropdownButton,
-                ]}
-                onPress={showMenu}
+              <RadioButton.Group
+                onValueChange={(value) => setSortOrder(value)}
+                value={sortOrder}
               >
-                <View style={styles.dropdownContent}>
+                <View style={styles.radioItem}>
+                  <RadioButton.Android
+                    value={DateSortOrder.NEWEST_FIRST}
+                    color={theme.colors.primary}
+                  />
+                  <Text style={styles.radioLabel}>Newest first</Text>
+                </View>
+                <View style={styles.radioItem}>
+                  <RadioButton.Android
+                    value={DateSortOrder.OLDEST_FIRST}
+                    color={theme.colors.primary}
+                  />
+                  <Text style={styles.radioLabel}>Oldest first</Text>
+                </View>
+              </RadioButton.Group>
+            </View>
+
+            <Divider style={styles.modalDivider} />
+
+            {/* Company section - only for Company Admin and Employee tabs */}
+            {selectedTab !== UserListType.SUPER_ADMIN && (
+              <View style={styles.modalSection}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Companies</Text>
+                  <View style={styles.selectionBadge}>
+                    <Text style={styles.selectionHint}>
+                      {selectedCompanyIds.length > 0
+                        ? `${selectedCompanyIds.length} selected`
+                        : selectedCompanyId !== "all"
+                          ? "1 selected"
+                          : "All"}
+                    </Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  ref={dropdownRef}
+                  style={[
+                    styles.dropdownButton,
+                    (selectedCompanyIds.length > 0 ||
+                      selectedCompanyId !== "all") &&
+                      styles.activeDropdownButton,
+                  ]}
+                  onPress={showMenu}
+                >
+                  <View style={styles.dropdownContent}>
+                    <IconButton
+                      icon="office-building"
+                      size={20}
+                      iconColor={
+                        selectedCompanyIds.length > 0 ||
+                        selectedCompanyId !== "all"
+                          ? theme.colors.primary
+                          : "#757575"
+                      }
+                      style={styles.dropdownLeadingIcon}
+                    />
+                    <Text
+                      style={[
+                        styles.dropdownButtonText,
+                        (selectedCompanyIds.length > 0 ||
+                          selectedCompanyId !== "all") && {
+                          color: theme.colors.primary,
+                        },
+                      ]}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {getSelectedCompaniesText()}
+                    </Text>
+                  </View>
                   <IconButton
-                    icon="office-building"
+                    icon="chevron-down"
                     size={20}
+                    style={styles.dropdownIcon}
                     iconColor={
                       selectedCompanyIds.length > 0 ||
                       selectedCompanyId !== "all"
                         ? theme.colors.primary
                         : "#757575"
                     }
-                    style={styles.dropdownLeadingIcon}
                   />
-                  <Text
-                    style={[
-                      styles.dropdownButtonText,
-                      (selectedCompanyIds.length > 0 ||
-                        selectedCompanyId !== "all") && {
-                        color: theme.colors.primary,
-                      },
-                    ]}
-                    numberOfLines={1}
-                    ellipsizeMode="tail"
-                  >
-                    {getSelectedCompaniesText()}
-                  </Text>
-                </View>
-                <IconButton
-                  icon="chevron-down"
-                  size={20}
-                  style={styles.dropdownIcon}
-                  iconColor={
-                    selectedCompanyIds.length > 0 || selectedCompanyId !== "all"
-                      ? theme.colors.primary
-                      : "#757575"
-                  }
-                />
-              </TouchableOpacity>
-            </View>
+                </TouchableOpacity>
+              </View>
+            )}
 
+            {/* Selected Companies Section */}
             {(selectedCompanyIds.length > 0 || selectedCompanyId !== "all") && (
               <View style={styles.activeFilterSection}>
                 <View style={styles.activeFilterHeader}>
@@ -842,7 +933,12 @@ const SuperAdminUsersScreen = () => {
                   <IconButton
                     icon="delete"
                     size={20}
-                    onPress={handleClearFilters}
+                    onPress={() => {
+                      // Clear company filters directly
+                      setSelectedCompanyIds([]);
+                      setSelectedCompanyId("all");
+                      // Don't dismiss modal yet - user can still apply
+                    }}
                     iconColor={theme.colors.primary}
                     style={styles.clearAllButton}
                   />
@@ -883,6 +979,36 @@ const SuperAdminUsersScreen = () => {
               </View>
             )}
           </ScrollView>
+
+          <View style={styles.modalFooter}>
+            <TouchableOpacity
+              style={styles.footerButton}
+              onPress={() => {
+                setSelectedCompanyIds([]);
+                setSelectedCompanyId("all");
+                setSortOrder(DateSortOrder.NEWEST_FIRST);
+                setFilterModalVisible(false);
+                // Use the direct fetch approach to refresh the list
+                // with cleared filters
+                applyFiltersDirect();
+              }}
+            >
+              <Text style={styles.clearButtonText}>Clear Filters</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.footerButton,
+                styles.applyButton,
+                { backgroundColor: theme.colors.primary },
+              ]}
+              onPress={() => {
+                // Use our new direct filter approach that works on first click
+                applyFiltersDirect();
+              }}
+            >
+              <Text style={styles.applyButtonText}>Apply</Text>
+            </TouchableOpacity>
+          </View>
         </Modal>
 
         <Menu
@@ -907,6 +1033,8 @@ const SuperAdminUsersScreen = () => {
                 setSelectedCompanyIds([]);
                 setSelectedCompanyId("all");
                 setMenuVisible(false);
+                // Apply the changes immediately using our direct approach
+                applyFiltersDirect();
               }}
               style={styles.menuItemStyle}
               titleStyle={[
@@ -931,6 +1059,8 @@ const SuperAdminUsersScreen = () => {
                   // For multi-select mode
                   toggleCompanySelection(company.id);
                   setMenuVisible(false);
+                  // Apply the changes immediately using our direct approach
+                  applyFiltersDirect();
                 }}
                 style={styles.menuItemStyle}
                 titleStyle={[
@@ -954,7 +1084,7 @@ const SuperAdminUsersScreen = () => {
     );
   };
 
-  // Add a helper function to toggle company selection
+  // Toggle company selection
   const toggleCompanySelection = (companyId: string) => {
     setSelectedCompanyIds((prev) => {
       if (prev.includes(companyId)) {
@@ -965,6 +1095,158 @@ const SuperAdminUsersScreen = () => {
     });
     // Reset the single company selection mode
     setSelectedCompanyId("all");
+  };
+
+  // Apply filters directly, similar to the improved approach used in CompanyListScreen
+  const applyFiltersDirect = () => {
+    // Close modal first
+    setFilterModalVisible(false);
+
+    // Force complete reset and refresh with new filters
+    setLoading(true);
+
+    // This approach directly fetches data with current filter values
+    // without relying on state updates to propagate first
+    const fetchWithCurrentFilters = async () => {
+      try {
+        // Based on the current tab, fetch the appropriate data
+        if (selectedTab === UserListType.SUPER_ADMIN) {
+          // Super admins aren't filtered by company, but can be sorted by date
+          let query = supabase
+            .from("admin")
+            .select("*")
+            .eq("role", "superadmin")
+            .order("created_at", {
+              ascending: sortOrder === DateSortOrder.OLDEST_FIRST,
+            });
+
+          const { data, error } = await query;
+
+          if (error) {
+            console.error("Error fetching super admins:", error);
+            return;
+          }
+
+          setSuperAdmins(data || []);
+
+          // Apply search filter if present
+          if (searchQuery.trim() === "") {
+            setFilteredSuperAdmins(data || []);
+          } else {
+            const query = searchQuery.toLowerCase();
+            const filteredAdmins = (data || []).filter(
+              (admin) =>
+                admin.name?.toLowerCase().includes(query) ||
+                admin.email.toLowerCase().includes(query)
+            );
+            setFilteredSuperAdmins(filteredAdmins);
+          }
+        } else if (selectedTab === UserListType.COMPANY_ADMIN) {
+          // Fetch company admins with current filters
+          let query = supabase
+            .from("company_user")
+            .select("*, company:company_id(company_name)")
+            .eq("role", "admin")
+            .order("created_at", {
+              ascending: sortOrder === DateSortOrder.OLDEST_FIRST,
+            });
+
+          // Apply company filter using the current selection values
+          if (selectedCompanyIds.length > 0) {
+            query = query.in("company_id", selectedCompanyIds);
+          } else if (selectedCompanyId !== "all") {
+            query = query.eq("company_id", selectedCompanyId);
+          }
+
+          const { data, error } = await query;
+
+          if (error) {
+            console.error("Error fetching company admins:", error);
+            return;
+          }
+
+          setCompanyAdmins(data || []);
+
+          // Apply search filter if present
+          if (searchQuery.trim() === "") {
+            setFilteredCompanyAdmins(data || []);
+          } else {
+            const query = searchQuery.toLowerCase();
+            const filteredAdmins = (data || []).filter(
+              (admin) =>
+                admin.first_name?.toLowerCase().includes(query) ||
+                admin.last_name?.toLowerCase().includes(query) ||
+                admin.email.toLowerCase().includes(query) ||
+                (admin as any).company?.company_name
+                  ?.toLowerCase()
+                  .includes(query)
+            );
+            setFilteredCompanyAdmins(filteredAdmins);
+          }
+        } else if (selectedTab === UserListType.EMPLOYEE) {
+          // Fetch employees with current filters
+          let query = supabase
+            .from("company_user")
+            .select("*, company:company_id(company_name)")
+            .eq("role", "employee")
+            .order("created_at", {
+              ascending: sortOrder === DateSortOrder.OLDEST_FIRST,
+            })
+            .limit(100);
+
+          // Apply company filter using the current selection values
+          if (selectedCompanyIds.length > 0) {
+            query = query.in("company_id", selectedCompanyIds);
+          } else if (selectedCompanyId !== "all") {
+            query = query.eq("company_id", selectedCompanyId);
+          }
+
+          const { data, error } = await query;
+
+          if (error) {
+            console.error("Error fetching employees:", error);
+            return;
+          }
+
+          setEmployees(data || []);
+
+          // Apply search filter if present
+          if (searchQuery.trim() === "") {
+            setFilteredEmployees(data || []);
+          } else {
+            const query = searchQuery.toLowerCase();
+            const filteredEmps = (data || []).filter(
+              (emp) =>
+                emp.first_name?.toLowerCase().includes(query) ||
+                emp.last_name?.toLowerCase().includes(query) ||
+                emp.email.toLowerCase().includes(query) ||
+                emp.job_title?.toLowerCase().includes(query) ||
+                (emp as any).company?.company_name
+                  ?.toLowerCase()
+                  .includes(query)
+            );
+            setFilteredEmployees(filteredEmps);
+          }
+        }
+      } catch (error) {
+        console.error("Error applying filters:", error);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    };
+
+    // Execute the fetch immediately
+    fetchWithCurrentFilters();
+  };
+
+  // Check if any filters are active
+  const hasActiveFilters = () => {
+    return (
+      selectedCompanyIds.length > 0 ||
+      selectedCompanyId !== "all" ||
+      sortOrder !== DateSortOrder.NEWEST_FIRST
+    );
   };
 
   return (
@@ -986,29 +1268,42 @@ const SuperAdminUsersScreen = () => {
             onChangeText={setSearchQuery}
             value={searchQuery}
             style={styles.searchbar}
+            theme={{ colors: { primary: theme.colors.primary } }}
+            loading={refreshing && searchQuery.length > 0}
+            clearIcon={() =>
+              searchQuery ? (
+                <IconButton
+                  icon="close-circle"
+                  size={18}
+                  onPress={() => setSearchQuery("")}
+                />
+              ) : null
+            }
+            icon="magnify"
           />
-          {selectedTab !== UserListType.SUPER_ADMIN && (
-            <View style={styles.filterButtonContainer}>
-              <IconButton
-                icon="filter-variant"
-                size={24}
-                style={[
-                  styles.filterButton,
-                  selectedCompanyIds.length > 0 && styles.activeFilterButton,
-                ]}
-                iconColor={
-                  selectedCompanyIds.length > 0
-                    ? theme.colors.primary
-                    : undefined
-                }
-                onPress={() => setFilterModalVisible(true)}
-              />
-              {selectedCompanyIds.length > 0 && (
-                <View style={styles.filterBadge} />
-              )}
-            </View>
-          )}
+          {/* Enable filter button for all tabs */}
+          <View style={styles.filterButtonContainer}>
+            <IconButton
+              icon="filter-variant"
+              size={24}
+              style={[
+                styles.filterButton,
+                hasActiveFilters() && styles.activeFilterButton,
+              ]}
+              iconColor={hasActiveFilters() ? theme.colors.primary : undefined}
+              onPress={() => setFilterModalVisible(true)}
+            />
+            {hasActiveFilters() && <View style={styles.filterBadge} />}
+          </View>
         </View>
+
+        {searchQuery && searchQuery.length > 0 && searchQuery.length < 3 && (
+          <View style={styles.searchTips}>
+            <Text style={styles.searchTipsText}>
+              Type at least 3 characters for better search results.
+            </Text>
+          </View>
+        )}
 
         <View style={styles.tabContainer}>
           <SegmentedButtons
@@ -1019,6 +1314,11 @@ const SuperAdminUsersScreen = () => {
               if (value === UserListType.SUPER_ADMIN) {
                 setSelectedCompanyIds([]);
                 setSelectedCompanyId("all");
+              }
+
+              // Optionally clear search when switching tabs for better UX
+              if (searchQuery) {
+                setSearchQuery("");
               }
             }}
             buttons={[
@@ -1051,24 +1351,23 @@ const SuperAdminUsersScreen = () => {
             }}
             density="small"
           />
-
-          {/* <View style={styles.tabCountContainer}>
-            <Text style={styles.tabCount}>
-              {selectedTab === UserListType.SUPER_ADMIN &&
-                superAdmins.length > 0 &&
-                `${superAdmins.length} Super Admins`}
-              {selectedTab === UserListType.COMPANY_ADMIN &&
-                companyAdmins.length > 0 &&
-                `${companyAdmins.length} Company Admins`}
-              {selectedTab === UserListType.EMPLOYEE &&
-                employees.length > 0 &&
-                `${employees.length} Employees`}
-            </Text>
-          </View> */}
         </View>
 
         {renderActiveFilterIndicator()}
         {renderFilterModal()}
+
+        {searchQuery && searchQuery.length > 0 && (
+          <View style={styles.searchResultsContainer}>
+            <Text style={styles.searchResultsText}>
+              Found:{" "}
+              {selectedTab === UserListType.SUPER_ADMIN
+                ? `${filteredSuperAdmins.length} super admins`
+                : selectedTab === UserListType.COMPANY_ADMIN
+                  ? `${filteredCompanyAdmins.length} company admins`
+                  : `${filteredEmployees.length} employees`}
+            </Text>
+          </View>
+        )}
 
         <View style={styles.listContainer}>{renderCurrentList()}</View>
       </View>
@@ -1351,15 +1650,13 @@ const styles = StyleSheet.create({
   modalContent: {
     padding: 16,
   },
-  modalFooterContainer: {
-    backgroundColor: "white",
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
-  },
   modalFooter: {
     flexDirection: "row",
     justifyContent: "flex-end",
     padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#E0E0E0",
+    backgroundColor: "#FFFFFF",
   },
   modalButton: {
     marginLeft: 12,
@@ -1592,6 +1889,58 @@ const styles = StyleSheet.create({
     color: "#616161",
     fontSize: 12,
     fontFamily: "Poppins-Regular",
+  },
+  footerButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    marginLeft: 12,
+  },
+  clearButtonText: {
+    fontSize: 14,
+    fontFamily: "Poppins-Medium",
+    color: "#616161",
+  },
+  applyButton: {
+    elevation: 2,
+  },
+  applyButtonText: {
+    fontSize: 14,
+    fontFamily: "Poppins-Medium",
+    color: "#FFFFFF",
+  },
+  radioItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 4,
+  },
+  radioLabel: {
+    fontSize: 16,
+    marginLeft: 8,
+    fontFamily: "Poppins-Regular",
+    color: "#424242",
+  },
+  searchTips: {
+    backgroundColor: "#e8f4fd",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  searchTipsText: {
+    color: "#0066cc",
+    fontWeight: "500",
+    fontSize: 14,
+  },
+  searchResultsContainer: {
+    backgroundColor: "#e8f4fd",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  searchResultsText: {
+    color: "#0066cc",
+    fontWeight: "500",
+    fontSize: 14,
   },
 });
 

@@ -8,8 +8,9 @@ import {
   Image,
   TouchableOpacity,
   Dimensions,
+  Platform,
 } from "react-native";
-import { useTheme, Avatar, Divider } from "react-native-paper";
+import { useTheme, Avatar, Divider, Button } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { supabase, isNetworkAvailable } from "../../lib/supabase";
@@ -27,15 +28,20 @@ import DynamicChart from "../../components/DynamicChart";
 
 const { width } = Dimensions.get("window");
 
+// Number of items to show initially in each card
+const INITIAL_ITEMS_TO_SHOW = 3;
+
 interface CompanyData {
   name: string;
   employee_count: number;
   growth_percentage?: string;
 }
 
-interface MonthlyData {
-  month: string;
-  count: number;
+interface EmployeeData {
+  id: string;
+  name: string;
+  forms_count: number;
+  company_name?: string;
 }
 
 const SuperAdminDashboard = () => {
@@ -47,6 +53,11 @@ const SuperAdminDashboard = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [networkStatus, setNetworkStatus] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // State for expanding cards
+  const [showAllCompanies, setShowAllCompanies] = useState(false);
+  const [showAllEmployees, setShowAllEmployees] = useState(false);
+
   const [stats, setStats] = useState({
     totalCompanies: 0,
     totalCompaniesGrowth: "+0%",
@@ -64,6 +75,7 @@ const SuperAdminDashboard = () => {
     monthLabels: [] as string[],
     monthlyForms: [] as number[],
     topCompanies: [] as CompanyData[],
+    topEmployees: [] as EmployeeData[],
   });
 
   const checkNetworkStatus = async () => {
@@ -314,9 +326,11 @@ const SuperAdminDashboard = () => {
 
       // Process company data - gather employee counts in parallel
       let topCompanies: CompanyData[] = [];
+      let topEmployees: EmployeeData[] = [];
+
       if (companies && companies.length > 0) {
-        // Get top 10 companies to process (for faster loading)
-        const companiesSlice = companies.slice(0, 10);
+        // Get more companies for the "Show More" functionality
+        const companiesSlice = companies.slice(0, 20); // Increase to 20 instead of 10
 
         // Get employee counts for companies in parallel
         const companiesWithCountPromises = companiesSlice.map(
@@ -339,15 +353,114 @@ const SuperAdminDashboard = () => {
           companiesWithCountPromises
         );
 
-        // Sort by employee count and take top 5
+        // Still get all the processed data, not just top 5
         topCompanies = companiesWithCounts
           .sort((a, b) => b.employee_count - a.employee_count)
-          .slice(0, 5)
           .map((company) => ({
             name: company.name,
             employee_count: company.employee_count,
             growth_percentage: `+${Math.floor(Math.random() * 20) + 1}%`, // Placeholder for growth
           }));
+      }
+
+      // Fetch top employees by forms count
+      // First, get all forms data with employee IDs
+      const [
+        { data: accidentForms, error: accidentFormsError },
+        { data: illnessForms, error: illnessFormsError },
+        { data: departureForms, error: departureFormsError },
+        { data: allEmployees, error: allEmployeesError },
+      ] = await Promise.all([
+        supabase
+          .from("accident_report")
+          .select("employee_id")
+          .neq("status", FormStatus.DRAFT),
+        supabase
+          .from("illness_report")
+          .select("employee_id")
+          .neq("status", FormStatus.DRAFT),
+        supabase
+          .from("staff_departure_report")
+          .select("employee_id")
+          .neq("status", FormStatus.DRAFT),
+        supabase
+          .from("company_user")
+          .select(
+            "id, first_name, last_name, company_id, company:company_id(company_name)"
+          )
+          .eq("role", "employee")
+          .limit(100),
+      ]);
+
+      if (
+        accidentFormsError ||
+        illnessFormsError ||
+        departureFormsError ||
+        allEmployeesError
+      ) {
+        console.error("Error fetching forms or employees data:", {
+          accidentFormsError,
+          illnessFormsError,
+          departureFormsError,
+          allEmployeesError,
+        });
+      } else {
+        // Count forms per employee
+        const employeeFormCounts: Record<string, number> = {};
+
+        // Initialize all employees with 0 forms
+        if (allEmployees) {
+          allEmployees.forEach((employee) => {
+            employeeFormCounts[employee.id] = 0;
+          });
+        }
+
+        // Count accident reports
+        if (accidentForms) {
+          accidentForms.forEach((form) => {
+            if (form.employee_id) {
+              employeeFormCounts[form.employee_id] =
+                (employeeFormCounts[form.employee_id] || 0) + 1;
+            }
+          });
+        }
+
+        // Count illness reports
+        if (illnessForms) {
+          illnessForms.forEach((form) => {
+            if (form.employee_id) {
+              employeeFormCounts[form.employee_id] =
+                (employeeFormCounts[form.employee_id] || 0) + 1;
+            }
+          });
+        }
+
+        // Count departure reports
+        if (departureForms) {
+          departureForms.forEach((form) => {
+            if (form.employee_id) {
+              employeeFormCounts[form.employee_id] =
+                (employeeFormCounts[form.employee_id] || 0) + 1;
+            }
+          });
+        }
+
+        // Process all employees with their form counts
+        if (allEmployees) {
+          // Map employee details with form counts
+          const employeesWithFormCounts = allEmployees.map((employee) => ({
+            id: employee.id,
+            name: `${employee.first_name || ""} ${employee.last_name || ""}`.trim(),
+            forms_count: employeeFormCounts[employee.id] || 0,
+            company_name:
+              (employee as any).company?.company_name || "Unknown Company",
+          }));
+
+          // Sort by form count (highest first) but don't limit to 10 anymore
+          topEmployees = employeesWithFormCounts.sort(
+            (a, b) => b.forms_count - a.forms_count
+          );
+        }
       }
 
       // Prepare monthly data fetch operations for the past year
@@ -504,6 +617,7 @@ const SuperAdminDashboard = () => {
         monthLabels: recentMonthsLabels,
         monthlyForms: recentMonthsFormData,
         topCompanies: topCompanies,
+        topEmployees: topEmployees,
       });
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
@@ -541,7 +655,8 @@ const SuperAdminDashboard = () => {
           isAdmin={true}
           onSignOut={signOut}
           showHelpButton={false}
-          showLogo={true}
+          showLogo={Platform.OS !== "web"}
+          title={Platform.OS === "web" ? "" : undefined}
         />
 
         <ScrollView
@@ -549,18 +664,20 @@ const SuperAdminDashboard = () => {
           contentContainerStyle={styles.scrollContent}
         >
           {/* Skeleton header */}
-          <View style={styles.welcomeHeader}>
-            <View
-              style={[styles.skeleton, styles.skeletonTitle, { width: "60%" }]}
-            />
-            <View
-              style={[
-                styles.skeleton,
-                styles.skeletonSubtitle,
-                { width: "80%" },
-              ]}
-            />
-          </View>
+          {Platform.OS !== "web" && (
+            <View style={styles.welcomeHeader}>
+              <View
+                style={[styles.skeleton, styles.skeletonTitle, { width: "60%" }]}
+              />
+              <View
+                style={[
+                  styles.skeleton,
+                  styles.skeletonSubtitle,
+                  { width: "80%" },
+                ]}
+              />
+            </View>
+          )}
 
           {/* Skeleton stats cards */}
           <View style={styles.statsGridContainer}>
@@ -852,7 +969,15 @@ const SuperAdminDashboard = () => {
           isAdmin={true}
           onSignOut={signOut}
           showHelpButton={false}
-          showLogo={true}
+          showLogo={Platform.OS !== "web"}
+          title={
+            Platform.OS === "web"
+              ? t("superAdmin.dashboard.title")
+              : undefined
+          }
+          subtitle={
+            Platform.OS === "web" ? t("superAdmin.dashboard.overview") : undefined
+          }
         />
 
         <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
@@ -863,14 +988,16 @@ const SuperAdminDashboard = () => {
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
             }
           >
-            <View style={styles.welcomeHeader}>
-              <Text variant={"bold"} style={styles.welcomeTitle}>
-                {t("superAdmin.dashboard.title")}
-              </Text>
-              <Text style={styles.welcomeSubtitle}>
-                {t("superAdmin.dashboard.overview")}
-              </Text>
-            </View>
+            {Platform.OS !== "web" && (
+              <View style={styles.welcomeHeader}>
+                <Text variant={"bold"} style={styles.welcomeTitle}>
+                  {t("superAdmin.dashboard.title")}
+                </Text>
+                <Text style={styles.welcomeSubtitle}>
+                  {t("superAdmin.dashboard.overview")}
+                </Text>
+              </View>
+            )}
 
             <View style={styles.statsGridContainer}>
               <View style={styles.statsGridItem}>
@@ -989,33 +1116,47 @@ const SuperAdminDashboard = () => {
                 {t("superAdmin.dashboard.topCompanies")}
               </Text>
 
-              {stats.topCompanies.map((company, index) => (
-                <View
-                  key={index}
-                  style={[
-                    styles.companyCard,
-                    index === stats.topCompanies.length - 1 && {
-                      borderBottomWidth: 0,
-                      marginBottom: 0,
-                    },
-                  ]}
-                >
-                  <View style={styles.companyInfo}>
-                    <Text variant={"bold"} style={styles.companyName}>
-                      {company.name}
-                    </Text>
-                    <Text style={styles.companyEmployees}>
-                      {company.employee_count}{" "}
-                      {t("superAdmin.dashboard.employeeCount")}
+              {stats.topCompanies
+                .slice(
+                  0,
+                  showAllCompanies
+                    ? stats.topCompanies.length
+                    : INITIAL_ITEMS_TO_SHOW
+                )
+                .map((company, index) => (
+                  <View
+                    key={index}
+                    style={[
+                      styles.companyCard,
+                      index ===
+                        (showAllCompanies
+                          ? stats.topCompanies.length
+                          : Math.min(
+                              INITIAL_ITEMS_TO_SHOW,
+                              stats.topCompanies.length
+                            )) -
+                          1 && {
+                        borderBottomWidth: 0,
+                        marginBottom: 0,
+                      },
+                    ]}
+                  >
+                    <View style={styles.companyInfo}>
+                      <Text variant={"bold"} style={styles.companyName}>
+                        {company.name}
+                      </Text>
+                      <Text style={styles.companyEmployees}>
+                        {company.employee_count}{" "}
+                        {t("superAdmin.dashboard.employeeCount")}
+                      </Text>
+                    </View>
+                    <Text variant={"bold"} style={styles.companyGrowth}>
+                      {company.growth_percentage}
                     </Text>
                   </View>
-                  <Text variant={"bold"} style={styles.companyGrowth}>
-                    {company.growth_percentage}
-                  </Text>
-                </View>
-              ))}
+                ))}
 
-              {stats.topCompanies.length === 0 && (
+              {stats.topCompanies.length === 0 ? (
                 <View style={styles.emptyState}>
                   <MaterialCommunityIcons
                     name="domain"
@@ -1026,6 +1167,112 @@ const SuperAdminDashboard = () => {
                     {t("superAdmin.companies.title")} {t("common.notFound")}
                   </Text>
                 </View>
+              ) : (
+                stats.topCompanies.length > INITIAL_ITEMS_TO_SHOW && (
+                  <TouchableOpacity
+                    style={styles.showMoreButton}
+                    onPress={() => {
+                      setShowAllCompanies(!showAllCompanies);
+                    }}
+                  >
+                    <Text style={styles.showMoreText}>
+                      {showAllCompanies
+                        ? t("superAdmin.dashboard.showLess") || "Show Less"
+                        : t("superAdmin.dashboard.showMore") || "Show More"}
+                    </Text>
+                    <MaterialCommunityIcons
+                      name={showAllCompanies ? "chevron-up" : "chevron-down"}
+                      size={16}
+                      color="#3b82f6"
+                    />
+                  </TouchableOpacity>
+                )
+              )}
+            </View>
+
+            {/* Top Employees Section */}
+            <View style={styles.topEmployeesContainer}>
+              <Text variant={"bold"} style={styles.sectionTitle}>
+                {t("superAdmin.dashboard.topEmployees") ||
+                  "Top Employees by Forms"}
+              </Text>
+
+              {stats.topEmployees
+                .slice(
+                  0,
+                  showAllEmployees
+                    ? stats.topEmployees.length
+                    : INITIAL_ITEMS_TO_SHOW
+                )
+                .map((employee, index) => (
+                  <View
+                    key={index}
+                    style={[
+                      styles.companyCard,
+                      index ===
+                        (showAllEmployees
+                          ? stats.topEmployees.length
+                          : Math.min(
+                              INITIAL_ITEMS_TO_SHOW,
+                              stats.topEmployees.length
+                            )) -
+                          1 && {
+                        borderBottomWidth: 0,
+                        marginBottom: 0,
+                      },
+                    ]}
+                  >
+                    <View style={styles.companyInfo}>
+                      <Text variant={"bold"} style={styles.companyName}>
+                        {employee.name}
+                      </Text>
+                      <Text style={styles.companyEmployees}>
+                        {employee.company_name}
+                      </Text>
+                    </View>
+                    <View style={styles.formsCountContainer}>
+                      <Text variant={"bold"} style={styles.formsCount}>
+                        {employee.forms_count}
+                      </Text>
+                      <Text style={styles.formsLabel}>
+                        {t("superAdmin.dashboard.formsFilled") || "Forms"}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+
+              {stats.topEmployees.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <MaterialCommunityIcons
+                    name="account-group"
+                    size={48}
+                    color={theme.colors.outlineVariant}
+                  />
+                  <Text style={styles.emptyStateText}>
+                    {t("superAdmin.employees.title") || "Employees"}{" "}
+                    {t("common.notFound")}
+                  </Text>
+                </View>
+              ) : (
+                stats.topEmployees.length > INITIAL_ITEMS_TO_SHOW && (
+                  <TouchableOpacity
+                    style={styles.showMoreButton}
+                    onPress={() => {
+                      setShowAllEmployees(!showAllEmployees);
+                    }}
+                  >
+                    <Text style={styles.showMoreText}>
+                      {showAllEmployees
+                        ? t("superAdmin.dashboard.showLess") || "Show Less"
+                        : t("superAdmin.dashboard.showMore") || "Show More"}
+                    </Text>
+                    <MaterialCommunityIcons
+                      name={showAllEmployees ? "chevron-up" : "chevron-down"}
+                      size={16}
+                      color="#3b82f6"
+                    />
+                  </TouchableOpacity>
+                )
               )}
             </View>
           </ScrollView>
@@ -1155,6 +1402,27 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e0e0e0",
   },
+  // Add new styles for top employees
+  topEmployeesContainer: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    marginBottom: 16,
+  },
+  formsCountContainer: {
+    alignItems: "center",
+  },
+  formsCount: {
+    fontSize: 18,
+    color: "#3b82f6",
+  },
+  formsLabel: {
+    fontSize: 12,
+    color: "#666",
+  },
   // Skeleton styles
   skeleton: {
     backgroundColor: "#E1E9EE",
@@ -1179,6 +1447,21 @@ const styles = StyleSheet.create({
   statsGridItem: {
     width: "48%",
     marginBottom: 5,
+  },
+  showMoreButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    // backgroundColor: "#f0f7ff",
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  showMoreText: {
+    color: "#3b82f6",
+    fontSize: 14,
+    fontFamily: "Poppins-Medium",
+    marginRight: 5,
   },
 });
 

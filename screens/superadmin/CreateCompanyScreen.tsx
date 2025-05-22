@@ -27,6 +27,7 @@ interface CompanyFormData {
   registration_number: string;
   industry_type: string;
   contact_number: string;
+  contact_email: string;
   address_line1: string;
   address_line2: string;
   address_city: string;
@@ -64,6 +65,7 @@ const CreateCompanyScreen = () => {
       registration_number: "",
       industry_type: "",
       contact_number: "",
+      contact_email: "",
       address_line1: "",
       address_line2: "",
       address_city: "",
@@ -119,7 +121,7 @@ const CreateCompanyScreen = () => {
       // Validate stakeholders
       if (stakeholders.length > 0) {
         const totalPercentage = stakeholders.reduce(
-          (sum, s) => sum + parseFloat(s.percentage),
+          (sum, s) => sum + s.percentage,
           0
         );
 
@@ -174,6 +176,7 @@ const CreateCompanyScreen = () => {
         registration_number: data.registration_number,
         industry_type: data.industry_type,
         contact_number: data.contact_number,
+        contact_email: data.contact_email,
         address: {
           line1: data.address_line1,
           line2: data.address_line2 || null,
@@ -398,6 +401,35 @@ const CreateCompanyScreen = () => {
             <Text style={styles.errorText}>
               {errors.contact_number.message}
             </Text>
+          )}
+
+          <Controller
+            control={control}
+            rules={{
+              required: t("superAdmin.companies.contactEmailRequired"),
+              pattern: {
+                value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                message: t("superAdmin.companies.invalidEmail"),
+              },
+            }}
+            render={({ field: { onChange, onBlur, value } }) => (
+              <TextInput
+                label={`${t("superAdmin.companies.contactEmail")} *`}
+                mode="outlined"
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
+                error={!!errors.contact_email}
+                style={styles.input}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                disabled={loading}
+              />
+            )}
+            name="contact_email"
+          />
+          {errors.contact_email && (
+            <Text style={styles.errorText}>{errors.contact_email.message}</Text>
           )}
 
           <Controller

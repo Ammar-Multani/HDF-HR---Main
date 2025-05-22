@@ -14,6 +14,9 @@ import {
   useTheme,
   Chip,
   TextInput,
+  Avatar,
+  IconButton,
+  Surface,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
@@ -172,7 +175,7 @@ const CompanyAdminTaskDetailsScreen = () => {
   }, [taskId]);
 
   // Helper function to determine user role label
-  const getUserRoleLabel = (comment) => {
+  const getUserRoleLabel = (comment: any) => {
     if (comment.sender_id === user?.id) return "You";
 
     if (comment.senderDetails) {
@@ -210,7 +213,7 @@ const CompanyAdminTaskDetailsScreen = () => {
         {
           task_id: taskId,
           sender_id: user.id,
-          company_id: task?.company_id,
+          company_id: task?.company_id as string | undefined, // Type assertion
           message: newComment.trim(),
         },
       ]);
@@ -272,13 +275,31 @@ const CompanyAdminTaskDetailsScreen = () => {
   const getPriorityColor = (priority: TaskPriority) => {
     switch (priority) {
       case TaskPriority.HIGH:
-        return theme.colors.error;
+        return "#F44336"; // Red
       case TaskPriority.MEDIUM:
-        return theme.colors.warning || "#F59E0B";
+        return "#FF9800"; // Orange
       case TaskPriority.LOW:
-        return theme.colors.primary;
+        return "#4CAF50"; // Green
       default:
         return theme.colors.primary;
+    }
+  };
+
+  const getStatusBackgroundColor = (status: string) => {
+    switch (status) {
+      case TaskStatus.COMPLETED:
+        return "rgba(76, 175, 80, 0.1)"; // Green background
+      case TaskStatus.IN_PROGRESS:
+        return "rgba(33, 150, 243, 0.1)"; // Blue background
+      case TaskStatus.PENDING:
+      case TaskStatus.OPEN:
+        return "rgba(255, 152, 0, 0.1)"; // Orange background
+      case TaskStatus.OVERDUE:
+        return "rgba(244, 67, 54, 0.1)"; // Red background
+      case TaskStatus.AWAITING_RESPONSE:
+        return "rgba(156, 39, 176, 0.1)"; // Purple background
+      default:
+        return "rgba(0, 0, 0, 0.05)";
     }
   };
 
@@ -287,6 +308,17 @@ const CompanyAdminTaskDetailsScreen = () => {
       return `${user.first_name} ${user.last_name}`;
     }
     return user.email;
+  };
+
+  // Get initials for avatar
+  const getInitials = (user: any) => {
+    if (user.first_name && user.last_name) {
+      return `${user.first_name[0]}${user.last_name[0]}`.toUpperCase();
+    }
+    if (user.email) {
+      return user.email[0].toUpperCase();
+    }
+    return "U";
   };
 
   if (loading && !refreshing) {
@@ -300,7 +332,21 @@ const CompanyAdminTaskDetailsScreen = () => {
       >
         <AppHeader title="Task Details" showBackButton />
         <View style={styles.errorContainer}>
-          <Text style={{ color: theme.colors.error }}>Task not found</Text>
+          <IconButton
+            icon="alert-circle-outline"
+            size={50}
+            iconColor={theme.colors.error}
+          />
+          <Text
+            style={{
+              color: theme.colors.error,
+              fontSize: 18,
+              fontWeight: "bold",
+              marginBottom: 16,
+            }}
+          >
+            Task not found
+          </Text>
           <Button
             mode="contained"
             onPress={() => navigation.goBack()}
@@ -314,9 +360,7 @@ const CompanyAdminTaskDetailsScreen = () => {
   }
 
   return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
+    <SafeAreaView style={[styles.container, { backgroundColor: "#F5F7FA" }]}>
       <AppHeader
         title="Task Details"
         showBackButton={true}
@@ -334,53 +378,82 @@ const CompanyAdminTaskDetailsScreen = () => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+        {/* Task Header Card with status background */}
+        <Card
+          style={[
+            styles.headerCard,
+            { backgroundColor: getStatusBackgroundColor(task.status) },
+          ]}
+        >
           <Card.Content>
-            <View style={styles.headerRow}>
-              <Text style={styles.taskTitle}>{task.title}</Text>
+            <View style={styles.statusContainer}>
               <StatusBadge status={task.status} />
             </View>
+            <Text style={styles.taskTitle}>{task.title}</Text>
 
-            <Chip
-              icon="flag"
-              style={[
-                styles.priorityChip,
-                { backgroundColor: getPriorityColor(task.priority) + "20" },
-              ]}
-              textStyle={{ color: getPriorityColor(task.priority) }}
-            >
-              {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}{" "}
-              Priority
-            </Chip>
+            <View style={styles.priorityContainer}>
+              <Chip
+                icon="flag"
+                style={[
+                  styles.priorityChip,
+                  {
+                    borderColor: getPriorityColor(task.priority),
+                    backgroundColor: `${getPriorityColor(task.priority)}20`,
+                  },
+                ]}
+                textStyle={{ color: getPriorityColor(task.priority) }}
+              >
+                {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}{" "}
+                Priority
+              </Chip>
+            </View>
+          </Card.Content>
+        </Card>
 
-            <Divider style={styles.divider} />
-
+        {/* Task Info Card */}
+        <Card style={styles.card}>
+          <Card.Content>
             <Text style={styles.sectionTitle}>Description</Text>
             <Text style={styles.description}>{task.description}</Text>
 
             <Divider style={styles.divider} />
 
-            <Text style={styles.sectionTitle}>Details</Text>
+            <Text style={styles.sectionTitle}>Timeline</Text>
 
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Deadline:</Text>
-              <Text style={styles.detailValue}>
-                {format(new Date(task.deadline), "MMMM d, yyyy")}
-              </Text>
-            </View>
+            <View style={styles.timelineContainer}>
+              <View style={styles.timelineItem}>
+                <View style={styles.timelineDot} />
+                <View style={styles.timelineContent}>
+                  <Text style={styles.timelineTitle}>Created</Text>
+                  <Text style={styles.timelineDate}>
+                    {format(new Date(task.created_at), "MMMM d, yyyy")}
+                  </Text>
+                </View>
+              </View>
 
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Created:</Text>
-              <Text style={styles.detailValue}>
-                {format(new Date(task.created_at), "MMMM d, yyyy")}
-              </Text>
-            </View>
+              <View style={styles.timelineItem}>
+                <View
+                  style={[styles.timelineDot, { backgroundColor: "#FF9800" }]}
+                />
+                <View style={styles.timelineContent}>
+                  <Text style={styles.timelineTitle}>Due Date</Text>
+                  <Text style={styles.timelineDate}>
+                    {format(new Date(task.deadline), "MMMM d, yyyy")}
+                  </Text>
+                </View>
+              </View>
 
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Reminder:</Text>
-              <Text style={styles.detailValue}>
-                {task.reminder_days_before} days before deadline
-              </Text>
+              <View style={styles.timelineItem}>
+                <View
+                  style={[styles.timelineDot, { backgroundColor: "#2196F3" }]}
+                />
+                <View style={styles.timelineContent}>
+                  <Text style={styles.timelineTitle}>Reminder</Text>
+                  <Text style={styles.timelineDate}>
+                    {task.reminder_days_before} days before deadline
+                  </Text>
+                </View>
+              </View>
             </View>
 
             <Divider style={styles.divider} />
@@ -388,139 +461,119 @@ const CompanyAdminTaskDetailsScreen = () => {
             <Text style={styles.sectionTitle}>Assigned Users</Text>
 
             {assignedUsers.length > 0 ? (
-              <View style={styles.usersContainer}>
+              <View style={styles.assignedUsersContainer}>
                 {assignedUsers.map((user) => (
-                  <Chip
-                    key={user.id}
-                    icon="account"
-                    style={styles.userChip}
-                    mode="outlined"
-                  >
-                    {renderUserName(user)}
-                  </Chip>
+                  <Surface key={user.id} style={styles.userSurface}>
+                    <Avatar.Text
+                      size={36}
+                      label={getInitials(user)}
+                      style={{ backgroundColor: theme.colors.primary }}
+                    />
+                    <Text style={styles.userName}>{renderUserName(user)}</Text>
+                  </Surface>
                 ))}
               </View>
             ) : (
-              <Text style={styles.noUsersText}>No users assigned</Text>
+              <View style={styles.emptyStateContainer}>
+                <IconButton icon="account-off-outline" size={24} />
+                <Text style={styles.emptyStateText}>No users assigned</Text>
+              </View>
             )}
           </Card.Content>
         </Card>
 
-        <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+        {/* Status Update Card */}
+        <Card style={styles.card}>
           <Card.Content>
             <Text style={styles.sectionTitle}>Update Status</Text>
 
-            <View style={styles.statusButtonsContainer}>
-              <Button
-                mode="outlined"
+            <View style={styles.statusGrid}>
+              <TouchableStatusButton
+                status={TaskStatus.OPEN}
+                currentStatus={task.status}
+                icon="clipboard-outline"
+                color="#FF9800"
                 onPress={() => handleUpdateStatus(TaskStatus.OPEN)}
-                style={[
-                  styles.statusButton,
-                  task.status === TaskStatus.OPEN && styles.activeStatusButton,
-                ]}
-                textColor={
-                  task.status === TaskStatus.OPEN
-                    ? theme.colors.primary
-                    : undefined
-                }
-              >
-                Open
-              </Button>
+              />
 
-              <Button
-                mode="outlined"
+              <TouchableStatusButton
+                status={TaskStatus.IN_PROGRESS}
+                currentStatus={task.status}
+                icon="progress-clock"
+                color="#2196F3"
                 onPress={() => handleUpdateStatus(TaskStatus.IN_PROGRESS)}
-                style={[
-                  styles.statusButton,
-                  task.status === TaskStatus.IN_PROGRESS &&
-                    styles.activeStatusButton,
-                ]}
-                textColor={
-                  task.status === TaskStatus.IN_PROGRESS
-                    ? theme.colors.primary
-                    : undefined
-                }
-              >
-                In Progress
-              </Button>
+              />
 
-              <Button
-                mode="outlined"
+              <TouchableStatusButton
+                status={TaskStatus.AWAITING_RESPONSE}
+                currentStatus={task.status}
+                icon="message-reply-outline"
+                color="#9C27B0"
                 onPress={() => handleUpdateStatus(TaskStatus.AWAITING_RESPONSE)}
-                style={[
-                  styles.statusButton,
-                  task.status === TaskStatus.AWAITING_RESPONSE &&
-                    styles.activeStatusButton,
-                ]}
-                textColor={
-                  task.status === TaskStatus.AWAITING_RESPONSE
-                    ? theme.colors.primary
-                    : undefined
-                }
-              >
-                Awaiting
-              </Button>
+              />
 
-              <Button
-                mode="outlined"
+              <TouchableStatusButton
+                status={TaskStatus.COMPLETED}
+                currentStatus={task.status}
+                icon="check-circle-outline"
+                color="#4CAF50"
                 onPress={() => handleUpdateStatus(TaskStatus.COMPLETED)}
-                style={[
-                  styles.statusButton,
-                  task.status === TaskStatus.COMPLETED &&
-                    styles.activeStatusButton,
-                ]}
-                textColor={
-                  task.status === TaskStatus.COMPLETED
-                    ? theme.colors.primary
-                    : undefined
-                }
-              >
-                Completed
-              </Button>
+              />
 
-              <Button
-                mode="outlined"
+              <TouchableStatusButton
+                status={TaskStatus.OVERDUE}
+                currentStatus={task.status}
+                icon="clock-alert-outline"
+                color="#F44336"
                 onPress={() => handleUpdateStatus(TaskStatus.OVERDUE)}
-                style={[
-                  styles.statusButton,
-                  task.status === TaskStatus.OVERDUE &&
-                    styles.activeStatusButton,
-                ]}
-                textColor={
-                  task.status === TaskStatus.OVERDUE
-                    ? theme.colors.primary
-                    : undefined
-                }
-              >
-                Overdue
-              </Button>
+              />
             </View>
           </Card.Content>
         </Card>
 
-        <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+        {/* Comments Card */}
+        <Card style={styles.card}>
           <Card.Content>
-            <Text style={styles.sectionTitle}>Comments</Text>
+            <View style={styles.sectionHeaderContainer}>
+              <Text style={styles.sectionTitle}>Comments</Text>
+              <Chip icon="comment-outline">{comments.length}</Chip>
+            </View>
 
             {comments.length > 0 ? (
-              comments.map((comment) => (
-                <View key={comment.id} style={styles.commentContainer}>
-                  <View style={styles.commentHeader}>
-                    <Text style={styles.commentUser}>
-                      {getUserRoleLabel(comment)}
-                    </Text>
-                    <Text style={styles.commentDate}>
-                      {format(
-                        new Date(comment.created_at),
-                        "MMM d, yyyy h:mm a"
-                      )}
-                    </Text>
-                  </View>
-                  <Text style={styles.commentText}>{comment.message}</Text>
-                </View>
-              ))
+              <View style={styles.commentsContainer}>
+                {comments.map((comment) => (
+                  <Surface key={comment.id} style={styles.commentBubble}>
+                    <View style={styles.commentHeader}>
+                      <View style={styles.commentUser}>
+                        <Avatar.Text
+                          size={32}
+                          label={getUserRoleLabel(comment)
+                            .charAt(0)
+                            .toUpperCase()}
+                          style={{
+                            backgroundColor:
+                              comment.sender_id === user?.id
+                                ? theme.colors.primary
+                                : "#757575",
+                          }}
+                        />
+                        <Text style={styles.commentUserName}>
+                          {getUserRoleLabel(comment)}
+                        </Text>
+                      </View>
+                      <Text style={styles.commentDate}>
+                        {format(new Date(comment.created_at), "MMM d, h:mm a")}
+                      </Text>
+                    </View>
+                    <Text style={styles.commentText}>{comment.message}</Text>
+                  </Surface>
+                ))}
+              </View>
             ) : (
-              <Text style={styles.noCommentsText}>No comments yet</Text>
+              <View style={styles.emptyStateContainer}>
+                <IconButton icon="comment-off-outline" size={24} />
+                <Text style={styles.emptyStateText}>No comments yet</Text>
+              </View>
             )}
 
             <View style={styles.addCommentContainer}>
@@ -537,10 +590,11 @@ const CompanyAdminTaskDetailsScreen = () => {
                 mode="contained"
                 onPress={handleAddComment}
                 style={styles.addCommentButton}
+                icon="send"
                 loading={submittingComment}
                 disabled={submittingComment || !newComment.trim()}
               >
-                Add Comment
+                Send
               </Button>
             </View>
           </Card.Content>
@@ -549,13 +603,12 @@ const CompanyAdminTaskDetailsScreen = () => {
         <View style={styles.buttonContainer}>
           <Button
             mode="contained"
-            onPress={() =>
-              navigation.navigate(
-                "EditTask" as never,
-                { taskId: task.id } as never
-              )
-            }
-            style={[styles.button, { backgroundColor: theme.colors.primary }]}
+            onPress={() => {
+              // @ts-ignore - suppress type error for navigation
+              navigation.navigate("EditTask", { taskId: task.id });
+            }}
+            style={styles.editButton}
+            icon="pencil"
           >
             Edit Task
           </Button>
@@ -564,6 +617,48 @@ const CompanyAdminTaskDetailsScreen = () => {
     </SafeAreaView>
   );
 };
+
+// TouchableStatusButton component for status updates
+const TouchableStatusButton = ({
+  status,
+  currentStatus,
+  icon,
+  color,
+  onPress,
+}: {
+  status: string;
+  currentStatus: string;
+  icon: string;
+  color: string;
+  onPress: () => void;
+}) => {
+  const isActive = status === currentStatus;
+  return (
+    <TouchableOpacity
+      style={[
+        styles.statusButton,
+        {
+          borderColor: color,
+          backgroundColor: isActive ? `${color}20` : "transparent",
+        },
+      ]}
+      onPress={onPress}
+    >
+      <IconButton
+        icon={icon}
+        iconColor={color}
+        size={24}
+        style={{ margin: 0 }}
+      />
+      <Text style={[styles.statusButtonText, { color }]}>
+        {status.replace(/_/g, " ")}
+      </Text>
+    </TouchableOpacity>
+  );
+};
+
+// TouchableOpacity for the StatusButton component
+import { TouchableOpacity } from "react-native";
 
 const styles = StyleSheet.create({
   container: {
@@ -576,121 +671,212 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 40,
   },
+  headerCard: {
+    marginBottom: 16,
+    elevation: 0,
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.05)",
+  },
   card: {
     marginBottom: 16,
     elevation: 0,
+    backgroundColor: "white",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.05)",
   },
-  headerRow: {
+  statusContainer: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    justifyContent: "flex-end",
     marginBottom: 12,
   },
   taskTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "bold",
-    flex: 1,
-    marginRight: 8,
+    marginBottom: 16,
+    color: "#333",
+  },
+  priorityContainer: {
+    flexDirection: "row",
+    marginBottom: 8,
   },
   priorityChip: {
-    alignSelf: "flex-start",
-    marginBottom: 16,
+    height: 36,
+    borderWidth: 1,
   },
   divider: {
-    marginVertical: 16,
+    marginVertical: 20,
+    backgroundColor: "rgba(0,0,0,0.05)",
+    height: 1,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: "bold",
+    fontWeight: "600",
     marginBottom: 12,
+    color: "#333",
   },
   description: {
     fontSize: 16,
     lineHeight: 24,
-  },
-  detailRow: {
-    flexDirection: "row",
+    color: "#555",
     marginBottom: 8,
   },
-  detailLabel: {
-    fontWeight: "500",
-    width: 100,
-    opacity: 0.7,
+  timelineContainer: {
+    marginTop: 8,
   },
-  detailValue: {
+  timelineItem: {
+    flexDirection: "row",
+    marginBottom: 16,
+  },
+  timelineDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "#1976D2",
+    marginRight: 12,
+    marginTop: 4,
+  },
+  timelineContent: {
     flex: 1,
   },
-  usersContainer: {
+  timelineTitle: {
+    fontSize: 16,
+    fontWeight: "500",
+    marginBottom: 4,
+    color: "#333",
+  },
+  timelineDate: {
+    fontSize: 14,
+    color: "#666",
+  },
+  assignedUsersContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
+    marginHorizontal: -4,
   },
-  userChip: {
+  userSurface: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 8,
+    borderRadius: 12,
     margin: 4,
+    elevation: 1,
   },
-  noUsersText: {
-    fontStyle: "italic",
-    opacity: 0.7,
+  userName: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: "#333",
   },
-  statusButtonsContainer: {
+  statusGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
+    marginTop: 8,
   },
   statusButton: {
-    marginBottom: 8,
-    flex: 1,
-    marginHorizontal: 4,
+    width: "48%",
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 12,
+    alignItems: "center",
+    marginBottom: 12,
   },
-  activeStatusButton: {
-    borderWidth: 2,
+  statusButtonText: {
+    marginTop: 4,
+    fontSize: 12,
+    fontWeight: "500",
+    textTransform: "capitalize",
   },
-  commentContainer: {
+  sectionHeaderContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+  },
+  commentsContainer: {
+    marginBottom: 16,
+  },
+  commentBubble: {
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 12,
+    elevation: 1,
   },
   commentHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 4,
+    alignItems: "center",
+    marginBottom: 8,
   },
   commentUser: {
-    fontWeight: "bold",
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  commentUserName: {
+    fontWeight: "600",
+    marginLeft: 8,
+    color: "#333",
   },
   commentDate: {
     fontSize: 12,
-    opacity: 0.7,
+    color: "#666",
   },
   commentText: {
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: 15,
+    lineHeight: 22,
+    color: "#333",
   },
-  noCommentsText: {
-    fontStyle: "italic",
-    opacity: 0.7,
-    marginBottom: 16,
+  emptyStateContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 24,
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: "#666",
+    marginTop: 4,
   },
   addCommentContainer: {
-    marginTop: 16,
+    marginTop: 8,
   },
   commentInput: {
     marginBottom: 12,
+    backgroundColor: "white",
   },
   addCommentButton: {
     alignSelf: "flex-end",
+    borderRadius: 12,
   },
   buttonContainer: {
-    marginTop: 8,
+    marginBottom: 24,
   },
-  button: {
-    marginBottom: 12,
+  editButton: {
+    borderRadius: 12,
+    paddingVertical: 8,
   },
   errorContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
+  },
+  detailRow: {
+    flexDirection: "row",
+    marginBottom: 12,
+  },
+  detailLabel: {
+    fontWeight: "500",
+    width: 100,
+    opacity: 0.7,
+    fontSize: 14,
+    color: "#666",
+  },
+  detailValue: {
+    flex: 1,
+    fontSize: 14,
+    color: "#333",
   },
 });
 
