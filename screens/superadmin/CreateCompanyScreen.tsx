@@ -241,9 +241,13 @@ const CreateCompanyScreen = () => {
         role: "admin",
         active_status: "active",
         created_by: user?.id,
-        phone_number: t("superAdmin.companies.notProvided"),
+        phone_number: (
+          t("superAdmin.companies.notProvided") || "Not provided"
+        ).substring(0, 20),
         date_of_birth: new Date().toISOString(),
-        nationality: t("superAdmin.companies.notProvided"),
+        nationality: (
+          t("superAdmin.companies.notProvided") || "Not provided"
+        ).substring(0, 20),
       };
 
       const { error: companyUserError } = await supabase

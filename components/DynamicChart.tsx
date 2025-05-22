@@ -6,13 +6,13 @@ import { useTheme } from "react-native-paper";
 import Text from "./Text";
 import { LinearGradient } from "expo-linear-gradient";
 
-interface OnboardingChartProps {
+interface DynamicChartProps {
   monthlyData: number[];
   monthLabels: string[];
   width: number;
 }
 
-const OnboardingChart: React.FC<OnboardingChartProps> = ({
+const DynamicChart: React.FC<DynamicChartProps> = ({
   monthlyData,
   monthLabels,
   width,
@@ -116,32 +116,19 @@ const OnboardingChart: React.FC<OnboardingChartProps> = ({
 
   // Group months into quarters for display
   const getQuarterlyLabels = (labels: string[], data: number[]) => {
-    // Return quarter labels with month ranges
-    return ["Jan-Mar", "Apr-Jun", "Jul-Sep", "Oct-Dec"];
+    // Return the labels directly since we're already passing the 5 recent months
+    return labels;
   };
 
   // Aggregate monthly data into quarterly data
   const getQuarterlyData = (monthlyData: number[]) => {
     if (!monthlyData.length) {
-      // Sample quarterly data if no data is available
-      return [0, 0, 0, 0];
+      // Sample data if no data is available
+      return [0, 0, 0, 0, 0];
     }
 
-    // If we have less than 12 months, pad the array
-    const paddedData = [...monthlyData];
-    while (paddedData.length < 12) {
-      paddedData.push(0);
-    }
-
-    // Group into quarters (sum of values in each quarter)
-    const quarterlyData = [
-      paddedData[0] + paddedData[1] + paddedData[2],
-      paddedData[3] + paddedData[4] + paddedData[5],
-      paddedData[6] + paddedData[7] + paddedData[8],
-      paddedData[9] + paddedData[10] + paddedData[11],
-    ];
-
-    return quarterlyData;
+    // Return the data directly - no quarterly grouping needed
+    return monthlyData;
   };
 
   // For better grid appearance with small numbers
@@ -185,7 +172,7 @@ const OnboardingChart: React.FC<OnboardingChartProps> = ({
           color={theme.colors.outlineVariant}
         />
         <Text variant="medium" style={styles.emptyStateText}>
-          No onboarding data available
+          No data available
         </Text>
       </View>
     );
@@ -292,4 +279,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default OnboardingChart;
+export default DynamicChart;

@@ -15,16 +15,15 @@ import { useNavigation } from "@react-navigation/native";
 import { supabase, isNetworkAvailable } from "../../lib/supabase";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
-import { TaskStatus } from "../../types";
+import { TaskStatus, FormStatus } from "../../types";
 import { useAuth } from "../../contexts/AuthContext";
 import { LinearGradient } from "expo-linear-gradient";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { LineChart } from "react-native-chart-kit";
-import OnboardingChart from "../../components/OnboardingChart";
 import Text from "../../components/Text";
 import { globalStyles, createTextStyle } from "../../utils/globalStyles";
 import { useTranslation } from "react-i18next";
 import Animated, { FadeIn } from "react-native-reanimated";
+import DynamicChart from "../../components/DynamicChart";
 
 const { width } = Dimensions.get("window");
 
@@ -52,13 +51,18 @@ const SuperAdminDashboard = () => {
     totalCompanies: 0,
     totalCompaniesGrowth: "+0%",
     activeCompanies: 0,
+    totalEmployees: 0,
+    employeeGrowth: "+0%",
     totalTasks: 0,
     tasksGrowth: "+0%",
     pendingTasks: 0,
     completedTasks: 0,
     overdueTasks: 0,
+    totalForms: 0,
+    formsGrowth: "+0%",
     monthlyOnboarded: [] as number[],
     monthLabels: [] as string[],
+    monthlyForms: [] as number[],
     topCompanies: [] as CompanyData[],
   });
 
@@ -79,119 +83,25 @@ const SuperAdminDashboard = () => {
         setError(t("superAdmin.dashboard.offline"));
       }
 
-      // Fetch companies count
-      const { count: totalCompanies, error: companiesError } = await supabase
-        .from("company")
-        .select("*", { count: "exact", head: true });
-
-      // Fetch active companies count
-      const { count: activeCompanies, error: activeCompaniesError } =
-        await supabase
-          .from("company")
-          .select("*", { count: "exact", head: true })
-          .eq("active", true);
-
-      // Calculate company growth - fetch last month's count
-      const lastMonthDate = new Date();
-      lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
-      const { count: lastMonthCompanies, error: lastMonthError } =
-        await supabase
-          .from("company")
-          .select("*", { count: "exact", head: true })
-          .lt("created_at", lastMonthDate.toISOString());
-
-      // Calculate growth percentage
-      let companyGrowth = "+0%";
-      if (lastMonthCompanies && totalCompanies && lastMonthCompanies > 0) {
-        const growthRate =
-          ((totalCompanies - lastMonthCompanies) / lastMonthCompanies) * 100;
-        companyGrowth =
-          (growthRate >= 0 ? "+" : "") + growthRate.toFixed(1) + "%";
-      }
-
-      // Fetch tasks count - use 'tasks' table instead of 'task'
-      const { count: totalTasks, error: tasksError } = await supabase
-        .from("tasks")
-        .select("*", { count: "exact", head: true });
-
-      // Fetch last month's task count
-      const { count: lastMonthTasks, error: lastMonthTasksError } =
-        await supabase
-          .from("tasks")
-          .select("*", { count: "exact", head: true })
-          .lt("created_at", lastMonthDate.toISOString());
-
-      // Calculate tasks growth
-      let tasksGrowth = "+0%";
-      if (lastMonthTasks && totalTasks && lastMonthTasks > 0) {
-        const growthRate =
-          ((totalTasks - lastMonthTasks) / lastMonthTasks) * 100;
-        tasksGrowth =
-          (growthRate >= 0 ? "+" : "") + growthRate.toFixed(1) + "%";
-      }
-
-      // Fetch pending tasks count (open + in progress + awaiting response)
-      const { count: pendingTasks, error: pendingTasksError } = await supabase
-        .from("tasks")
-        .select("*", { count: "exact", head: true })
-        .in("status", [
-          TaskStatus.OPEN,
-          TaskStatus.IN_PROGRESS,
-          TaskStatus.AWAITING_RESPONSE,
-        ]);
-
-      // Fetch completed tasks count
-      const { count: completedTasks, error: completedTasksError } =
-        await supabase
-          .from("tasks")
-          .select("*", { count: "exact", head: true })
-          .eq("status", TaskStatus.COMPLETED);
-
-      // Fetch overdue tasks count
-      const { count: overdueTasks, error: overdueTasksError } = await supabase
-        .from("tasks")
-        .select("*", { count: "exact", head: true })
-        .eq("status", TaskStatus.OVERDUE);
-
-      // Fetch top companies by employee count - get all companies first
-      const { data: companies, error: companiesListError } = await supabase
-        .from("company")
-        .select("id, company_name")
-        .order("created_at", { ascending: false });
-
-      // If we have companies, calculate employee counts for each one
-      let topCompanies: CompanyData[] = [];
-      if (companies && companies.length > 0) {
-        // Get employee counts for each company
-        const companiesWithCounts = await Promise.all(
-          companies.map(async (company) => {
-            // Count employees for this company
-            const { count, error } = await supabase
-              .from("company_user")
-              .select("*", { count: "exact", head: true })
-              .eq("company_id", company.id);
-
-            return {
-              id: company.id,
-              name: company.company_name,
-              employee_count: count || 0,
-            };
-          })
-        );
-
-        // Sort by employee count and take top 5
-        topCompanies = companiesWithCounts
-          .sort((a, b) => b.employee_count - a.employee_count)
-          .slice(0, 5)
-          .map((company) => ({
-            name: company.name,
-            employee_count: company.employee_count,
-            growth_percentage: `+${Math.floor(Math.random() * 20) + 1}%`, // Placeholder for growth
-          }));
-      }
-
-      // Calculate monthly onboarded companies for all months of the current year
+      // Get today's date and reset hours to start of day
       const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Get current month and year
+      const currentMonth = today.getMonth();
+      const currentYear = today.getFullYear();
+      // Calculate the starting month index to show 5 months of data
+      const startMonthIndex =
+        currentMonth >= 4 ? currentMonth - 4 : 12 + (currentMonth - 4);
+
+      // Create array of the 5 most recent months to display
+      const recentMonths: number[] = [];
+      for (let i = 0; i < 5; i++) {
+        // Calculate month index (handling year wraparound)
+        const monthIndex = (startMonthIndex + i) % 12;
+        recentMonths.push(monthIndex);
+      }
+
       const monthNames = [
         "Jan",
         "Feb",
@@ -206,52 +116,369 @@ const SuperAdminDashboard = () => {
         "Nov",
         "Dec",
       ];
-      const monthlyData: MonthlyData[] = [];
 
-      // Get data for all 12 months of the current year
-      const currentYear = today.getFullYear();
-      for (let month = 0; month < 12; month++) {
-        const monthStart = new Date(currentYear, month, 1);
-        const monthEnd = new Date(currentYear, month + 1, 0);
+      // Run all main dashboard queries in parallel
+      const [
+        { count: totalCompanies, error: companiesError },
+        { count: activeCompanies, error: activeCompaniesError },
+        { count: totalEmployees, error: employeesError },
+        { count: todayEmployees, error: todayEmployeesError },
+        { count: todayCompanies, error: todayCompaniesError },
+        { count: totalTasks, error: tasksError },
+        { count: todayTasks, error: todayTasksError },
+        { count: pendingTasks, error: pendingTasksError },
+        { count: completedTasks, error: completedTasksError },
+        { count: overdueTasks, error: overdueTasksError },
+        { count: accidentReports, error: accidentError },
+        { count: illnessReports, error: illnessError },
+        { count: departureReports, error: departureError },
+        { count: todayAccidentReports, error: todayAccidentError },
+        { count: todayIllnessReports, error: todayIllnessError },
+        { count: todayDepartureReports, error: todayDepartureError },
+        { data: companies, error: companiesListError },
+      ] = await Promise.all([
+        // Total companies count
+        supabase.from("company").select("*", { count: "exact", head: true }),
 
-        const { count, error } = await supabase
+        // Active companies count
+        supabase
           .from("company")
           .select("*", { count: "exact", head: true })
-          .gte("created_at", monthStart.toISOString())
-          .lte("created_at", monthEnd.toISOString());
+          .eq("active", true),
 
-        if (error) {
-          console.error("Error fetching monthly data:", error);
+        // Total employees count
+        supabase
+          .from("company_user")
+          .select("*", { count: "exact", head: true })
+          .eq("role", "employee"),
+
+        // Today's employees count
+        supabase
+          .from("company_user")
+          .select("*", { count: "exact", head: true })
+          .eq("role", "employee")
+          .gte("created_at", today.toISOString()),
+
+        // Today's companies count
+        supabase
+          .from("company")
+          .select("*", { count: "exact", head: true })
+          .gte("created_at", today.toISOString()),
+
+        // Total tasks count
+        supabase.from("tasks").select("*", { count: "exact", head: true }),
+
+        // Today's tasks count
+        supabase
+          .from("tasks")
+          .select("*", { count: "exact", head: true })
+          .gte("created_at", today.toISOString()),
+
+        // Pending tasks count
+        supabase
+          .from("tasks")
+          .select("*", { count: "exact", head: true })
+          .in("status", [
+            TaskStatus.OPEN,
+            TaskStatus.IN_PROGRESS,
+            TaskStatus.AWAITING_RESPONSE,
+          ]),
+
+        // Completed tasks count
+        supabase
+          .from("tasks")
+          .select("*", { count: "exact", head: true })
+          .eq("status", TaskStatus.COMPLETED),
+
+        // Overdue tasks count
+        supabase
+          .from("tasks")
+          .select("*", { count: "exact", head: true })
+          .eq("status", TaskStatus.OVERDUE),
+
+        // Accident reports count
+        supabase
+          .from("accident_report")
+          .select("*", { count: "exact", head: true })
+          .neq("status", FormStatus.DRAFT),
+
+        // Illness reports count
+        supabase
+          .from("illness_report")
+          .select("*", { count: "exact", head: true })
+          .neq("status", FormStatus.DRAFT),
+
+        // Departure reports count
+        supabase
+          .from("staff_departure_report")
+          .select("*", { count: "exact", head: true })
+          .neq("status", FormStatus.DRAFT),
+
+        // Today's accident reports
+        supabase
+          .from("accident_report")
+          .select("*", { count: "exact", head: true })
+          .neq("status", FormStatus.DRAFT)
+          .gte("created_at", today.toISOString()),
+
+        // Today's illness reports
+        supabase
+          .from("illness_report")
+          .select("*", { count: "exact", head: true })
+          .neq("status", FormStatus.DRAFT)
+          .gte("submission_date", today.toISOString()),
+
+        // Today's departure reports
+        supabase
+          .from("staff_departure_report")
+          .select("*", { count: "exact", head: true })
+          .neq("status", FormStatus.DRAFT)
+          .gte("created_at", today.toISOString()),
+
+        // Companies list
+        supabase
+          .from("company")
+          .select("id, company_name")
+          .order("created_at", { ascending: false }),
+      ]);
+
+      // Calculate totals and growth rates
+      const totalForms =
+        (accidentReports || 0) +
+        (illnessReports || 0) +
+        (departureReports || 0);
+      const todayForms =
+        (todayAccidentReports || 0) +
+        (todayIllnessReports || 0) +
+        (todayDepartureReports || 0);
+
+      // Calculate company growth percentage
+      let companyGrowth = "+0%";
+      if (totalCompanies && todayCompanies) {
+        if (totalCompanies === todayCompanies) {
+          companyGrowth = "+100%";
         } else {
-          monthlyData.push({
-            month: monthNames[month],
-            count: count || 0,
-          });
+          const previousCompanies = totalCompanies - todayCompanies;
+          const growthRate =
+            previousCompanies > 0
+              ? (todayCompanies / previousCompanies) * 100
+              : 0;
+          companyGrowth =
+            (growthRate > 0 ? "+" : "") + growthRate.toFixed(1) + "%";
         }
       }
 
+      // Calculate tasks growth percentage
+      let tasksGrowth = "+0%";
+      if (totalTasks && todayTasks) {
+        if (totalTasks === todayTasks) {
+          tasksGrowth = "+100%";
+        } else {
+          const previousTasks = totalTasks - todayTasks;
+          const growthRate =
+            previousTasks > 0 ? (todayTasks / previousTasks) * 100 : 0;
+          tasksGrowth =
+            (growthRate > 0 ? "+" : "") + growthRate.toFixed(1) + "%";
+        }
+      }
+
+      // Calculate forms growth percentage
+      let formsGrowth = "+0%";
+      if (totalForms && todayForms) {
+        if (totalForms === todayForms) {
+          formsGrowth = "+100%";
+        } else {
+          const previousForms = totalForms - todayForms;
+          const growthRate =
+            previousForms > 0 ? (todayForms / previousForms) * 100 : 0;
+          formsGrowth =
+            (growthRate > 0 ? "+" : "") + growthRate.toFixed(1) + "%";
+        }
+      }
+
+      // Calculate employee growth percentage
+      let employeeGrowth = "+0%";
+      if (totalEmployees && todayEmployees) {
+        if (totalEmployees === todayEmployees) {
+          employeeGrowth = "+100%";
+        } else {
+          const previousEmployees = totalEmployees - todayEmployees;
+          const growthRate =
+            previousEmployees > 0
+              ? (todayEmployees / previousEmployees) * 100
+              : 0;
+          employeeGrowth =
+            (growthRate > 0 ? "+" : "") + growthRate.toFixed(1) + "%";
+        }
+      }
+
+      // Process company data - gather employee counts in parallel
+      let topCompanies: CompanyData[] = [];
+      if (companies && companies.length > 0) {
+        // Get top 10 companies to process (for faster loading)
+        const companiesSlice = companies.slice(0, 10);
+
+        // Get employee counts for companies in parallel
+        const companiesWithCountPromises = companiesSlice.map(
+          async (company) => {
+            const { count, error } = await supabase
+              .from("company_user")
+              .select("*", { count: "exact", head: true })
+              .eq("company_id", company.id)
+              .eq("role", "employee");
+
+            return {
+              id: company.id,
+              name: company.company_name,
+              employee_count: count || 0,
+            };
+          }
+        );
+
+        const companiesWithCounts = await Promise.all(
+          companiesWithCountPromises
+        );
+
+        // Sort by employee count and take top 5
+        topCompanies = companiesWithCounts
+          .sort((a, b) => b.employee_count - a.employee_count)
+          .slice(0, 5)
+          .map((company) => ({
+            name: company.name,
+            employee_count: company.employee_count,
+            growth_percentage: `+${Math.floor(Math.random() * 20) + 1}%`, // Placeholder for growth
+          }));
+      }
+
+      // Prepare monthly data fetch operations for the past year
+      const allMonthsCompanyData = new Array(12).fill(0);
+      const allMonthsFormData = new Array(12).fill(0);
+
+      // Create arrays of promises for each month's data
+      const monthlyCompanyPromises = [];
+      const monthlyAccidentFormPromises = [];
+      const monthlyIllnessFormPromises = [];
+      const monthlyDepartureFormPromises = [];
+
+      for (let month = 0; month < 12; month++) {
+        // Calculate the proper date range - handle year wraparound
+        const dateYear = currentMonth >= month ? currentYear : currentYear - 1;
+        const monthStart = new Date(dateYear, month, 1);
+        const monthEnd = new Date(dateYear, month + 1, 0);
+
+        // Company data promise
+        monthlyCompanyPromises.push(
+          supabase
+            .from("company")
+            .select("*", { count: "exact", head: true })
+            .gte("created_at", monthStart.toISOString())
+            .lte("created_at", monthEnd.toISOString())
+        );
+
+        // Form data promises
+        monthlyAccidentFormPromises.push(
+          supabase
+            .from("accident_report")
+            .select("*", { count: "exact", head: true })
+            .neq("status", FormStatus.DRAFT)
+            .gte("created_at", monthStart.toISOString())
+            .lte("created_at", monthEnd.toISOString())
+        );
+
+        monthlyIllnessFormPromises.push(
+          supabase
+            .from("illness_report")
+            .select("*", { count: "exact", head: true })
+            .neq("status", FormStatus.DRAFT)
+            .gte("submission_date", monthStart.toISOString())
+            .lte("submission_date", monthEnd.toISOString())
+        );
+
+        monthlyDepartureFormPromises.push(
+          supabase
+            .from("staff_departure_report")
+            .select("*", { count: "exact", head: true })
+            .neq("status", FormStatus.DRAFT)
+            .gte("created_at", monthStart.toISOString())
+            .lte("created_at", monthEnd.toISOString())
+        );
+      }
+
+      // Execute all monthly data promises in parallel
+      const [
+        monthlyCompanyResults,
+        monthlyAccidentResults,
+        monthlyIllnessResults,
+        monthlyDepartureResults,
+      ] = await Promise.all([
+        Promise.all(monthlyCompanyPromises),
+        Promise.all(monthlyAccidentFormPromises),
+        Promise.all(monthlyIllnessFormPromises),
+        Promise.all(monthlyDepartureFormPromises),
+      ]);
+
+      // Process monthly results
+      for (let month = 0; month < 12; month++) {
+        // Process company data
+        allMonthsCompanyData[month] = monthlyCompanyResults[month].count || 0;
+
+        // Process form data
+        const monthAccidentCount = monthlyAccidentResults[month].count || 0;
+        const monthIllnessCount = monthlyIllnessResults[month].count || 0;
+        const monthDepartureCount = monthlyDepartureResults[month].count || 0;
+
+        allMonthsFormData[month] =
+          monthAccidentCount + monthIllnessCount + monthDepartureCount;
+      }
+
+      // Extract data for recent months only
+      const recentMonthsCompanyData = recentMonths.map(
+        (index) => allMonthsCompanyData[index]
+      );
+      const recentMonthsFormData = recentMonths.map(
+        (index) => allMonthsFormData[index]
+      );
+      const recentMonthsLabels = recentMonths.map((index) => monthNames[index]);
+
       // Check for any errors
-      if (
+      const errorsFound =
         companiesError ||
         activeCompaniesError ||
+        employeesError ||
+        todayEmployeesError ||
         tasksError ||
         pendingTasksError ||
         completedTasksError ||
         overdueTasksError ||
         companiesListError ||
-        lastMonthError ||
-        lastMonthTasksError
-      ) {
+        todayCompaniesError ||
+        todayTasksError ||
+        accidentError ||
+        illnessError ||
+        departureError ||
+        todayAccidentError ||
+        todayIllnessError ||
+        todayDepartureError;
+
+      if (errorsFound) {
         console.error("Error fetching dashboard data:", {
           companiesError,
           activeCompaniesError,
+          employeesError,
+          todayEmployeesError,
           tasksError,
           pendingTasksError,
           completedTasksError,
           overdueTasksError,
           companiesListError,
-          lastMonthError,
-          lastMonthTasksError,
+          todayCompaniesError,
+          todayTasksError,
+          accidentError,
+          illnessError,
+          departureError,
+          todayAccidentError,
+          todayIllnessError,
+          todayDepartureError,
         });
 
         if (!error) {
@@ -259,17 +486,23 @@ const SuperAdminDashboard = () => {
         }
       }
 
+      // Update state with all the data
       setStats({
         totalCompanies: totalCompanies || 0,
         totalCompaniesGrowth: companyGrowth,
         activeCompanies: activeCompanies || 0,
+        totalEmployees: totalEmployees || 0,
+        employeeGrowth: employeeGrowth,
         totalTasks: totalTasks || 0,
         tasksGrowth: tasksGrowth,
         pendingTasks: pendingTasks || 0,
         completedTasks: completedTasks || 0,
         overdueTasks: overdueTasks || 0,
-        monthlyOnboarded: monthlyData.map((item) => item.count),
-        monthLabels: monthlyData.map((item) => item.month),
+        totalForms: totalForms,
+        formsGrowth: formsGrowth,
+        monthlyOnboarded: recentMonthsCompanyData,
+        monthLabels: recentMonthsLabels,
+        monthlyForms: recentMonthsFormData,
         topCompanies: topCompanies,
       });
     } catch (error) {
@@ -330,30 +563,82 @@ const SuperAdminDashboard = () => {
           </View>
 
           {/* Skeleton stats cards */}
-          <View style={styles.statsCard}>
-            <View style={styles.statRow}>
-              <View style={[styles.skeleton, { width: "40%", height: 18 }]} />
-              <View style={[styles.skeleton, { width: "15%", height: 16 }]} />
+          <View style={styles.statsGridContainer}>
+            <View style={styles.statsGridItem}>
+              <View style={styles.statsCard}>
+                <View style={styles.statRow}>
+                  <View
+                    style={[styles.skeleton, { width: "40%", height: 18 }]}
+                  />
+                  <View
+                    style={[styles.skeleton, { width: "15%", height: 16 }]}
+                  />
+                </View>
+                <View
+                  style={[
+                    styles.skeleton,
+                    { width: "25%", height: 30, marginTop: 5 },
+                  ]}
+                />
+              </View>
             </View>
-            <View
-              style={[
-                styles.skeleton,
-                { width: "25%", height: 30, marginTop: 5 },
-              ]}
-            />
-          </View>
 
-          <View style={styles.statsCard}>
-            <View style={styles.statRow}>
-              <View style={[styles.skeleton, { width: "40%", height: 18 }]} />
-              <View style={[styles.skeleton, { width: "15%", height: 16 }]} />
+            <View style={styles.statsGridItem}>
+              <View style={styles.statsCard}>
+                <View style={styles.statRow}>
+                  <View
+                    style={[styles.skeleton, { width: "40%", height: 18 }]}
+                  />
+                  <View
+                    style={[styles.skeleton, { width: "15%", height: 16 }]}
+                  />
+                </View>
+                <View
+                  style={[
+                    styles.skeleton,
+                    { width: "25%", height: 30, marginTop: 5 },
+                  ]}
+                />
+              </View>
             </View>
-            <View
-              style={[
-                styles.skeleton,
-                { width: "25%", height: 30, marginTop: 5 },
-              ]}
-            />
+
+            <View style={styles.statsGridItem}>
+              <View style={styles.statsCard}>
+                <View style={styles.statRow}>
+                  <View
+                    style={[styles.skeleton, { width: "40%", height: 18 }]}
+                  />
+                  <View
+                    style={[styles.skeleton, { width: "15%", height: 16 }]}
+                  />
+                </View>
+                <View
+                  style={[
+                    styles.skeleton,
+                    { width: "25%", height: 30, marginTop: 5 },
+                  ]}
+                />
+              </View>
+            </View>
+
+            <View style={styles.statsGridItem}>
+              <View style={styles.statsCard}>
+                <View style={styles.statRow}>
+                  <View
+                    style={[styles.skeleton, { width: "40%", height: 18 }]}
+                  />
+                  <View
+                    style={[styles.skeleton, { width: "15%", height: 16 }]}
+                  />
+                </View>
+                <View
+                  style={[
+                    styles.skeleton,
+                    { width: "25%", height: 30, marginTop: 5 },
+                  ]}
+                />
+              </View>
+            </View>
           </View>
 
           {/* Skeleton chart */}
@@ -555,9 +840,6 @@ const SuperAdminDashboard = () => {
     ],
   };
 
-  // Change the title back to "by Month" to match the screenshot
-  const chartTitle = "Companies Onboarded by Month";
-
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -589,50 +871,116 @@ const SuperAdminDashboard = () => {
                 {t("superAdmin.dashboard.overview")}
               </Text>
             </View>
-            <View style={styles.statsCard}>
-              <View style={styles.statRow}>
-                <Text variant={"medium"} style={styles.statLabel}>
-                  {t("superAdmin.dashboard.totalCompanies")}
-                </Text>
-                <Text variant={"bold"} style={styles.statGrowth}>
-                  {stats.totalCompaniesGrowth}
-                </Text>
-              </View>
-              <Text variant={"bold"} style={styles.statValue}>
-                {stats.totalCompanies.toLocaleString()}
-              </Text>
-            </View>
 
-            <View style={styles.statsCard}>
-              <View style={styles.statRow}>
-                <Text variant={"medium"} style={styles.statLabel}>
-                  {t("superAdmin.dashboard.tasks")}
-                </Text>
-                <Text
-                  variant={"bold"}
-                  style={[
-                    styles.statGrowth,
-                    stats.tasksGrowth.startsWith("-")
-                      ? styles.negativeGrowth
-                      : {},
-                  ]}
-                >
-                  {stats.tasksGrowth}
-                </Text>
+            <View style={styles.statsGridContainer}>
+              <View style={styles.statsGridItem}>
+                <View style={styles.statsCard}>
+                  <View style={styles.statRow}>
+                    <Text variant={"medium"} style={styles.statLabel}>
+                      {t("superAdmin.dashboard.totalCompanies")}
+                    </Text>
+                    <Text variant={"bold"} style={styles.statGrowth}>
+                      {stats.totalCompaniesGrowth}
+                    </Text>
+                  </View>
+                  <Text variant={"bold"} style={styles.statValue}>
+                    {stats.totalCompanies.toLocaleString()}
+                  </Text>
+                </View>
               </View>
-              <Text variant={"bold"} style={styles.statValue}>
-                {stats.totalTasks.toLocaleString()}
-              </Text>
+
+              <View style={styles.statsGridItem}>
+                <View style={styles.statsCard}>
+                  <View style={styles.statRow}>
+                    <Text variant={"medium"} style={styles.statLabel}>
+                      {t("superAdmin.dashboard.totalEmployees")}
+                    </Text>
+                    <Text
+                      variant={"bold"}
+                      style={[
+                        styles.statGrowth,
+                        stats.employeeGrowth.startsWith("-")
+                          ? styles.negativeGrowth
+                          : {},
+                      ]}
+                    >
+                      {stats.employeeGrowth}
+                    </Text>
+                  </View>
+                  <Text variant={"bold"} style={styles.statValue}>
+                    {stats.totalEmployees.toLocaleString()}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.statsGridItem}>
+                <View style={styles.statsCard}>
+                  <View style={styles.statRow}>
+                    <Text variant={"medium"} style={styles.statLabel}>
+                      {t("superAdmin.dashboard.totalTasks")}
+                    </Text>
+                    <Text
+                      variant={"bold"}
+                      style={[
+                        styles.statGrowth,
+                        stats.tasksGrowth.startsWith("-")
+                          ? styles.negativeGrowth
+                          : {},
+                      ]}
+                    >
+                      {stats.tasksGrowth}
+                    </Text>
+                  </View>
+                  <Text variant={"bold"} style={styles.statValue}>
+                    {stats.totalTasks.toLocaleString()}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.statsGridItem}>
+                <View style={styles.statsCard}>
+                  <View style={styles.statRow}>
+                    <Text variant={"medium"} style={styles.statLabel}>
+                      {t("superAdmin.dashboard.totalForms")}
+                    </Text>
+                    <Text
+                      variant={"bold"}
+                      style={[
+                        styles.statGrowth,
+                        stats.formsGrowth.startsWith("-")
+                          ? styles.negativeGrowth
+                          : {},
+                      ]}
+                    >
+                      {stats.formsGrowth}
+                    </Text>
+                  </View>
+                  <Text variant={"bold"} style={styles.statValue}>
+                    {stats.totalForms.toLocaleString()}
+                  </Text>
+                </View>
+              </View>
             </View>
 
             <View style={styles.chartCard}>
               <Text variant={"bold"} style={styles.sectionTitle}>
                 {t("superAdmin.dashboard.monthlyOnboarded")}
               </Text>
-              <OnboardingChart
+              <DynamicChart
                 monthlyData={stats.monthlyOnboarded}
                 monthLabels={stats.monthLabels}
-                width={width - 5}
+                width={width - 10}
+              />
+            </View>
+
+            <View style={styles.chartCard}>
+              <Text variant={"bold"} style={styles.sectionTitle}>
+                {t("superAdmin.dashboard.monthlyForms")}
+              </Text>
+              <DynamicChart
+                monthlyData={stats.monthlyForms}
+                monthLabels={stats.monthLabels}
+                width={width - 10}
               />
             </View>
 
@@ -717,8 +1065,7 @@ const styles = StyleSheet.create({
   statsCard: {
     backgroundColor: "#fff",
     borderRadius: 16,
-    padding: 16,
-    marginBottom: 11,
+    padding: 18,
     borderWidth: 1,
     borderColor: "#e0e0e0",
   },
@@ -726,14 +1073,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 5,
   },
   statLabel: {
-    fontSize: 16,
+    fontSize: 13,
     color: "#333",
+    right: 5,
+    paddingRight: 3,
   },
   statGrowth: {
-    fontSize: 14,
+    fontSize: 10,
     color: "#4CAF50",
   },
   negativeGrowth: {
@@ -748,6 +1096,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     paddingBottom: 10,
+    marginBottom: 16,
     minHeight: 280,
     borderWidth: 1,
     borderColor: "#e0e0e0",
@@ -819,6 +1168,17 @@ const styles = StyleSheet.create({
   },
   skeletonSubtitle: {
     height: 14,
+  },
+  statsGridContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-evenly",
+    gap: 10,
+    marginBottom: 10,
+  },
+  statsGridItem: {
+    width: "48%",
+    marginBottom: 5,
   },
 });
 

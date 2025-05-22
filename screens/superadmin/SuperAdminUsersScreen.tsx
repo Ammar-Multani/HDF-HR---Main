@@ -423,12 +423,6 @@ const SuperAdminUsersScreen = () => {
             </View>
             <View style={styles.statusContainer}>
               {renderStatusChip(item.status)}
-              <IconButton
-                icon="dots-vertical"
-                size={20}
-                style={styles.menuButton}
-                onPress={() => console.log("Menu for", item.id)}
-              />
             </View>
           </View>
         </Card.Content>
@@ -486,12 +480,6 @@ const SuperAdminUsersScreen = () => {
             </View>
             <View style={styles.statusContainer}>
               {renderStatusChip(item.active_status)}
-              <IconButton
-                icon="dots-vertical"
-                size={20}
-                style={styles.menuButton}
-                onPress={() => console.log("Menu for", item.id)}
-              />
             </View>
           </View>
         </Card.Content>
@@ -549,12 +537,6 @@ const SuperAdminUsersScreen = () => {
             </View>
             <View style={styles.statusContainer}>
               {renderStatusChip(item.active_status)}
-              <IconButton
-                icon="dots-vertical"
-                size={20}
-                style={styles.menuButton}
-                onPress={() => console.log("Menu for", item.id)}
-              />
             </View>
           </View>
         </Card.Content>
@@ -992,6 +974,7 @@ const SuperAdminUsersScreen = () => {
       <AppHeader
         title="All Users"
         showBackButton={false}
+        showHelpButton={true}
         showLogo={false}
         subtitle="Manage all system users"
       />
@@ -1066,7 +1049,7 @@ const SuperAdminUsersScreen = () => {
                 outline: "#E0E0E0",
               },
             }}
-            density="medium"
+            density="small"
           />
 
           {/* <View style={styles.tabCountContainer}>
@@ -1100,7 +1083,7 @@ const SuperAdminUsersScreen = () => {
             navigation.navigate("CreateCompanyAdmin");
           } else {
             // Show company list to add employees
-            navigation.navigate("Companies");
+            navigation.navigate("CreateEmployee");
           }
         }}
         color={theme.colors.surface}
@@ -1188,7 +1171,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   segmentedButtons: {
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "trans",
   },
   tabCountContainer: {
     alignItems: "flex-end",
@@ -1516,7 +1499,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     margin: 16,
     right: 0,
-    bottom: 0,
+    bottom: 80,
   },
   avatarLabel: {
     fontSize: 18,
