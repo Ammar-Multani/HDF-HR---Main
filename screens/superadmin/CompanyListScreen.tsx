@@ -424,7 +424,12 @@ const CompanyListScreen = () => {
               {t("superAdmin.companies.company")}
             </Text>
             <Text>:</Text>
-            <Text variant="bold" style={styles.companyName}>
+            <Text
+              variant="regular"
+              style={styles.companyName}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
               {item.company_name}
             </Text>
             <StatusBadge
@@ -453,10 +458,13 @@ const CompanyListScreen = () => {
 
             <View style={styles.detailItem}>
               <Text variant="medium" style={styles.detailLabel}>
-                {t("superAdmin.companies.contactNumber")}
+                {t("superAdmin.companies.onboardingDate")}
               </Text>
               <Text style={styles.detailValue}>
-                : {item.contact_number || "-"}
+                :{" "}
+                {item.created_at
+                  ? new Date(item.created_at).toLocaleDateString()
+                  : "-"}
               </Text>
             </View>
 
@@ -870,6 +878,7 @@ const CompanyListScreen = () => {
         showHelpButton={true}
         absolute={false}
       />
+      <View style={{ flex: 1, backgroundColor: theme.colors.backgroundSecondary }}>
 
       {networkStatus === false && (
         <Banner
@@ -973,6 +982,7 @@ const CompanyListScreen = () => {
         color={theme.colors.surface}
         disabled={networkStatus === false}
       />
+      </View>
     </SafeAreaView>
   );
 };
@@ -1049,10 +1059,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   companyName: {
-    fontSize: 16,
+    fontSize: 12,
     flex: 1,
-    color: "#333",
-    paddingLeft: 5,
+    color: "#000",
+    paddingLeft: 3,
   },
   cardDetails: {},
   detailItem: {
@@ -1060,18 +1070,18 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   detailLabel: {
-    marginRight: 8,
     opacity: 0.7,
     width: 100,
     color: "#333",
-    fontSize: 11,
+    fontSize: 12,
   },
   detailValue: {
     flex: 1,
-    color: "#666",
-    fontSize: 14,
+    color: "#000",
+    fontSize: 12,
   },
   fab: {
+    borderRadius: 35,
     position: "absolute",
     margin: 16,
     right: Platform.OS === "web" ? 15 : 0,

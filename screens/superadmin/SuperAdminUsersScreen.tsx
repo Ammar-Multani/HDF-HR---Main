@@ -7,6 +7,8 @@ import {
   RefreshControl,
   ScrollView,
   Platform,
+  Animated,
+  TouchableWithoutFeedback,
 } from "react-native";
 import {
   Card,
@@ -125,6 +127,18 @@ const SuperAdminUsersScreen = () => {
   const [selectedTab, setSelectedTab] = useState<string>(
     UserListType.SUPER_ADMIN
   );
+
+  // User type dropdown state
+  const [userTypeMenuVisible, setUserTypeMenuVisible] = useState(false);
+  const userTypeDropdownRef = React.useRef(null);
+  const [userTypeMenuPosition, setUserTypeMenuPosition] = useState({
+    x: 0,
+    y: 0,
+  });
+
+  // Animation values for dropdown
+  const [dropdownAnimation] = useState(new Animated.Value(0));
+  const [rotateAnimation] = useState(new Animated.Value(0));
 
   // Create styles with theme access
   const localStyles = {
@@ -444,6 +458,60 @@ const SuperAdminUsersScreen = () => {
     );
   };
 
+  // Render a gradient avatar with initials
+  const renderGradientAvatar = (initials: string, userType: string) => {
+    // Different gradient colors based on user type
+    let gradientColors: readonly [string, string, ...string[]] = ["", ""]; // Default initialization
+
+    switch (userType) {
+      case "super":
+        gradientColors = [
+          "rgba(6,169,169,255)",
+          "rgba(38,127,161,255)",
+          "rgba(54,105,157,255)",
+          "rgba(74,78,153,255)",
+          "rgba(94,52,149,255)",
+        ] as const;
+        break;
+      case "company":
+        gradientColors = [
+          "rgba(140,82,255,0.9)",
+          "rgba(127,90,240,0.9)",
+          "rgba(115,98,225,0.9)",
+          "rgba(102,106,210,0.9)",
+          "rgba(90,114,195,0.9)",
+        ] as const;
+        break;
+      case "employee":
+        gradientColors = [
+          "rgba(76,175,80,0.9)",
+          "rgba(67,160,71,0.9)",
+          "rgba(56,142,60,0.9)",
+          "rgba(46,125,50,0.9)",
+          "rgba(27,94,32,0.9)",
+        ] as const;
+        break;
+      default:
+        gradientColors = [
+          "rgba(38,127,161,255)",
+          "rgba(74,78,153,255)",
+        ] as const;
+    }
+
+    return (
+      <View style={styles.avatarContainer}>
+        <LinearGradient
+          colors={gradientColors}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.avatarGradient}
+        >
+          <Text style={styles.avatarText}>{initials}</Text>
+        </LinearGradient>
+      </View>
+    );
+  };
+
   const renderSuperAdminItem = ({ item }: { item: Admin }) => (
     <TouchableOpacity
       onPress={() => {
@@ -459,12 +527,10 @@ const SuperAdminUsersScreen = () => {
         <Card.Content style={styles.cardContent}>
           <View style={styles.cardHeader}>
             <View style={styles.userInfo}>
-              <Avatar.Text
-                size={50}
-                label={getInitials(item.name || "", item.email)}
-                style={styles.superAdminAvatar}
-                labelStyle={styles.avatarLabel}
-              />
+              {renderGradientAvatar(
+                getInitials(item.name || "", item.email),
+                "super"
+              )}
               <View style={styles.userTextContainer}>
                 <Text variant="bold" style={styles.userName} numberOfLines={1}>
                   {item.name || "Unnamed Admin"}
@@ -498,16 +564,14 @@ const SuperAdminUsersScreen = () => {
         <Card.Content style={styles.cardContent}>
           <View style={styles.cardHeader}>
             <View style={styles.userInfo}>
-              <Avatar.Text
-                size={50}
-                label={getCompanyUserInitials(
+              {renderGradientAvatar(
+                getCompanyUserInitials(
                   item.first_name || "",
                   item.last_name || "",
                   item.email
-                )}
-                style={styles.companyAdminAvatar}
-                labelStyle={styles.avatarLabel}
-              />
+                ),
+                "company"
+              )}
               <View style={styles.userTextContainer}>
                 <Text variant="bold" style={styles.userName} numberOfLines={1}>
                   {`${item.first_name || ""} ${item.last_name || ""}`.trim() ||
@@ -555,16 +619,14 @@ const SuperAdminUsersScreen = () => {
         <Card.Content style={styles.cardContent}>
           <View style={styles.cardHeader}>
             <View style={styles.userInfo}>
-              <Avatar.Text
-                size={50}
-                label={getCompanyUserInitials(
+              {renderGradientAvatar(
+                getCompanyUserInitials(
                   item.first_name || "",
                   item.last_name || "",
                   item.email
-                )}
-                style={styles.employeeAvatar}
-                labelStyle={styles.avatarLabel}
-              />
+                ),
+                "employee"
+              )}
               <View style={styles.userTextContainer}>
                 <Text variant="bold" style={styles.userName} numberOfLines={1}>
                   {`${item.first_name || ""} ${item.last_name || ""}`.trim() ||
@@ -991,6 +1053,7 @@ const SuperAdminUsersScreen = () => {
                 // Use the direct fetch approach to refresh the list
                 // with cleared filters
                 applyFiltersDirect();
+                setMenuVisible(false);
               }}
             >
               <Text style={styles.clearButtonText}>Clear Filters</Text>
@@ -1249,6 +1312,360 @@ const SuperAdminUsersScreen = () => {
     );
   };
 
+  // Get display text for selected user type
+  const getUserTypeDisplayText = () => {
+    switch (selectedTab) {
+      case UserListType.SUPER_ADMIN:
+        return "Admins";
+      case UserListType.COMPANY_ADMIN:
+        return "Company Admins";
+      case UserListType.EMPLOYEE:
+        return "Employees";
+      default:
+        return "Select User Type";
+    }
+  };
+
+  // Enhanced dropdown menu show/hide with animations
+  const showUserTypeMenu = () => {
+    if (userTypeDropdownRef.current) {
+      // @ts-ignore - Getting layout measurements
+      userTypeDropdownRef.current.measure(
+        (
+          x: number,
+          y: number,
+          width: number,
+          height: number,
+          pageX: number,
+          pageY: number
+        ) => {
+          setUserTypeMenuPosition({ x: pageX, y: pageY + height });
+
+          // Start animations
+          Animated.parallel([
+            Animated.timing(dropdownAnimation, {
+              toValue: 1,
+              duration: 250,
+              useNativeDriver: true,
+            }),
+            Animated.timing(rotateAnimation, {
+              toValue: 1,
+              duration: 250,
+              useNativeDriver: true,
+            }),
+          ]).start();
+
+          setUserTypeMenuVisible(true);
+        }
+      );
+    }
+  };
+
+  // Render the dropdown menu
+  const renderUserTypeMenu = () => {
+    if (!userTypeMenuVisible) return null;
+
+    return (
+      <Portal>
+        <TouchableWithoutFeedback onPress={hideUserTypeMenu}>
+          <View style={styles.menuBackdrop} />
+        </TouchableWithoutFeedback>
+
+        <Animated.View
+          style={[
+            styles.enhancedMenuContainer,
+            {
+              position: "absolute",
+              top: userTypeMenuPosition.y + 5,
+              left: userTypeMenuPosition.x,
+              right: 16,
+              opacity: opacityInterpolate,
+              transform: [{ scale: scaleInterpolate }],
+            },
+          ]}
+        >
+          <View style={styles.userTypeMenuHeader}>
+            <Text style={styles.userTypeMenuTitle}>Select User Type</Text>
+          </View>
+
+          {/* Super Admin Option */}
+          <TouchableOpacity
+            style={[
+              styles.enhancedMenuItem,
+              selectedTab === UserListType.SUPER_ADMIN &&
+                styles.selectedMenuItem,
+            ]}
+            onPress={() => {
+              setSelectedTab(UserListType.SUPER_ADMIN);
+              hideUserTypeMenu();
+              setSelectedCompanyIds([]);
+              setSelectedCompanyId("all");
+              if (searchQuery) setSearchQuery("");
+            }}
+          >
+            <View
+              style={[
+                styles.menuIconContainer,
+                { backgroundColor: "rgba(54,105,157,0.1)" },
+              ]}
+            >
+              <IconButton
+                icon="shield-account"
+                size={22}
+                iconColor="rgba(54,105,157,255)"
+                style={styles.menuIcon}
+              />
+            </View>
+            <View style={styles.menuItemContent}>
+              <Text
+                style={[
+                  styles.menuItemTitleText,
+                  selectedTab === UserListType.SUPER_ADMIN &&
+                    styles.menuItemSelected,
+                ]}
+              >
+                Admins
+              </Text>
+              <Text style={styles.menuItemDescription}>
+                Super administrators with full access
+              </Text>
+            </View>
+            {selectedTab === UserListType.SUPER_ADMIN && (
+              <View style={styles.checkIconContainer}>
+                <IconButton
+                  icon="check"
+                  size={18}
+                  iconColor="rgba(54,105,157,255)"
+                />
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* Company Admin Option */}
+          <TouchableOpacity
+            style={[
+              styles.enhancedMenuItem,
+              selectedTab === UserListType.COMPANY_ADMIN &&
+                styles.selectedMenuItem,
+            ]}
+            onPress={() => {
+              setSelectedTab(UserListType.COMPANY_ADMIN);
+              hideUserTypeMenu();
+              if (searchQuery) setSearchQuery("");
+            }}
+          >
+            <View
+              style={[
+                styles.menuIconContainer,
+                { backgroundColor: "rgba(115,98,225,0.1)" },
+              ]}
+            >
+              <IconButton
+                icon="office-building"
+                size={22}
+                iconColor="rgba(115,98,225,0.9)"
+                style={styles.menuIcon}
+              />
+            </View>
+            <View style={styles.menuItemContent}>
+              <Text
+                style={[
+                  styles.menuItemTitleText,
+                  selectedTab === UserListType.COMPANY_ADMIN &&
+                    styles.menuItemSelected,
+                ]}
+              >
+                Company Admins
+              </Text>
+              <Text style={styles.menuItemDescription}>
+                Manage company-specific settings and users
+              </Text>
+            </View>
+            {selectedTab === UserListType.COMPANY_ADMIN && (
+              <View style={styles.checkIconContainer}>
+                <IconButton
+                  icon="check"
+                  size={18}
+                  iconColor="rgba(115,98,225,0.9)"
+                />
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* Employee Option */}
+          <TouchableOpacity
+            style={[
+              styles.enhancedMenuItem, 
+              { borderBottomWidth: 0, paddingBottom: 5 },
+              selectedTab === UserListType.EMPLOYEE && styles.selectedMenuItem,
+            ]}
+            onPress={() => {
+              setSelectedTab(UserListType.EMPLOYEE);
+              hideUserTypeMenu();
+              if (searchQuery) setSearchQuery("");
+            }}
+          >
+            <View
+              style={[
+                styles.menuIconContainer,
+                { backgroundColor: "rgba(56,142,60,0.1)" },
+              ]}
+            >
+              <IconButton
+                icon="account-group"
+                size={22}
+                iconColor="rgba(56,142,60,0.9)"
+                style={styles.menuIcon}
+              />
+            </View>
+            <View style={styles.menuItemContent}>
+              <Text
+                style={[
+                  styles.menuItemTitleText,
+                  selectedTab === UserListType.EMPLOYEE &&
+                    styles.menuItemSelected,
+                ]}
+              >
+                Employees
+              </Text>
+              <Text style={styles.menuItemDescription}>
+                Regular users within companies
+              </Text>
+            </View>
+            {selectedTab === UserListType.EMPLOYEE && (
+              <View style={styles.checkIconContainer}>
+                <IconButton
+                  icon="check"
+                  size={18}
+                  iconColor="rgba(56,142,60,0.9)"
+                />
+              </View>
+            )}
+          </TouchableOpacity>
+        </Animated.View>
+      </Portal>
+    );
+  };
+
+  const hideUserTypeMenu = () => {
+    Animated.parallel([
+      Animated.timing(dropdownAnimation, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(rotateAnimation, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setUserTypeMenuVisible(false);
+    });
+  };
+
+  // Get the rotation for the dropdown icon
+  const rotateInterpolate = rotateAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "180deg"],
+  });
+
+  // Get the scale animation for the dropdown menu
+  const scaleInterpolate = dropdownAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.9, 1],
+  });
+
+  // Get the opacity animation for the dropdown menu
+  const opacityInterpolate = dropdownAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
+
+  // Get icon and color based on user type
+  const getUserTypeIcon = () => {
+    switch (selectedTab) {
+      case UserListType.SUPER_ADMIN:
+        return {
+          icon: "shield-account",
+          color: "rgba(54,105,157,255)",
+          background: "rgba(54,105,157,0.1)",
+        };
+      case UserListType.COMPANY_ADMIN:
+        return {
+          icon: "office-building",
+          color: "rgba(115,98,225,0.9)",
+          background: "rgba(115,98,225,0.1)",
+        };
+      case UserListType.EMPLOYEE:
+        return {
+          icon: "account-group",
+          color: "rgba(56,142,60,0.9)",
+          background: "rgba(56,142,60,0.1)",
+        };
+      default:
+        return {
+          icon: "account",
+          color: theme.colors.primary,
+          background: `${theme.colors.primary}15`,
+        };
+    }
+  };
+
+  // Enhanced dropdown with better styling
+  const renderEnhancedDropdown = () => {
+    const userTypeInfo = getUserTypeIcon();
+
+    return (
+      <View style={styles.userTypeDropdownContainer}>
+        <TouchableOpacity
+          ref={userTypeDropdownRef}
+          style={[
+            styles.userTypeDropdown,
+            { borderColor: userTypeInfo.color + "50" },
+          ]}
+          onPress={showUserTypeMenu}
+          activeOpacity={0.7}
+        >
+          <View style={styles.userTypeDropdownContent}>
+            <View
+              style={[
+                styles.iconContainer,
+              ]}
+            >
+              <IconButton
+                icon={userTypeInfo.icon}
+                size={22}
+                iconColor={userTypeInfo.color}
+                style={styles.dropdownLeadingIcon}
+              />
+            </View>
+            <Text
+              style={[styles.userTypeDropdownText, { color: "#333333" }]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {getUserTypeDisplayText()}
+            </Text>
+          </View>
+
+          <Animated.View
+            style={{
+              transform: [{ rotate: rotateInterpolate }],
+            }}
+          >
+            <IconButton
+              icon="chevron-down"
+              size={24}
+              style={styles.dropdownIcon}
+              iconColor={"#666666"}
+            />
+          </Animated.View>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -1261,7 +1678,7 @@ const SuperAdminUsersScreen = () => {
         subtitle="Manage all system users"
       />
 
-      <View style={styles.mainContent}>
+      <View style={[styles.mainContent, { backgroundColor: theme.colors.backgroundSecondary }]}>
         <View style={styles.searchContainer}>
           <Searchbar
             placeholder="Search users..."
@@ -1305,53 +1722,9 @@ const SuperAdminUsersScreen = () => {
           </View>
         )}
 
-        <View style={styles.tabContainer}>
-          <SegmentedButtons
-            value={selectedTab}
-            onValueChange={(value) => {
-              setSelectedTab(value);
-              // Reset company filter when switching to Super Admin
-              if (value === UserListType.SUPER_ADMIN) {
-                setSelectedCompanyIds([]);
-                setSelectedCompanyId("all");
-              }
+        {renderEnhancedDropdown()}
 
-              // Optionally clear search when switching tabs for better UX
-              if (searchQuery) {
-                setSearchQuery("");
-              }
-            }}
-            buttons={[
-              {
-                value: UserListType.SUPER_ADMIN,
-                label: `Super Admins`,
-                icon: "shield-account",
-                showSelectedCheck: true,
-              },
-              {
-                value: UserListType.COMPANY_ADMIN,
-                label: `Company Admins`,
-                icon: "office-building",
-                showSelectedCheck: true,
-              },
-              {
-                value: UserListType.EMPLOYEE,
-                label: `Employees`,
-                icon: "account-group",
-                showSelectedCheck: true,
-              },
-            ]}
-            style={styles.segmentedButtons}
-            theme={{
-              colors: {
-                secondaryContainer: theme.colors.primary + "15",
-                onSecondaryContainer: theme.colors.primary,
-                outline: "#E0E0E0",
-              },
-            }}
-            density="small"
-          />
-        </View>
+        {renderUserTypeMenu()}
 
         {renderActiveFilterIndicator()}
         {renderFilterModal()}
@@ -1440,7 +1813,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     height: 60,
     marginTop: 8,
-    marginBottom: 16,
+    marginBottom: 8,
   },
   searchbar: {
     flex: 1,
@@ -1465,17 +1838,6 @@ const styles = StyleSheet.create({
   inputContainer: {
     height: 40,
     paddingHorizontal: 8,
-  },
-  tabContainer: {
-    marginBottom: 16,
-  },
-  segmentedButtons: {
-    backgroundColor: "trans",
-  },
-  tabCountContainer: {
-    alignItems: "flex-end",
-    paddingTop: 4,
-    paddingRight: 4,
   },
   tabCount: {
     fontSize: 12,
@@ -1765,6 +2127,8 @@ const styles = StyleSheet.create({
   menuItemStyle: {
     height: 48,
     justifyContent: "center",
+    borderBottomWidth: 1,
+    borderColor: "#E0E0E0",
   },
   menuItemText: {
     fontFamily: "Poppins-Regular",
@@ -1774,6 +2138,7 @@ const styles = StyleSheet.create({
   menuItemSelected: {
     color: "#1a73e8",
     fontFamily: "Poppins-Medium",
+    paddingRight: 12,
   },
   resultSummary: {
     alignItems: "center",
@@ -1797,10 +2162,25 @@ const styles = StyleSheet.create({
     margin: 16,
     right: 0,
     bottom: 80,
+    borderRadius: 28,
   },
-  avatarLabel: {
+  avatarContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    overflow: "hidden",
+  },
+  avatarGradient: {
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingTop: 3,
+  },
+  avatarText: {
+    color: "#FFFFFF",
     fontSize: 18,
-    fontWeight: "600",
+    fontFamily: "Poppins-Bold",
   },
   filterBadge: {
     width: 8,
@@ -1941,6 +2321,118 @@ const styles = StyleSheet.create({
     color: "#0066cc",
     fontWeight: "500",
     fontSize: 14,
+  },
+  userTypeDropdownContainer: {
+    marginBottom: 10,
+    zIndex: 10,
+  },
+  userTypeDropdown: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1.5,
+    borderColor: "#E0E0E0",
+    borderRadius: 15,
+    paddingVertical: 6,
+    paddingLeft: 6,
+    paddingRight: 8,
+    backgroundColor: "#FFFFFF",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    paddingHorizontal:10,
+  },
+  userTypeDropdownContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  iconContainer: {
+    borderRadius: 12,
+    marginRight: 4,
+    padding: 2,
+  },
+  userTypeDropdownText: {
+    fontFamily: "Poppins-Medium",
+    color: "#424242",
+    flex: 1,
+    fontSize: 16,
+    marginLeft: 4,
+  },
+  menuBackdrop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.01)",
+  },
+  enhancedMenuContainer: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 15,
+    paddingVertical: 8,
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    overflow: "hidden",
+    width: "100%",
+    maxWidth: 350,
+  },
+  userTypeMenuHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
+  },
+  userTypeMenuTitle: {
+    fontSize: 16,
+    fontFamily: "Poppins-Medium",
+    color: "#333333",
+  },
+  enhancedMenuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F0",
+  },
+  selectedMenuItem: {
+    backgroundColor: "#F8F8F8",
+  },
+  menuIconContainer: {
+    borderRadius: 12,
+    padding: 2,
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  menuIcon: {
+    margin: 0,
+    padding: 0,
+  },
+  menuItemContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  menuItemTitleText: {
+    fontSize: 16,
+    fontFamily: "Poppins-Medium",
+    color: "#333333",
+    marginBottom: 2,
+  },
+  menuItemDescription: {
+    fontSize: 12,
+    fontFamily: "Poppins-Regular",
+    color: "#757575",
+  },
+  checkIconContainer: {
+    marginLeft: 8,
   },
 });
 

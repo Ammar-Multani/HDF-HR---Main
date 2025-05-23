@@ -335,16 +335,40 @@ const SuperAdminDashboard = () => {
         // Get employee counts for companies in parallel
         const companiesWithCountPromises = companiesSlice.map(
           async (company) => {
-            const { count, error } = await supabase
+            // Get total employee count for company
+            const { count: totalCount, error: totalError } = await supabase
               .from("company_user")
               .select("*", { count: "exact", head: true })
               .eq("company_id", company.id)
               .eq("role", "employee");
 
+            // Get today's employee count for company
+            const { count: todayCount, error: todayError } = await supabase
+              .from("company_user")
+              .select("*", { count: "exact", head: true })
+              .eq("company_id", company.id)
+              .eq("role", "employee")
+              .gte("created_at", today.toISOString());
+
+            // Calculate growth percentage
+            let growthPercentage = "+0%";
+            if (totalCount && todayCount) {
+              if (totalCount === todayCount) {
+                growthPercentage = "+100%"; // All employees added today
+              } else {
+                const previousCount = totalCount - todayCount;
+                const growthRate =
+                  previousCount > 0 ? (todayCount / previousCount) * 100 : 0;
+                growthPercentage =
+                  (growthRate > 0 ? "+" : "") + growthRate.toFixed(1) + "%";
+              }
+            }
+
             return {
               id: company.id,
               name: company.company_name,
-              employee_count: count || 0,
+              employee_count: totalCount || 0,
+              growth_percentage: growthPercentage,
             };
           }
         );
@@ -359,7 +383,7 @@ const SuperAdminDashboard = () => {
           .map((company) => ({
             name: company.name,
             employee_count: company.employee_count,
-            growth_percentage: `+${Math.floor(Math.random() * 20) + 1}%`, // Placeholder for growth
+            growth_percentage: company.growth_percentage,
           }));
       }
 
@@ -667,7 +691,11 @@ const SuperAdminDashboard = () => {
           {Platform.OS !== "web" && (
             <View style={styles.welcomeHeader}>
               <View
-                style={[styles.skeleton, styles.skeletonTitle, { width: "60%" }]}
+                style={[
+                  styles.skeleton,
+                  styles.skeletonTitle,
+                  { width: "60%" },
+                ]}
               />
               <View
                 style={[
@@ -971,12 +999,12 @@ const SuperAdminDashboard = () => {
           showHelpButton={false}
           showLogo={Platform.OS !== "web"}
           title={
-            Platform.OS === "web"
-              ? t("superAdmin.dashboard.title")
-              : undefined
+            Platform.OS === "web" ? t("superAdmin.dashboard.title") : undefined
           }
           subtitle={
-            Platform.OS === "web" ? t("superAdmin.dashboard.overview") : undefined
+            Platform.OS === "web"
+              ? t("superAdmin.dashboard.overview")
+              : undefined
           }
         />
 
@@ -1150,7 +1178,15 @@ const SuperAdminDashboard = () => {
                         {t("superAdmin.dashboard.employeeCount")}
                       </Text>
                     </View>
-                    <Text variant={"bold"} style={styles.companyGrowth}>
+                    <Text
+                      variant={"bold"}
+                      style={[
+                        styles.companyGrowth,
+                        company.growth_percentage?.startsWith("-")
+                          ? styles.negativeGrowth
+                          : {},
+                      ]}
+                    >
                       {company.growth_percentage}
                     </Text>
                   </View>

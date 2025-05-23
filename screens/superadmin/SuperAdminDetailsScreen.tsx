@@ -239,7 +239,6 @@ const SuperAdminDetailsScreen = () => {
         );
       }
 
-    
       setAdmin(result.data);
     } catch (error: any) {
       console.error("Error fetching admin details:", error);
@@ -583,6 +582,7 @@ const SuperAdminDetailsScreen = () => {
                     styles.contactButton,
                     { backgroundColor: theme.colors.primary, color: "white" },
                   ]}
+                  labelStyle={{ color: "white" }}
                 >
                   Call
                 </Button>
@@ -595,6 +595,7 @@ const SuperAdminDetailsScreen = () => {
                     styles.contactButton,
                     { backgroundColor: theme.colors.primary },
                   ]}
+                  labelStyle={{ color: "white" }}
                 >
                   Email
                 </Button>

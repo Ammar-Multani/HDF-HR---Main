@@ -47,6 +47,9 @@ interface ExtendedTask extends Task {
     company_name: string;
   };
   assignedUserDetails?: Array<UserDetail>;
+  modified_by?: string;
+  modified_at?: string;
+  modifier_name?: string;
 }
 
 // Define user details interface
@@ -60,117 +63,145 @@ interface UserDetail {
 // Component for skeleton loading UI
 const TaskItemSkeleton = () => {
   return (
-    <Card
+    <View
       style={[
-        styles.card,
         {
           backgroundColor: "#FFFFFF",
-          shadowColor: "transparent",
+          borderRadius: 16,
+          marginBottom: 16,
+          borderWidth: 1,
+          borderColor: "rgba(0,0,0,0.03)",
+          elevation: 1,
+          shadowColor: "rgba(0,0,0,0.1)",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.08,
+          shadowRadius: 8,
+          padding: 16,
         },
       ]}
-      elevation={0}
     >
-      <Card.Content>
-        <View style={styles.cardHeader}>
-          <View style={styles.titleContainer}>
-            <View
-              style={{
-                height: 20,
-                width: "70%",
-                backgroundColor: "#E0E0E0",
-                borderRadius: 4,
-                marginBottom: 8,
-              }}
-            />
-            <View
-              style={{
-                height: 14,
-                width: "50%",
-                backgroundColor: "#E0E0E0",
-                borderRadius: 4,
-              }}
-            />
-          </View>
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          marginBottom: 12,
+        }}
+      >
+        <View style={{ flex: 1, marginRight: 8 }}>
           <View
             style={{
-              height: 24,
-              width: 80,
+              height: 20,
+              width: "70%",
               backgroundColor: "#E0E0E0",
-              borderRadius: 12,
-            }}
-          />
-        </View>
-
-        <View
-          style={{
-            height: 40,
-            backgroundColor: "#E0E0E0",
-            borderRadius: 4,
-            marginBottom: 16,
-          }}
-        />
-
-        <View style={[styles.cardDetails, { borderLeftColor: "#E0E0E0" }]}>
-          <View style={styles.detailItem}>
-            <View
-              style={{
-                height: 14,
-                width: 80,
-                backgroundColor: "#E0E0E0",
-                borderRadius: 4,
-              }}
-            />
-            <View
-              style={{
-                height: 14,
-                width: "60%",
-                backgroundColor: "#E0E0E0",
-                borderRadius: 4,
-                marginLeft: 8,
-              }}
-            />
-          </View>
-          <View style={styles.detailItem}>
-            <View
-              style={{
-                height: 14,
-                width: 80,
-                backgroundColor: "#E0E0E0",
-                borderRadius: 4,
-              }}
-            />
-            <View
-              style={{
-                height: 14,
-                width: "40%",
-                backgroundColor: "#E0E0E0",
-                borderRadius: 4,
-                marginLeft: 8,
-              }}
-            />
-          </View>
-        </View>
-
-        <View style={styles.cardFooter}>
-          <View
-            style={{
-              height: 30,
-              width: 80,
-              backgroundColor: "#E0E0E0",
-              borderRadius: 15,
+              borderRadius: 4,
+              marginBottom: 8,
             }}
           />
           <View
             style={{
-              height: 24,
-              width: 120,
+              height: 14,
+              width: "50%",
               backgroundColor: "#E0E0E0",
               borderRadius: 4,
             }}
           />
         </View>
-      </Card.Content>
-    </Card>
+        <View
+          style={{
+            height: 24,
+            width: 80,
+            backgroundColor: "#E0E0E0",
+            borderRadius: 12,
+          }}
+        />
+      </View>
+
+      <View
+        style={{
+          height: 40,
+          backgroundColor: "#F5F5F5",
+          borderRadius: 6,
+          marginBottom: 16,
+        }}
+      />
+
+      <View
+        style={{
+          backgroundColor: "#f9f9f9",
+          borderRadius: 8,
+          padding: 12,
+          marginBottom: 16,
+          borderLeftWidth: 2,
+          borderLeftColor: "#E0E0E0",
+        }}
+      >
+        <View style={{ flexDirection: "row", marginBottom: 4 }}>
+          <View
+            style={{
+              height: 14,
+              width: 80,
+              backgroundColor: "#E0E0E0",
+              borderRadius: 4,
+            }}
+          />
+          <View
+            style={{
+              height: 14,
+              width: "60%",
+              backgroundColor: "#E0E0E0",
+              borderRadius: 4,
+              marginLeft: 8,
+            }}
+          />
+        </View>
+        <View style={{ flexDirection: "row", marginBottom: 4 }}>
+          <View
+            style={{
+              height: 14,
+              width: 80,
+              backgroundColor: "#E0E0E0",
+              borderRadius: 4,
+            }}
+          />
+          <View
+            style={{
+              height: 14,
+              width: "40%",
+              backgroundColor: "#E0E0E0",
+              borderRadius: 4,
+              marginLeft: 8,
+            }}
+          />
+        </View>
+      </View>
+
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginTop: 4,
+        }}
+      >
+        <View
+          style={{
+            height: 30,
+            width: 80,
+            backgroundColor: "#E0E0E0",
+            borderRadius: 15,
+          }}
+        />
+        <View
+          style={{
+            height: 24,
+            width: 120,
+            backgroundColor: "#E0E0E0",
+            borderRadius: 6,
+          }}
+        />
+      </View>
+    </View>
   );
 };
 
@@ -273,6 +304,8 @@ const SuperAdminTasksScreen = () => {
           priority, 
           deadline, 
           created_at,
+          updated_at,
+          modified_by,
           assigned_to,
           company:company_id (
             id, 
@@ -318,19 +351,29 @@ const SuperAdminTasksScreen = () => {
             .flatMap((task) => task.assigned_to) || [];
 
         // Only fetch user details if there are assigned users
-        const uniqueAssignedIds = [...new Set(allAssignedIds)];
+        const uniqueAssignedIds = Array.from(new Set(allAssignedIds));
+
+        // Get all modifier IDs (if they exist)
+        const allModifierIds = (data || [])
+          .map((task) => task.modified_by)
+          .filter(Boolean);
+
+        // Fix the Set iteration issue with a more compatible approach
+        const allUserIds = Array.from(
+          new Set([...uniqueAssignedIds, ...allModifierIds])
+        );
 
         let companyUsers: UserDetail[] = [];
         let adminUsers: UserDetail[] = [];
 
-        if (uniqueAssignedIds.length > 0) {
+        if (allUserIds.length > 0) {
           try {
             // Fetch all company users in one batch
             const { data: companyUsersData, error: companyError } =
               await supabase
                 .from("company_user")
                 .select("id, first_name, last_name, email, role")
-                .in("id", uniqueAssignedIds);
+                .in("id", allUserIds);
 
             if (companyError) {
               console.error("Error fetching company users:", companyError);
@@ -351,7 +394,7 @@ const SuperAdminTasksScreen = () => {
             const { data: adminUsersData, error: adminError } = await supabase
               .from("admin")
               .select("id, name, email, role")
-              .in("id", uniqueAssignedIds);
+              .in("id", allUserIds);
 
             if (adminError) {
               console.error("Error fetching admin users:", adminError);
@@ -376,8 +419,8 @@ const SuperAdminTasksScreen = () => {
           }
         });
 
-        // Now map task data with assigned users
-        const tasksWithAssignedUsers = data.map((task) => {
+        // Now map task data with assigned users and modifier information
+        const tasksWithDetails = data.map((task) => {
           try {
             // Make sure assigned_to exists and is an array
             const assignedToArray = Array.isArray(task.assigned_to)
@@ -391,10 +434,17 @@ const SuperAdminTasksScreen = () => {
                     .filter(Boolean) // Remove undefined entries
                 : [];
 
+            // Add modifier info if available
+            const modifierName = task.modified_by
+              ? userDetailsMap[task.modified_by]?.name
+              : undefined;
+
             // First convert to unknown, then to ExtendedTask to satisfy TypeScript
             return {
               ...task,
               assignedUserDetails,
+              modified_at: task.updated_at,
+              modifier_name: modifierName,
             } as unknown as ExtendedTask;
           } catch (taskError) {
             console.error("Error processing task:", taskError, task);
@@ -402,6 +452,7 @@ const SuperAdminTasksScreen = () => {
             return {
               ...task,
               assignedUserDetails: [],
+              modified_at: task.updated_at,
             } as unknown as ExtendedTask;
           }
         });
@@ -414,9 +465,9 @@ const SuperAdminTasksScreen = () => {
         }
 
         if (refresh) {
-          setTasks(tasksWithAssignedUsers);
+          setTasks(tasksWithDetails);
         } else {
-          setTasks((prev) => [...prev, ...tasksWithAssignedUsers]);
+          setTasks((prev) => [...prev, ...tasksWithDetails]);
         }
       } catch (dataProcessingError) {
         console.error("Error processing task data:", dataProcessingError);
@@ -481,6 +532,7 @@ const SuperAdminTasksScreen = () => {
     setStatusFilter("all");
     setPriorityFilter("all");
     setSortOrder("desc");
+    setFilterModalVisible(false);
 
     // Clear applied filters
     setAppliedFilters({
@@ -754,102 +806,235 @@ const SuperAdminTasksScreen = () => {
     );
   };
 
-  // Create memoized renderTaskItem function to prevent unnecessary re-renders
+  // Create memoized renderTaskItem function
   const renderTaskItem = useCallback(
     ({ item }: { item: ExtendedTask }) => (
       <TouchableOpacity
         onPress={() => navigation.navigate("TaskDetails", { taskId: item.id })}
       >
-        <Card
-          style={[
-            styles.card,
-            {
-              backgroundColor: "#FFFFFF",
-              shadowColor: "transparent",
-            },
-          ]}
-          elevation={0}
+        <View
+          style={{
+            backgroundColor: "#FFFFFF",
+            borderRadius: 16,
+            marginBottom: 16,
+            borderWidth: 1,
+            borderColor: "rgba(0,0,0,0.03)",
+            elevation: 1,
+            shadowColor: "rgba(0,0,0,0.1)",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.08,
+            shadowRadius: 8,
+            padding: 16,
+          }}
         >
-          <Card.Content>
-            <View style={styles.cardHeader}>
-              <View style={styles.titleContainer}>
-                <Text variant="bold" style={styles.taskTitle}>
-                  {item.title}
-                </Text>
-                {item.company && (
-                  <View style={styles.detailItem}>
-                    <Text variant="medium" style={styles.detailLabel}>
-                      {t("superAdmin.companies.company")}
-                    </Text>
-                    <Text variant="medium" style={styles.companyName}>
-                      {item.company.company_name}
-                    </Text>
-                  </View>
-                )}
-              </View>
-              <StatusBadge status={item.status} />
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              marginBottom: 12,
+            }}
+          >
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <Text
+                style={{
+                  fontSize: 16,
+                  color: "#333",
+                  marginBottom: 4,
+                  fontWeight: "bold",
+                }}
+              >
+                {item.title}
+              </Text>
+              {item.company && (
+                <View style={{ flexDirection: "row" }}>
+                  <Text
+                    style={{
+                      opacity: 0.7,
+                      color: "#333",
+                      fontSize: 13,
+                      fontWeight: "600",
+                      marginRight: 2,
+                    }}
+                  >
+                    {t("superAdmin.companies.company")}
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      color: "#666",
+                      marginLeft: 4,
+                    }}
+                  >
+                    {item.company.company_name}
+                  </Text>
+                </View>
+              )}
             </View>
+            <StatusBadge status={item.status} />
+          </View>
 
+          <View
+            style={{
+              backgroundColor: "#f9f9f9",
+              borderRadius: 8,
+              padding: 12,
+              marginBottom: 16,
+              borderLeftWidth: 2,
+              borderLeftColor: "#1a73e8",
+            }}
+          >
             {item.assignedUserDetails &&
               item.assignedUserDetails.length > 0 && (
-                <View style={styles.detailItem}>
-                  <Text variant="medium" style={styles.detailLabel}>
+                <View style={{ flexDirection: "row", marginBottom: 4 }}>
+                  <Text
+                    style={{
+                      opacity: 0.7,
+                      color: "#333",
+                      fontSize: 13,
+                      fontWeight: "600",
+                      marginRight: 2,
+                    }}
+                  >
                     {t("superAdmin.tasks.assignedTo")}
                   </Text>
-                  <Text style={styles.detailValue}>
+                  <Text
+                    style={{
+                      flex: 1,
+                      color: "#666",
+                      fontSize: 13,
+                    }}
+                  >
                     : {item.assignedUserDetails[0].name}
                     {item.assignedUserDetails.length > 1 &&
                       ` +${item.assignedUserDetails.length - 1} ${t("superAdmin.tasks.more")}`}
                   </Text>
                 </View>
               )}
-            <View style={styles.detailItem}>
-              <Text variant="medium" style={styles.detailLabel}>
+            <View style={{ flexDirection: "row", marginBottom: 4 }}>
+              <Text
+                style={{
+                  opacity: 0.7,
+                  color: "#333",
+                  fontSize: 13,
+                  fontWeight: "600",
+                  marginRight: 2,
+                }}
+              >
                 {t("superAdmin.tasks.created")}
               </Text>
-              <Text style={styles.detailValue}>
+              <Text
+                style={{
+                  flex: 1,
+                  color: "#666",
+                  fontSize: 13,
+                }}
+              >
                 : {format(new Date(item.created_at), "MMM d, yyyy")}
               </Text>
             </View>
 
-            <View style={styles.cardFooter}>
-              <Chip
-                icon="flag"
-                style={[
-                  styles.priorityChip,
-                  {
-                    backgroundColor: getPriorityColor(item.priority) + "20",
-                    borderColor: getPriorityColor(item.priority),
-                  },
-                ]}
-                textStyle={{
-                  color: getPriorityColor(item.priority),
-                  fontFamily: "Poppins-Regular",
-                  fontSize: 12,
+            {item.modified_by && item.modified_at && (
+              <View
+                style={{
+                  marginTop: 6,
+                  paddingTop: 6,
+                  borderTopWidth: 1,
+                  borderTopColor: "rgba(0,0,0,0.05)",
                 }}
               >
-                {getTranslatedPriority(item.priority)}
-              </Chip>
+                <View style={{ flexDirection: "row", marginBottom: 4 }}>
+                  <Text
+                    style={{
+                      opacity: 0.7,
+                      color: "#333",
+                      fontSize: 13,
+                      fontWeight: "600",
+                      marginRight: 2,
+                    }}
+                  >
+                    {t("superAdmin.tasks.lastModified")}
+                  </Text>
+                  <Text
+                    style={{
+                      flex: 1,
+                      color: "#666",
+                      fontSize: 13,
+                    }}
+                  >
+                    : {format(new Date(item.modified_at), "MMM d, yyyy, HH:mm")}
+                  </Text>
+                </View>
+                {item.modifier_name && (
+                  <View style={{ flexDirection: "row", marginBottom: 4 }}>
+                    <Text
+                      style={{
+                        opacity: 0.7,
+                        color: "#333",
+                        fontSize: 13,
+                        fontWeight: "600",
+                        marginRight: 2,
+                      }}
+                    >
+                      {t("superAdmin.tasks.modifiedBy")}
+                    </Text>
+                    <Text
+                      style={{
+                        flex: 1,
+                        color: "#666",
+                        fontSize: 13,
+                      }}
+                    >
+                      : {item.modifier_name}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+          </View>
 
-              <Text
-                variant="medium"
-                style={[
-                  styles.deadline,
-                  {
-                    backgroundColor: "#f5f5f5",
-                    paddingVertical: 6,
-                    paddingHorizontal: 12,
-                    borderRadius: 4,
-                    fontSize: 12,
-                  },
-                ]}
-              >
-                {t("superAdmin.tasks.due")}:{" "}
-                {format(new Date(item.deadline), "MMM d, yyyy")}
-              </Text>
-            </View>
-          </Card.Content>
-        </Card>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginTop: 4,
+            }}
+          >
+            <Chip
+              icon="flag"
+              style={{
+                height: 30,
+                borderRadius: 25,
+                borderWidth: 1,
+                backgroundColor: getPriorityColor(item.priority) + "20",
+                borderColor: getPriorityColor(item.priority),
+              }}
+              textStyle={{
+                color: getPriorityColor(item.priority),
+                fontFamily: "Poppins-Regular",
+                fontSize: 12,
+              }}
+            >
+              {getTranslatedPriority(item.priority)}
+            </Chip>
+
+            <Text
+              style={{
+                opacity: 0.8,
+                fontSize: 13,
+                color: "#555",
+                backgroundColor: "#f5f5f5",
+                paddingVertical: 6,
+                paddingHorizontal: 12,
+                borderRadius: 6,
+              }}
+            >
+              {t("superAdmin.tasks.due")}:{" "}
+              {format(new Date(item.deadline), "MMM d, yyyy")}
+            </Text>
+          </View>
+        </View>
       </TouchableOpacity>
     ),
     [t]
@@ -981,7 +1166,7 @@ const SuperAdminTasksScreen = () => {
 
       <FAB
         icon="plus"
-        style={[styles.fab, { backgroundColor: "#1a73e8" }]}
+        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
         onPress={() => navigation.navigate("CreateTask")}
         color="#FFFFFF"
       />
@@ -992,6 +1177,7 @@ const SuperAdminTasksScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#F8F9FA",
   },
   searchContainer: {
     padding: 16,
@@ -1000,13 +1186,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   searchbar: {
-    elevation: 0,
-    borderRadius: 18,
-    height: 60,
+    elevation: 1,
+    borderRadius: 16,
+    height: 56,
     backgroundColor: "#fff",
     borderWidth: 1,
-    borderColor: "#e0e0e0",
+    borderColor: "rgba(0,0,0,0.05)",
     flex: 1,
+    shadowColor: "rgba(0,0,0,0.1)",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   filterButtonContainer: {
     position: "relative",
@@ -1014,8 +1204,8 @@ const styles = StyleSheet.create({
   },
   filterButton: {
     borderWidth: 1,
-    borderColor: "#e0e0e0",
-    borderRadius: 8,
+    borderColor: "rgba(0,0,0,0.05)",
+    borderRadius: 12,
     backgroundColor: "#fff",
   },
   activeFilterButton: {
@@ -1040,7 +1230,7 @@ const styles = StyleSheet.create({
   filterChip: {
     marginRight: 8,
     borderWidth: 1,
-    borderColor: "#e0e0e0",
+    borderColor: "rgba(0,0,0,0.05)",
     backgroundColor: "#fff",
   },
   selectedChip: {
@@ -1075,11 +1265,14 @@ const styles = StyleSheet.create({
   },
   card: {
     marginBottom: 16,
-    elevation: 0,
+    elevation: 1,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#e0e0e0",
+    borderColor: "rgba(0,0,0,0.03)",
     overflow: "hidden",
+  },
+  cardContent: {
+    padding: 16,
   },
   cardHeader: {
     flexDirection: "row",
@@ -1094,10 +1287,12 @@ const styles = StyleSheet.create({
   taskTitle: {
     fontSize: 16,
     color: "#333",
+    marginBottom: 4,
   },
   companyName: {
     fontSize: 14,
     color: "#666",
+    marginLeft: 4,
   },
   taskDescription: {
     marginBottom: 16,
@@ -1105,28 +1300,29 @@ const styles = StyleSheet.create({
     color: "#666",
     lineHeight: 20,
   },
-  cardDetails: {
-    marginBottom: 16,
+  detailsSection: {
     backgroundColor: "#f9f9f9",
     borderRadius: 8,
-    padding: 10,
-    borderLeftWidth: 3,
+    padding: 12,
+    marginBottom: 16,
+    borderLeftWidth: 2,
     borderLeftColor: "#1a73e8",
   },
   detailItem: {
     flexDirection: "row",
+    marginBottom: 4,
   },
   detailLabel: {
     opacity: 0.7,
     color: "#333",
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "600",
-    marginRight: 4,
+    marginRight: 2,
   },
   detailValue: {
     flex: 1,
     color: "#666",
-    fontSize: 12,
+    fontSize: 13,
   },
   cardFooter: {
     flexDirection: "row",
@@ -1140,15 +1336,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   deadline: {
-    opacity: 0.7,
-    fontSize: 14,
-    color: "#666",
+    opacity: 0.8,
+    fontSize: 13,
+    color: "#555",
   },
   fab: {
     position: "absolute",
     margin: 16,
     right: Platform.OS === "web" ? 15 : 0,
-    bottom: Platform.OS === "web" ? 10 : 80,
+    bottom: Platform.OS === "web" ? 10 : 10,
+    borderRadius: 28,
+    elevation: 4,
   },
   // Modal styles
   modalContainer: {
@@ -1173,7 +1371,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontFamily: "Poppins-SemiBold",
     color: "#212121",
   },
@@ -1183,7 +1381,7 @@ const styles = StyleSheet.create({
   },
   modalDivider: {
     height: 1,
-    backgroundColor: "#E0E0E0",
+    backgroundColor: "#EEEEEE",
     marginVertical: 8,
   },
   modalSection: {
@@ -1200,7 +1398,7 @@ const styles = StyleSheet.create({
   radioItem: {
     flexDirection: "row",
     alignItems: "center",
-    marginVertical: 4,
+    marginVertical: 6,
   },
   radioLabel: {
     fontSize: 16,
@@ -1213,12 +1411,12 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: "#E0E0E0",
+    borderTopColor: "#EEEEEE",
   },
   footerButton: {
     paddingVertical: 10,
     paddingHorizontal: 20,
-    borderRadius: 8,
+    borderRadius: 12,
     marginLeft: 12,
   },
   applyButton: {
@@ -1244,6 +1442,12 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins-Regular",
     color: "#616161",
   },
-});
+  modificationInfo: {
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(0,0,0,0.05)",
+  },
+} as const);
 
 export default SuperAdminTasksScreen;

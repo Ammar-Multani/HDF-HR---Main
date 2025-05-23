@@ -585,6 +585,7 @@ const CompanyAdminDetailsScreen = () => {
                     styles.contactButton,
                     { backgroundColor: theme.colors.primary },
                   ]}
+                  labelStyle={{ color: "white" }}
                 >
                   Call
                 </Button>
@@ -598,6 +599,7 @@ const CompanyAdminDetailsScreen = () => {
                   styles.contactButton,
                   { backgroundColor: theme.colors.primary },
                 ]}
+                labelStyle={{ color: "white" }}
               >
                 Email
               </Button>

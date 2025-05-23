@@ -224,6 +224,8 @@ export interface AccidentReport {
   comments?: string;
   created_at: string;
   updated_at: string;
+  modified_at: string;
+  modified_by: string;
   status: FormStatus;
 }
 
@@ -238,6 +240,8 @@ export interface IllnessReport {
   comments?: string;
   submission_date: string;
   updated_at: string;
+  modified_at: string;
+  modified_by: string;
   status: FormStatus;
 }
 
@@ -253,6 +257,8 @@ export interface StaffDepartureReport {
   status: FormStatus;
   submission_date: string;
   updated_at: string;
+  modified_at: string;
+  modified_by: string;
 }
 
 // Receipt interface

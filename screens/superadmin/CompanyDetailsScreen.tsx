@@ -243,6 +243,7 @@ const CompanyDetailsScreen = () => {
               active, 
               vat_type, 
               stakeholders,
+              created_at,
               company_user!company_id (
                 id, 
                 first_name, 
@@ -716,6 +717,16 @@ const CompanyDetailsScreen = () => {
               </Text>
             </View>
 
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>
+                {t("superAdmin.companies.onboardingDate")}:
+              </Text>
+              <Text style={styles.infoValue}>
+                {company.created_at
+                  ? new Date(company.created_at).toLocaleDateString()
+                  : "-"}
+              </Text>
+            </View>
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>
                 {t("superAdmin.companies.vatType")}:

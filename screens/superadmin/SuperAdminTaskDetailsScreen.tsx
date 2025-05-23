@@ -5,6 +5,7 @@ import {
   ScrollView,
   RefreshControl,
   Alert,
+  TouchableOpacity,
 } from "react-native";
 import {
   Text,
@@ -14,6 +15,10 @@ import {
   useTheme,
   Chip,
   TextInput,
+  Surface,
+  IconButton,
+  Portal,
+  Modal,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
@@ -38,6 +43,13 @@ interface CommentWithSender extends TaskComment {
   } | null;
 }
 
+// Define extended Task type with the properties needed for our UI
+interface ExtendedTask extends Task {
+  modified_by?: string;
+  modified_at?: string;
+  modifier_name?: string;
+}
+
 const SuperAdminTaskDetailsScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
@@ -49,11 +61,14 @@ const SuperAdminTaskDetailsScreen = () => {
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [task, setTask] = useState<Task | null>(null);
+  const [task, setTask] = useState<ExtendedTask | null>(null);
   const [comments, setComments] = useState<CommentWithSender[]>([]);
   const [newComment, setNewComment] = useState("");
   const [submittingComment, setSubmittingComment] = useState(false);
   const [assignedUsers, setAssignedUsers] = useState<any[]>([]);
+  const [statusMenuVisible, setStatusMenuVisible] = useState(false);
+  const [selectedStatus, setSelectedStatus] = useState<TaskStatus | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const fetchTaskDetails = async () => {
     try {
@@ -62,7 +77,7 @@ const SuperAdminTaskDetailsScreen = () => {
       // Fetch task details
       const { data: taskData, error: taskError } = await supabase
         .from("tasks")
-        .select("*")
+        .select("*, modified_by, updated_at")
         .eq("id", taskId)
         .single();
 
@@ -71,7 +86,45 @@ const SuperAdminTaskDetailsScreen = () => {
         return;
       }
 
+      // First store basic task data
       setTask(taskData);
+
+      // Fetch modifier user details if available
+      if (taskData.modified_by) {
+        try {
+          // Check in company_user table
+          const { data: userModifier } = await supabase
+            .from("company_user")
+            .select("id, first_name, last_name")
+            .eq("id", taskData.modified_by)
+            .single();
+
+          if (userModifier) {
+            setTask({
+              ...taskData,
+              modifier_name: `${userModifier.first_name} ${userModifier.last_name}`,
+              modified_at: taskData.updated_at,
+            });
+          } else {
+            // Check in admin table
+            const { data: adminModifier } = await supabase
+              .from("admin")
+              .select("id, name")
+              .eq("id", taskData.modified_by)
+              .single();
+
+            if (adminModifier) {
+              setTask({
+                ...taskData,
+                modifier_name: adminModifier.name,
+                modified_at: taskData.updated_at,
+              });
+            }
+          }
+        } catch (modifierError) {
+          console.error("Error fetching modifier details:", modifierError);
+        }
+      }
 
       // Fetch task comments
       const { data: commentsData, error: commentsError } = await supabase
@@ -131,22 +184,30 @@ const SuperAdminTaskDetailsScreen = () => {
         }
       }
 
-      // Fetch assigned users using a separate query if assigned_to array exists
-      if (taskData.assigned_to && taskData.assigned_to.length > 0) {
-        // First check if the assigned users are in company_user table
-        const { data: assignedCompanyUsers, error: companyUserError } =
-          await supabase
+      // Fetch assigned users using a separate query
+      if (taskData.assigned_to) {
+        // Handle both single user ID or array of user IDs
+        let assignedUserIds: string[] = [];
+
+        if (Array.isArray(taskData.assigned_to)) {
+          assignedUserIds = taskData.assigned_to;
+        } else if (typeof taskData.assigned_to === "string") {
+          assignedUserIds = [taskData.assigned_to];
+        }
+
+        if (assignedUserIds.length > 0) {
+          // First check in company_user table
+          const { data: assignedCompanyUsers } = await supabase
             .from("company_user")
             .select("id, first_name, last_name, email, role")
-            .in("id", taskData.assigned_to);
+            .in("id", assignedUserIds);
 
-        // Then check if any are in admin table
-        const { data: assignedAdmins, error: adminError } = await supabase
-          .from("admin")
-          .select("id, name, email, role")
-          .in("id", taskData.assigned_to);
+          // Then check in admin table
+          const { data: assignedAdmins } = await supabase
+            .from("admin")
+            .select("id, name, email, role")
+            .in("id", assignedUserIds);
 
-        if (!companyUserError && !adminError) {
           // Format and combine the results
           const formattedCompanyUsers = (assignedCompanyUsers || []).map(
             (user) => ({
@@ -211,6 +272,35 @@ const SuperAdminTaskDetailsScreen = () => {
     return t("superAdmin.tasks.user");
   };
 
+  // Get color based on user role for comments
+  const getCommentColorByRole = (comment: CommentWithSender) => {
+    // If it's the current user
+    if (comment.sender_id === user?.id) return theme.colors.primary;
+
+    // Check sender details
+    if (comment.senderDetails) {
+      if (comment.senderDetails.role === "superadmin") return "#8E24AA"; // purple for super admin
+      if (comment.senderDetails.role === "admin") return "#0288D1"; // blue for company admin
+    }
+
+    // Check in assignedUsers array
+    const assignedUser = assignedUsers.find((u) => u.id === comment.sender_id);
+    if (assignedUser) {
+      if (assignedUser.role === "SUPER_ADMIN") return "#8E24AA"; // purple for super admin
+      if (assignedUser.role === "COMPANY_ADMIN") return "#0288D1"; // blue for company admin
+    }
+
+    // Default for other users
+    return "#689F38"; // green for regular users
+  };
+
+  // Get background color for comment bubble
+  const getCommentBgColor = (comment: CommentWithSender) => {
+    const baseColor = getCommentColorByRole(comment);
+    // Return a lighter version of the color for the background
+    return baseColor + "15"; // 15 is hex for low opacity
+  };
+
   const onRefresh = () => {
     setRefreshing(true);
     fetchTaskDetails();
@@ -266,14 +356,21 @@ const SuperAdminTaskDetailsScreen = () => {
   };
 
   const handleUpdateStatus = async (newStatus: TaskStatus) => {
-    if (!task) return;
+    if (!task || !user) return;
 
     try {
-      setLoading(true);
+      setSubmitting(true);
+      setSelectedStatus(newStatus);
+
+      const updateData = {
+        status: newStatus,
+        modified_by: user.id,
+        updated_at: new Date().toISOString(),
+      };
 
       const { error } = await supabase
         .from("tasks")
-        .update({ status: newStatus })
+        .update(updateData)
         .eq("id", task.id);
 
       if (error) {
@@ -284,14 +381,42 @@ const SuperAdminTaskDetailsScreen = () => {
       setTask({
         ...task,
         status: newStatus,
+        modified_by: user.id,
+        modified_at: updateData.updated_at,
       });
 
-      Alert.alert(
-        t("common.success"),
-        t("superAdmin.tasks.statusUpdated", {
-          status: getTranslatedStatus(newStatus),
-        })
-      );
+      // Fetch the modifier name for display
+      try {
+        // Check company_user table
+        const { data: userModifier } = await supabase
+          .from("company_user")
+          .select("first_name, last_name")
+          .eq("id", user.id)
+          .single();
+
+        if (userModifier) {
+          setTask((prevState) => ({
+            ...prevState!,
+            modifier_name: `${userModifier.first_name} ${userModifier.last_name}`,
+          }));
+        } else {
+          // Check admin table
+          const { data: adminModifier } = await supabase
+            .from("admin")
+            .select("name")
+            .eq("id", user.id)
+            .single();
+
+          if (adminModifier) {
+            setTask((prevState) => ({
+              ...prevState!,
+              modifier_name: adminModifier.name,
+            }));
+          }
+        }
+      } catch (modifierError) {
+        console.error("Error fetching modifier name:", modifierError);
+      }
     } catch (error: any) {
       console.error("Error updating task status:", error);
       Alert.alert(
@@ -299,7 +424,62 @@ const SuperAdminTaskDetailsScreen = () => {
         error.message || t("superAdmin.tasks.failedToUpdateStatus")
       );
     } finally {
-      setLoading(false);
+      setSubmitting(false);
+      setStatusMenuVisible(false);
+    }
+  };
+
+  // Function to get background color based on status
+  const getStatusBackgroundColor = (status: TaskStatus) => {
+    switch (status) {
+      case TaskStatus.COMPLETED:
+        return "#E8F5E9";
+      case TaskStatus.OVERDUE:
+        return "#FFEBEE";
+      case TaskStatus.IN_PROGRESS:
+        return "#FFF8E1";
+      case TaskStatus.AWAITING_RESPONSE:
+        return "#E3F2FD";
+      case TaskStatus.OPEN:
+        return "#F5F5F5";
+      default:
+        return "#F5F5F5";
+    }
+  };
+
+  // Function to get text color based on status
+  const getStatusTextColor = (status: TaskStatus) => {
+    switch (status) {
+      case TaskStatus.COMPLETED:
+        return "#4CAF50";
+      case TaskStatus.OVERDUE:
+        return "#F44336";
+      case TaskStatus.IN_PROGRESS:
+        return "#FF9800";
+      case TaskStatus.AWAITING_RESPONSE:
+        return "#2196F3";
+      case TaskStatus.OPEN:
+        return "#757575";
+      default:
+        return "#757575";
+    }
+  };
+
+  // Function to get icon based on status
+  const getStatusIcon = (status: TaskStatus) => {
+    switch (status) {
+      case TaskStatus.COMPLETED:
+        return "check-circle";
+      case TaskStatus.OVERDUE:
+        return "close-circle";
+      case TaskStatus.IN_PROGRESS:
+        return "progress-clock";
+      case TaskStatus.AWAITING_RESPONSE:
+        return "chat-processing";
+      case TaskStatus.OPEN:
+        return "pencil";
+      default:
+        return "pencil";
     }
   };
 
@@ -386,16 +566,101 @@ const SuperAdminTaskDetailsScreen = () => {
   }
 
   return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
+    <SafeAreaView style={[styles.container, { backgroundColor: "#F8F9FA" }]}>
       <AppHeader
         title={t("superAdmin.tasks.taskDetails")}
+        subtitle={t("superAdmin.tasks.reviewTaskDetails")}
         showLogo={false}
         showTitle={true}
         showHelpButton={false}
         showBackButton={true}
       />
+
+      <Portal>
+        <Modal
+          visible={statusMenuVisible}
+          onDismiss={() => setStatusMenuVisible(false)}
+          contentContainerStyle={styles.modalContainer}
+        >
+          <Surface style={styles.modalSurface}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {t("superAdmin.tasks.updateStatus")}
+              </Text>
+              <IconButton
+                icon="close"
+                onPress={() => setStatusMenuVisible(false)}
+              />
+            </View>
+            <Divider />
+
+            <ScrollView style={styles.statusOptionsContainer}>
+              {Object.values(TaskStatus).map((status) => (
+                <TouchableOpacity
+                  key={status}
+                  style={[
+                    styles.statusOption,
+                    task &&
+                      task.status === status && {
+                        backgroundColor: getStatusBackgroundColor(status),
+                      },
+                  ]}
+                  onPress={() => {
+                    handleUpdateStatus(status);
+                  }}
+                  disabled={submitting}
+                >
+                  <View style={styles.statusOptionContent}>
+                    <View
+                      style={[
+                        styles.statusIconContainer,
+                        { backgroundColor: getStatusBackgroundColor(status) },
+                      ]}
+                    >
+                      <IconButton
+                        icon={getStatusIcon(status)}
+                        size={20}
+                        iconColor={getStatusTextColor(status)}
+                        style={{ margin: 0 }}
+                      />
+                    </View>
+                    <View style={styles.statusTextContainer}>
+                      <Text
+                        style={[
+                          styles.statusText,
+                          { color: getStatusTextColor(status) },
+                        ]}
+                      >
+                        {getTranslatedStatus(status)}
+                      </Text>
+                      <Text style={styles.statusDescription}>
+                        {status === TaskStatus.COMPLETED &&
+                          t("superAdmin.tasks.markAsCompleted")}
+                        {status === TaskStatus.OVERDUE &&
+                          t("superAdmin.tasks.markAsOverdue")}
+                        {status === TaskStatus.IN_PROGRESS &&
+                          t("superAdmin.tasks.markAsInProgress")}
+                        {status === TaskStatus.AWAITING_RESPONSE &&
+                          t("superAdmin.tasks.markAsAwaitingResponse")}
+                        {status === TaskStatus.OPEN &&
+                          t("superAdmin.tasks.markAsOpen")}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {task && task.status === status && (
+                    <IconButton
+                      icon="check"
+                      size={20}
+                      iconColor={getStatusTextColor(status)}
+                    />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </Surface>
+        </Modal>
+      </Portal>
 
       <ScrollView
         style={styles.scrollView}
@@ -404,18 +669,60 @@ const SuperAdminTaskDetailsScreen = () => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-          <Card.Content>
-            <View style={styles.headerRow}>
-              <Text style={styles.taskTitle}>{task.title}</Text>
-              <StatusBadge status={task.status} />
-            </View>
+        <View style={styles.statusSection}>
+          <View style={styles.statusRow}>
+            <Text style={styles.statusLabel}>
+              {t("superAdmin.tasks.currentStatus")}:
+            </Text>
+            <TouchableOpacity
+              onPress={() => setStatusMenuVisible(true)}
+              disabled={submitting}
+              style={[
+                styles.statusBadgeClickable,
+                {
+                  backgroundColor: getStatusBackgroundColor(task.status),
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusText,
+                  { color: getStatusTextColor(task.status) },
+                ]}
+              >
+                {getTranslatedStatus(task.status)}
+              </Text>
+              <IconButton
+                icon={getStatusIcon(task.status)}
+                size={16}
+                style={styles.editStatusIcon}
+                iconColor={getStatusTextColor(task.status)}
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
 
+        <Surface style={styles.detailsCard}>
+          <View style={styles.cardHeader}>
+            <View style={styles.simpleCardHeader}>
+              <IconButton
+                icon="clipboard-text"
+                size={22}
+                iconColor={theme.colors.primary}
+              />
+              <Text style={styles.simpleCardHeaderTitle}>{task.title}</Text>
+            </View>
+          </View>
+
+          <View style={styles.cardContent}>
             <Chip
               icon="flag"
               style={[
                 styles.priorityChip,
-                { backgroundColor: getPriorityColor(task.priority) + "20" },
+                {
+                  backgroundColor: getPriorityColor(task.priority) + "20",
+                  borderColor: getPriorityColor(task.priority),
+                },
               ]}
               textStyle={{ color: getPriorityColor(task.priority) }}
             >
@@ -423,16 +730,16 @@ const SuperAdminTaskDetailsScreen = () => {
               {t("superAdmin.tasks.priority")}
             </Chip>
 
-            <Divider style={styles.divider} />
+            <Divider style={styles.sectionDivider} />
 
-            <Text style={styles.sectionTitle}>
+            <Text style={styles.sectionSubtitle}>
               {t("superAdmin.tasks.description")}
             </Text>
             <Text style={styles.description}>{task.description}</Text>
 
-            <Divider style={styles.divider} />
+            <Divider style={styles.sectionDivider} />
 
-            <Text style={styles.sectionTitle}>
+            <Text style={styles.sectionSubtitle}>
               {t("superAdmin.tasks.details")}
             </Text>
 
@@ -465,12 +772,51 @@ const SuperAdminTaskDetailsScreen = () => {
               </Text>
             </View>
 
-            <Divider style={styles.divider} />
+            {task.modified_by && task.modified_at && (
+              <>
+                <Divider style={styles.sectionDivider} />
 
-            <Text style={styles.sectionTitle}>
-              {t("superAdmin.tasks.assignedUsers")}
-            </Text>
+                <Text style={styles.sectionSubtitle}>
+                  {t("superAdmin.tasks.lastModification")}
+                </Text>
 
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>
+                    {t("superAdmin.tasks.modifiedAt")}:
+                  </Text>
+                  <Text style={styles.detailValue}>
+                    {format(new Date(task.modified_at), "MMMM d, yyyy HH:mm")}
+                  </Text>
+                </View>
+
+                {task.modifier_name && (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>
+                      {t("superAdmin.tasks.modifiedBy")}:
+                    </Text>
+                    <Text style={styles.detailValue}>{task.modifier_name}</Text>
+                  </View>
+                )}
+              </>
+            )}
+          </View>
+        </Surface>
+
+        <Surface style={styles.detailsCard}>
+          <View style={styles.cardHeader}>
+            <View style={styles.simpleCardHeader}>
+              <IconButton
+                icon="account-group"
+                size={22}
+                iconColor={theme.colors.primary}
+              />
+              <Text style={styles.simpleCardHeaderTitle}>
+                {t("superAdmin.tasks.assignedUsers")}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.cardContent}>
             {assignedUsers.length > 0 ? (
               <View style={styles.usersContainer}>
                 {assignedUsers.map((user) => (
@@ -489,126 +835,67 @@ const SuperAdminTaskDetailsScreen = () => {
                 {t("superAdmin.tasks.noUsersAssigned")}
               </Text>
             )}
-          </Card.Content>
-        </Card>
+          </View>
+        </Surface>
 
-        <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-          <Card.Content>
-            <Text style={styles.sectionTitle}>
-              {t("superAdmin.tasks.updateStatus")}
-            </Text>
-
-            <View style={styles.statusButtonsContainer}>
-              <Button
-                mode="outlined"
-                onPress={() => handleUpdateStatus(TaskStatus.OPEN)}
-                style={[
-                  styles.statusButton,
-                  task.status === TaskStatus.OPEN && styles.activeStatusButton,
-                ]}
-                textColor={
-                  task.status === TaskStatus.OPEN
-                    ? theme.colors.primary
-                    : undefined
-                }
-              >
-                {t("superAdmin.tasks.open")}
-              </Button>
-
-              <Button
-                mode="outlined"
-                onPress={() => handleUpdateStatus(TaskStatus.IN_PROGRESS)}
-                style={[
-                  styles.statusButton,
-                  task.status === TaskStatus.IN_PROGRESS &&
-                    styles.activeStatusButton,
-                ]}
-                textColor={
-                  task.status === TaskStatus.IN_PROGRESS
-                    ? theme.colors.primary
-                    : undefined
-                }
-              >
-                {t("superAdmin.tasks.inProgress")}
-              </Button>
-
-              <Button
-                mode="outlined"
-                onPress={() => handleUpdateStatus(TaskStatus.AWAITING_RESPONSE)}
-                style={[
-                  styles.statusButton,
-                  task.status === TaskStatus.AWAITING_RESPONSE &&
-                    styles.activeStatusButton,
-                ]}
-                textColor={
-                  task.status === TaskStatus.AWAITING_RESPONSE
-                    ? theme.colors.primary
-                    : undefined
-                }
-              >
-                {t("superAdmin.tasks.awaiting")}
-              </Button>
-
-              <Button
-                mode="outlined"
-                onPress={() => handleUpdateStatus(TaskStatus.COMPLETED)}
-                style={[
-                  styles.statusButton,
-                  task.status === TaskStatus.COMPLETED &&
-                    styles.activeStatusButton,
-                ]}
-                textColor={
-                  task.status === TaskStatus.COMPLETED
-                    ? theme.colors.primary
-                    : undefined
-                }
-              >
-                {t("superAdmin.tasks.completed")}
-              </Button>
-
-              <Button
-                mode="outlined"
-                onPress={() => handleUpdateStatus(TaskStatus.OVERDUE)}
-                style={[
-                  styles.statusButton,
-                  task.status === TaskStatus.OVERDUE &&
-                    styles.activeStatusButton,
-                ]}
-                textColor={
-                  task.status === TaskStatus.OVERDUE
-                    ? theme.colors.primary
-                    : undefined
-                }
-              >
-                {t("superAdmin.tasks.overdue")}
-              </Button>
+        <Surface style={styles.detailsCard}>
+          <View style={styles.cardHeader}>
+            <View style={styles.simpleCardHeader}>
+              <IconButton
+                icon="comment-text-multiple"
+                size={22}
+                iconColor={theme.colors.primary}
+              />
+              <Text style={styles.simpleCardHeaderTitle}>
+                {t("superAdmin.tasks.comments")}
+              </Text>
             </View>
-          </Card.Content>
-        </Card>
+          </View>
 
-        <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-          <Card.Content>
-            <Text style={styles.sectionTitle}>
-              {t("superAdmin.tasks.comments")}
-            </Text>
-
+          <View style={styles.cardContent}>
             {comments.length > 0 ? (
-              comments.map((comment) => (
-                <View key={comment.id} style={styles.commentContainer}>
-                  <View style={styles.commentHeader}>
-                    <Text style={styles.commentUser}>
-                      {getUserRoleLabel(comment)}
-                    </Text>
-                    <Text style={styles.commentDate}>
-                      {format(
-                        new Date(comment.created_at),
-                        "MMM d, yyyy h:mm a"
-                      )}
-                    </Text>
+              comments.map((comment) => {
+                const isCurrentUser = comment.sender_id === user?.id;
+                const commentColor = getCommentColorByRole(comment);
+                const commentBgColor = getCommentBgColor(comment);
+
+                return (
+                  <View
+                    key={comment.id}
+                    style={[
+                      styles.commentContainer,
+                      isCurrentUser
+                        ? styles.currentUserComment
+                        : styles.otherUserComment,
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.commentBubble,
+                        {
+                          backgroundColor: commentBgColor,
+                          borderColor: commentColor + "30",
+                        },
+                      ]}
+                    >
+                      <View style={styles.commentHeader}>
+                        <Text
+                          style={[styles.commentUser, { color: commentColor }]}
+                        >
+                          {getUserRoleLabel(comment)}
+                        </Text>
+                        <Text style={styles.commentDate}>
+                          {format(
+                            new Date(comment.created_at),
+                            "MMM d, yyyy h:mm a"
+                          )}
+                        </Text>
+                      </View>
+                      <Text style={styles.commentText}>{comment.message}</Text>
+                    </View>
                   </View>
-                  <Text style={styles.commentText}>{comment.message}</Text>
-                </View>
-              ))
+                );
+              })
             ) : (
               <Text style={styles.noCommentsText}>
                 {t("superAdmin.tasks.noCommentsYet")}
@@ -635,8 +922,8 @@ const SuperAdminTaskDetailsScreen = () => {
                 {t("superAdmin.tasks.addComment")}
               </Button>
             </View>
-          </Card.Content>
-        </Card>
+          </View>
+        </Surface>
 
         <View style={styles.buttonContainer}>
           <Button
@@ -645,7 +932,7 @@ const SuperAdminTaskDetailsScreen = () => {
               // @ts-ignore - Navigation typing can be complex
               navigation.navigate("EditTask", { taskId: task.id });
             }}
-            style={[styles.button, { backgroundColor: theme.colors.primary }]}
+            style={styles.button}
           >
             {t("superAdmin.tasks.editTask")}
           </Button>
@@ -658,6 +945,7 @@ const SuperAdminTaskDetailsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#F8F9FA",
   },
   scrollView: {
     flex: 1,
@@ -736,9 +1024,22 @@ const styles = StyleSheet.create({
   },
   commentContainer: {
     marginBottom: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5E7EB",
+  },
+  currentUserComment: {
+    alignItems: "flex-end",
+  },
+  otherUserComment: {
+    alignItems: "flex-start",
+  },
+  commentBubble: {
+    maxWidth: "85%",
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    shadowColor: "rgba(0,0,0,0.1)",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
   },
   commentHeader: {
     flexDirection: "row",
@@ -747,14 +1048,16 @@ const styles = StyleSheet.create({
   },
   commentUser: {
     fontWeight: "bold",
+    fontSize: 14,
+    marginRight: 8,
   },
   commentDate: {
     fontSize: 12,
     opacity: 0.7,
   },
   commentText: {
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: 15,
+    lineHeight: 22,
   },
   noCommentsText: {
     fontStyle: "italic",
@@ -781,6 +1084,161 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
+  },
+  statusSection: {
+    marginBottom: 20,
+    paddingHorizontal: 6,
+  },
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 0,
+  },
+  statusLabel: {
+    fontSize: 16,
+    fontFamily: "Poppins-Medium",
+    marginRight: 8,
+    color: "#616161",
+  },
+  statusBadgeContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 20,
+    paddingLeft: 12,
+    paddingRight: 4,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.05)",
+  },
+  statusText: {
+    fontSize: 16,
+    fontFamily: "Poppins-Medium",
+    textTransform: "capitalize",
+  },
+  statusIcon: {
+    margin: 0,
+  },
+  detailsCard: {
+    marginBottom: 20,
+    borderRadius: 16,
+    overflow: "hidden",
+    elevation: 1,
+    shadowColor: "rgba(0,0,0,0.1)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.03)",
+  },
+  cardHeader: {
+    width: "100%",
+  },
+  simpleCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 5,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0,0,0,0.05)",
+  },
+  simpleCardHeaderTitle: {
+    fontSize: 17,
+    fontFamily: "Poppins-SemiBold",
+    color: "#424242",
+  },
+  cardContent: {
+    padding: 20,
+  },
+  sectionDivider: {
+    marginVertical: 16,
+    backgroundColor: "#EEEEEE",
+    height: 1,
+  },
+  sectionSubtitle: {
+    fontSize: 16,
+    fontFamily: "Poppins-Medium",
+    marginBottom: 8,
+    color: "#424242",
+  },
+  modalContainer: {
+    margin: 20,
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: "transparent",
+  },
+  modalSurface: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    overflow: "hidden",
+    elevation: 1,
+    shadowColor: "rgba(0,0,0,0.1)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 18,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontFamily: "Poppins-SemiBold",
+    color: "#424242",
+  },
+  statusOptionsContainer: {
+    maxHeight: 400,
+    padding: 12,
+  },
+  statusOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 12,
+    borderRadius: 12,
+    marginVertical: 6,
+  },
+  statusOptionContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  statusIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 14,
+  },
+  statusTextContainer: {
+    flex: 1,
+  },
+  statusOptionText: {
+    fontSize: 16,
+    fontFamily: "Poppins-Medium",
+    textTransform: "capitalize",
+  },
+  statusDescription: {
+    fontSize: 12,
+    color: "#757575",
+    fontFamily: "Poppins-Regular",
+  },
+  editStatusIcon: {
+    margin: 0,
+    marginLeft: 4,
+  },
+  statusBadgeClickable: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 20,
+    paddingLeft: 12,
+    paddingRight: 4,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.05)",
   },
 });
 

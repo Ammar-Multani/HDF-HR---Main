@@ -571,6 +571,7 @@ const EmployeeDetailedScreen = () => {
                   styles.contactButton,
                   { backgroundColor: theme.colors.primary },
                 ]}
+                labelStyle={{ color: "white" }}
               >
                 Call
               </Button>
@@ -583,6 +584,7 @@ const EmployeeDetailedScreen = () => {
                   styles.contactButton,
                   { backgroundColor: theme.colors.primary },
                 ]}
+                labelStyle={{ color: "white" }}
               >
                 Email
               </Button>

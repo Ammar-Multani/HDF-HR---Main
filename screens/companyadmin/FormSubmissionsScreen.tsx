@@ -408,7 +408,7 @@ const FormSubmissionsScreen = () => {
 
       {filteredForms.length === 0 ? (
         <EmptyState
-          icon="file-document-off"
+          icon="file-document"
           title="No Forms Found"
           message={
             searchQuery || typeFilter !== "all" || statusFilter !== "all"

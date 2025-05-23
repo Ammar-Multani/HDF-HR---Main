@@ -183,7 +183,7 @@ const CreateSuperAdminScreen = () => {
         style={styles.keyboardAvoidingView}
       >
         <ScrollView
-          style={styles.scrollView}
+          style={[styles.scrollView, { backgroundColor: theme.colors.backgroundSecondary }]}
           contentContainerStyle={styles.scrollContent}
         >
           <Text

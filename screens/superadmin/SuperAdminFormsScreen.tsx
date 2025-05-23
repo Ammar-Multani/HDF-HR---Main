@@ -19,6 +19,7 @@ import {
   Modal,
   Divider,
   RadioButton,
+  Surface,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -36,6 +37,7 @@ import StatusBadge from "../../components/StatusBadge";
 import { FormStatus } from "../../types";
 import Text from "../../components/Text";
 import { useTranslation } from "react-i18next";
+import { LinearGradient } from "expo-linear-gradient";
 
 // Define form interface with the properties needed for our UI
 interface FormItem {
@@ -48,6 +50,9 @@ interface FormItem {
   submitted_by: string;
   company_name: string;
   employee_name: string;
+  modified_by?: string;
+  modified_at?: string;
+  modifier_name?: string;
 }
 
 // Component for skeleton loading UI
@@ -55,7 +60,7 @@ const FormItemSkeleton = () => {
   return (
     <Card
       style={[
-        styles.card,
+        styles.cardSurface,
         {
           backgroundColor: "#FFFFFF",
           shadowColor: "transparent",
@@ -252,6 +257,8 @@ const SuperAdminFormsScreen = () => {
           id,
           status,
           created_at,
+          modified_by,
+          updated_at,
           employee:employee_id(
             id,
             first_name,
@@ -277,6 +284,8 @@ const SuperAdminFormsScreen = () => {
           id,
           status,
           submission_date,
+          modified_by,
+          updated_at,
           employee:employee_id(
             id,
             first_name,
@@ -302,6 +311,8 @@ const SuperAdminFormsScreen = () => {
           id,
           status,
           created_at,
+          modified_by,
+          updated_at,
           employee:employee_id(
             id,
             first_name,
@@ -328,6 +339,49 @@ const SuperAdminFormsScreen = () => {
         throw new Error("Failed to fetch forms");
       }
 
+      // Get all unique modifier IDs
+      const allModifierIds = [
+        ...(accidentData || []).map((form) => form.modified_by),
+        ...(illnessData || []).map((form) => form.modified_by),
+        ...(departureData || []).map((form) => form.modified_by),
+      ].filter(Boolean);
+
+      // Fetch modifiers info
+      let modifiersInfo: Record<string, string> = {};
+      if (allModifierIds.length > 0) {
+        const uniqueModifierIds = Array.from(new Set(allModifierIds));
+
+        // Fetch admin modifiers
+        const { data: adminModifiers } = await supabase
+          .from("admin")
+          .select("id, name")
+          .in("id", uniqueModifierIds);
+
+        // Fetch company_user modifiers
+        const { data: companyUserModifiers } = await supabase
+          .from("company_user")
+          .select("id, first_name, last_name")
+          .in("id", uniqueModifierIds);
+
+        // Create a lookup map for modifier names
+        modifiersInfo = {
+          ...(adminModifiers || []).reduce(
+            (acc: Record<string, string>, admin: any) => {
+              acc[admin.id] = admin.name;
+              return acc;
+            },
+            {}
+          ),
+          ...(companyUserModifiers || []).reduce(
+            (acc: Record<string, string>, user: any) => {
+              acc[user.id] = `${user.first_name} ${user.last_name}`;
+              return acc;
+            },
+            {}
+          ),
+        };
+      }
+
       // Format and combine all forms
       const formattedAccidentForms = (accidentData || []).map((form) => {
         // Ensure we handle the nested structure correctly
@@ -338,7 +392,12 @@ const SuperAdminFormsScreen = () => {
           title: "Accident Report",
           status: form.status as FormStatus,
           created_at: form.created_at,
-          updated_at: form.created_at,
+          updated_at: form.updated_at,
+          modified_by: form.modified_by,
+          modified_at: form.updated_at,
+          modifier_name: form.modified_by
+            ? modifiersInfo[form.modified_by]
+            : undefined,
           submitted_by: "",
           company_name: employee?.company?.company_name || "Unknown Company",
           employee_name: employee
@@ -356,7 +415,12 @@ const SuperAdminFormsScreen = () => {
           title: "Illness Report",
           status: form.status as FormStatus,
           created_at: form.submission_date,
-          updated_at: form.submission_date,
+          updated_at: form.updated_at,
+          modified_by: form.modified_by,
+          modified_at: form.updated_at,
+          modifier_name: form.modified_by
+            ? modifiersInfo[form.modified_by]
+            : undefined,
           submitted_by: "",
           company_name: employee?.company?.company_name || "Unknown Company",
           employee_name: employee
@@ -374,7 +438,12 @@ const SuperAdminFormsScreen = () => {
           title: "Staff Departure Report",
           status: form.status as FormStatus,
           created_at: form.created_at,
-          updated_at: form.created_at,
+          updated_at: form.updated_at,
+          modified_by: form.modified_by,
+          modified_at: form.updated_at,
+          modifier_name: form.modified_by
+            ? modifiersInfo[form.modified_by]
+            : undefined,
           submitted_by: "",
           company_name: employee?.company?.company_name || "Unknown Company",
           employee_name: employee
@@ -736,84 +805,118 @@ const SuperAdminFormsScreen = () => {
   // Create memoized renderFormItem function to prevent unnecessary re-renders
   const renderFormItem = useCallback(
     ({ item }: { item: FormItem }) => (
-      <TouchableOpacity
-        onPress={() => {
-          // Navigate to form details screen based on form type
-          console.log("View form details for:", item.id, item.type);
-          navigation.navigate("SuperAdminFormDetailsScreen", {
-            formId: item.id,
-            formType: item.type,
-          });
-        }}
-      >
-        <Card
-          style={[
-            styles.card,
-            {
-              backgroundColor: "#FFFFFF",
-              shadowColor: "transparent",
-            },
-          ]}
-          elevation={0}
+      <Surface style={[styles.cardSurface, { backgroundColor: "#FFFFFF" }]}>
+        <TouchableOpacity
+          onPress={() => {
+            // Navigate to form details screen based on form type
+            console.log("View form details for:", item.id, item.type);
+            navigation.navigate("SuperAdminFormDetailsScreen", {
+              formId: item.id,
+              formType: item.type,
+            });
+          }}
+          style={styles.cardTouchable}
         >
-          <Card.Content>
-            <View style={styles.cardHeader}>
-              <View style={styles.titleContainer}>
-                <Text variant="bold" style={styles.formTitle}>
-                  {item.title}
-                </Text>
-                <View style={styles.detailItem}>
-                  <Text variant="medium" style={styles.detailLabel}>
-                    {t("superAdmin.forms.company")}
+          <View style={styles.cardHeader}>
+            <View style={styles.titleContainer}>
+              <View style={styles.detailItem}>
+                <LinearGradient
+                  colors={
+                    [
+                      getFormTypeColor(item.type),
+                      getFormTypeColor(item.type) + "99",
+                    ] as readonly [string, string]
+                  }
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.formTypeChip}
+                >
+                  <Text style={styles.formTypeText}>
+                    {getFormTypeName(item.type)}
                   </Text>
-                  <Text variant="medium" style={styles.companyName}>
-                    {item.company_name}
-                  </Text>
-                </View>
+                </LinearGradient>
               </View>
-              <StatusBadge status={item.status} />
             </View>
+            <StatusBadge status={item.status} />
+          </View>
 
+          <View
+            style={[
+              styles.cardDetails,
+              { borderLeftColor: getFormTypeColor(item.type) },
+            ]}
+          >
             <View style={styles.detailItem}>
               <Text variant="medium" style={styles.detailLabel}>
-                {t("superAdmin.forms.submittedBy")}
+                {t("superAdmin.forms.submittedBy")} :
               </Text>
-              <Text style={styles.detailValue}>: {item.employee_name}</Text>
+              <Text style={styles.detailValue}>{item.employee_name}</Text>
             </View>
 
             <View style={styles.detailItem}>
               <Text variant="medium" style={styles.detailLabel}>
-                {t("superAdmin.forms.created")}
+                {t("superAdmin.forms.created")} :
               </Text>
               <Text style={styles.detailValue}>
-                : {format(new Date(item.created_at), "MMM d, yyyy")}
+                {format(new Date(item.created_at), "MMM d, yyyy")}
               </Text>
             </View>
 
-            <View style={styles.cardFooter}>
-              <Chip
-                icon="file-document"
-                style={[
-                  styles.formTypeChip,
-                  {
-                    backgroundColor: getFormTypeColor(item.type) + "20",
-                    borderColor: getFormTypeColor(item.type),
-                  },
-                ]}
-                textStyle={{
-                  color: getFormTypeColor(item.type),
-                  fontFamily: "Poppins-Regular",
-                  fontSize: 12,
-                }}
-              >
-                {getFormTypeName(item.type)}
-              </Chip>
+            {item.modified_by && item.modified_at && (
+              <View style={styles.modificationInfo}>
+                <View style={styles.detailItem}>
+                  <Text variant="medium" style={[styles.detailLabel]}>
+                    {t("superAdmin.forms.lastModified")} :
+                  </Text>
+                  <Text style={[styles.detailValue]}>
+                    {format(new Date(item.modified_at), "MMM d, yyyy, HH:mm")}
+                  </Text>
+                </View>
+                {item.modifier_name && (
+                  <View style={styles.detailItem}>
+                    <Text variant="medium" style={[styles.detailLabel]}>
+                      {t("superAdmin.forms.modifiedBy")} :
+                    </Text>
+                    <Text style={[styles.detailValue]}>
+                      {item.modifier_name}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+          </View>
+
+          <View style={styles.cardFooter}>
+            <View style={styles.detailItem}>
+            <Text variant="medium" style={styles.detailLabel}>
+              {t("superAdmin.forms.company")}:
+            </Text>
+            <Text variant="medium" style={styles.companyName}>
+              {item.company_name}
+              </Text>
             </View>
-          </Card.Content>
-        </Card>
-      </TouchableOpacity>
+
+            <View style={styles.viewDetailsContainer}>
+              <Text
+                style={[
+                  styles.viewDetailsText,
+                  { color: getFormTypeColor(item.type) },
+                ]}
+              >
+                VIEW DETAILS
+              </Text>
+              <IconButton
+                icon="chevron-right"
+                size={18}
+                iconColor={getFormTypeColor(item.type)}
+                style={styles.chevronIcon}
+              />
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Surface>
     ),
-    [t, navigation]
+    [t, navigation, getFormTypeColor, getFormTypeName]
   );
 
   if (loading && !refreshing) {
@@ -821,6 +924,7 @@ const SuperAdminFormsScreen = () => {
       <SafeAreaView style={[styles.container, { backgroundColor: "#F5F5F5" }]}>
         <AppHeader
           title={t("superAdmin.forms.title")}
+          subtitle="Review and manage all submitted forms"
           showBackButton={true}
           showHelpButton={false}
           showProfileMenu={false}
@@ -846,18 +950,20 @@ const SuperAdminFormsScreen = () => {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: "#F5F5F5" }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: "#F8F9FA" }]}>
       <AppHeader
         title={t("superAdmin.forms.title")}
+        subtitle="Review and manage all submitted forms"
         showBackButton={true}
         showHelpButton={false}
         showProfileMenu={false}
         showLogo={false}
         showTitle={true}
       />
+
       <View style={styles.searchContainer}>
         <Searchbar
-          placeholder={t("superAdmin.forms.search")}
+          placeholder={t("superAdmin.forms.search") || "Search forms..."}
           onChangeText={setSearchQuery}
           value={searchQuery}
           style={styles.searchbar}
@@ -893,7 +999,7 @@ const SuperAdminFormsScreen = () => {
 
       {filteredForms.length === 0 ? (
         <EmptyState
-          icon="file-document-off"
+          icon="file-document"
           title={t("superAdmin.forms.noFormsFound")}
           message={
             searchQuery || hasActiveFilters()
@@ -944,21 +1050,42 @@ const SuperAdminFormsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#F8F9FA",
+  },
+  headerSection: {
+    marginTop: 8,
+    marginBottom: 12,
+    paddingHorizontal: 16,
+  },
+  pageTitle: {
+    fontSize: 22,
+    color: "#212121",
+    marginBottom: 4,
+  },
+  pageSubtitle: {
+    fontSize: 14,
+    color: "#757575",
+    marginBottom: 8,
   },
   searchContainer: {
     padding: 16,
-    paddingBottom: 8,
+    paddingTop: 10,
+    paddingBottom: 12,
     flexDirection: "row",
     alignItems: "center",
   },
   searchbar: {
-    elevation: 0,
-    borderRadius: 18,
-    height: 60,
+    elevation: 2,
+    borderRadius: 12,
+    height: 58,
     backgroundColor: "#fff",
     borderWidth: 1,
     borderColor: "#e0e0e0",
     flex: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   filterButtonContainer: {
     position: "relative",
@@ -1003,7 +1130,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     flexWrap: "wrap",
-    marginTop: 8,
+    marginTop: 0,
     marginBottom: 12,
     paddingHorizontal: 20,
   },
@@ -1022,16 +1149,21 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
-    paddingTop: 8,
+    paddingTop: 0,
     paddingBottom: 100,
   },
-  card: {
+  cardSurface: {
     marginBottom: 16,
-    elevation: 0,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
     overflow: "hidden",
+  },
+  cardTouchable: {
+    padding: 16,
   },
   cardHeader: {
     flexDirection: "row",
@@ -1046,33 +1178,36 @@ const styles = StyleSheet.create({
   formTitle: {
     fontSize: 16,
     color: "#333",
+    marginBottom: 4,
   },
   companyName: {
     fontSize: 14,
-    color: "#666",
+    color: "#000",
+    marginLeft: 4,
   },
   cardDetails: {
-    marginBottom: 16,
+    marginBottom: 10,
     backgroundColor: "#f9f9f9",
     borderRadius: 8,
-    padding: 10,
+    padding: 12,
     borderLeftWidth: 3,
     borderLeftColor: "#1a73e8",
   },
   detailItem: {
     flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 4,
   },
   detailLabel: {
-    opacity: 0.7,
-    color: "#333",
-    fontSize: 12,
+    color: "#555",
+    fontSize: 13,
     fontWeight: "600",
-    marginRight: 4,
+    marginRight: 2,
   },
   detailValue: {
     flex: 1,
     color: "#666",
-    fontSize: 12,
+    fontSize: 13,
   },
   cardFooter: {
     flexDirection: "row",
@@ -1081,9 +1216,28 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   formTypeChip: {
-    height: 30,
-    borderRadius: 25,
-    borderWidth: 1,
+    height: 32,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  formTypeText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontFamily: "Poppins-Medium",
+  },
+  viewDetailsContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  viewDetailsText: {
+    fontSize: 12,
+    fontFamily: "Poppins-SemiBold",
+  },
+  chevronIcon: {
+    margin: 0,
+    padding: 0,
   },
   // Modal styles
   modalContainer: {
@@ -1179,6 +1333,12 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins-Regular",
     color: "#616161",
   },
-});
+  modificationInfo: {
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(0,0,0,0.05)",
+  },
+} as const);
 
 export default SuperAdminFormsScreen;

@@ -53,6 +53,7 @@ import CreateCompanyAdminScreen from "../screens/superadmin/CreateCompanyAdminSc
 import SuperAdminFormsScreen from "../screens/superadmin/SuperAdminFormsScreen";
 import SuperAdminUtilitiesScreen from "../screens/superadmin/SuperAdminUtilitiesScreen";
 import SuperAdminFormDetailsScreen from "../screens/superadmin/SuperAdminFormDetailsScreen";
+import CreateReceiptScreen from "../screens/superadmin/CreateReceiptScreen";
 
 // Company Admin Screens
 import CompanyAdminDashboard from "../screens/companyadmin/CompanyAdminDashboard";
@@ -78,6 +79,9 @@ import EmployeeProfileScreen from "../screens/employee/EmployeeProfileScreen";
 import EmployeeTasksScreen from "../screens/employee/EmployeeTasksScreen";
 import EmployeeTaskDetailsScreen from "../screens/employee/EmployeeTaskDetailsScreen";
 import CreateEmployeesScreen from "../screens/superadmin/CreateEmployeesScreen";
+import ReceiptsListScreen from "../screens/superadmin/ReceiptsListScreen";
+import ReceiptDetailsScreen from "../screens/superadmin/ReceiptDetailsScreen";
+import EditTaskScreen from "../screens/superadmin/EditTaskScreen";
 
 // Stack navigators
 const AuthStack = createNativeStackNavigator();
@@ -233,6 +237,22 @@ const SuperAdminNavigator = () => {
       <SuperAdminStack.Screen
         name="SuperAdminTasksScreen"
         component={SuperAdminTasksScreen}
+      />
+      <SuperAdminStack.Screen
+        name="CreateReceipt"
+        component={CreateReceiptScreen}
+      />
+      <SuperAdminStack.Screen
+        name="ReceiptsListScreen"
+        component={ReceiptsListScreen}
+      />
+      <SuperAdminStack.Screen
+        name="ReceiptDetails"
+        component={ReceiptDetailsScreen}
+      />
+      <SuperAdminStack.Screen
+        name="EditTask"
+        component={EditTaskScreen}
       />
     </SuperAdminStack.Navigator>
   );
