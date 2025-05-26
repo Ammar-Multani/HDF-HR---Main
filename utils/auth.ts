@@ -3,7 +3,6 @@ import { encode as base64Encode } from "base-64";
 
 /**
  * Hashes a password using PBKDF2 via expo-crypto
- * Optimized for mobile performance while maintaining security
  */
 export const hashPassword = async (password: string): Promise<string> => {
   // Generate a salt (16 random bytes)
@@ -12,7 +11,7 @@ export const hashPassword = async (password: string): Promise<string> => {
     .map(b => b.toString(16).padStart(2, '0'))
     .join('');
   
-  // Use PBKDF2 with SHA-256 and 200 iterations (balanced for mobile security/performance)
+  // Use PBKDF2 with SHA-256 and 200 iterations 
   const iterations = 200;
   
   // Hash with optimized PBKDF2
@@ -52,7 +51,6 @@ export const validatePassword = async (
 
 /**
  * Optimized PBKDF2 implementation
- * Uses a more efficient approach for better mobile performance
  */
 const pbkdf2 = async (
   password: string,

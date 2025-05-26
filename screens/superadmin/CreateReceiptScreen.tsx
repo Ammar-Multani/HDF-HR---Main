@@ -7,6 +7,7 @@ import {
   Platform,
   Image,
   Alert,
+  TouchableOpacity,
 } from "react-native";
 import {
   Text,
@@ -18,6 +19,7 @@ import {
   HelperText,
   Divider,
   List,
+  IconButton,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -73,6 +75,9 @@ const CreateReceiptScreen = () => {
   const [newItemQuantity, setNewItemQuantity] = useState("");
   const [newItemPrice, setNewItemPrice] = useState("");
   const [showAddItem, setShowAddItem] = useState(false);
+  const [imageSource, setImageSource] = useState<"camera" | "gallery" | null>(
+    null
+  );
 
   const {
     control,
@@ -134,14 +139,60 @@ const CreateReceiptScreen = () => {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
-      quality: 0.8,
+      quality: 0.5,
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
       setReceiptImage(result.assets[0].uri);
+      setImageSource("gallery");
     }
+  };
+
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+
+    if (status !== "granted") {
+      Alert.alert(
+        "Permission Denied",
+        "We need camera permission to take photos of receipts"
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.5,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      setReceiptImage(result.assets[0].uri);
+      setImageSource("camera");
+    }
+  };
+
+  const showImageOptions = () => {
+    Alert.alert(
+      "Upload Receipt Image",
+      "Choose an option",
+      [
+        {
+          text: "Take Photo",
+          onPress: takePhoto,
+        },
+        {
+          text: "Choose from Gallery",
+          onPress: pickImage,
+        },
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   const uploadImage = async (uri: string): Promise<string> => {
@@ -316,7 +367,12 @@ const CreateReceiptScreen = () => {
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <AppHeader title="Create Receipt" showBackButton />
+      <AppHeader
+        title="Create Receipt"
+        showBackButton
+        showHelpButton
+        showLogo={false}
+      />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -619,14 +675,24 @@ const CreateReceiptScreen = () => {
             Receipt Image
           </Text>
 
-          <Button
-            mode="outlined"
-            icon="camera"
-            onPress={pickImage}
-            style={styles.uploadButton}
-          >
-            {receiptImage ? "Change Receipt Image" : "Upload Receipt Image *"}
-          </Button>
+          <View style={styles.imageButtonsContainer}>
+            <Button
+              mode="outlined"
+              icon="camera"
+              onPress={takePhoto}
+              style={[styles.imageButton, { marginRight: 8 }]}
+            >
+              Take Photo
+            </Button>
+            <Button
+              mode="outlined"
+              icon="image"
+              onPress={pickImage}
+              style={styles.imageButton}
+            >
+              Gallery
+            </Button>
+          </View>
 
           {receiptImage && (
             <View style={styles.imagePreviewContainer}>
@@ -634,6 +700,12 @@ const CreateReceiptScreen = () => {
                 source={{ uri: receiptImage }}
                 style={styles.imagePreview}
                 resizeMode="contain"
+              />
+              <IconButton
+                icon="delete"
+                size={24}
+                style={styles.deleteImageButton}
+                onPress={() => setReceiptImage(null)}
               />
             </View>
           )}
@@ -721,6 +793,13 @@ const styles = StyleSheet.create({
   uploadButton: {
     marginBottom: 16,
   },
+  imageButtonsContainer: {
+    flexDirection: "row",
+    marginBottom: 16,
+  },
+  imageButton: {
+    flex: 1,
+  },
   imagePreviewContainer: {
     alignItems: "center",
     marginBottom: 16,
@@ -728,11 +807,18 @@ const styles = StyleSheet.create({
     borderColor: "#ddd",
     borderRadius: 8,
     padding: 8,
+    position: "relative",
   },
   imagePreview: {
     width: "100%",
     height: 200,
     borderRadius: 4,
+  },
+  deleteImageButton: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    backgroundColor: "rgba(255, 255, 255, 0.7)",
   },
   submitButton: {
     marginTop: 24,

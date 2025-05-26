@@ -21,6 +21,7 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
+import { t } from "i18next";
 
 const EmployeeProfileScreen = () => {
   const theme = useTheme();
@@ -145,7 +146,7 @@ const EmployeeProfileScreen = () => {
     >
       <AppHeader
         title="Profile"
-        showBackButton={false}
+        showBackButton={true}
         showHelpButton={false}
         showProfileMenu={false}
         showLogo={false}

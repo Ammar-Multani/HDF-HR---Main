@@ -16,7 +16,8 @@
     "success": "Success",
     "error": "Error",
     "confirm": "Confirm",
-    "ok": "OK"
+    "ok": "OK",
+    "cancel": "Cancel"
   },
   "login": {
     "welcomeBack": "Welcome Back",
@@ -37,7 +38,9 @@
     "french": "French",
     "italian": "Italian",
     "albanian": "Albanian",
-    "selectLanguage": "Select Language"
+    "selectLanguage": "Select Language",
+    "language": "Language",
+    "select": "Select"
   },
   "superAdmin": {
     "dashboard": {
@@ -259,7 +262,6 @@
       "apply": "Apply",
       "updateTaskDetails": "Update task details",
       "selectCompany": "Select Company",
-      "title": "Title",
       "titleRequired": "Title is required",
       "descriptionRequired": "Description is required",
       "reminderDays": "Reminder (days before deadline)",

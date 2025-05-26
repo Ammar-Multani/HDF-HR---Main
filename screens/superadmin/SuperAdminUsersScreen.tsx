@@ -1773,7 +1773,7 @@ const styles = StyleSheet.create({
   mainContent: {
     flex: 1,
     paddingHorizontal: 16,
-    marginBottom: 76,
+    // marginBottom: 76,
   },
   contentContainer: {
     paddingHorizontal: 16,
@@ -1915,6 +1915,7 @@ const styles = StyleSheet.create({
   listContainer: {
     flex: 1,
     marginTop: 4,
+    marginBottom: 76,
   },
   listHeaderContainer: {
     backgroundColor: "#FFFFFF",
@@ -2161,7 +2162,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     margin: 16,
     right: 0,
-    bottom: 80,
+    bottom: Platform.OS === 'web' ? 0 : 80,
     borderRadius: 28,
   },
   avatarContainer: {

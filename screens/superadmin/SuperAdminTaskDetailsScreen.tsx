@@ -28,7 +28,13 @@ import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import StatusBadge from "../../components/StatusBadge";
-import { Task, TaskStatus, TaskPriority, TaskComment } from "../../types";
+import {
+  Task,
+  TaskStatus,
+  TaskPriority,
+  TaskComment,
+  UserRole,
+} from "../../types";
 import { useTranslation } from "react-i18next";
 
 type TaskDetailsRouteParams = {
@@ -355,8 +361,46 @@ const SuperAdminTaskDetailsScreen = () => {
     }
   };
 
+  // Function to check if the super admin can edit this task
+  const canEditTask = () => {
+    // Check if current user is the one who created the task
+    if (user && task && task.created_by === user.id) {
+      return true;
+    }
+    return false;
+  };
+
+  // Function to check if user can update task status
+  const canUpdateStatus = () => {
+    // Allow task creator to update status
+    if (canEditTask()) {
+      return true;
+    }
+
+    // Allow assigned users to update status
+    if (
+      user &&
+      task &&
+      assignedUsers.some((assignedUser) => assignedUser.id === user.id)
+    ) {
+      return true;
+    }
+
+    return false;
+  };
+
   const handleUpdateStatus = async (newStatus: TaskStatus) => {
     if (!task || !user) return;
+
+    // Don't allow status updates if user is not the creator or assigned user
+    if (!canUpdateStatus()) {
+      Alert.alert(
+        t("common.error"),
+        t("superAdmin.tasks.onlyCreatorOrAssignedCanUpdateStatus"),
+        [{ text: t("common.ok"), onPress: () => setStatusMenuVisible(false) }]
+      );
+      return;
+    }
 
     try {
       setSubmitting(true);
@@ -676,11 +720,12 @@ const SuperAdminTaskDetailsScreen = () => {
             </Text>
             <TouchableOpacity
               onPress={() => setStatusMenuVisible(true)}
-              disabled={submitting}
+              disabled={submitting || !canUpdateStatus()}
               style={[
                 styles.statusBadgeClickable,
                 {
                   backgroundColor: getStatusBackgroundColor(task.status),
+                  opacity: canUpdateStatus() ? 1 : 0.7,
                 },
               ]}
             >
@@ -692,12 +737,21 @@ const SuperAdminTaskDetailsScreen = () => {
               >
                 {getTranslatedStatus(task.status)}
               </Text>
-              <IconButton
-                icon={getStatusIcon(task.status)}
-                size={16}
-                style={styles.editStatusIcon}
-                iconColor={getStatusTextColor(task.status)}
-              />
+              {canUpdateStatus() ? (
+                <IconButton
+                  icon={getStatusIcon(task.status)}
+                  size={16}
+                  style={styles.editStatusIcon}
+                  iconColor={getStatusTextColor(task.status)}
+                />
+              ) : (
+                <IconButton
+                  icon="lock"
+                  size={16}
+                  style={styles.editStatusIcon}
+                  iconColor={getStatusTextColor(task.status)}
+                />
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -926,16 +980,19 @@ const SuperAdminTaskDetailsScreen = () => {
         </Surface>
 
         <View style={styles.buttonContainer}>
-          <Button
-            mode="contained"
-            onPress={() => {
-              // @ts-ignore - Navigation typing can be complex
-              navigation.navigate("EditTask", { taskId: task.id });
-            }}
-            style={styles.button}
-          >
-            {t("superAdmin.tasks.editTask")}
-          </Button>
+          {canEditTask() && (
+            <Button
+              mode="contained"
+              onPress={() => {
+                // @ts-ignore - Navigation typing can be complex
+                navigation.navigate("EditTask", { taskId: task.id });
+              }}
+              style={styles.button}
+              icon="pencil"
+            >
+              {t("superAdmin.tasks.editTask")}
+            </Button>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -1239,6 +1296,24 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderWidth: 1,
     borderColor: "rgba(0,0,0,0.05)",
+  },
+  disabledButton: {
+    borderColor: "#8E24AA",
+    borderWidth: 1,
+  },
+  creatorWarning: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    backgroundColor: "#FFEBEE",
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  creatorWarningText: {
+    fontSize: 14,
+    fontFamily: "Poppins-Regular",
+    color: "#F44336",
+    marginLeft: 8,
   },
 });
 

@@ -28,7 +28,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { useLanguage } from "../../contexts/LanguageContext";
-import LanguageSelector from "../../components/LanguageSelector";
+import CustomLanguageSelector from "../../components/CustomLanguageSelector";
 
 const SuperAdminProfileScreen = () => {
   const theme = useTheme();
@@ -51,7 +51,7 @@ const SuperAdminProfileScreen = () => {
     "rgba(54,105,157,255)",
     "rgba(74,78,153,255)",
     "rgba(94,52,149,255)",
-  ];
+  ] as const;
 
   const fetchAdminData = async () => {
     try {
@@ -189,14 +189,14 @@ const SuperAdminProfileScreen = () => {
                 style={styles.avatar}
               />
               <Text variant="bold" style={styles.userName}>
-                {name || "Super Admin"}
+                {name || "Admin"}
               </Text>
               <Text variant="medium" style={styles.userEmail}>
                 {email}
               </Text>
               <View style={styles.roleBadge}>
                 <Text variant="medium" style={styles.roleText}>
-                  Super Admin
+                  Admin
                 </Text>
               </View>
             </View>
@@ -285,7 +285,7 @@ const SuperAdminProfileScreen = () => {
                   </Text>
                 </View>
                 <View style={styles.languageSelectorContainer}>
-                  <LanguageSelector />
+                  <CustomLanguageSelector compact={true} />
                 </View>
               </View>
 
@@ -388,6 +388,11 @@ const styles = StyleSheet.create({
     height: 160,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
   profileHeader: {
     alignItems: "center",
@@ -399,6 +404,7 @@ const styles = StyleSheet.create({
   avatar: {
     borderWidth: 4,
     borderColor: "#fff",
+    backgroundColor: "rgba(54,105,157,255)",
   },
   userName: {
     fontSize: 22,
@@ -419,6 +425,11 @@ const styles = StyleSheet.create({
     marginTop: 8,
     borderWidth: 1,
     borderColor: "rgba(54,105,157,255)",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
   },
   roleText: {
     fontSize: 14,

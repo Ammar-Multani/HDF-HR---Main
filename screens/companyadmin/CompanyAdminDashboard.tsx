@@ -18,8 +18,14 @@ import { TaskStatus, FormStatus } from "../../types";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Text from "../../components/Text";
 import { globalStyles } from "../../utils/globalStyles";
+import DynamicChart from "../../components/DynamicChart";
 
 const { width } = Dimensions.get("window");
+
+// Add this interface above the component
+interface CompanyData {
+  company_name: string;
+}
 
 const CompanyAdminDashboard = () => {
   const theme = useTheme();
@@ -28,6 +34,7 @@ const CompanyAdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [companyName, setCompanyName] = useState<string>("");
   const [networkStatus, setNetworkStatus] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState({
@@ -42,6 +49,9 @@ const CompanyAdminDashboard = () => {
     totalForms: 0,
     pendingForms: 0,
     formsGrowth: "+0%",
+    monthlyEmployees: [] as number[],
+    monthlyForms: [] as number[],
+    monthLabels: [] as string[],
   });
 
   const checkNetworkStatus = async () => {
@@ -56,13 +66,19 @@ const CompanyAdminDashboard = () => {
     try {
       const { data, error } = await supabase
         .from("company_user")
-        .select("company_id")
+        .select("company_id, company:company_id(company_name)")
         .eq("id", user.id)
         .single();
 
       if (error) {
         console.error("Error fetching company ID:", error);
         return null;
+      }
+
+      // Check if company data exists and set the company name
+      if (data && data.company) {
+        // @ts-ignore - The company object structure is verified in CompanyAdminProfileScreen
+        setCompanyName(data.company.company_name || "");
       }
 
       return data?.company_id || null;
@@ -93,162 +109,330 @@ const CompanyAdminDashboard = () => {
 
       setCompanyId(currentCompanyId);
 
-      // Calculate last month date for growth calculations
-      const lastMonthDate = new Date();
-      lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
+      // Get today's date and reset hours to start of day
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
-      // Fetch employees count
-      const { count: totalEmployees, error: employeesError } = await supabase
-        .from("company_user")
-        .select("*", { count: "exact", head: true })
-        .eq("company_id", currentCompanyId);
+      // Get current month and year
+      const currentMonth = today.getMonth();
+      const currentYear = today.getFullYear();
 
-      // Fetch last month's employee count
-      const { count: lastMonthEmployees, error: lastMonthEmployeesError } = await supabase
-        .from("company_user")
-        .select("*", { count: "exact", head: true })
-        .eq("company_id", currentCompanyId)
-        .lt("created_at", lastMonthDate.toISOString());
+      // Calculate the starting month index to show 5 months of data
+      const startMonthIndex =
+        currentMonth >= 4 ? currentMonth - 4 : 12 + (currentMonth - 4);
 
-      // Calculate employee growth percentage
-      let employeeGrowth = "+0%";
-      if (lastMonthEmployees && totalEmployees && lastMonthEmployees > 0) {
-        const growthRate = ((totalEmployees - lastMonthEmployees) / lastMonthEmployees) * 100;
-        employeeGrowth = (growthRate >= 0 ? "+" : "") + growthRate.toFixed(1) + "%";
+      // Create array of the 5 most recent months to display
+      const recentMonths: number[] = [];
+      for (let i = 0; i < 5; i++) {
+        // Calculate month index (handling year wraparound)
+        const monthIndex = (startMonthIndex + i) % 12;
+        recentMonths.push(monthIndex);
       }
 
-      // Fetch active employees count
-      const { count: activeEmployees, error: activeEmployeesError } =
-        await supabase
+      const monthNames = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+      ];
+
+      // Run all main dashboard queries in parallel for better performance
+      const [
+        { count: totalEmployees, error: employeesError },
+        { count: todayEmployees, error: todayEmployeesError },
+        { count: activeEmployees, error: activeEmployeesError },
+        { count: totalTasks, error: tasksError },
+        { count: todayTasks, error: todayTasksError },
+        { count: pendingTasks, error: pendingTasksError },
+        { count: completedTasks, error: completedTasksError },
+        { count: overdueTasks, error: overdueTasksError },
+        { count: accidentReports, error: accidentError },
+        { count: illnessReports, error: illnessError },
+        { count: departureReports, error: departureError },
+        { count: todayAccidentReports, error: todayAccidentError },
+        { count: todayIllnessReports, error: todayIllnessError },
+        { count: todayDepartureReports, error: todayDepartureError },
+        { count: pendingAccidentReports, error: pendingAccidentError },
+        { count: pendingIllnessReports, error: pendingIllnessError },
+        { count: pendingDepartureReports, error: pendingDepartureError },
+      ] = await Promise.all([
+        // Fetch employees count
+        supabase
+          .from("company_user")
+          .select("*", { count: "exact", head: true })
+          .eq("company_id", currentCompanyId),
+
+        // Today's employees count
+        supabase
           .from("company_user")
           .select("*", { count: "exact", head: true })
           .eq("company_id", currentCompanyId)
-          .eq("active_status", "active");
+          .gte("created_at", today.toISOString()),
 
-      // Fetch tasks count
-      const { count: totalTasks, error: tasksError } = await supabase
-        .from("task")
-        .select("*", { count: "exact", head: true })
-        .eq("company_id", currentCompanyId);
-
-      // Fetch last month's task count
-      const { count: lastMonthTasks, error: lastMonthTasksError } = await supabase
-        .from("task")
-        .select("*", { count: "exact", head: true })
-        .eq("company_id", currentCompanyId)
-        .lt("created_at", lastMonthDate.toISOString());
-
-      // Calculate tasks growth
-      let tasksGrowth = "+0%";
-      if (lastMonthTasks && totalTasks && lastMonthTasks > 0) {
-        const growthRate = ((totalTasks - lastMonthTasks) / lastMonthTasks) * 100;
-        tasksGrowth = (growthRate >= 0 ? "+" : "") + growthRate.toFixed(1) + "%";
-      }
-
-      // Fetch pending tasks count (open + in progress + awaiting response)
-      const { count: pendingTasks, error: pendingTasksError } = await supabase
-        .from("task")
-        .select("*", { count: "exact", head: true })
-        .eq("company_id", currentCompanyId)
-        .in("status", [
-          TaskStatus.OPEN,
-          TaskStatus.IN_PROGRESS,
-          TaskStatus.AWAITING_RESPONSE,
-        ]);
-
-      // Fetch completed tasks count
-      const { count: completedTasks, error: completedTasksError } =
-        await supabase
-          .from("task")
+        // Fetch active employees count
+        supabase
+          .from("company_user")
           .select("*", { count: "exact", head: true })
           .eq("company_id", currentCompanyId)
-          .eq("status", TaskStatus.COMPLETED);
+          .eq("active_status", "active"),
 
-      // Fetch overdue tasks count
-      const { count: overdueTasks, error: overdueTasksError } = await supabase
-        .from("task")
-        .select("*", { count: "exact", head: true })
-        .eq("company_id", currentCompanyId)
-        .eq("status", TaskStatus.OVERDUE);
+        // Fetch tasks count
+        supabase
+          .from("tasks")
+          .select("*", { count: "exact", head: true })
+          .eq("company_id", currentCompanyId),
 
-      // Fetch forms count (accident reports + illness reports + staff departure reports)
-      const { count: accidentReports, error: accidentError } = await supabase
-        .from("accident_report")
-        .select("*", { count: "exact", head: true })
-        .eq("company_id", currentCompanyId);
+        // Today's tasks count
+        supabase
+          .from("tasks")
+          .select("*", { count: "exact", head: true })
+          .eq("company_id", currentCompanyId)
+          .gte("created_at", today.toISOString()),
 
-      const { count: illnessReports, error: illnessError } = await supabase
-        .from("illness_report")
-        .select("*", { count: "exact", head: true })
-        .eq("company_id", currentCompanyId);
+        // Fetch pending tasks count (open + in progress + awaiting response)
+        supabase
+          .from("tasks")
+          .select("*", { count: "exact", head: true })
+          .eq("company_id", currentCompanyId)
+          .in("status", [
+            TaskStatus.OPEN,
+            TaskStatus.IN_PROGRESS,
+            TaskStatus.AWAITING_RESPONSE,
+          ]),
 
-      const { count: departureReports, error: departureError } = await supabase
-        .from("staff_departure_report")
-        .select("*", { count: "exact", head: true })
-        .eq("company_id", currentCompanyId);
+        // Fetch completed tasks count
+        supabase
+          .from("tasks")
+          .select("*", { count: "exact", head: true })
+          .eq("company_id", currentCompanyId)
+          .eq("status", TaskStatus.COMPLETED),
 
-      // Fetch pending forms count
-      const { count: pendingAccidentReports, error: pendingAccidentError } =
-        await supabase
+        // Fetch overdue tasks count
+        supabase
+          .from("tasks")
+          .select("*", { count: "exact", head: true })
+          .eq("company_id", currentCompanyId)
+          .eq("status", TaskStatus.OVERDUE),
+
+        // Fetch accident reports count
+        supabase
+          .from("accident_report")
+          .select("*", { count: "exact", head: true })
+          .eq("company_id", currentCompanyId),
+
+        // Fetch illness reports count
+        supabase
+          .from("illness_report")
+          .select("*", { count: "exact", head: true })
+          .eq("company_id", currentCompanyId),
+
+        // Fetch departure reports count
+        supabase
+          .from("staff_departure_report")
+          .select("*", { count: "exact", head: true })
+          .eq("company_id", currentCompanyId),
+
+        // Today's accident reports
+        supabase
           .from("accident_report")
           .select("*", { count: "exact", head: true })
           .eq("company_id", currentCompanyId)
-          .in("status", [FormStatus.DRAFT, FormStatus.PENDING]);
+          .gte("created_at", today.toISOString()),
 
-      const { count: pendingIllnessReports, error: pendingIllnessError } =
-        await supabase
+        // Today's illness reports
+        supabase
           .from("illness_report")
           .select("*", { count: "exact", head: true })
           .eq("company_id", currentCompanyId)
-          .in("status", [FormStatus.DRAFT, FormStatus.PENDING]);
+          .gte("submission_date", today.toISOString()),
 
-      const { count: pendingDepartureReports, error: pendingDepartureError } =
-        await supabase
+        // Today's departure reports
+        supabase
           .from("staff_departure_report")
           .select("*", { count: "exact", head: true })
           .eq("company_id", currentCompanyId)
-          .in("status", [FormStatus.DRAFT, FormStatus.PENDING]);
+          .gte("created_at", today.toISOString()),
 
+        // Pending accident reports
+        supabase
+          .from("accident_report")
+          .select("*", { count: "exact", head: true })
+          .eq("company_id", currentCompanyId)
+          .in("status", [FormStatus.DRAFT, FormStatus.PENDING]),
+
+        // Pending illness reports
+        supabase
+          .from("illness_report")
+          .select("*", { count: "exact", head: true })
+          .eq("company_id", currentCompanyId)
+          .in("status", [FormStatus.DRAFT, FormStatus.PENDING]),
+
+        // Pending departure reports
+        supabase
+          .from("staff_departure_report")
+          .select("*", { count: "exact", head: true })
+          .eq("company_id", currentCompanyId)
+          .in("status", [FormStatus.DRAFT, FormStatus.PENDING]),
+      ]);
+
+      // Calculate totals and growth percentages
       const totalForms =
         (accidentReports || 0) +
         (illnessReports || 0) +
         (departureReports || 0);
-      
+
+      const todayForms =
+        (todayAccidentReports || 0) +
+        (todayIllnessReports || 0) +
+        (todayDepartureReports || 0);
+
       const pendingForms =
         (pendingAccidentReports || 0) +
         (pendingIllnessReports || 0) +
         (pendingDepartureReports || 0);
 
-      // Last month's forms data
-      const { count: lastMonthAccidentReports } = await supabase
-        .from("accident_report")
-        .select("*", { count: "exact", head: true })
-        .eq("company_id", currentCompanyId)
-        .lt("created_at", lastMonthDate.toISOString());
-
-      const { count: lastMonthIllnessReports } = await supabase
-        .from("illness_report")
-        .select("*", { count: "exact", head: true })
-        .eq("company_id", currentCompanyId)
-        .lt("created_at", lastMonthDate.toISOString());
-
-      const { count: lastMonthDepartureReports } = await supabase
-        .from("staff_departure_report")
-        .select("*", { count: "exact", head: true })
-        .eq("company_id", currentCompanyId)
-        .lt("created_at", lastMonthDate.toISOString());
-
-      const lastMonthForms = 
-        (lastMonthAccidentReports || 0) +
-        (lastMonthIllnessReports || 0) +
-        (lastMonthDepartureReports || 0);
-
-      // Calculate forms growth
-      let formsGrowth = "+0%";
-      if (lastMonthForms && totalForms && lastMonthForms > 0) {
-        const growthRate = ((totalForms - lastMonthForms) / lastMonthForms) * 100;
-        formsGrowth = (growthRate >= 0 ? "+" : "") + growthRate.toFixed(1) + "%";
+      // Calculate employee growth percentage
+      let employeeGrowth = "+0%";
+      if (totalEmployees && todayEmployees) {
+        if (totalEmployees === todayEmployees) {
+          employeeGrowth = "+100%";
+        } else {
+          const previousEmployees = totalEmployees - todayEmployees;
+          const growthRate =
+            previousEmployees > 0
+              ? (todayEmployees / previousEmployees) * 100
+              : 0;
+          employeeGrowth =
+            (growthRate > 0 ? "+" : "") + growthRate.toFixed(1) + "%";
+        }
       }
+
+      // Calculate tasks growth percentage
+      let tasksGrowth = "+0%";
+      if (totalTasks && todayTasks) {
+        if (totalTasks === todayTasks) {
+          tasksGrowth = "+100%";
+        } else {
+          const previousTasks = totalTasks - todayTasks;
+          const growthRate =
+            previousTasks > 0 ? (todayTasks / previousTasks) * 100 : 0;
+          tasksGrowth =
+            (growthRate > 0 ? "+" : "") + growthRate.toFixed(1) + "%";
+        }
+      }
+
+      // Calculate forms growth percentage
+      let formsGrowth = "+0%";
+      if (totalForms && todayForms) {
+        if (totalForms === todayForms) {
+          formsGrowth = "+100%";
+        } else {
+          const previousForms = totalForms - todayForms;
+          const growthRate =
+            previousForms > 0 ? (todayForms / previousForms) * 100 : 0;
+          formsGrowth =
+            (growthRate > 0 ? "+" : "") + growthRate.toFixed(1) + "%";
+        }
+      }
+
+      // Prepare monthly data fetch operations for employees and forms
+      const allMonthsEmployeeData = new Array(12).fill(0);
+      const allMonthsFormData = new Array(12).fill(0);
+
+      // Create arrays of promises for each month's data
+      const monthlyEmployeePromises = [];
+      const monthlyAccidentFormPromises = [];
+      const monthlyIllnessFormPromises = [];
+      const monthlyDepartureFormPromises = [];
+
+      for (let month = 0; month < 12; month++) {
+        // Calculate the proper date range - handle year wraparound
+        const dateYear = currentMonth >= month ? currentYear : currentYear - 1;
+        const monthStart = new Date(dateYear, month, 1);
+        const monthEnd = new Date(dateYear, month + 1, 0);
+
+        // Employee data promise
+        monthlyEmployeePromises.push(
+          supabase
+            .from("company_user")
+            .select("*", { count: "exact", head: true })
+            .eq("company_id", currentCompanyId)
+            .gte("created_at", monthStart.toISOString())
+            .lte("created_at", monthEnd.toISOString())
+        );
+
+        // Form data promises
+        monthlyAccidentFormPromises.push(
+          supabase
+            .from("accident_report")
+            .select("*", { count: "exact", head: true })
+            .eq("company_id", currentCompanyId)
+            .gte("created_at", monthStart.toISOString())
+            .lte("created_at", monthEnd.toISOString())
+        );
+
+        monthlyIllnessFormPromises.push(
+          supabase
+            .from("illness_report")
+            .select("*", { count: "exact", head: true })
+            .eq("company_id", currentCompanyId)
+            .gte("submission_date", monthStart.toISOString())
+            .lte("submission_date", monthEnd.toISOString())
+        );
+
+        monthlyDepartureFormPromises.push(
+          supabase
+            .from("staff_departure_report")
+            .select("*", { count: "exact", head: true })
+            .eq("company_id", currentCompanyId)
+            .gte("created_at", monthStart.toISOString())
+            .lte("created_at", monthEnd.toISOString())
+        );
+      }
+
+      // Execute all monthly data promises in parallel
+      const [
+        monthlyEmployeeResults,
+        monthlyAccidentResults,
+        monthlyIllnessResults,
+        monthlyDepartureResults,
+      ] = await Promise.all([
+        Promise.all(monthlyEmployeePromises),
+        Promise.all(monthlyAccidentFormPromises),
+        Promise.all(monthlyIllnessFormPromises),
+        Promise.all(monthlyDepartureFormPromises),
+      ]);
+
+      // Process monthly results
+      for (let month = 0; month < 12; month++) {
+        // Process employee data
+        allMonthsEmployeeData[month] = monthlyEmployeeResults[month].count || 0;
+
+        // Process form data
+        const monthAccidentCount = monthlyAccidentResults[month].count || 0;
+        const monthIllnessCount = monthlyIllnessResults[month].count || 0;
+        const monthDepartureCount = monthlyDepartureResults[month].count || 0;
+
+        allMonthsFormData[month] =
+          monthAccidentCount + monthIllnessCount + monthDepartureCount;
+      }
+
+      // Extract data for recent months only
+      const recentMonthsEmployeeData = recentMonths.map(
+        (index) => allMonthsEmployeeData[index]
+      );
+      const recentMonthsFormData = recentMonths.map(
+        (index) => allMonthsFormData[index]
+      );
+      const recentMonthsLabels = recentMonths.map((index) => monthNames[index]);
 
       setStats({
         totalEmployees: totalEmployees || 0,
@@ -262,6 +446,9 @@ const CompanyAdminDashboard = () => {
         totalForms: totalForms,
         pendingForms: pendingForms,
         formsGrowth: formsGrowth,
+        monthlyEmployees: recentMonthsEmployeeData,
+        monthlyForms: recentMonthsFormData,
+        monthLabels: recentMonthsLabels,
       });
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
@@ -282,7 +469,7 @@ const CompanyAdminDashboard = () => {
       setError("Cannot refresh while offline");
       return;
     }
-    
+
     setRefreshing(true);
     fetchDashboardData();
   };
@@ -313,27 +500,27 @@ const CompanyAdminDashboard = () => {
       >
         <View style={styles.welcomeHeader}>
           <Text variant={"bold"} style={styles.welcomeTitle}>
-            Company Admin Dashboard
+            {companyName
+              ? `${companyName} Dashboard`
+              : "Company Admin Dashboard"}
           </Text>
           <Text style={styles.welcomeSubtitle}>
             Manage your company data and operations
           </Text>
         </View>
 
-        {/* Employees Section */}
-        <Text variant={"bold"} style={styles.sectionTitle}>
-          Employees
-        </Text>
         <View style={styles.statsCard}>
           <View style={styles.statRow}>
             <Text variant={"medium"} style={styles.statLabel}>
               Total Employees
             </Text>
-            <Text 
-              variant={"bold"} 
+            <Text
+              variant={"bold"}
               style={[
                 styles.statGrowth,
-                stats.employeeGrowth.startsWith("-") ? styles.negativeGrowth : {}
+                stats.employeeGrowth.startsWith("-")
+                  ? styles.negativeGrowth
+                  : {},
               ]}
             >
               {stats.employeeGrowth}
@@ -344,21 +531,17 @@ const CompanyAdminDashboard = () => {
           </Text>
         </View>
 
-        <View style={styles.statsCard}>
-          <View style={styles.statRow}>
-            <Text variant={"medium"} style={styles.statLabel}>
-              Active Employees
-            </Text>
-          </View>
-          <Text variant={"bold"} style={styles.statValue}>
-            {stats.activeEmployees.toLocaleString()}
+        <View style={styles.chartCard}>
+          <Text variant={"bold"} style={styles.sectionTitle}>
+            Monthly Employee Onboarding
           </Text>
+          <DynamicChart
+            monthlyData={stats.monthlyEmployees}
+            monthLabels={stats.monthLabels}
+            width={width - 10}
+          />
         </View>
 
-        {/* Tasks Section */}
-        <Text variant={"bold"} style={styles.sectionTitle}>
-          Tasks
-        </Text>
         <View style={styles.statsCard}>
           <View style={styles.statRow}>
             <Text variant={"medium"} style={styles.statLabel}>
@@ -368,7 +551,7 @@ const CompanyAdminDashboard = () => {
               variant={"bold"}
               style={[
                 styles.statGrowth,
-                stats.tasksGrowth.startsWith("-") ? styles.negativeGrowth : {}
+                stats.tasksGrowth.startsWith("-") ? styles.negativeGrowth : {},
               ]}
             >
               {stats.tasksGrowth}
@@ -387,9 +570,13 @@ const CompanyAdminDashboard = () => {
             <Text variant={"bold"} style={styles.statCardValue}>
               {stats.pendingTasks}
             </Text>
-            <MaterialCommunityIcons name="clipboard-clock" size={24} color="#F59E0B" />
+            <MaterialCommunityIcons
+              name="clipboard-clock"
+              size={24}
+              color="#F59E0B"
+            />
           </View>
-          
+
           <View style={styles.statCardSmall}>
             <Text variant={"medium"} style={styles.statCardLabel}>
               Completed
@@ -397,9 +584,13 @@ const CompanyAdminDashboard = () => {
             <Text variant={"bold"} style={styles.statCardValue}>
               {stats.completedTasks}
             </Text>
-            <MaterialCommunityIcons name="clipboard-check" size={24} color="#10B981" />
+            <MaterialCommunityIcons
+              name="clipboard-check"
+              size={24}
+              color="#10B981"
+            />
           </View>
-          
+
           <View style={styles.statCardSmall}>
             <Text variant={"medium"} style={styles.statCardLabel}>
               Overdue
@@ -407,14 +598,14 @@ const CompanyAdminDashboard = () => {
             <Text variant={"bold"} style={styles.statCardValue}>
               {stats.overdueTasks}
             </Text>
-            <MaterialCommunityIcons name="clipboard-alert" size={24} color="#EF4444" />
+            <MaterialCommunityIcons
+              name="clipboard-alert"
+              size={24}
+              color="#EF4444"
+            />
           </View>
         </View>
 
-        {/* Forms Section */}
-        <Text variant={"bold"} style={styles.sectionTitle}>
-          Forms
-        </Text>
         <View style={styles.statsCard}>
           <View style={styles.statRow}>
             <Text variant={"medium"} style={styles.statLabel}>
@@ -424,7 +615,7 @@ const CompanyAdminDashboard = () => {
               variant={"bold"}
               style={[
                 styles.statGrowth,
-                stats.formsGrowth.startsWith("-") ? styles.negativeGrowth : {}
+                stats.formsGrowth.startsWith("-") ? styles.negativeGrowth : {},
               ]}
             >
               {stats.formsGrowth}
@@ -435,15 +626,15 @@ const CompanyAdminDashboard = () => {
           </Text>
         </View>
 
-        <View style={styles.statsCard}>
-          <View style={styles.statRow}>
-            <Text variant={"medium"} style={styles.statLabel}>
-              Pending Forms
-            </Text>
-          </View>
-          <Text variant={"bold"} style={styles.statValue}>
-            {stats.pendingForms.toLocaleString()}
+        <View style={styles.chartCard}>
+          <Text variant={"bold"} style={styles.sectionTitle}>
+            Monthly Forms Submitted
           </Text>
+          <DynamicChart
+            monthlyData={stats.monthlyForms}
+            monthLabels={stats.monthLabels}
+            width={width - 10}
+          />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -479,10 +670,8 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    marginTop: 16,
-    marginBottom: 12,
+    marginBottom: 16,
     color: "#333",
-    marginLeft: 5,
   },
   statsCard: {
     backgroundColor: "#fff",
@@ -536,6 +725,16 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: "#111",
     marginBottom: 8,
+  },
+  chartCard: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 16,
+    paddingBottom: 10,
+    marginBottom: 16,
+    minHeight: 280,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
   },
 });
 

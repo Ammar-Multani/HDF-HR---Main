@@ -518,6 +518,7 @@ const EmployeeDetailsScreen = () => {
                   styles.contactButton,
                   { backgroundColor: theme.colors.primary },
                 ]}
+                labelStyle={{ color: theme.colors.onPrimary }}
               >
                 Call
               </Button>
@@ -530,6 +531,7 @@ const EmployeeDetailsScreen = () => {
                   styles.contactButton,
                   { backgroundColor: theme.colors.primary },
                 ]}
+                labelStyle={{ color: theme.colors.onPrimary }}
               >
                 Email
               </Button>

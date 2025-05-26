@@ -134,11 +134,7 @@ const CompanyAdminCreateTaskScreen = () => {
   }, [user]);
 
   const toggleAssignee = (userId: string) => {
-    if (selectedAssignees.includes(userId)) {
-      setSelectedAssignees(selectedAssignees.filter((id) => id !== userId));
-    } else {
-      setSelectedAssignees([...selectedAssignees, userId]);
-    }
+    setSelectedAssignees([userId]);
   };
 
   const onSubmit = async (data: TaskFormData) => {
@@ -190,9 +186,7 @@ const CompanyAdminCreateTaskScreen = () => {
             priority: data.priority,
             status: TaskStatus.OPEN,
             assigned_to:
-              selectedAssignees.length === 1
-                ? selectedAssignees[0]
-                : selectedAssignees,
+              selectedAssignees.length > 0 ? selectedAssignees[0] : null,
             created_by: user.id,
             company_id: currentCompanyId,
             reminder_days_before: reminderDays,
@@ -380,7 +374,7 @@ const CompanyAdminCreateTaskScreen = () => {
           </Text>
 
           <Text style={styles.helperText}>
-            Select super admins to assign this task to (required)
+            Select one super admin to assign this task to (required)
           </Text>
 
           <View style={styles.usersContainer}>
