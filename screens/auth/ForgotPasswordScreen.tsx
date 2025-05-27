@@ -30,6 +30,8 @@ import { useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import AppHeader from "../../components/AppHeader";
+import CustomLanguageSelector from "../../components/CustomLanguageSelector";
+import { globalStyles, createTextStyle } from "../../utils/globalStyles";
 
 const { width, height } = Dimensions.get("window");
 
@@ -104,12 +106,15 @@ const ForgotPasswordScreen = () => {
   };
 
   const getGradientColors = () => {
-    return theme.dark ? ["#151729", "#2a2e43"] : ["#f0f8ff", "#e6f2ff"];
+    return theme.dark
+      ? (["#151729", "#2a2e43"] as ["#151729", "#2a2e43"])
+      : (["#f0f8ff", "#e6f2ff"] as ["#f0f8ff", "#e6f2ff"]);
   };
 
   return (
     <SafeAreaView
-    style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
       <StatusBar barStyle={theme.dark ? "light-content" : "dark-content"} />
       <LinearGradient
         colors={getGradientColors()}
@@ -117,7 +122,7 @@ const ForgotPasswordScreen = () => {
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       >
-               <AppHeader
+        <AppHeader
           showBackButton={true}
           showHelpButton={true}
           absolute={true}
@@ -131,7 +136,6 @@ const ForgotPasswordScreen = () => {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-
             <Animated.View
               style={[
                 styles.formContainer,
@@ -141,7 +145,6 @@ const ForgotPasswordScreen = () => {
                 },
               ]}
             >
-              
               <BlurView
                 intensity={50}
                 tint={theme.dark ? "dark" : "light"}
@@ -156,21 +159,27 @@ const ForgotPasswordScreen = () => {
                 ]}
               >
                 <Text
-                variant="headlineMedium"
-                style={[styles.title, { color: theme.colors.primary }]}
-              >
-                Reset Password
-              </Text>
-              <Text
-                variant="bodyLarge"
-                style={[
-                  styles.subtitle,
-                  { color: theme.colors.onSurfaceVariant },
-                ]}
-              >
-               Enter your email to receive password reset instructions
-              </Text>
-
+                  variant="headlineMedium"
+                  style={[
+                    styles.title,
+                    {
+                      color: theme.colors.primary,
+                    },
+                  ]}
+                >
+                  Reset Password
+                </Text>
+                <Text
+                  variant="bodyLarge"
+                  style={[
+                    styles.subtitle,
+                    {
+                      color: theme.colors.onSurfaceVariant,
+                    },
+                  ]}
+                >
+                  Enter your email to receive password reset instructions
+                </Text>
 
                 <TextInput
                   label="Email"
@@ -182,7 +191,10 @@ const ForgotPasswordScreen = () => {
                   mode="flat"
                   keyboardType="email-address"
                   autoCapitalize="none"
-                  style={styles.input}
+                  style={[
+                    styles.input,
+                    Platform.OS === "web" && { maxWidth: "100%" },
+                  ]}
                   disabled={loading}
                   error={!!emailError}
                   theme={{
@@ -198,12 +210,39 @@ const ForgotPasswordScreen = () => {
                 ) : null}
 
                 <TouchableOpacity
-                  style={styles.button}
+                  style={[
+                    styles.button,
+                    Platform.OS === "web" && {
+                      maxWidth: 320,
+                      alignSelf: "center",
+                      width: "100%",
+                    },
+                    {
+                      borderWidth: 0.3,
+                      borderColor: theme.colors.outlineVariant,
+                    },
+                  ]}
                   onPress={handleResetPassword}
                   disabled={loading}
                 >
                   <LinearGradient
-                    colors={["#4c669f", "#3b5998", "#192f6a"]}
+                    colors={
+                      [
+                        "rgba(10,185,129,255)",
+                        "rgba(6,169,169,255)",
+                        "rgba(38,127,161,255)",
+                        "rgba(54,105,157,255)",
+                        "rgba(74,78,153,255)",
+                        "rgba(94,52,149,255)",
+                      ] as [
+                        "rgba(10,185,129,255)",
+                        "rgba(6,169,169,255)",
+                        "rgba(38,127,161,255)",
+                        "rgba(54,105,157,255)",
+                        "rgba(74,78,153,255)",
+                        "rgba(94,52,149,255)",
+                      ]
+                    }
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={styles.gradientButton}
@@ -254,6 +293,11 @@ const ForgotPasswordScreen = () => {
                   </Text>
                 </TouchableOpacity>
               </View>
+
+              {/* Language Selector */}
+              <View style={styles.languageSelectorContainer}>
+                <CustomLanguageSelector compact={Platform.OS !== "web"} />
+              </View>
             </Animated.View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -286,62 +330,45 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: "center",
     padding: 24,
-  },
-  logoContainer: {
+    maxWidth: Platform.OS === "web" ? 1200 : undefined,
+    alignSelf: "center",
     width: "100%",
-    marginBottom: 12,
-  },
-  headerContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    width: "100%",
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-  },
-  logoWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  logo: {
-    width: 40,
-    height: 40,
-    marginRight: 8,
-  },
-  logoText: {
-    fontWeight: "bold",
-  },
-  helpButton: {
-    margin: 0,
-  },
-  title: {
-    fontWeight: "bold",
-    marginBottom: 8,
-  },
-  subtitle: {
-    marginBottom: 24,
   },
   formContainer: {
     width: "100%",
     marginBottom: 20,
+    maxWidth: Platform.OS === "web" ? 480 : undefined,
+    alignSelf: "center",
   },
   glassSurface: {
-    padding: 20,
+    padding: Platform.OS === "web" ? 32 : 20,
     borderRadius: 16,
     borderWidth: 0.3,
-
     overflow: "hidden",
   },
-  instructionText: {
-    textAlign: "center",
-    marginBottom: 20,
-    fontSize: 16,
-    lineHeight: 24,
+  title: {
+    ...createTextStyle({
+      fontWeight: "600",
+      fontSize: 24,
+      marginBottom: 8,
+      textAlign: Platform.OS === "web" ? "center" : "left",
+    }),
+  },
+  subtitle: {
+    ...createTextStyle({
+      fontWeight: "400",
+      fontSize: 16,
+      marginBottom: 24,
+      textAlign: Platform.OS === "web" ? "center" : "left",
+    }),
   },
   input: {
     marginBottom: 16,
     backgroundColor: "transparent",
     height: 60,
+    ...createTextStyle({
+      fontWeight: "400",
+    }),
   },
   button: {
     marginTop: 24,
@@ -356,10 +383,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   buttonLabel: {
-    fontSize: 16,
-    letterSpacing: 1,
-    fontWeight: "600",
-    color: "#ffffff",
+    ...createTextStyle({
+      fontWeight: "600",
+      fontSize: 16,
+      letterSpacing: 1,
+      color: "#ffffff",
+    }),
+  },
+  loginContainer: {
+    alignItems: "center",
+    marginTop: 8,
+    maxWidth: Platform.OS === "web" ? 480 : undefined,
+    alignSelf: "center",
+    width: "100%",
   },
   dividerContainer: {
     flexDirection: "row",
@@ -372,20 +408,33 @@ const styles = StyleSheet.create({
   },
   dividerText: {
     marginHorizontal: 16,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  loginContainer: {
-    alignItems: "center",
-    marginTop: 8,
+    ...createTextStyle({
+      fontWeight: "600",
+      fontSize: 14,
+    }),
   },
   rememberPasswordContainer: {
     flexDirection: "row",
     justifyContent: "center",
     marginTop: 16,
+    marginBottom: Platform.OS === "web" ? 32 : 24,
+    ...createTextStyle({
+      fontWeight: "400",
+      fontSize: 14,
+    }),
   },
   loginText: {
-    fontWeight: "bold",
+    ...createTextStyle({
+      fontWeight: "600",
+      fontSize: 16,
+    }),
+  },
+  languageSelectorContainer: {
+    marginTop: Platform.OS === "web" ? 0 : 20,
+    alignItems: "center",
+    width: "100%",
+    maxWidth: Platform.OS === "web" ? 320 : undefined,
+    alignSelf: "center",
   },
   snackbar: {
     marginBottom: 16,

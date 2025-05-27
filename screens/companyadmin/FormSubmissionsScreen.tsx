@@ -863,7 +863,7 @@ const FormSubmissionsScreen = () => {
       <SafeAreaView style={[styles.container, { backgroundColor: "#F5F5F5" }]}>
         <AppHeader
           title="Form Submissions"
-          showBackButton={false}
+          showBackButton={Platform.OS !== "web"}
           showHelpButton={true}
           onHelpPress={() => {
             navigation.navigate("Help" as never);
@@ -892,7 +892,7 @@ const FormSubmissionsScreen = () => {
     <SafeAreaView style={[styles.container, { backgroundColor: "#F8F9FA" }]}>
       <AppHeader
         title="Form Submissions"
-        showBackButton={false}
+        showBackButton={Platform.OS !== "web"}
         showHelpButton={true}
         onHelpPress={() => {
           navigation.navigate("Help" as never);

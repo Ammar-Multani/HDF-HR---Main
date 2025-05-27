@@ -1045,7 +1045,7 @@ const SuperAdminTasksScreen = () => {
       <SafeAreaView style={[styles.container, { backgroundColor: "#F5F5F5" }]}>
         <AppHeader
           title={t("superAdmin.tasks.title")}
-          showBackButton={true}
+          showBackButton={Platform.OS !== "web"}
           showHelpButton={false}
           showProfileMenu={false}
           showLogo={false}
@@ -1073,7 +1073,7 @@ const SuperAdminTasksScreen = () => {
     <SafeAreaView style={[styles.container, { backgroundColor: "#F5F5F5" }]}>
       <AppHeader
         title={t("superAdmin.tasks.title")}
-        showBackButton={true}
+        showBackButton={Platform.OS !== "web"}
         showHelpButton={false}
         showProfileMenu={false}
         showLogo={false}

@@ -36,7 +36,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import AppHeader from "../../components/AppHeader";
 import { useTranslation } from "react-i18next";
-import LanguageSelector from "../../components/LanguageSelector";
+import CustomLanguageSelector from "../../components/CustomLanguageSelector";
+import { globalStyles, createTextStyle } from "../../utils/globalStyles";
 
 // Key to prevent showing loading screen right after login
 const SKIP_LOADING_KEY = "skip_loading_after_login";
@@ -310,10 +311,20 @@ const LoginScreen = () => {
                 >
                   <LinearGradient
                     colors={
-                      ["#4c669f", "#3b5998", "#192f6a"] as [
-                        "#4c669f",
-                        "#3b5998",
-                        "#192f6a",
+                      [
+                        "rgba(10,185,129,255)",
+                        "rgba(6,169,169,255)",
+                        "rgba(38,127,161,255)",
+                        "rgba(54,105,157,255)",
+                        "rgba(74,78,153,255)",
+                        "rgba(94,52,149,255)",
+                      ] as [
+                        "rgba(10,185,129,255)",
+                        "rgba(6,169,169,255)",
+                        "rgba(38,127,161,255)",
+                        "rgba(54,105,157,255)",
+                        "rgba(74,78,153,255)",
+                        "rgba(94,52,149,255)",
                       ]
                     }
                     start={{ x: 0, y: 0 }}
@@ -360,7 +371,7 @@ const LoginScreen = () => {
                   disabled={isLoggingIn}
                   style={styles.contactButton}
                 >
-                  <Text style={{ color: theme.colors.primary }}>
+                  <Text style={{ color: theme.colors.text }}>
                     {t("common.dontHaveAccount")}{" "}
                     <Text
                       style={[
@@ -376,7 +387,7 @@ const LoginScreen = () => {
 
               {/* Language Selector */}
               <View style={styles.languageSelectorContainer}>
-                <LanguageSelector />
+                <CustomLanguageSelector compact={Platform.OS !== "web"} />
               </View>
             </Animated.View>
           </ScrollView>
@@ -410,20 +421,34 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: "center",
     padding: 24,
+    maxWidth: Platform.OS === "web" ? 1200 : undefined,
+    alignSelf: "center",
+    width: "100%",
   },
   title: {
-    fontWeight: "bold",
-    marginBottom: 8,
+    ...createTextStyle({
+      fontWeight: "600",
+      fontSize: 24,
+      marginBottom: 8,
+      textAlign: Platform.OS === "web" ? "center" : "left",
+    }),
   },
   subtitle: {
-    marginBottom: 24,
+    ...createTextStyle({
+      fontWeight: "400",
+      fontSize: 16,
+      marginBottom: 24,
+      textAlign: Platform.OS === "web" ? "center" : "left",
+    }),
   },
   formContainer: {
     width: "100%",
     marginBottom: 20,
+    maxWidth: Platform.OS === "web" ? 480 : undefined,
+    alignSelf: "center",
   },
   glassSurface: {
-    padding: 20,
+    padding: Platform.OS === "web" ? 32 : 20,
     borderRadius: 16,
     borderWidth: 0.3,
     overflow: "hidden",
@@ -432,12 +457,18 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     backgroundColor: "transparent",
     height: 60,
+    ...createTextStyle({
+      fontWeight: "400",
+    }),
   },
   button: {
     marginTop: 24,
     borderRadius: 30,
     overflow: "hidden",
     borderWidth: 0.3,
+    maxWidth: Platform.OS === "web" ? 320 : undefined,
+    alignSelf: "center",
+    width: "100%",
   },
   gradientButton: {
     width: "100%",
@@ -447,10 +478,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   buttonLabel: {
-    fontSize: 16,
-    letterSpacing: 1,
-    fontWeight: "600",
-    color: "#ffffff",
+    ...createTextStyle({
+      fontWeight: "600",
+      fontSize: 16,
+      letterSpacing: 1,
+      color: "#ffffff",
+    }),
   },
   forgotPasswordContainer: {
     alignItems: "flex-end",
@@ -458,8 +491,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   forgotPasswordText: {
-    fontSize: 14,
-    fontWeight: "600",
+    ...createTextStyle({
+      fontWeight: "500",
+      fontSize: 14,
+    }),
   },
   dividerContainer: {
     flexDirection: "row",
@@ -472,11 +507,16 @@ const styles = StyleSheet.create({
   },
   dividerText: {
     marginHorizontal: 16,
-    fontSize: 14,
-    fontWeight: "600",
+    ...createTextStyle({
+      fontWeight: "600",
+      fontSize: 14,
+    }),
   },
   socialLoginContainer: {
     marginTop: 8,
+    maxWidth: Platform.OS === "web" ? 480 : undefined,
+    alignSelf: "center",
+    width: "100%",
   },
   socialButtons: {
     flexDirection: "row",
@@ -509,18 +549,24 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     marginTop: 24,
+    marginBottom: Platform.OS === "web" ? 32 : 24,
   },
   contactButton: {
     paddingVertical: 8,
     paddingHorizontal: 16,
   },
   contactText: {
-    fontWeight: "bold",
-    fontSize: 16,
+    ...createTextStyle({
+      fontWeight: "600",
+      fontSize: 16,
+    }),
   },
   languageSelectorContainer: {
-    marginTop: 20,
+    marginTop: Platform.OS === "web" ? 0 : 20,
     alignItems: "center",
+    width: "100%",
+    maxWidth: Platform.OS === "web" ? 320 : undefined,
+    alignSelf: "center",
   },
   snackbar: {
     marginBottom: 16,

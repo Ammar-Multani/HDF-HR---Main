@@ -753,7 +753,7 @@ const ReceiptsListScreen = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: "#F8F9FA" }]}>
-      <AppHeader title="Receipts" showBackButton={true} showLogo={false} />
+      <AppHeader title="Receipts" showBackButton={Platform.OS !== "web"} showLogo={false} />
 
       <View style={styles.searchContainer}>
         <Searchbar

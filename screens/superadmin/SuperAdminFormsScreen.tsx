@@ -925,7 +925,7 @@ const SuperAdminFormsScreen = () => {
         <AppHeader
           title={t("superAdmin.forms.title")}
           subtitle="Review and manage all submitted forms"
-          showBackButton={true}
+          showBackButton={Platform.OS !== "web"}
           showHelpButton={false}
           showProfileMenu={false}
           showLogo={false}
@@ -954,7 +954,7 @@ const SuperAdminFormsScreen = () => {
       <AppHeader
         title={t("superAdmin.forms.title")}
         subtitle="Review and manage all submitted forms"
-        showBackButton={true}
+        showBackButton={Platform.OS !== "web"}
         showHelpButton={false}
         showProfileMenu={false}
         showLogo={false}
