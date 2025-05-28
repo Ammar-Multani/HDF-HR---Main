@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   StyleSheet,
   View,
@@ -7,6 +7,8 @@ import {
   RefreshControl,
   Platform,
   ScrollView,
+  Dimensions,
+  Pressable,
 } from "react-native";
 import {
   Text,
@@ -33,11 +35,19 @@ import { supabase } from "../../lib/supabase";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import EmptyState from "../../components/EmptyState";
+import { LinearGradient } from "expo-linear-gradient";
+import Animated, {
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 
 // Define the navigation param list type
 type RootStackParamList = {
   ReceiptDetails: { receiptId: string };
   CreateReceipt: undefined;
+  EditReceipt: { receiptId: string };
 };
 
 type ReceiptsListNavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -55,29 +65,203 @@ interface Receipt {
   company: any; // Using any to avoid TypeScript issues
 }
 
+// Add TooltipText component after imports and before Receipt interface
+const TooltipText = ({
+  text,
+  numberOfLines = 1,
+  theme,
+}: {
+  text: string;
+  numberOfLines?: number;
+  theme: MD3Theme;
+}) => {
+  const [isHovered, setIsHovered] = useState(false);
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+  const containerRef = useRef<View>(null);
+  const styles = createStyles(theme);
+
+  const updateTooltipPosition = () => {
+    if (Platform.OS === "web" && containerRef.current) {
+      // @ts-ignore - web specific
+      const rect = containerRef.current.getBoundingClientRect();
+      const windowHeight = window.innerHeight;
+      const spaceAbove = rect.top;
+      const spaceBelow = windowHeight - rect.bottom;
+
+      // Calculate horizontal position to prevent overflow
+      const windowWidth = window.innerWidth;
+      let xPos = rect.left;
+
+      // Ensure tooltip doesn't overflow right edge
+      if (xPos + 300 > windowWidth) {
+        // 300 is max tooltip width
+        xPos = windowWidth - 310; // Add some padding
+      }
+
+      // Position vertically based on available space
+      let yPos;
+      if (spaceBelow >= 100) {
+        // If enough space below
+        yPos = rect.bottom + window.scrollY + 5;
+      } else if (spaceAbove >= 100) {
+        // If enough space above
+        yPos = rect.top + window.scrollY - 5;
+      } else {
+        // If neither, position it where there's more space
+        yPos =
+          spaceAbove > spaceBelow
+            ? rect.top + window.scrollY - 5
+            : rect.bottom + window.scrollY + 5;
+      }
+
+      setTooltipPosition({ x: xPos, y: yPos });
+    }
+  };
+
+  useEffect(() => {
+    if (isHovered) {
+      updateTooltipPosition();
+      // Add scroll and resize listeners
+      if (Platform.OS === "web") {
+        window.addEventListener("scroll", updateTooltipPosition);
+        window.addEventListener("resize", updateTooltipPosition);
+
+        return () => {
+          window.removeEventListener("scroll", updateTooltipPosition);
+          window.removeEventListener("resize", updateTooltipPosition);
+        };
+      }
+    }
+  }, [isHovered]);
+
+  if (Platform.OS !== "web") {
+    return (
+      <Text style={styles.tableCellText} numberOfLines={numberOfLines}>
+        {text}
+      </Text>
+    );
+  }
+
+  return (
+    <View
+      ref={containerRef}
+      style={styles.tooltipContainer}
+      // @ts-ignore - web specific props
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <Text style={styles.tableCellText} numberOfLines={numberOfLines}>
+        {text}
+      </Text>
+      {isHovered && (
+        <Portal>
+          <View
+            style={[
+              styles.tooltip,
+              {
+                position: "absolute",
+                left: tooltipPosition.x,
+                top: tooltipPosition.y,
+              },
+            ]}
+          >
+            <Text style={styles.tooltipText}>{text}</Text>
+          </View>
+        </Portal>
+      )}
+    </View>
+  );
+};
+
+// Add Shimmer component after TooltipText component
+interface ShimmerProps {
+  width: number | string;
+  height: number;
+  style?: any;
+}
+
+const Shimmer: React.FC<ShimmerProps> = ({ width, height, style }) => {
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        {
+          translateX: withRepeat(
+            withSequence(
+              withTiming(typeof width === "number" ? -width : -200, {
+                duration: 800,
+              }),
+              withTiming(typeof width === "number" ? width : 200, {
+                duration: 800,
+              })
+            ),
+            -1
+          ),
+        },
+      ],
+    };
+  });
+
+  return (
+    <View
+      style={[
+        {
+          width,
+          height,
+          backgroundColor: "#E8E8E8",
+          overflow: "hidden",
+          borderRadius: 4,
+        },
+        style,
+      ]}
+    >
+      <Animated.View
+        style={[
+          {
+            width: "100%",
+            height: "100%",
+            position: "absolute",
+            backgroundColor: "transparent",
+          },
+          animatedStyle,
+        ]}
+      >
+        <LinearGradient
+          colors={["transparent", "rgba(255, 255, 255, 0.4)", "transparent"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{ width: "100%", height: "100%" }}
+        />
+      </Animated.View>
+    </View>
+  );
+};
+
 const createStyles = (theme: MD3Theme) =>
   StyleSheet.create({
     container: {
       flex: 1,
     },
     searchContainer: {
-      padding: 16,
+      padding: Platform.OS === "web" ? 24 : 16,
+      paddingTop: 10,
       paddingBottom: 8,
       flexDirection: "row",
       alignItems: "center",
+      justifyContent: "space-between",
     },
-    searchBar: {
+    searchBarContainer: {
       flex: 1,
-      elevation: 2,
-      borderRadius: 12,
-      height: 56,
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    searchbar: {
+      elevation: 0,
+      borderRadius: 18,
+      height: 60,
       backgroundColor: "#fff",
       borderWidth: 1,
-      borderColor: "rgba(0,0,0,0.05)",
-      shadowColor: "rgba(0,0,0,0.1)",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.1,
-      shadowRadius: 2,
+      borderColor: "#e0e0e0",
+      flex: 1,
     },
     filterButtonContainer: {
       position: "relative",
@@ -85,7 +269,7 @@ const createStyles = (theme: MD3Theme) =>
     },
     filterButton: {
       borderWidth: 1,
-      borderColor: "rgba(0,0,0,0.05)",
+      borderColor: "#e0e0e0",
       borderRadius: 12,
       backgroundColor: "#fff",
     },
@@ -210,11 +394,8 @@ const createStyles = (theme: MD3Theme) =>
       padding: 0,
     },
     fab: {
-      position: "absolute",
-      margin: 16,
-      right: Platform.OS === "web" ? 15 : 0,
-      bottom: Platform.OS === "web" ? 10 : 10,
-      borderRadius: 35,
+      borderRadius: 17,
+      height: 56,
     },
     // Modal styles
     modalContainer: {
@@ -300,6 +481,114 @@ const createStyles = (theme: MD3Theme) =>
       fontWeight: "500",
       color: "#FFFFFF",
     },
+    contentContainer: {
+      flex: 1,
+      paddingHorizontal: Platform.OS === "web" ? 24 : 16,
+      paddingVertical: 16,
+    },
+    tableContainer: {
+      flex: 1,
+      backgroundColor: "#fff",
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: "#e0e0e0",
+      overflow: "hidden",
+    },
+    tableHeader: {
+      flexDirection: "row",
+      backgroundColor: "#f8fafc",
+      borderBottomWidth: 1,
+      borderBottomColor: "#e0e0e0",
+      paddingVertical: 16,
+      paddingHorizontal: 26,
+      alignContent: "center",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    tableHeaderCell: {
+      flex: 1,
+      paddingHorizontal: 16,
+      justifyContent: "space-around",
+      paddingLeft: 25,
+      alignItems: "flex-start",
+    },
+    tableHeaderText: {
+      fontSize: 14,
+      color: "#64748b",
+      fontFamily: "Poppins-Medium",
+    },
+    tableRow: {
+      flexDirection: "row",
+      borderBottomWidth: 1,
+      borderBottomColor: "#e0e0e0",
+      paddingVertical: 16,
+      backgroundColor: "#fff",
+      paddingHorizontal: 26,
+      alignItems: "center",
+    },
+    tableCell: {
+      flex: 1,
+      paddingHorizontal: 26,
+      justifyContent: "space-evenly",
+      alignItems: "flex-start",
+    },
+    tableCellText: {
+      fontSize: 14,
+      color: "#334155",
+      fontFamily: "Poppins-Regular",
+    },
+    tableContent: {
+      flexGrow: 1,
+    },
+    actionCell: {
+      flex: 1,
+      flexDirection: "row",
+      justifyContent: "flex-start",
+      alignItems: "center",
+      paddingHorizontal: 26,
+    },
+    actionIcon: {
+      margin: 0,
+      marginRight: 8,
+    },
+    tooltipContainer: {
+      position: "relative",
+      flex: 1,
+      maxWidth: "100%",
+      zIndex: 10,
+    },
+    tooltip: {
+      backgroundColor: "rgba(255, 255, 255, 0.95)",
+      padding: 8,
+      marginLeft: 30,
+      borderRadius: 4,
+      borderWidth: 1,
+      borderColor: "#e0e0e0",
+      maxWidth: 300,
+      shadowColor: "#000",
+      shadowOffset: {
+        width: 0,
+        height: 2,
+      },
+      shadowOpacity: 0.25,
+      shadowRadius: 3.84,
+      elevation: 5,
+      zIndex: 9999,
+      ...(Platform.OS === "web"
+        ? {
+            // @ts-ignore - web specific style
+            willChange: "transform",
+            // @ts-ignore - web specific style
+            isolation: "isolate",
+          }
+        : {}),
+    },
+    tooltipText: {
+      color: "#000",
+      fontSize: 12,
+      fontFamily: "Poppins-Regular",
+      lineHeight: 16,
+    },
   });
 
 const ReceiptsListScreen = () => {
@@ -319,6 +608,10 @@ const ReceiptsListScreen = () => {
     companyId: null as string | null,
     sortBy: "date",
     sortOrder: "desc" as "asc" | "desc",
+  });
+  const [windowDimensions, setWindowDimensions] = useState({
+    width: Dimensions.get("window").width,
+    height: Dimensions.get("window").height,
   });
 
   const styles = createStyles(theme);
@@ -394,6 +687,22 @@ const ReceiptsListScreen = () => {
   useEffect(() => {
     fetchReceipts();
   }, [appliedFilters]);
+
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      const handleResize = () => {
+        setWindowDimensions({
+          width: Dimensions.get("window").width,
+          height: Dimensions.get("window").height,
+        });
+      };
+
+      window.addEventListener("resize", handleResize);
+
+      // Cleanup
+      return () => window.removeEventListener("resize", handleResize);
+    }
+  }, []);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -734,6 +1043,16 @@ const ReceiptsListScreen = () => {
               : "Unknown Company"}
           </Chip>
           <View style={styles.viewDetailsContainer}>
+            <IconButton
+              icon="pencil"
+              size={20}
+              onPress={(e) => {
+                e.stopPropagation();
+                navigation.navigate("EditReceipt", { receiptId: item.id });
+              }}
+              iconColor={theme.colors.primary}
+              style={styles.actionIcon}
+            />
             <Text style={styles.viewDetailsText}>VIEW DETAILS</Text>
             <IconButton
               icon="chevron-right"
@@ -747,8 +1066,249 @@ const ReceiptsListScreen = () => {
     </Surface>
   );
 
+  // Calculate responsive breakpoints
+  const isLargeScreen = windowDimensions.width >= 1440;
+  const isMediumScreen =
+    windowDimensions.width >= 768 && windowDimensions.width < 1440;
+
+  // Add TableHeader component
+  const TableHeader = () => (
+    <View style={styles.tableHeader}>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Receipt Number</Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Merchant</Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Date</Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Amount</Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Company</Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Actions</Text>
+      </View>
+    </View>
+  );
+
+  // Update the TableRow component to use TooltipText
+  const TableRow = ({ item }: { item: Receipt }) => {
+    const theme = useTheme();
+    return (
+      <Pressable
+        onPress={() => handleViewReceipt(item)}
+        style={({ pressed }) => [
+          styles.tableRow,
+          pressed && { backgroundColor: "#f8fafc" },
+        ]}
+      >
+        <View style={styles.tableCell}>
+          <TooltipText text={item.receipt_number} theme={theme} />
+        </View>
+        <View style={styles.tableCell}>
+          <TooltipText text={item.merchant_name} theme={theme} />
+        </View>
+        <View style={styles.tableCell}>
+          <TooltipText
+            text={format(new Date(item.date), "MMM d, yyyy")}
+            theme={theme}
+          />
+        </View>
+        <View style={styles.tableCell}>
+          <TooltipText
+            text={`$${item.total_amount.toFixed(2)}`}
+            theme={theme}
+          />
+        </View>
+        <View style={styles.tableCell}>
+          <TooltipText
+            text={
+              item.company &&
+              typeof item.company === "object" &&
+              "company_name" in item.company
+                ? item.company.company_name
+                : "Unknown Company"
+            }
+            theme={theme}
+          />
+        </View>
+        <View style={styles.actionCell}>
+          <IconButton
+            icon="pencil"
+            size={20}
+            onPress={(e) => {
+              e.stopPropagation();
+              navigation.navigate("EditReceipt", { receiptId: item.id });
+            }}
+            style={styles.actionIcon}
+          />
+          <IconButton
+            icon="eye"
+            size={20}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleViewReceipt(item);
+            }}
+            style={styles.actionIcon}
+          />
+        </View>
+      </Pressable>
+    );
+  };
+
+  // Add TableSkeleton component
+  const TableSkeleton = () => {
+    return (
+      <View style={styles.tableContainer}>
+        <TableHeader />
+        {Array(5)
+          .fill(0)
+          .map((_, index) => (
+            <View key={`skeleton-${index}`} style={styles.tableRow}>
+              <View style={styles.tableCell}>
+                <Shimmer width={140} height={16} />
+              </View>
+              <View style={styles.tableCell}>
+                <Shimmer width={160} height={16} />
+              </View>
+              <View style={styles.tableCell}>
+                <Shimmer width={100} height={16} />
+              </View>
+              <View style={styles.tableCell}>
+                <Shimmer width={120} height={16} />
+              </View>
+              <View style={styles.tableCell}>
+                <Shimmer width={140} height={16} />
+              </View>
+              <View style={styles.actionCell}>
+                <Shimmer
+                  width={40}
+                  height={40}
+                  style={{ borderRadius: 20, marginRight: 8 }}
+                />
+                <Shimmer width={40} height={40} style={{ borderRadius: 20 }} />
+              </View>
+            </View>
+          ))}
+      </View>
+    );
+  };
+
+  // Add CardSkeleton component
+  const CardSkeleton = () => {
+    return (
+      <Surface style={styles.cardSurface}>
+        <View style={styles.cardTouchable}>
+          <View style={styles.cardHeader}>
+            <View style={styles.titleContainer}>
+              <Shimmer width={160} height={20} style={{ marginBottom: 8 }} />
+              <Shimmer width={140} height={16} />
+            </View>
+            <Shimmer width={120} height={32} style={{ borderRadius: 16 }} />
+          </View>
+
+          <View style={styles.cardDetails}>
+            <View style={styles.detailItem}>
+              <Shimmer width={80} height={14} style={{ marginRight: 8 }} />
+              <Shimmer width={100} height={14} />
+            </View>
+            <View style={styles.detailItem}>
+              <Shimmer width={80} height={14} style={{ marginRight: 8 }} />
+              <Shimmer width={80} height={14} />
+            </View>
+            <View style={styles.detailItem}>
+              <Shimmer width={120} height={14} style={{ marginRight: 8 }} />
+              <Shimmer width={100} height={14} />
+            </View>
+          </View>
+
+          <View style={styles.cardFooter}>
+            <Shimmer width={160} height={32} style={{ borderRadius: 16 }} />
+            <View style={styles.viewDetailsContainer}>
+              <Shimmer
+                width={40}
+                height={40}
+                style={{ borderRadius: 20, marginRight: 8 }}
+              />
+              <Shimmer width={100} height={14} style={{ marginRight: 8 }} />
+              <Shimmer width={24} height={24} style={{ borderRadius: 12 }} />
+            </View>
+          </View>
+        </View>
+      </Surface>
+    );
+  };
+
   if (loading && !refreshing) {
-    return <LoadingIndicator />;
+    const isLargeScreen = windowDimensions.width >= 1440;
+    const isMediumScreen =
+      windowDimensions.width >= 768 && windowDimensions.width < 1440;
+    const useTableLayout = isLargeScreen || isMediumScreen;
+
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: "#F8F9FA" }]}>
+        <AppHeader
+          title="Receipts"
+          showBackButton={Platform.OS !== "web"}
+          showLogo={false}
+        />
+        <View
+          style={[
+            styles.searchContainer,
+            {
+              maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
+              alignSelf: "center",
+              width: "100%",
+            },
+          ]}
+        >
+          <View style={styles.searchBarContainer}>
+            <Shimmer
+              width="100%"
+              height={60}
+              style={{
+                borderRadius: 18,
+                marginRight: 8,
+              }}
+            />
+            <Shimmer
+              width={48}
+              height={48}
+              style={{
+                borderRadius: 8,
+              }}
+            />
+          </View>
+        </View>
+
+        <View
+          style={[
+            styles.contentContainer,
+            {
+              maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
+              alignSelf: "center",
+              width: "100%",
+              flex: 1,
+            },
+          ]}
+        >
+          {useTableLayout ? (
+            <TableSkeleton />
+          ) : (
+            <FlatList
+              data={Array(4).fill(0)}
+              renderItem={() => <CardSkeleton />}
+              keyExtractor={(_, index) => `skeleton-${index}`}
+              contentContainerStyle={styles.listContent}
+            />
+          )}
+        </View>
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -759,83 +1319,130 @@ const ReceiptsListScreen = () => {
         showLogo={false}
       />
 
-      <View style={styles.searchContainer}>
-        <Searchbar
-          placeholder="Search receipts..."
-          onChangeText={setSearchQuery}
-          value={searchQuery}
-          style={styles.searchBar}
-          theme={{ colors: { primary: theme.colors.primary } }}
-          clearIcon={() =>
-            searchQuery ? (
-              <IconButton
-                icon="close-circle"
-                size={18}
-                onPress={() => setSearchQuery("")}
-              />
-            ) : null
-          }
-          icon="magnify"
-        />
-        <View style={styles.filterButtonContainer}>
-          <IconButton
-            icon="filter-variant"
-            size={24}
-            style={[
-              styles.filterButton,
-              hasActiveFilters() && styles.activeFilterButton,
-            ]}
-            iconColor={hasActiveFilters() ? theme.colors.primary : undefined}
-            onPress={() => setFilterModalVisible(true)}
+      <View
+        style={[
+          styles.searchContainer,
+          {
+            maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
+            alignSelf: "center",
+            width: "100%",
+          },
+        ]}
+      >
+        <View style={styles.searchBarContainer}>
+          <Searchbar
+            placeholder="Search receipts..."
+            onChangeText={setSearchQuery}
+            value={searchQuery}
+            style={styles.searchbar}
+            theme={{ colors: { primary: theme.colors.primary } }}
+            clearIcon={() =>
+              searchQuery ? (
+                <IconButton
+                  icon="close-circle"
+                  size={18}
+                  onPress={() => setSearchQuery("")}
+                />
+              ) : null
+            }
+            icon="magnify"
           />
-          {hasActiveFilters() && <View style={styles.filterBadge} />}
+          <View style={styles.filterButtonContainer}>
+            <IconButton
+              icon="filter-variant"
+              size={30}
+              style={[
+                styles.filterButton,
+                hasActiveFilters() && styles.activeFilterButton,
+              ]}
+              iconColor={hasActiveFilters() ? theme.colors.primary : undefined}
+              onPress={() => setFilterModalVisible(true)}
+            />
+            {hasActiveFilters() && <View style={styles.filterBadge} />}
+          </View>
         </View>
+
+        <FAB
+          icon="plus"
+          label="Create Receipt"
+          style={[
+            styles.fab,
+            {
+              backgroundColor: theme.colors.primary,
+              position: "relative",
+              margin: 0,
+              marginLeft: 16,
+            },
+          ]}
+          onPress={handleCreateReceipt}
+          color={theme.colors.surface}
+          mode="flat"
+          theme={{ colors: { accent: theme.colors.surface } }}
+        />
       </View>
 
       {renderActiveFilterChips()}
       {renderFilterModal()}
 
-      {filteredReceipts.length === 0 ? (
-        <EmptyState
-          icon="receipt"
-          title="No Receipts Found"
-          message={
-            searchQuery || hasActiveFilters()
-              ? "No receipts match your search or filters"
-              : "No receipts have been added yet"
-          }
-          buttonTitle={
-            searchQuery || hasActiveFilters()
-              ? "Clear Filters"
-              : "Add New Receipt"
-          }
-          onButtonPress={() => {
-            if (searchQuery || hasActiveFilters()) {
-              setSearchQuery("");
-              clearFilters();
-            } else {
-              handleCreateReceipt();
+      <View
+        style={[
+          styles.contentContainer,
+          {
+            maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
+            alignSelf: "center",
+            width: "100%",
+            flex: 1,
+          },
+        ]}
+      >
+        {filteredReceipts.length === 0 ? (
+          <EmptyState
+            icon="receipt"
+            title="No Receipts Found"
+            message={
+              searchQuery || hasActiveFilters()
+                ? "No receipts match your search or filters"
+                : "No receipts have been added yet"
             }
-          }}
-        />
-      ) : (
-        <FlatList
-          data={filteredReceipts}
-          renderItem={renderReceiptItem}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-        />
-      )}
-
-      <FAB
-        icon="plus"
-        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
-        onPress={handleCreateReceipt}
-        color={theme.colors.surface}
-      />
+            buttonTitle={
+              searchQuery || hasActiveFilters()
+                ? "Clear Filters"
+                : "Add New Receipt"
+            }
+            onButtonPress={() => {
+              if (searchQuery || hasActiveFilters()) {
+                setSearchQuery("");
+                clearFilters();
+              } else {
+                handleCreateReceipt();
+              }
+            }}
+          />
+        ) : isMediumScreen || isLargeScreen ? (
+          <View style={styles.tableContainer}>
+            <TableHeader />
+            <FlatList
+              data={filteredReceipts}
+              renderItem={({ item }) => <TableRow item={item} />}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.tableContent}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+              }
+            />
+          </View>
+        ) : (
+          <FlatList
+            data={filteredReceipts}
+            renderItem={renderReceiptItem}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+          />
+        )}
+      </View>
     </SafeAreaView>
   );
 };

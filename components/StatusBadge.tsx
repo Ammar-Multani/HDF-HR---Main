@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Text } from 'react-native-paper';
+import { Chip, Text } from 'react-native-paper';
 import { TaskStatus, FormStatus, UserStatus } from '../types';
 
 interface StatusBadgeProps {
@@ -66,23 +66,20 @@ const StatusBadge = ({ status, size = 'medium' }: StatusBadgeProps) => {
   const backgroundColor = getStatusColor();
 
   return (
-    <View
-      style={[
-        styles.container,
-        sizeStyles.container,
-        { backgroundColor: backgroundColor + '20', borderColor: backgroundColor },
-      ]}
+    <Chip
+      style={{
+        borderRadius: 25,
+        backgroundColor: backgroundColor + '20',
+        maxWidth: 90,
+        alignSelf: 'flex-start',
+      }}
+      textStyle={{
+        color: backgroundColor,
+        fontSize: 11,
+      }}
     >
-      <Text
-        style={[
-          styles.text,
-          sizeStyles.text,
-          { color: backgroundColor },
-        ]}
-      >
-        {getStatusText()}
-      </Text>
-    </View>
+      {getStatusText()}
+    </Chip>
   );
 };
 

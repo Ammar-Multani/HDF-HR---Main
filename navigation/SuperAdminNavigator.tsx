@@ -44,6 +44,7 @@ import CreateEmployeesScreen from "../screens/superadmin/CreateEmployeesScreen";
 import ReceiptsListScreen from "../screens/superadmin/ReceiptsListScreen";
 import ReceiptDetailsScreen from "../screens/superadmin/ReceiptDetailsScreen";
 import EditTaskScreen from "../screens/superadmin/EditTaskScreen";
+import EditReceiptScreen from "../screens/superadmin/EditReceiptScreen";
 
 // Stack navigators
 const SuperAdminStack = createNativeStackNavigator();
@@ -64,8 +65,8 @@ const NavItem = ({ icon, label, onPress, isActive = false }: NavItemProps) => {
       style={{
         flexDirection: "row",
         alignItems: "center",
-        paddingVertical: 16,
-        paddingHorizontal: 16,
+        paddingVertical: 10,
+        paddingHorizontal: 15,
         borderRadius: 10,
         marginBottom: 10,
         backgroundColor: isActive ? "rgba(255, 255, 255, 0.15)" : "transparent",
@@ -93,15 +94,48 @@ const NavItem = ({ icon, label, onPress, isActive = false }: NavItemProps) => {
   );
 };
 
-// Web layout component that includes the sidebar
+// Add a custom hook for window dimensions
+const useWindowDimensions = () => {
+  const [dimensions, setDimensions] = useState({
+    width: Dimensions.get("window").width,
+    height: Dimensions.get("window").height,
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setDimensions({
+        width: Dimensions.get("window").width,
+        height: Dimensions.get("window").height,
+      });
+    };
+
+    // Set up event listener
+    if (Platform.OS === "web") {
+      window.addEventListener("resize", handleResize);
+
+      // Clean up
+      return () => window.removeEventListener("resize", handleResize);
+    }
+  }, []);
+
+  return dimensions;
+};
+
+// WebLayout component update
 const WebLayout = ({ children }: { children: React.ReactNode }) => {
   const navigation = useNavigation<any>();
   const [activeScreen, setActiveScreen] = useState("Dashboard");
+  const { width } = useWindowDimensions();
+  const showSidebar = width > 768;
 
   const handleNavigation = (screen: string) => {
     setActiveScreen(screen);
     navigation.navigate(screen);
   };
+
+  if (!showSidebar) {
+    return <View style={{ flex: 1 }}>{children}</View>;
+  }
 
   return (
     <View style={{ flexDirection: "row", height: "100%" }}>
@@ -111,7 +145,7 @@ const WebLayout = ({ children }: { children: React.ReactNode }) => {
           width: 220,
           height: "100%",
           backgroundColor: "transparent",
-          paddingTop: 20,
+          paddingTop: 10,
           paddingBottom: 20,
           borderRightWidth: 0,
           position: "relative",
@@ -136,8 +170,7 @@ const WebLayout = ({ children }: { children: React.ReactNode }) => {
         <View
           style={{
             paddingHorizontal: 20,
-            paddingVertical: 24,
-            marginBottom: 10,
+            paddingVertical: 29,
             alignItems: "center",
             borderBottomWidth: 1,
             borderBottomColor: "rgba(255, 255, 255, 0.1)",
@@ -145,8 +178,8 @@ const WebLayout = ({ children }: { children: React.ReactNode }) => {
         >
           <View
             style={{
-              width: 150,
-              height: 50,
+              width: 160,
+              height: 70,
               justifyContent: "center",
               alignItems: "center",
             }}
@@ -154,8 +187,8 @@ const WebLayout = ({ children }: { children: React.ReactNode }) => {
             <Image
               source={require("../assets/splash-icon-mono.png")}
               style={{
-                width: 160,
-                height: 120,
+                width: 170,
+                height: 130,
                 resizeMode: "contain",
                 alignSelf: "center",
               }}
@@ -164,7 +197,7 @@ const WebLayout = ({ children }: { children: React.ReactNode }) => {
         </View>
 
         {/* Navigation Items */}
-        <View style={{ paddingLeft: 20, paddingRight: 20, marginTop: 20 }}>
+        <View style={{ paddingLeft: 20, paddingRight: 20, marginTop: 25 }}>
           <NavItem
             icon="home"
             label="Dashboard"
@@ -178,10 +211,17 @@ const WebLayout = ({ children }: { children: React.ReactNode }) => {
             onPress={() => handleNavigation("Companies")}
           />
           <NavItem
-            icon="clipboard-text"
-            label="Tasks"
-            isActive={activeScreen === "Tasks"}
-            onPress={() => handleNavigation("Tasks")}
+            icon="account-group"
+            label="Users"
+            isActive={activeScreen === "Users"}
+            onPress={() => handleNavigation("Users")}
+          />
+
+          <NavItem
+            icon="file-document"
+            label="Forms"
+            isActive={activeScreen === "Forms"}
+            onPress={() => handleNavigation("Forms")}
           />
           <NavItem
             icon="receipt"
@@ -190,17 +230,12 @@ const WebLayout = ({ children }: { children: React.ReactNode }) => {
             onPress={() => handleNavigation("Receipts")}
           />
           <NavItem
-            icon="file-document"
-            label="Forms"
-            isActive={activeScreen === "Forms"}
-            onPress={() => handleNavigation("Forms")}
+            icon="clipboard-text"
+            label="Tasks"
+            isActive={activeScreen === "Tasks"}
+            onPress={() => handleNavigation("Tasks")}
           />
-          <NavItem
-            icon="account-group"
-            label="Users"
-            isActive={activeScreen === "Users"}
-            onPress={() => handleNavigation("Users")}
-          />
+
           <NavItem
             icon="account-circle"
             label="Profile"
@@ -209,7 +244,6 @@ const WebLayout = ({ children }: { children: React.ReactNode }) => {
           />
         </View>
       </View>
-
       {/* Main Content */}
       <View style={{ flex: 1 }}>{children}</View>
     </View>
@@ -219,9 +253,9 @@ const WebLayout = ({ children }: { children: React.ReactNode }) => {
 // Tab Navigator for SuperAdmin
 const SuperAdminTabNavigator = () => {
   const theme = useTheme();
+  const { width } = useWindowDimensions();
   const isWeb = Platform.OS === "web";
-  const windowWidth = Dimensions.get("window").width;
-  const isLargeScreen = isWeb && windowWidth > 768;
+  const isLargeScreen = isWeb && width > 768;
 
   // For mobile or small screen: Use bottom tabs
   if (!isLargeScreen) {
@@ -436,6 +470,10 @@ const SuperAdminTabNavigator = () => {
           name="ReceiptDetails"
           component={ReceiptDetailsScreen}
         />
+        <SuperAdminStack.Screen
+          name="EditReceipt"
+          component={EditReceiptScreen}
+        />
         <SuperAdminStack.Screen name="EditTask" component={EditTaskScreen} />
       </SuperAdminStack.Navigator>
     </WebLayout>
@@ -445,9 +483,9 @@ const SuperAdminTabNavigator = () => {
 // Super Admin Navigator
 export const SuperAdminNavigator = () => {
   const theme = useTheme();
+  const { width } = useWindowDimensions();
   const isWeb = Platform.OS === "web";
-  const windowWidth = Dimensions.get("window").width;
-  const isLargeScreen = isWeb && windowWidth > 768;
+  const isLargeScreen = isWeb && width > 768;
 
   if (isLargeScreen) {
     return <SuperAdminTabNavigator />;
@@ -541,6 +579,10 @@ export const SuperAdminNavigator = () => {
         component={ReceiptDetailsScreen}
       />
       <SuperAdminStack.Screen name="EditTask" component={EditTaskScreen} />
+      <SuperAdminStack.Screen
+        name="EditReceipt"
+        component={EditReceiptScreen}
+      />
     </SuperAdminStack.Navigator>
   );
 };

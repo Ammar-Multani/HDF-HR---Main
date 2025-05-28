@@ -23,7 +23,13 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Text from "../../components/Text";
 import { globalStyles, createTextStyle } from "../../utils/globalStyles";
 import { useTranslation } from "react-i18next";
-import Animated, { FadeIn } from "react-native-reanimated";
+import Animated, {
+  FadeIn,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  withSequence,
+} from "react-native-reanimated";
 import DynamicChart from "../../components/DynamicChart";
 
 const { width } = Dimensions.get("window");
@@ -43,6 +49,69 @@ interface EmployeeData {
   forms_count: number;
   company_name?: string;
 }
+
+interface ShimmerProps {
+  width: number | string;
+  height: number;
+  style?: any; // Using any for style prop as it can accept various style objects
+}
+
+// Add Shimmer component
+const Shimmer: React.FC<ShimmerProps> = ({ width, height, style }) => {
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        {
+          translateX: withRepeat(
+            withSequence(
+              withTiming(typeof width === "number" ? -width : -200, {
+                duration: 800,
+              }),
+              withTiming(typeof width === "number" ? width : 200, {
+                duration: 800,
+              })
+            ),
+            -1
+          ),
+        },
+      ],
+    };
+  });
+
+  return (
+    <View
+      style={[
+        {
+          width,
+          height,
+          backgroundColor: "#E8E8E8",
+          overflow: "hidden",
+          borderRadius: 4,
+        },
+        style,
+      ]}
+    >
+      <Animated.View
+        style={[
+          {
+            width: "100%",
+            height: "100%",
+            position: "absolute",
+            backgroundColor: "transparent",
+          },
+          animatedStyle,
+        ]}
+      >
+        <LinearGradient
+          colors={["transparent", "rgba(255, 255, 255, 0.4)", "transparent"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{ width: "100%", height: "100%" }}
+        />
+      </Animated.View>
+    </View>
+  );
+};
 
 const SuperAdminDashboard = () => {
   const theme = useTheme();
@@ -77,6 +146,33 @@ const SuperAdminDashboard = () => {
     topCompanies: [] as CompanyData[],
     topEmployees: [] as EmployeeData[],
   });
+
+  const [windowDimensions, setWindowDimensions] = useState({
+    width: Dimensions.get("window").width,
+    height: Dimensions.get("window").height,
+  });
+
+  // Add window resize listener
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      const handleResize = () => {
+        setWindowDimensions({
+          width: Dimensions.get("window").width,
+          height: Dimensions.get("window").height,
+        });
+      };
+
+      window.addEventListener("resize", handleResize);
+
+      // Cleanup
+      return () => window.removeEventListener("resize", handleResize);
+    }
+  }, []);
+
+  // Use windowDimensions.width instead of direct width reference
+  const isLargeScreen = windowDimensions.width >= 1440;
+  const isMediumScreen =
+    windowDimensions.width >= 768 && windowDimensions.width < 1440;
 
   const checkNetworkStatus = async () => {
     const isAvailable = await isNetworkAvailable();
@@ -687,153 +783,125 @@ const SuperAdminDashboard = () => {
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
         >
-          {/* Skeleton header */}
           {Platform.OS !== "web" && (
             <View style={styles.welcomeHeader}>
-              <View
-                style={[
-                  styles.skeleton,
-                  styles.skeletonTitle,
-                  { width: "60%" },
-                ]}
-              />
-              <View
-                style={[
-                  styles.skeleton,
-                  styles.skeletonSubtitle,
-                  { width: "80%" },
-                ]}
+              <Shimmer width={200} height={28} style={styles.skeletonTitle} />
+              <Shimmer
+                width={300}
+                height={16}
+                style={styles.skeletonSubtitle}
               />
             </View>
           )}
 
-          {/* Skeleton stats cards */}
-          <View style={styles.statsGridContainer}>
-            <View style={styles.statsGridItem}>
-              <View style={styles.statsCard}>
-                <View style={styles.statRow}>
-                  <View
-                    style={[styles.skeleton, { width: "40%", height: 18 }]}
-                  />
-                  <View
-                    style={[styles.skeleton, { width: "15%", height: 16 }]}
-                  />
-                </View>
-                <View
-                  style={[
-                    styles.skeleton,
-                    { width: "25%", height: 30, marginTop: 5 },
-                  ]}
-                />
-              </View>
-            </View>
-
-            <View style={styles.statsGridItem}>
-              <View style={styles.statsCard}>
-                <View style={styles.statRow}>
-                  <View
-                    style={[styles.skeleton, { width: "40%", height: 18 }]}
-                  />
-                  <View
-                    style={[styles.skeleton, { width: "15%", height: 16 }]}
-                  />
-                </View>
-                <View
-                  style={[
-                    styles.skeleton,
-                    { width: "25%", height: 30, marginTop: 5 },
-                  ]}
-                />
-              </View>
-            </View>
-
-            <View style={styles.statsGridItem}>
-              <View style={styles.statsCard}>
-                <View style={styles.statRow}>
-                  <View
-                    style={[styles.skeleton, { width: "40%", height: 18 }]}
-                  />
-                  <View
-                    style={[styles.skeleton, { width: "15%", height: 16 }]}
-                  />
-                </View>
-                <View
-                  style={[
-                    styles.skeleton,
-                    { width: "25%", height: 30, marginTop: 5 },
-                  ]}
-                />
-              </View>
-            </View>
-
-            <View style={styles.statsGridItem}>
-              <View style={styles.statsCard}>
-                <View style={styles.statRow}>
-                  <View
-                    style={[styles.skeleton, { width: "40%", height: 18 }]}
-                  />
-                  <View
-                    style={[styles.skeleton, { width: "15%", height: 16 }]}
-                  />
-                </View>
-                <View
-                  style={[
-                    styles.skeleton,
-                    { width: "25%", height: 30, marginTop: 5 },
-                  ]}
-                />
-              </View>
-            </View>
-          </View>
-
-          {/* Skeleton chart */}
-          <View style={styles.chartCard}>
-            <View
-              style={[
-                styles.skeleton,
-                { width: "50%", height: 22, marginBottom: 20 },
-              ]}
-            />
-            <View
-              style={[
-                styles.skeleton,
-                { width: "100%", height: 200, borderRadius: 8 },
-              ]}
-            />
-          </View>
-
-          {/* Skeleton companies list */}
-          <View style={styles.topCompaniesContainer}>
-            <View
-              style={[
-                styles.skeleton,
-                { width: "40%", height: 22, marginBottom: 20 },
-              ]}
-            />
-
-            {[1, 2, 3, 4, 5].map((_, index) => (
+          <View style={[styles.statsGridContainer, { gap: 16 }]}>
+            {[1, 2, 3, 4].map((_, index) => (
               <View
                 key={index}
                 style={[
-                  styles.companyCard,
-                  index === 4 && {
-                    borderBottomWidth: 0,
-                    marginBottom: 0,
+                  styles.statsGridItem,
+                  {
+                    width: isLargeScreen
+                      ? "23.5%"
+                      : isMediumScreen
+                        ? "31.33%"
+                        : "100%",
+                    minWidth: isMediumScreen || isLargeScreen ? 275 : "100%",
+                    marginBottom: isMediumScreen || isLargeScreen ? 0 : 16,
                   },
                 ]}
               >
-                <View style={styles.companyInfo}>
-                  <View
-                    style={[
-                      styles.skeleton,
-                      { width: "60%", height: 18, marginBottom: 8 },
-                    ]}
+                <View style={[styles.statsCard, styles.skeletonStatsCard]}>
+                  <View style={styles.statRow}>
+                    <Shimmer
+                      width={140}
+                      height={16}
+                      style={{ marginBottom: 4 }}
+                    />
+                    <Shimmer
+                      width={45}
+                      height={14}
+                      style={{ marginLeft: "auto" }}
+                    />
+                  </View>
+                  <Shimmer width={90} height={36} style={{ marginTop: 20 }} />
+                </View>
+              </View>
+            ))}
+          </View>
+
+          <View
+            style={[
+              styles.chartsContainer,
+              { flexDirection: isLargeScreen ? "row" : "column" },
+            ]}
+          >
+            {[1, 2].map((_, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.chartWrapper,
+                  {
+                    flex: isLargeScreen ? 1 : undefined,
+                    width: "100%",
+                    maxWidth: isLargeScreen ? "50%" : 1000,
+                    marginBottom: isLargeScreen ? 0 : 24,
+                  },
+                ]}
+              >
+                <View style={styles.chartCard}>
+                  <Shimmer
+                    width={200}
+                    height={24}
+                    style={{ marginBottom: 24, marginLeft: 24, marginTop: 24 }}
                   />
-                  <View
-                    style={[styles.skeleton, { width: "40%", height: 16 }]}
+                  <Shimmer
+                    width="90%"
+                    height={200}
+                    style={{ marginHorizontal: "5%" }}
                   />
                 </View>
-                <View style={[styles.skeleton, { width: "15%", height: 16 }]} />
+              </View>
+            ))}
+          </View>
+
+          <View
+            style={[
+              styles.listsContainer,
+              { flexDirection: isLargeScreen ? "row" : "column" },
+            ]}
+          >
+            {[1, 2].map((_, listIndex) => (
+              <View key={listIndex} style={styles.listWrapper}>
+                <View style={styles.listCard}>
+                  <Shimmer
+                    width={180}
+                    height={24}
+                    style={{ marginBottom: 24 }}
+                  />
+                  {[1, 2, 3].map((_, itemIndex) => (
+                    <View
+                      key={itemIndex}
+                      style={[
+                        styles.companyCard,
+                        itemIndex === 2 && {
+                          borderBottomWidth: 0,
+                          marginBottom: 0,
+                        },
+                      ]}
+                    >
+                      <View style={styles.companyInfo}>
+                        <Shimmer
+                          width={160}
+                          height={18}
+                          style={{ marginBottom: 8 }}
+                        />
+                        <Shimmer width={120} height={14} />
+                      </View>
+                      <Shimmer width={50} height={16} />
+                    </View>
+                  ))}
+                </View>
               </View>
             ))}
           </View>
@@ -1027,289 +1095,337 @@ const SuperAdminDashboard = () => {
               </View>
             )}
 
-            <View style={styles.statsGridContainer}>
-              <View style={styles.statsGridItem}>
-                <View style={styles.statsCard}>
-                  <View style={styles.statRow}>
-                    <Text variant={"medium"} style={styles.statLabel}>
-                      {t("superAdmin.dashboard.totalCompanies")}
-                    </Text>
-                    <Text variant={"bold"} style={styles.statGrowth}>
-                      {stats.totalCompaniesGrowth}
-                    </Text>
-                  </View>
-                  <Text variant={"bold"} style={styles.statValue}>
-                    {stats.totalCompanies.toLocaleString()}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.statsGridItem}>
-                <View style={styles.statsCard}>
-                  <View style={styles.statRow}>
-                    <Text variant={"medium"} style={styles.statLabel}>
-                      {t("superAdmin.dashboard.totalEmployees")}
-                    </Text>
-                    <Text
-                      variant={"bold"}
-                      style={[
-                        styles.statGrowth,
-                        stats.employeeGrowth.startsWith("-")
-                          ? styles.negativeGrowth
-                          : {},
-                      ]}
-                    >
-                      {stats.employeeGrowth}
-                    </Text>
-                  </View>
-                  <Text variant={"bold"} style={styles.statValue}>
-                    {stats.totalEmployees.toLocaleString()}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.statsGridItem}>
-                <View style={styles.statsCard}>
-                  <View style={styles.statRow}>
-                    <Text variant={"medium"} style={styles.statLabel}>
-                      {t("superAdmin.dashboard.totalTasks")}
-                    </Text>
-                    <Text
-                      variant={"bold"}
-                      style={[
-                        styles.statGrowth,
-                        stats.tasksGrowth.startsWith("-")
-                          ? styles.negativeGrowth
-                          : {},
-                      ]}
-                    >
-                      {stats.tasksGrowth}
-                    </Text>
-                  </View>
-                  <Text variant={"bold"} style={styles.statValue}>
-                    {stats.totalTasks.toLocaleString()}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.statsGridItem}>
-                <View style={styles.statsCard}>
-                  <View style={styles.statRow}>
-                    <Text variant={"medium"} style={styles.statLabel}>
-                      {t("superAdmin.dashboard.totalForms")}
-                    </Text>
-                    <Text
-                      variant={"bold"}
-                      style={[
-                        styles.statGrowth,
-                        stats.formsGrowth.startsWith("-")
-                          ? styles.negativeGrowth
-                          : {},
-                      ]}
-                    >
-                      {stats.formsGrowth}
-                    </Text>
-                  </View>
-                  <Text variant={"bold"} style={styles.statValue}>
-                    {stats.totalForms.toLocaleString()}
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.chartCard}>
-              <Text variant={"bold"} style={styles.sectionTitle}>
-                {t("superAdmin.dashboard.monthlyOnboarded")}
-              </Text>
-              <DynamicChart
-                monthlyData={stats.monthlyOnboarded}
-                monthLabels={stats.monthLabels}
-                width={width}
-              />
-            </View>
-
-            <View style={styles.chartCard}>
-              <Text variant={"bold"} style={styles.sectionTitle}>
-                {t("superAdmin.dashboard.monthlyForms")}
-              </Text>
-              <DynamicChart
-                monthlyData={stats.monthlyForms}
-                monthLabels={stats.monthLabels}
-                width={width}
-              />
-            </View>
-
-            <View style={styles.topCompaniesContainer}>
-              <Text variant={"bold"} style={styles.sectionTitle}>
-                {t("superAdmin.dashboard.topCompanies")}
-              </Text>
-
-              {stats.topCompanies
-                .slice(
-                  0,
-                  showAllCompanies
-                    ? stats.topCompanies.length
-                    : INITIAL_ITEMS_TO_SHOW
-                )
-                .map((company, index) => (
+            <View
+              style={[
+                styles.statsGridContainer,
+                {
+                  justifyContent: isLargeScreen ? "flex-start" : "center",
+                  gap: isMediumScreen || isLargeScreen ? 24 : 16,
+                  marginBottom: isMediumScreen || isLargeScreen ? 32 : 24,
+                },
+              ]}
+            >
+              {/* Stats Grid Items */}
+              {[
+                {
+                  label: t("superAdmin.dashboard.totalCompanies"),
+                  value: stats.totalCompanies,
+                  growth: stats.totalCompaniesGrowth,
+                },
+                {
+                  label: t("superAdmin.dashboard.totalEmployees"),
+                  value: stats.totalEmployees,
+                  growth: stats.employeeGrowth,
+                },
+                {
+                  label: t("superAdmin.dashboard.totalTasks"),
+                  value: stats.totalTasks,
+                  growth: stats.tasksGrowth,
+                },
+                {
+                  label: t("superAdmin.dashboard.totalForms"),
+                  value: stats.totalForms,
+                  growth: stats.formsGrowth,
+                },
+              ].map((stat, index) => (
+                <View
+                  key={index}
+                  style={[
+                    styles.statsGridItem,
+                    {
+                      width: isLargeScreen
+                        ? "23.5%" // Approximately 25% - 18px gap
+                        : isMediumScreen
+                          ? "31%" // Approximately 33.33% - 16px gap
+                          : "100%",
+                      minWidth: isMediumScreen || isLargeScreen ? 275 : "100%",
+                      marginBottom: isMediumScreen || isLargeScreen ? 0 : 16,
+                    },
+                  ]}
+                >
                   <View
-                    key={index}
                     style={[
-                      styles.companyCard,
-                      index ===
-                        (showAllCompanies
-                          ? stats.topCompanies.length
-                          : Math.min(
-                              INITIAL_ITEMS_TO_SHOW,
-                              stats.topCompanies.length
-                            )) -
-                          1 && {
-                        borderBottomWidth: 0,
-                        marginBottom: 0,
+                      styles.statsCard,
+                      {
+                        padding: isMediumScreen || isLargeScreen ? 24 : 20,
                       },
                     ]}
                   >
-                    <View style={styles.companyInfo}>
-                      <Text variant={"bold"} style={styles.companyName}>
-                        {company.name}
+                    <View style={styles.statRow}>
+                      <Text variant={"medium"} style={styles.statLabel}>
+                        {stat.label}
                       </Text>
-                      <Text style={styles.companyEmployees}>
-                        {company.employee_count}{" "}
-                        {t("superAdmin.dashboard.employeeCount")}
+                      <Text
+                        variant={"bold"}
+                        style={[
+                          styles.statGrowth,
+                          stat.growth.startsWith("-")
+                            ? styles.negativeGrowth
+                            : {},
+                        ]}
+                      >
+                        {stat.growth}
                       </Text>
                     </View>
-                    <Text
-                      variant={"bold"}
-                      style={[
-                        styles.companyGrowth,
-                        company.growth_percentage?.startsWith("-")
-                          ? styles.negativeGrowth
-                          : {},
-                      ]}
-                    >
-                      {company.growth_percentage}
+                    <Text variant={"bold"} style={styles.statValue}>
+                      {stat.value.toLocaleString()}
                     </Text>
                   </View>
-                ))}
-
-              {stats.topCompanies.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <MaterialCommunityIcons
-                    name="domain"
-                    size={48}
-                    color={theme.colors.outlineVariant}
-                  />
-                  <Text style={styles.emptyStateText}>
-                    {t("superAdmin.companies.title")} {t("common.notFound")}
-                  </Text>
                 </View>
-              ) : (
-                stats.topCompanies.length > INITIAL_ITEMS_TO_SHOW && (
-                  <TouchableOpacity
-                    style={styles.showMoreButton}
-                    onPress={() => {
-                      setShowAllCompanies(!showAllCompanies);
-                    }}
-                  >
-                    <Text style={styles.showMoreText}>
-                      {showAllCompanies
-                        ? t("superAdmin.dashboard.showLess") || "Show Less"
-                        : t("superAdmin.dashboard.showMore") || "Show More"}
-                    </Text>
-                    <MaterialCommunityIcons
-                      name={showAllCompanies ? "chevron-up" : "chevron-down"}
-                      size={16}
-                      color="#3b82f6"
-                    />
-                  </TouchableOpacity>
-                )
-              )}
+              ))}
             </View>
 
-            {/* Top Employees Section */}
-            <View style={styles.topEmployeesContainer}>
-              <Text variant={"bold"} style={styles.sectionTitle}>
-                {t("superAdmin.dashboard.topEmployees") ||
-                  "Top Employees by Forms"}
-              </Text>
-
-              {stats.topEmployees
-                .slice(
-                  0,
-                  showAllEmployees
-                    ? stats.topEmployees.length
-                    : INITIAL_ITEMS_TO_SHOW
-                )
-                .map((employee, index) => (
-                  <View
-                    key={index}
-                    style={[
-                      styles.companyCard,
-                      index ===
-                        (showAllEmployees
-                          ? stats.topEmployees.length
-                          : Math.min(
-                              INITIAL_ITEMS_TO_SHOW,
-                              stats.topEmployees.length
-                            )) -
-                          1 && {
-                        borderBottomWidth: 0,
-                        marginBottom: 0,
-                      },
-                    ]}
-                  >
-                    <View style={styles.companyInfo}>
-                      <Text variant={"bold"} style={styles.companyName}>
-                        {employee.name}
-                      </Text>
-                      <Text style={styles.companyEmployees}>
-                        {employee.company_name}
-                      </Text>
-                    </View>
-                    <View style={styles.formsCountContainer}>
-                      <Text variant={"bold"} style={styles.formsCount}>
-                        {employee.forms_count}
-                      </Text>
-                      <Text style={styles.formsLabel}>
-                        {t("superAdmin.dashboard.formsFilled") || "Forms"}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
-
-              {stats.topEmployees.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <MaterialCommunityIcons
-                    name="account-group"
-                    size={48}
-                    color={theme.colors.outlineVariant}
-                  />
-                  <Text style={styles.emptyStateText}>
-                    {t("superAdmin.employees.title") || "Employees"}{" "}
-                    {t("common.notFound")}
+            <View
+              style={[
+                styles.chartsContainer,
+                { flexDirection: isLargeScreen ? "row" : "column" },
+              ]}
+            >
+              <View
+                style={[
+                  styles.chartWrapper,
+                  {
+                    flex: isLargeScreen ? 1 : undefined,
+                    width: "100%",
+                    maxWidth: isLargeScreen ? "50%" : 1000,
+                    marginBottom: isLargeScreen ? 0 : 24,
+                  },
+                ]}
+              >
+                <View style={styles.chartCard}>
+                  <Text variant={"bold"} style={styles.sectionTitle}>
+                    {t("superAdmin.dashboard.monthlyOnboarded")}
                   </Text>
+                  <DynamicChart
+                    monthlyData={stats.monthlyOnboarded}
+                    monthLabels={stats.monthLabels}
+                    width={
+                      Platform.OS === "web"
+                        ? isLargeScreen
+                          ? Math.min((windowDimensions.width - 72) / 2, 600)
+                          : isMediumScreen
+                            ? Math.min((windowDimensions.width - 48) / 2, 850)
+                            : Math.min(windowDimensions.width - 48, 1000)
+                        : windowDimensions.width - 32
+                    }
+                  />
                 </View>
-              ) : (
-                stats.topEmployees.length > INITIAL_ITEMS_TO_SHOW && (
-                  <TouchableOpacity
-                    style={styles.showMoreButton}
-                    onPress={() => {
-                      setShowAllEmployees(!showAllEmployees);
-                    }}
-                  >
-                    <Text style={styles.showMoreText}>
-                      {showAllEmployees
-                        ? t("superAdmin.dashboard.showLess") || "Show Less"
-                        : t("superAdmin.dashboard.showMore") || "Show More"}
-                    </Text>
-                    <MaterialCommunityIcons
-                      name={showAllEmployees ? "chevron-up" : "chevron-down"}
-                      size={16}
-                      color="#3b82f6"
-                    />
-                  </TouchableOpacity>
-                )
-              )}
+              </View>
+
+              <View
+                style={[
+                  styles.chartWrapper,
+                  {
+                    flex: isLargeScreen ? 1 : undefined,
+                    width: "100%",
+                    maxWidth: isLargeScreen ? "50%" : 1000,
+                    marginBottom: isLargeScreen ? 0 : 24,
+                  },
+                ]}
+              >
+                <View style={styles.chartCard}>
+                  <Text variant={"bold"} style={styles.sectionTitle}>
+                    {t("superAdmin.dashboard.monthlyForms")}
+                  </Text>
+                  <DynamicChart
+                    monthlyData={stats.monthlyForms}
+                    monthLabels={stats.monthLabels}
+                    width={
+                      Platform.OS === "web"
+                        ? isLargeScreen
+                          ? Math.min((windowDimensions.width - 72) / 2, 600)
+                          : isMediumScreen
+                            ? Math.min((windowDimensions.width - 48) / 2, 850)
+                            : Math.min(windowDimensions.width - 48, 1000)
+                        : windowDimensions.width - 32
+                    }
+                  />
+                </View>
+              </View>
+            </View>
+
+            <View
+              style={[
+                styles.listsContainer,
+                { flexDirection: isLargeScreen ? "row" : "column" },
+              ]}
+            >
+              <View style={styles.listWrapper}>
+                <View style={styles.listCard}>
+                  <Text variant={"bold"} style={styles.sectionTitle}>
+                    {t("superAdmin.dashboard.topCompanies")}
+                  </Text>
+                  {stats.topCompanies
+                    .slice(
+                      0,
+                      showAllCompanies
+                        ? stats.topCompanies.length
+                        : INITIAL_ITEMS_TO_SHOW
+                    )
+                    .map((company, index) => (
+                      <View
+                        key={index}
+                        style={[
+                          styles.companyCard,
+                          index ===
+                            (showAllCompanies
+                              ? stats.topCompanies.length
+                              : Math.min(
+                                  INITIAL_ITEMS_TO_SHOW,
+                                  stats.topCompanies.length
+                                )) -
+                              1 && {
+                            borderBottomWidth: 0,
+                            marginBottom: 0,
+                          },
+                        ]}
+                      >
+                        <View style={styles.companyInfo}>
+                          <Text variant={"bold"} style={styles.companyName}>
+                            {company.name}
+                          </Text>
+                          <Text style={styles.companyEmployees}>
+                            {company.employee_count}{" "}
+                            {t("superAdmin.dashboard.employeeCount")}
+                          </Text>
+                        </View>
+                        <Text
+                          variant={"bold"}
+                          style={[
+                            styles.companyGrowth,
+                            company.growth_percentage?.startsWith("-")
+                              ? styles.negativeGrowth
+                              : {},
+                          ]}
+                        >
+                          {company.growth_percentage}
+                        </Text>
+                      </View>
+                    ))}
+
+                  {stats.topCompanies.length === 0 ? (
+                    <View style={styles.emptyState}>
+                      <MaterialCommunityIcons
+                        name="domain"
+                        size={48}
+                        color={theme.colors.outlineVariant}
+                      />
+                      <Text style={styles.emptyStateText}>
+                        {t("superAdmin.companies.title")} {t("common.notFound")}
+                      </Text>
+                    </View>
+                  ) : (
+                    stats.topCompanies.length > INITIAL_ITEMS_TO_SHOW && (
+                      <TouchableOpacity
+                        style={styles.showMoreButton}
+                        onPress={() => {
+                          setShowAllCompanies(!showAllCompanies);
+                        }}
+                      >
+                        <Text style={styles.showMoreText}>
+                          {showAllCompanies
+                            ? t("superAdmin.dashboard.showLess") || "Show Less"
+                            : t("superAdmin.dashboard.showMore") || "Show More"}
+                        </Text>
+                        <MaterialCommunityIcons
+                          name={
+                            showAllCompanies ? "chevron-up" : "chevron-down"
+                          }
+                          size={16}
+                          color="#3b82f6"
+                        />
+                      </TouchableOpacity>
+                    )
+                  )}
+                </View>
+              </View>
+
+              <View style={styles.listWrapper}>
+                <View style={styles.listCard}>
+                  <Text variant={"bold"} style={styles.sectionTitle}>
+                    {t("superAdmin.dashboard.topEmployees")}
+                  </Text>
+                  {stats.topEmployees
+                    .slice(
+                      0,
+                      showAllEmployees
+                        ? stats.topEmployees.length
+                        : INITIAL_ITEMS_TO_SHOW
+                    )
+                    .map((employee, index) => (
+                      <View
+                        key={index}
+                        style={[
+                          styles.companyCard,
+                          index ===
+                            (showAllEmployees
+                              ? stats.topEmployees.length
+                              : Math.min(
+                                  INITIAL_ITEMS_TO_SHOW,
+                                  stats.topEmployees.length
+                                )) -
+                              1 && {
+                            borderBottomWidth: 0,
+                            marginBottom: 0,
+                          },
+                        ]}
+                      >
+                        <View style={styles.companyInfo}>
+                          <Text variant={"bold"} style={styles.companyName}>
+                            {employee.name}
+                          </Text>
+                          <Text style={styles.companyEmployees}>
+                            {employee.company_name}
+                          </Text>
+                        </View>
+                        <View style={styles.formsCountContainer}>
+                          <Text variant={"bold"} style={styles.formsCount}>
+                            {employee.forms_count}
+                          </Text>
+                          <Text style={styles.formsLabel}>
+                            {t("superAdmin.dashboard.formsFilled") || "Forms"}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+
+                  {stats.topEmployees.length === 0 ? (
+                    <View style={styles.emptyState}>
+                      <MaterialCommunityIcons
+                        name="account-group"
+                        size={48}
+                        color={theme.colors.outlineVariant}
+                      />
+                      <Text style={styles.emptyStateText}>
+                        {t("superAdmin.employees.title") || "Employees"}{" "}
+                        {t("common.notFound")}
+                      </Text>
+                    </View>
+                  ) : (
+                    stats.topEmployees.length > INITIAL_ITEMS_TO_SHOW && (
+                      <TouchableOpacity
+                        style={styles.showMoreButton}
+                        onPress={() => {
+                          setShowAllEmployees(!showAllEmployees);
+                        }}
+                      >
+                        <Text style={styles.showMoreText}>
+                          {showAllEmployees
+                            ? t("superAdmin.dashboard.showLess") || "Show Less"
+                            : t("superAdmin.dashboard.showMore") || "Show More"}
+                        </Text>
+                        <MaterialCommunityIcons
+                          name={
+                            showAllEmployees ? "chevron-up" : "chevron-down"
+                          }
+                          size={16}
+                          color="#3b82f6"
+                        />
+                      </TouchableOpacity>
+                    )
+                  )}
+                </View>
+              </View>
             </View>
           </ScrollView>
         </Animated.View>
@@ -1327,38 +1443,73 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: Platform.OS === "web" ? (width >= 768 ? 24 : 16) : 16,
+    paddingVertical: Platform.OS === "web" ? (width >= 768 ? 24 : 16) : 16,
     paddingBottom: 90,
+    maxWidth: Platform.OS === "web" ? 1400 : undefined,
+    alignSelf: "center",
+    width: "100%",
   },
   welcomeHeader: {
-    marginBottom: 16,
-    marginTop: 5,
+    marginBottom: Platform.OS === "web" ? 24 : 16,
+    marginTop: Platform.OS === "web" ? 8 : 5,
     marginLeft: 5,
   },
   welcomeTitle: {
-    fontSize: 22,
+    ...createTextStyle({
+      fontWeight: "600",
+      fontSize: Platform.OS === "web" ? (width >= 768 ? 28 : 22) : 22,
+    }),
     color: "#333",
     paddingBottom: 3,
   },
   welcomeSubtitle: {
-    fontSize: 14,
+    ...createTextStyle({
+      fontWeight: "400",
+      fontSize: Platform.OS === "web" ? (width >= 768 ? 16 : 14) : 14,
+    }),
     color: "#666",
+  },
+  statsGridContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    width: "100%",
+    marginBottom: 24,
+    justifyContent: "space-between",
+  },
+  statsGridItem: {
+    // Base styles only, dynamic values applied inline
   },
   statsCard: {
     backgroundColor: "#fff",
     borderRadius: 16,
-    padding: 18,
     borderWidth: 1,
     borderColor: "#e0e0e0",
+    height: "100%",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  skeletonStatsCard: {
+    padding: Platform.OS === "web" ? 24 : 20,
+    minHeight: 120,
   },
   statRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    width: "100%",
   },
   statLabel: {
-    fontSize: 13,
+    ...createTextStyle({
+      fontWeight: "500",
+      fontSize: Platform.OS === "web" ? (width >= 768 ? 14 : 13) : 13,
+    }),
     color: "#333",
     right: 5,
     paddingRight: 3,
@@ -1371,40 +1522,88 @@ const styles = StyleSheet.create({
     color: "#F44336",
   },
   statValue: {
-    fontSize: 25,
+    ...createTextStyle({
+      fontWeight: "600",
+      fontSize: Platform.OS === "web" ? (width >= 768 ? 32 : 25) : 25,
+    }),
     color: "#111",
+    marginTop: Platform.OS === "web" ? 16 : 8,
+  },
+  chartsContainer: {
+    flexDirection: width >= 1440 ? "row" : "column",
+    gap: 24,
+    marginBottom: 24,
+    width: "100%",
+    alignItems: "center",
+  },
+  chartWrapper: {
+    flex: width >= 1440 ? 1 : undefined,
+    width: "100%",
+    maxWidth: width >= 1440 ? "50%" : 1000,
+    marginBottom: width >= 1440 ? 0 : 24,
   },
   chartCard: {
     backgroundColor: "#fff",
     borderRadius: 16,
-    padding: 16,
-    paddingBottom: 10,
-    marginBottom: 16,
-    minHeight: 280,
+    padding: 0,
+    marginBottom: Platform.OS === "web" ? 0 : 1,
+    minHeight: width >= 768 ? 290 : 290,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    flex: 1,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    overflow: "hidden",
+  },
+  sectionTitle: {
+    ...createTextStyle({
+      fontWeight: "600",
+      fontSize: Platform.OS === "web" ? (width >= 768 ? 18 : 16) : 16,
+    }),
+    marginBottom: Platform.OS === "web" ? (width >= 768 ? 20 : 16) : 16,
+    color: "#374151",
+    paddingHorizontal: Platform.OS === "web" ? 24 : 16,
+    paddingTop: Platform.OS === "web" ? 24 : 16,
+  },
+  listsContainer: {
+    gap: 24,
+    width: "100%",
+    marginTop: 24,
+    alignItems: "flex-start",
+  },
+  listWrapper: {
+    flex: 1,
+    width: "100%",
+    maxWidth: 1000,
+    marginBottom: 24,
+  },
+  listCard: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: Platform.OS === "web" ? (width >= 768 ? 24 : 16) : 16,
     borderWidth: 1,
     borderColor: "#e0e0e0",
-  },
-  chartTitle: {
-    fontSize: 16,
-    marginBottom: 16,
-    color: "#333",
-  },
-  emptyState: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 40,
-  },
-  emptyStateText: {
-    marginTop: 8,
-    fontSize: 16,
-    color: "#999",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
   companyCard: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     backgroundColor: "#fff",
-    padding: 16,
+    padding: Platform.OS === "web" ? (width >= 768 ? 20 : 16) : 16,
     marginBottom: 5,
     borderBottomWidth: 1,
     borderBottomColor: "#e0e0e0",
@@ -1413,40 +1612,37 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   companyName: {
-    fontSize: 16,
+    ...createTextStyle({
+      fontWeight: "600",
+      fontSize: Platform.OS === "web" ? (width >= 768 ? 16 : 14) : 14,
+    }),
     color: "#333",
     marginBottom: 4,
   },
   companyEmployees: {
-    fontSize: 14,
+    ...createTextStyle({
+      fontWeight: "400",
+      fontSize: Platform.OS === "web" ? (width >= 768 ? 14 : 12) : 12,
+    }),
     color: "#666",
   },
   companyGrowth: {
     fontSize: 14,
     color: "#4CAF50",
   },
-  sectionTitle: {
-    fontSize: 18,
-    marginBottom: 16,
-    color: "#333",
+  showMoreButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 8,
   },
-  topCompaniesContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 16,
-    marginTop: 16,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-  },
-  // Add new styles for top employees
-  topEmployeesContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 16,
-    marginTop: 16,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    marginBottom: 16,
+  showMoreText: {
+    color: "#3b82f6",
+    fontSize: 14,
+    fontFamily: "Poppins-Medium",
+    marginRight: 5,
   },
   formsCountContainer: {
     alignItems: "center",
@@ -1459,45 +1655,32 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#666",
   },
-  // Skeleton styles
-  skeleton: {
-    backgroundColor: "#E1E9EE",
-    borderRadius: 4,
-    overflow: "hidden",
-    position: "relative",
-  },
-  skeletonTitle: {
-    height: 22,
-    marginBottom: 5,
-  },
-  skeletonSubtitle: {
-    height: 14,
-  },
-  statsGridContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-evenly",
-    gap: 10,
-    marginBottom: 10,
-  },
-  statsGridItem: {
-    width: "48%",
-    marginBottom: 5,
-  },
-  showMoreButton: {
-    flexDirection: "row",
+  emptyState: {
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 12,
-    // backgroundColor: "#f0f7ff",
-    borderRadius: 8,
-    marginTop: 8,
+    paddingVertical: 40,
   },
-  showMoreText: {
-    color: "#3b82f6",
-    fontSize: 14,
-    fontFamily: "Poppins-Medium",
-    marginRight: 5,
+  emptyStateText: {
+    marginTop: 8,
+    fontSize: 16,
+    color: "#999",
+  },
+  skeleton: {
+    backgroundColor: "#F3F4F6",
+    borderRadius: 4,
+    overflow: "hidden",
+  },
+  skeletonTitle: {
+    marginBottom: 8,
+  },
+  skeletonSubtitle: {
+    marginBottom: 24,
+  },
+  topCompaniesContainer: {
+    flex: 1,
+  },
+  topEmployeesContainer: {
+    flex: 1,
   },
 });
 

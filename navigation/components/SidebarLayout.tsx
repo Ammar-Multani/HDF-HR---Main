@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
   logoContainer: {
     paddingHorizontal: 20,
     paddingVertical: 24,
-    marginBottom: 10,
+    marginBottom: 15,
     alignItems: "center",
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255, 255, 255, 0.1)",

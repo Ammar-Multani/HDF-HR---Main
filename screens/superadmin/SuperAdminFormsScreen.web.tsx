@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import {
   StyleSheet,
   View,
@@ -8,6 +14,9 @@ import {
   ScrollView,
   Platform,
   ActivityIndicator,
+  Dimensions,
+  Pressable,
+  PressableStateCallbackType,
 } from "react-native";
 import {
   Card,
@@ -38,6 +47,13 @@ import { FormStatus } from "../../types";
 import Text from "../../components/Text";
 import { useTranslation } from "react-i18next";
 import { LinearGradient } from "expo-linear-gradient";
+import {
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
+import Animated from "react-native-reanimated";
 
 // Define form interface with the properties needed for our UI
 interface FormItem {
@@ -55,111 +71,277 @@ interface FormItem {
   modifier_name?: string;
 }
 
-// Component for skeleton loading UI
+// Update TooltipText component to disable tooltips on large screens
+const TooltipText = ({
+  text,
+  numberOfLines = 1,
+}: {
+  text: string;
+  numberOfLines?: number;
+}) => {
+  const [isHovered, setIsHovered] = useState(false);
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+  const containerRef = useRef<View>(null);
+  const [isLargeScreen, setIsLargeScreen] = useState(window.innerWidth >= 1440);
+
+  // Add window resize listener for screen size
+  useEffect(() => {
+    const handleResize = () => {
+      setIsLargeScreen(window.innerWidth >= 1440);
+    };
+
+    if (Platform.OS === "web") {
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }
+  }, []);
+
+  const updateTooltipPosition = () => {
+    if (Platform.OS === "web" && containerRef.current && !isLargeScreen) {
+      // @ts-ignore - web specific
+      const rect = containerRef.current.getBoundingClientRect();
+      const windowHeight = window.innerHeight;
+      const spaceAbove = rect.top;
+      const spaceBelow = windowHeight - rect.bottom;
+
+      // Calculate horizontal position to prevent overflow
+      const windowWidth = window.innerWidth;
+      let xPos = rect.left;
+
+      // Ensure tooltip doesn't overflow right edge
+      if (xPos + 300 > windowWidth) {
+        // 300 is max tooltip width
+        xPos = windowWidth - 310; // Add some padding
+      }
+
+      // Position vertically based on available space
+      let yPos;
+      if (spaceBelow >= 100) {
+        // If enough space below
+        yPos = rect.bottom + window.scrollY + 5;
+      } else if (spaceAbove >= 100) {
+        // If enough space above
+        yPos = rect.top + window.scrollY - 5;
+      } else {
+        // If neither, position it where there's more space
+        yPos =
+          spaceAbove > spaceBelow
+            ? rect.top + window.scrollY - 5
+            : rect.bottom + window.scrollY + 5;
+      }
+
+      setTooltipPosition({ x: xPos, y: yPos });
+    }
+  };
+
+  useEffect(() => {
+    if (isHovered && !isLargeScreen) {
+      updateTooltipPosition();
+      // Add scroll and resize listeners
+      if (Platform.OS === "web") {
+        window.addEventListener("scroll", updateTooltipPosition);
+        window.addEventListener("resize", updateTooltipPosition);
+
+        return () => {
+          window.removeEventListener("scroll", updateTooltipPosition);
+          window.removeEventListener("resize", updateTooltipPosition);
+        };
+      }
+    }
+  }, [isHovered, isLargeScreen]);
+
+  if (Platform.OS !== "web" || isLargeScreen) {
+    return (
+      <Text
+        style={styles.tableCellText}
+        numberOfLines={isLargeScreen ? undefined : numberOfLines}
+      >
+        {text}
+      </Text>
+    );
+  }
+
+  return (
+    <View
+      ref={containerRef}
+      style={styles.tooltipContainer}
+      // @ts-ignore - web specific props
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <Text style={styles.tableCellText} numberOfLines={numberOfLines}>
+        {text}
+      </Text>
+      {isHovered && !isLargeScreen && (
+        <Portal>
+          <View
+            style={[
+              styles.tooltip,
+              {
+                position: "absolute",
+                left: tooltipPosition.x,
+                top: tooltipPosition.y,
+              },
+            ]}
+          >
+            <Text style={styles.tooltipText}>{text}</Text>
+          </View>
+        </Portal>
+      )}
+    </View>
+  );
+};
+
+// Add Shimmer component after TooltipText component
+interface ShimmerProps {
+  width: number | string;
+  height: number;
+  style?: any;
+}
+
+const Shimmer: React.FC<ShimmerProps> = ({ width, height, style }) => {
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        {
+          translateX: withRepeat(
+            withSequence(
+              withTiming(typeof width === 'number' ? -width : -200, { duration: 800 }),
+              withTiming(typeof width === 'number' ? width : 200, { duration: 800 })
+            ),
+            -1
+          ),
+        },
+      ],
+    };
+  });
+
+  return (
+    <View
+      style={[
+        {
+          width,
+          height,
+          backgroundColor: "#E8E8E8",
+          overflow: "hidden",
+          borderRadius: 4,
+        },
+        style,
+      ]}
+    >
+      <Animated.View
+        style={[
+          {
+            width: "100%",
+            height: "100%",
+            position: "absolute",
+            backgroundColor: "transparent",
+          },
+          animatedStyle,
+        ]}
+      >
+        <LinearGradient
+          colors={["transparent", "rgba(255, 255, 255, 0.4)", "transparent"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{ width: "100%", height: "100%" }}
+        />
+      </Animated.View>
+    </View>
+  );
+};
+
+// Update FormItemSkeleton component
 const FormItemSkeleton = () => {
   return (
-    <Card
-      style={[
-        styles.cardSurface,
-        {
-          backgroundColor: "#FFFFFF",
-          shadowColor: "transparent",
-        },
-      ]}
-      elevation={0}
-    >
-      <Card.Content>
+    <Surface style={[styles.cardSurface, { backgroundColor: "#FFFFFF" }]}>
+      <View style={styles.cardTouchable}>
         <View style={styles.cardHeader}>
           <View style={styles.titleContainer}>
-            <View
-              style={{
-                height: 20,
-                width: "70%",
-                backgroundColor: "#E0E0E0",
-                borderRadius: 4,
-                marginBottom: 8,
-              }}
-            />
-            <View
-              style={{
-                height: 14,
-                width: "50%",
-                backgroundColor: "#E0E0E0",
-                borderRadius: 4,
-              }}
-            />
+            <Shimmer width={180} height={20} style={{ marginBottom: 8 }} />
           </View>
-          <View
-            style={{
-              height: 24,
-              width: 80,
-              backgroundColor: "#E0E0E0",
-              borderRadius: 12,
-            }}
-          />
+          <Shimmer width={80} height={24} style={{ borderRadius: 12 }} />
         </View>
 
         <View style={[styles.cardDetails, { borderLeftColor: "#E0E0E0" }]}>
           <View style={styles.detailItem}>
-            <View
-              style={{
-                height: 14,
-                width: 80,
-                backgroundColor: "#E0E0E0",
-                borderRadius: 4,
-              }}
-            />
-            <View
-              style={{
-                height: 14,
-                width: "60%",
-                backgroundColor: "#E0E0E0",
-                borderRadius: 4,
-                marginLeft: 8,
-              }}
-            />
+            <Shimmer width={100} height={14} style={{ marginRight: 8 }} />
+            <Shimmer width={150} height={14} />
           </View>
           <View style={styles.detailItem}>
-            <View
-              style={{
-                height: 14,
-                width: 80,
-                backgroundColor: "#E0E0E0",
-                borderRadius: 4,
-              }}
-            />
-            <View
-              style={{
-                height: 14,
-                width: "40%",
-                backgroundColor: "#E0E0E0",
-                borderRadius: 4,
-                marginLeft: 8,
-              }}
-            />
+            <Shimmer width={80} height={14} style={{ marginRight: 8 }} />
+            <Shimmer width={120} height={14} />
+          </View>
+          <View style={styles.detailItem}>
+            <Shimmer width={90} height={14} style={{ marginRight: 8 }} />
+            <Shimmer width={140} height={14} />
           </View>
         </View>
 
         <View style={styles.cardFooter}>
-          <View
-            style={{
-              height: 30,
-              width: 80,
-              backgroundColor: "#E0E0E0",
-              borderRadius: 15,
-            }}
-          />
-          <View
-            style={{
-              height: 24,
-              width: 120,
-              backgroundColor: "#E0E0E0",
-              borderRadius: 4,
-            }}
-          />
+          <View style={styles.detailItem}>
+            <Shimmer width={160} height={16} />
+          </View>
+          <View style={styles.viewDetailsContainer}>
+            <Shimmer width={100} height={14} style={{ marginRight: 8 }} />
+            <Shimmer width={24} height={24} style={{ borderRadius: 12 }} />
+          </View>
         </View>
-      </Card.Content>
-    </Card>
+      </View>
+    </Surface>
+  );
+};
+
+// Add TableSkeleton component
+const TableSkeleton = () => {
+  const TableHeader = () => (
+    <View style={styles.tableHeader}>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Form Type</Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Employee</Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Company</Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Submitted Date</Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Status</Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Actions</Text>
+      </View>
+    </View>
+  );
+  return (
+    <View style={styles.tableContainer}>
+      <TableHeader />
+      {Array(5).fill(0).map((_, index) => (
+        <View key={`skeleton-${index}`} style={styles.tableRow}>
+          <View style={styles.tableCell}>
+            <Shimmer width={140} height={16} />
+          </View>
+          <View style={styles.tableCell}>
+            <Shimmer width={160} height={16} />
+          </View>
+          <View style={styles.tableCell}>
+            <Shimmer width={180} height={16} />
+          </View>
+          <View style={styles.tableCell}>
+            <Shimmer width={100} height={16} />
+          </View>
+          <View style={styles.tableCell}>
+            <Shimmer width={80} height={24} style={{ borderRadius: 12 }} />
+          </View>
+          <View style={styles.actionCell}>
+            <Shimmer width={40} height={40} style={{ borderRadius: 20 }} />
+          </View>
+        </View>
+      ))}
+    </View>
   );
 };
 
@@ -191,6 +373,34 @@ const SuperAdminFormsScreen = () => {
     formType: "all",
     sortOrder: "desc",
   });
+
+  // Add window dimensions state
+  const [windowDimensions, setWindowDimensions] = useState({
+    width: Dimensions.get("window").width,
+    height: Dimensions.get("window").height,
+  });
+
+  // Add window resize listener
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      const handleResize = () => {
+        setWindowDimensions({
+          width: Dimensions.get("window").width,
+          height: Dimensions.get("window").height,
+        });
+      };
+
+      window.addEventListener("resize", handleResize);
+
+      // Cleanup
+      return () => window.removeEventListener("resize", handleResize);
+    }
+  }, []);
+
+  // Calculate responsive breakpoints
+  const isLargeScreen = windowDimensions.width >= 1440;
+  const isMediumScreen =
+    windowDimensions.width >= 768 && windowDimensions.width < 1440;
 
   // Memoize filteredForms to avoid unnecessary re-filtering
   const memoizedFilteredForms = useMemo(() => {
@@ -808,7 +1018,6 @@ const SuperAdminFormsScreen = () => {
       <Surface style={[styles.cardSurface, { backgroundColor: "#FFFFFF" }]}>
         <TouchableOpacity
           onPress={() => {
-            // Navigate to form details screen based on form type
             console.log("View form details for:", item.id, item.type);
             navigation.navigate("SuperAdminFormDetailsScreen", {
               formId: item.id,
@@ -820,21 +1029,14 @@ const SuperAdminFormsScreen = () => {
           <View style={styles.cardHeader}>
             <View style={styles.titleContainer}>
               <View style={styles.detailItem}>
-                <LinearGradient
-                  colors={
-                    [
-                      getFormTypeColor(item.type),
-                      getFormTypeColor(item.type) + "99",
-                    ] as readonly [string, string]
-                  }
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.formTypeChip}
+                <Text
+                  style={[
+                    styles.formTypeText,
+                    { color: getFormTypeColor(item.type) },
+                  ]}
                 >
-                  <Text style={styles.formTypeText}>
-                    {getFormTypeName(item.type)}
-                  </Text>
-                </LinearGradient>
+                  {getFormTypeName(item.type)}
+                </Text>
               </View>
             </View>
             <StatusBadge status={item.status} />
@@ -880,11 +1082,11 @@ const SuperAdminFormsScreen = () => {
 
           <View style={styles.cardFooter}>
             <View style={styles.detailItem}>
-            <Text variant="medium" style={styles.detailLabel}>
-              {t("superAdmin.forms.company")}:
-            </Text>
-            <Text variant="medium" style={styles.companyName}>
-              {item.company_name}
+              <Text variant="medium" style={styles.detailLabel}>
+                {t("superAdmin.forms.company")}:
+              </Text>
+              <Text variant="medium" style={styles.companyName}>
+                {item.company_name}
               </Text>
             </View>
 
@@ -911,9 +1113,93 @@ const SuperAdminFormsScreen = () => {
     [t, navigation, getFormTypeColor, getFormTypeName]
   );
 
+  // Add TableHeader component
+  const TableHeader = () => (
+    <View style={styles.tableHeader}>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Form Type</Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Employee</Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Company</Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Submitted Date</Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Status</Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Actions</Text>
+      </View>
+    </View>
+  );
+
+  // Add TableRow component
+  const TableRow = ({ item }: { item: FormItem }) => (
+    <Pressable
+      onPress={() => {
+        navigation.navigate("SuperAdminFormDetailsScreen", {
+          formId: item.id,
+          formType: item.type,
+        });
+      }}
+      style={({ pressed }: PressableStateCallbackType) => [
+        styles.tableRow,
+        pressed && { backgroundColor: "#f8fafc" },
+      ]}
+    >
+      <View style={styles.tableCell}>
+        <Text
+          style={[
+            styles.tableCellText,
+            {
+              color: getFormTypeColor(item.type),
+              fontFamily: "Poppins-Medium",
+            },
+          ]}
+        >
+          {getFormTypeName(item.type)}
+        </Text>
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText text={item.employee_name} />
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText text={item.company_name} />
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText text={format(new Date(item.created_at), "MMM d, yyyy")} />
+      </View>
+      <View style={styles.tableCell}>
+        <StatusBadge status={item.status} />
+      </View>
+      <View style={styles.actionCell}>
+        <IconButton
+          icon="eye"
+          size={20}
+          onPress={(e) => {
+            e.stopPropagation();
+            navigation.navigate("SuperAdminFormDetailsScreen", {
+              formId: item.id,
+              formType: item.type,
+            });
+          }}
+          style={styles.actionIcon}
+        />
+      </View>
+    </Pressable>
+  );
+
   if (loading && !refreshing) {
+    const isLargeScreen = windowDimensions.width >= 1440;
+    const isMediumScreen = windowDimensions.width >= 768 && windowDimensions.width < 1440;
+    const useTableLayout = isLargeScreen || isMediumScreen;
+
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: "#F5F5F5" }]}>
+      <SafeAreaView style={[styles.container, { backgroundColor: "#F8F9FA" }]}>
         <AppHeader
           title={t("superAdmin.forms.title")}
           subtitle="Review and manage all submitted forms"
@@ -923,20 +1209,47 @@ const SuperAdminFormsScreen = () => {
           showLogo={false}
           showTitle={true}
         />
-        <View style={styles.searchContainer}>
-          <View style={[styles.searchbar, { backgroundColor: "#E0E0E0" }]} />
-          <View style={styles.filterButtonContainer}>
-            <View
-              style={[styles.filterButton, { backgroundColor: "#E0E0E0" }]}
+        <View style={[styles.searchContainer, {
+          maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
+          alignSelf: "center",
+          width: "100%",
+        }]}>
+          <View style={styles.searchBarContainer}>
+            <Shimmer 
+              width="100%" 
+              height={60} 
+              style={{ 
+                borderRadius: 18,
+                marginRight: 8,
+              }} 
+            />
+            <Shimmer 
+              width={48} 
+              height={48} 
+              style={{ 
+                borderRadius: 8,
+              }} 
             />
           </View>
         </View>
-        <FlatList
-          data={Array(3).fill(0)}
-          renderItem={() => <FormItemSkeleton />}
-          keyExtractor={(_, index) => `skeleton-${index}`}
-          contentContainerStyle={styles.listContent}
-        />
+
+        <View style={[styles.contentContainer, {
+          maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
+          alignSelf: "center",
+          width: "100%",
+          flex: 1,
+        }]}>
+          {useTableLayout ? (
+            <TableSkeleton />
+          ) : (
+            <FlatList
+              data={Array(4).fill(0)}
+              renderItem={() => <FormItemSkeleton />}
+              keyExtractor={(_, index) => `skeleton-${index}`}
+              contentContainerStyle={styles.listContent}
+            />
+          )}
+        </View>
       </SafeAreaView>
     );
   }
@@ -953,88 +1266,138 @@ const SuperAdminFormsScreen = () => {
         showTitle={true}
       />
 
-      <View style={styles.searchContainer}>
-        <Searchbar
-          placeholder={t("superAdmin.forms.search") || "Search forms..."}
-          onChangeText={setSearchQuery}
-          value={searchQuery}
-          style={styles.searchbar}
-          theme={{ colors: { primary: "#1a73e8" } }}
-          clearIcon={() =>
-            searchQuery ? (
-              <IconButton
-                icon="close-circle"
-                size={18}
-                onPress={() => setSearchQuery("")}
-              />
-            ) : null
-          }
-          icon="magnify"
-        />
-        <View style={styles.filterButtonContainer}>
-          <IconButton
-            icon="filter-variant"
-            size={24}
-            style={[
-              styles.filterButton,
-              hasActiveFilters() && styles.activeFilterButton,
-            ]}
-            iconColor={hasActiveFilters() ? "#1a73e8" : undefined}
-            onPress={() => setFilterModalVisible(true)}
+      <View
+        style={[
+          styles.searchContainer,
+          {
+            maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
+            alignSelf: "center",
+            width: "100%",
+          },
+        ]}
+      >
+        <View style={styles.searchBarContainer}>
+          <Searchbar
+            placeholder={t("superAdmin.forms.search") || "Search forms..."}
+            onChangeText={setSearchQuery}
+            value={searchQuery}
+            style={styles.searchbar}
+            theme={{ colors: { primary: "#1a73e8" } }}
+            clearIcon={() =>
+              searchQuery ? (
+                <IconButton
+                  icon="close-circle"
+                  size={18}
+                  onPress={() => setSearchQuery("")}
+                />
+              ) : null
+            }
+            icon="magnify"
           />
-          {hasActiveFilters() && <View style={styles.filterBadge} />}
+          <View style={styles.filterButtonContainer}>
+            <IconButton
+              icon="filter-variant"
+              size={30}
+              style={[
+                styles.filterButton,
+                hasActiveFilters() && styles.activeFilterButton,
+              ]}
+              iconColor={hasActiveFilters() ? "#1a73e8" : undefined}
+              onPress={() => setFilterModalVisible(true)}
+            />
+            {hasActiveFilters() && <View style={styles.filterBadge} />}
+          </View>
         </View>
       </View>
 
       {renderActiveFilterIndicator()}
       {renderFilterModal()}
 
-      {filteredForms.length === 0 ? (
-        <EmptyState
-          icon="file-document"
-          title={t("superAdmin.forms.noFormsFound")}
-          message={
-            searchQuery || hasActiveFilters()
-              ? t("superAdmin.forms.noFormsMatch")
-              : t("superAdmin.forms.noFormsSubmitted")
-          }
-          buttonTitle={
-            searchQuery || hasActiveFilters()
-              ? t("superAdmin.forms.clearFilters")
-              : undefined
-          }
-          onButtonPress={() => {
-            if (searchQuery || hasActiveFilters()) {
-              setSearchQuery("");
-              clearFilters();
+      <View
+        style={[
+          styles.contentContainer,
+          {
+            maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
+            alignSelf: "center",
+            width: "100%",
+            flex: 1,
+          },
+        ]}
+      >
+        {filteredForms.length === 0 ? (
+          <EmptyState
+            icon="file-document"
+            title={t("superAdmin.forms.noFormsFound")}
+            message={
+              searchQuery || hasActiveFilters()
+                ? t("superAdmin.forms.noFormsMatch")
+                : t("superAdmin.forms.noFormsSubmitted")
             }
-          }}
-        />
-      ) : (
-        <FlatList
-          data={filteredForms}
-          renderItem={renderFormItem}
-          keyExtractor={(item) => `${item.type}-${item.id}`}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-          onEndReached={loadMoreForms}
-          onEndReachedThreshold={0.3}
-          ListFooterComponent={() => (
-            <View style={styles.loadingFooter}>
-              {loadingMore && hasMoreData && (
-                <ActivityIndicator size="small" color="#1a73e8" />
+            buttonTitle={
+              searchQuery || hasActiveFilters()
+                ? t("superAdmin.forms.clearFilters")
+                : undefined
+            }
+            onButtonPress={() => {
+              if (searchQuery || hasActiveFilters()) {
+                setSearchQuery("");
+                clearFilters();
+              }
+            }}
+          />
+        ) : isMediumScreen || isLargeScreen ? (
+          <View style={styles.tableContainer}>
+            <TableHeader />
+            <FlatList
+              data={filteredForms}
+              renderItem={({ item }) => <TableRow item={item} />}
+              keyExtractor={(item) => `${item.type}-${item.id}`}
+              contentContainerStyle={styles.tableContent}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+              }
+              onEndReached={loadMoreForms}
+              onEndReachedThreshold={0.3}
+              ListFooterComponent={() => (
+                <View style={styles.loadingFooter}>
+                  {loadingMore && hasMoreData && (
+                    <ActivityIndicator size="small" color="#1a73e8" />
+                  )}
+                  {!hasMoreData && filteredForms.length > 0 && (
+                    <Text style={styles.endListText}>
+                      {t("superAdmin.forms.noMoreForms")}
+                    </Text>
+                  )}
+                </View>
               )}
-              {!hasMoreData && filteredForms.length > 0 && (
-                <Text style={styles.endListText}>
-                  {t("superAdmin.forms.noMoreForms")}
-                </Text>
-              )}
-            </View>
-          )}
-        />
-      )}
+            />
+          </View>
+        ) : (
+          <FlatList
+            data={filteredForms}
+            renderItem={renderFormItem}
+            keyExtractor={(item) => `${item.type}-${item.id}`}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+            onEndReached={loadMoreForms}
+            onEndReachedThreshold={0.3}
+            ListFooterComponent={() => (
+              <View style={styles.loadingFooter}>
+                {loadingMore && hasMoreData && (
+                  <ActivityIndicator size="small" color="#1a73e8" />
+                )}
+                {!hasMoreData && filteredForms.length > 0 && (
+                  <Text style={styles.endListText}>
+                    {t("superAdmin.forms.noMoreForms")}
+                  </Text>
+                )}
+              </View>
+            )}
+          />
+        )}
+      </View>
     </SafeAreaView>
   );
 };
@@ -1060,24 +1423,26 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   searchContainer: {
-    padding: 16,
+    padding: Platform.OS === "web" ? 24 : 16,
     paddingTop: 10,
-    paddingBottom: 12,
+    paddingBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  searchBarContainer: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
   },
   searchbar: {
-    elevation: 2,
-    borderRadius: 12,
-    height: 58,
+    elevation: 0,
+    borderRadius: 18,
+    height: 60,
     backgroundColor: "#fff",
     borderWidth: 1,
     borderColor: "#e0e0e0",
     flex: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
   },
   filterButtonContainer: {
     position: "relative",
@@ -1207,16 +1572,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 4,
   },
-  formTypeChip: {
-    height: 32,
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    justifyContent: "center",
-    alignItems: "center",
-  },
   formTypeText: {
-    color: "#FFFFFF",
-    fontSize: 12,
+    fontSize: 14,
     fontFamily: "Poppins-Medium",
   },
   viewDetailsContainer: {
@@ -1330,6 +1687,114 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     borderTopWidth: 1,
     borderTopColor: "rgba(0,0,0,0.05)",
+  },
+  contentContainer: {
+    flex: 1,
+    paddingHorizontal: Platform.OS === "web" ? 24 : 16,
+    paddingVertical: 16,
+  },
+  tableContainer: {
+    flex: 1,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    overflow: "hidden",
+  },
+  tableHeader: {
+    flexDirection: "row",
+    backgroundColor: "#f8fafc",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
+    paddingVertical: 16,
+    paddingHorizontal: 26,
+    alignContent: "center",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  tableHeaderCell: {
+    flex: 1,
+    paddingHorizontal: 16,
+    justifyContent: "space-around",
+    paddingLeft: 25,
+    alignItems: "flex-start",
+  },
+  tableHeaderText: {
+    fontSize: 14,
+    color: "#64748b",
+    fontFamily: "Poppins-Medium",
+  },
+  tableRow: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
+    paddingVertical: 16,
+    backgroundColor: "#fff",
+    paddingHorizontal: 26,
+    alignItems: "center",
+  },
+  tableCell: {
+    flex: 1,
+    paddingHorizontal: 26,
+    justifyContent: "space-evenly",
+    alignItems: "flex-start",
+  },
+  tableCellText: {
+    fontSize: 14,
+    color: "#334155",
+    fontFamily: "Poppins-Regular",
+  },
+  tableContent: {
+    flexGrow: 1,
+  },
+  actionCell: {
+    flex: 1,
+    flexDirection: "row",
+    justifyContent: "flex-start",
+    alignItems: "center",
+    paddingHorizontal: 26,
+  },
+  actionIcon: {
+    margin: 0,
+    marginRight: 8,
+  },
+  tooltipContainer: {
+    position: "relative",
+    flex: 1,
+    maxWidth: "100%",
+    zIndex: 10,
+  },
+  tooltip: {
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    padding: 8,
+    marginLeft: 30,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    maxWidth: 300,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    zIndex: 9999,
+    ...(Platform.OS === "web"
+      ? {
+          // @ts-ignore - web specific style
+          willChange: "transform",
+          // @ts-ignore - web specific style
+          isolation: "isolate",
+        }
+      : {}),
+  },
+  tooltipText: {
+    color: "#000",
+    fontSize: 12,
+    fontFamily: "Poppins-Regular",
+    lineHeight: 16,
   },
 } as const);
 

@@ -1,4 +1,4 @@
-import React, { createRef, useEffect } from "react";
+import React, { createRef, useEffect, useState } from "react";
 import {
   NavigationContainer,
   useNavigationContainerRef,
@@ -7,6 +7,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "../contexts/AuthContext";
 import { UserRole } from "../types";
+import { Dimensions, Platform } from "react-native";
 
 // Import navigators from separate files
 import { AuthNavigator } from "./AuthNavigator";
@@ -22,6 +23,30 @@ const NAVIGATE_TO_DASHBOARD_KEY = "NAVIGATE_TO_DASHBOARD";
 
 // Create a navigation ref that can be used outside of the Navigation Provider
 export const navigationRef = createRef();
+
+// Add window dimensions hook
+const useWindowDimensions = () => {
+  const [dimensions, setDimensions] = useState({
+    width: Dimensions.get("window").width,
+    height: Dimensions.get("window").height,
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setDimensions({
+        width: Dimensions.get("window").width,
+        height: Dimensions.get("window").height,
+      });
+    };
+
+    if (Platform.OS === "web") {
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }
+  }, []);
+
+  return dimensions;
+};
 
 // Helper function to navigate to dashboard based on user role
 export const navigateToDashboard = (role: string) => {
@@ -47,11 +72,22 @@ export const navigateToDashboard = (role: string) => {
 export const AppNavigator = ({ initialAuthState = null }) => {
   const { user, userRole } = useAuth();
   const navRef = useNavigationContainerRef();
+  const { width } = useWindowDimensions();
 
   // Set the navigationRef for use outside of the component
   useEffect(() => {
     (navigationRef as any).current = navRef;
   }, [navRef]);
+
+  // Force navigation update on window resize
+  useEffect(() => {
+    if (navRef.current && navRef.isReady()) {
+      const currentRoute = navRef.current.getCurrentRoute();
+      if (currentRoute) {
+        navRef.current.navigate(currentRoute.name);
+      }
+    }
+  }, [width]);
 
   // Check for navigation requests from auth context
   useEffect(() => {

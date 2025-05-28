@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   StyleSheet,
   View,
@@ -9,6 +9,9 @@ import {
   Platform,
   Animated,
   TouchableWithoutFeedback,
+  Pressable,
+  Dimensions,
+  PressableStateCallbackType,
 } from "react-native";
 import {
   Card,
@@ -41,18 +44,21 @@ import LoadingIndicator from "../../components/LoadingIndicator";
 import EmptyState from "../../components/EmptyState";
 import Text from "../../components/Text";
 import { LinearGradient } from "expo-linear-gradient";
+import StatusBadge from "../../components/StatusBadge";
+import { UserStatus } from "../../types";
+import {
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
+import { useTranslation } from "react-i18next";
 
 // User list types
 enum UserListType {
   SUPER_ADMIN = "super_admin",
   COMPANY_ADMIN = "company_admin",
   EMPLOYEE = "employee",
-}
-
-// User status enum
-enum UserStatus {
-  ACTIVE = "active",
-  INACTIVE = "inactive",
 }
 
 // Date sort options
@@ -89,7 +95,176 @@ interface CompanyUser {
   role: string;
   active_status?: string | boolean;
   job_title?: string;
+  created_at: string;
 }
+
+// Add this component after the imports and before other components
+const TooltipText = ({
+  text,
+  numberOfLines = 1,
+}: {
+  text: string;
+  numberOfLines?: number;
+}) => {
+  const [isHovered, setIsHovered] = useState(false);
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+  const containerRef = useRef<View>(null);
+
+  const updateTooltipPosition = () => {
+    if (Platform.OS === "web" && containerRef.current) {
+      // @ts-ignore - web specific
+      const rect = containerRef.current.getBoundingClientRect();
+      const windowHeight = window.innerHeight;
+      const spaceAbove = rect.top;
+      const spaceBelow = windowHeight - rect.bottom;
+
+      // Calculate horizontal position to prevent overflow
+      const windowWidth = window.innerWidth;
+      let xPos = rect.left;
+
+      // Ensure tooltip doesn't overflow right edge
+      if (xPos + 300 > windowWidth) {
+        // 300 is max tooltip width
+        xPos = windowWidth - 310; // Add some padding
+      }
+
+      // Position vertically based on available space
+      let yPos;
+      if (spaceBelow >= 100) {
+        // If enough space below
+        yPos = rect.bottom + window.scrollY + 5;
+      } else if (spaceAbove >= 100) {
+        // If enough space above
+        yPos = rect.top + window.scrollY - 5;
+      } else {
+        // If neither, position it where there's more space
+        yPos =
+          spaceAbove > spaceBelow
+            ? rect.top + window.scrollY - 5
+            : rect.bottom + window.scrollY + 5;
+      }
+
+      setTooltipPosition({ x: xPos, y: yPos });
+    }
+  };
+
+  useEffect(() => {
+    if (isHovered) {
+      updateTooltipPosition();
+      // Add scroll and resize listeners
+      if (Platform.OS === "web") {
+        window.addEventListener("scroll", updateTooltipPosition);
+        window.addEventListener("resize", updateTooltipPosition);
+
+        return () => {
+          window.removeEventListener("scroll", updateTooltipPosition);
+          window.removeEventListener("resize", updateTooltipPosition);
+        };
+      }
+    }
+  }, [isHovered]);
+
+  if (Platform.OS !== "web") {
+    return (
+      <Text style={styles.tableCellText} numberOfLines={numberOfLines}>
+        {text}
+      </Text>
+    );
+  }
+
+  return (
+    <View
+      ref={containerRef}
+      style={styles.tooltipContainer}
+      // @ts-ignore - web specific props
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <Text style={styles.tableCellText} numberOfLines={numberOfLines}>
+        {text}
+      </Text>
+      {isHovered && (
+        <Portal>
+          <View
+            style={[
+              styles.tooltip,
+              {
+                position: "absolute",
+                left: tooltipPosition.x,
+                top: tooltipPosition.y,
+              },
+            ]}
+          >
+            <Text style={styles.tooltipText}>{text}</Text>
+          </View>
+        </Portal>
+      )}
+    </View>
+  );
+};
+
+// Add Shimmer component after TooltipText component
+interface ShimmerProps {
+  width: number | string;
+  height: number;
+  style?: any;
+}
+
+const Shimmer: React.FC<ShimmerProps> = ({ width, height, style }) => {
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        {
+          translateX: withRepeat(
+            withSequence(
+              withTiming(typeof width === "number" ? -width : -200, {
+                duration: 800,
+              }),
+              withTiming(typeof width === "number" ? width : 200, {
+                duration: 800,
+              })
+            ),
+            -1
+          ),
+        },
+      ],
+    };
+  });
+
+  return (
+    <View
+      style={[
+        {
+          width,
+          height,
+          backgroundColor: "#E8E8E8",
+          overflow: "hidden",
+          borderRadius: 4,
+        },
+        style,
+      ]}
+    >
+      <Animated.View
+        style={[
+          {
+            width: "100%",
+            height: "100%",
+            position: "absolute",
+            backgroundColor: "transparent",
+          },
+          animatedStyle,
+        ]}
+      >
+        <LinearGradient
+          colors={["transparent", "rgba(255, 255, 255, 0.4)", "transparent"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{ width: "100%", height: "100%" }}
+        />
+      </Animated.View>
+    </View>
+  );
+};
 
 const SuperAdminUsersScreen = () => {
   const theme = useTheme();
@@ -410,54 +585,6 @@ const SuperAdminUsersScreen = () => {
     );
   };
 
-  // Render a status chip
-  const renderStatusChip = (status?: UserStatus | string | boolean) => {
-    if (status === undefined) return null;
-
-    let color;
-    let displayText;
-
-    // Handle boolean values
-    if (typeof status === "boolean") {
-      if (status === true) {
-        color = "#4CAF50"; // Green
-        displayText = "Active";
-      } else {
-        color = "#757575"; // Grey
-        displayText = "Inactive";
-      }
-    } else {
-      // Handle string values
-      switch (status) {
-        case UserStatus.ACTIVE:
-        case "active":
-          color = "#4CAF50"; // Green
-          displayText = "Active";
-          break;
-        case UserStatus.INACTIVE:
-        case "inactive":
-          color = "#757575"; // Grey
-          displayText = "Inactive";
-          break;
-        default:
-          color = theme.colors.primary;
-          displayText =
-            typeof status === "string" && status.length > 0
-              ? status.charAt(0).toUpperCase() + status.slice(1).toLowerCase()
-              : "Unknown";
-      }
-    }
-
-    return (
-      <Chip
-        style={{ backgroundColor: color + "20" }}
-        textStyle={{ color: color, fontFamily: "Poppins-Medium" }}
-      >
-        {displayText}
-      </Chip>
-    );
-  };
-
   // Render a gradient avatar with initials
   const renderGradientAvatar = (initials: string, userType: string) => {
     // Different gradient colors based on user type
@@ -541,7 +668,14 @@ const SuperAdminUsersScreen = () => {
               </View>
             </View>
             <View style={styles.statusContainer}>
-              {renderStatusChip(item.status)}
+              <StatusBadge
+                status={
+                  item.status === true || item.status === "active"
+                    ? UserStatus.ACTIVE
+                    : UserStatus.INACTIVE
+                }
+                size="small"
+              />
             </View>
           </View>
         </Card.Content>
@@ -596,7 +730,14 @@ const SuperAdminUsersScreen = () => {
               </View>
             </View>
             <View style={styles.statusContainer}>
-              {renderStatusChip(item.active_status)}
+              <StatusBadge
+                status={
+                  item.active_status === true || item.active_status === "active"
+                    ? UserStatus.ACTIVE
+                    : UserStatus.INACTIVE
+                }
+                size="small"
+              />
             </View>
           </View>
         </Card.Content>
@@ -651,7 +792,14 @@ const SuperAdminUsersScreen = () => {
               </View>
             </View>
             <View style={styles.statusContainer}>
-              {renderStatusChip(item.active_status)}
+              <StatusBadge
+                status={
+                  item.active_status === true || item.active_status === "active"
+                    ? UserStatus.ACTIVE
+                    : UserStatus.INACTIVE
+                }
+                size="small"
+              />
             </View>
           </View>
         </Card.Content>
@@ -762,64 +910,509 @@ const SuperAdminUsersScreen = () => {
     );
   };
 
+  // Add table header components
+  const SuperAdminTableHeader = () => (
+    <View style={styles.tableHeader}>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Name
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Email
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Role
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Created Date
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Status
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Actions
+        </Text>
+      </View>
+    </View>
+  );
+
+  const CompanyAdminTableHeader = () => (
+    <View style={styles.tableHeader}>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Name
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Email
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Company
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Created Date
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Status
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Actions
+        </Text>
+      </View>
+    </View>
+  );
+
+  const EmployeeTableHeader = () => (
+    <View style={styles.tableHeader}>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Name
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Email
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Company
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Job Title
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Status
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Actions
+        </Text>
+      </View>
+    </View>
+  );
+
+  // Add table row components
+  const SuperAdminTableRow = ({ item }: { item: Admin }) => (
+    <Pressable
+      onPress={() => {
+        navigation.navigate("SuperAdminDetailsScreen", {
+          adminId: item.id,
+          adminType: "super",
+        });
+      }}
+      style={({ pressed }: PressableStateCallbackType) => [
+        styles.tableRow,
+        pressed && { backgroundColor: "#f8fafc" },
+      ]}
+    >
+      <View style={styles.tableCell}>
+        <TooltipText text={item.name || "Unnamed Admin"} />
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText text={item.email} />
+      </View>
+      <View style={styles.tableCell}>
+        <Text style={styles.tableCellText}>Super Admin</Text>
+      </View>
+      <View style={styles.tableCell}>
+        <Text style={styles.tableCellText}>
+          {item.created_at
+            ? new Date(item.created_at).toLocaleDateString()
+            : "-"}
+        </Text>
+      </View>
+      <View style={styles.tableCell}>
+        <StatusBadge
+          status={
+            item.status === true || item.status === "active"
+              ? UserStatus.ACTIVE
+              : UserStatus.INACTIVE
+          }
+          size="small"
+        />
+      </View>
+      <View style={styles.actionCell}>
+        <IconButton
+          icon="pencil"
+          size={20}
+          onPress={(e) => {
+            e.stopPropagation();
+            navigation.navigate("EditSuperAdmin", { adminId: item.id });
+          }}
+          style={styles.actionIcon}
+        />
+        <IconButton
+          icon="eye"
+          size={20}
+          onPress={(e) => {
+            e.stopPropagation();
+            navigation.navigate("SuperAdminDetailsScreen", {
+              adminId: item.id,
+              adminType: "super",
+            });
+          }}
+          style={styles.actionIcon}
+        />
+      </View>
+    </Pressable>
+  );
+
+  const CompanyAdminTableRow = ({ item }: { item: CompanyUser }) => (
+    <Pressable
+      onPress={() => {
+        navigation.navigate("CompanyAdminDetailsScreen", {
+          adminId: item.id,
+          adminType: "company",
+        });
+      }}
+      style={({ pressed }: PressableStateCallbackType) => [
+        styles.tableRow,
+        pressed && { backgroundColor: "#f8fafc" },
+      ]}
+    >
+      <View style={styles.tableCell}>
+        <TooltipText
+          text={
+            `${item.first_name || ""} ${item.last_name || ""}`.trim() ||
+            "Unnamed Admin"
+          }
+        />
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText text={item.email} />
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText
+          text={(item as any).company?.company_name || "Unknown Company"}
+        />
+      </View>
+      <View style={styles.tableCell}>
+        <Text style={styles.tableCellText}>
+          {item.created_at
+            ? new Date(item.created_at).toLocaleDateString()
+            : "-"}
+        </Text>
+      </View>
+      <View style={styles.tableCell}>
+        <StatusBadge
+          status={
+            item.active_status === true || item.active_status === "active"
+              ? UserStatus.ACTIVE
+              : UserStatus.INACTIVE
+          }
+          size="small"
+        />
+      </View>
+      <View style={styles.actionCell}>
+        <IconButton
+          icon="pencil"
+          size={20}
+          onPress={(e) => {
+            e.stopPropagation();
+            navigation.navigate("EditCompanyAdmin", { adminId: item.id });
+          }}
+          style={styles.actionIcon}
+        />
+        <IconButton
+          icon="eye"
+          size={20}
+          onPress={(e) => {
+            e.stopPropagation();
+            navigation.navigate("CompanyAdminDetailsScreen", {
+              adminId: item.id,
+              adminType: "company",
+            });
+          }}
+          style={styles.actionIcon}
+        />
+      </View>
+    </Pressable>
+  );
+
+  const EmployeeTableRow = ({ item }: { item: CompanyUser }) => (
+    <Pressable
+      onPress={() => {
+        navigation.navigate("EmployeeDetailedScreen", {
+          employeeId: item.id,
+          companyId: item.company_id,
+        });
+      }}
+      style={({ pressed }: PressableStateCallbackType) => [
+        styles.tableRow,
+        pressed && { backgroundColor: "#f8fafc" },
+      ]}
+    >
+      <View style={styles.tableCell}>
+        <TooltipText
+          text={
+            `${item.first_name || ""} ${item.last_name || ""}`.trim() ||
+            "Unnamed Employee"
+          }
+        />
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText text={item.email} />
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText
+          text={(item as any).company?.company_name || "Unknown Company"}
+        />
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText text={item.job_title || "-"} />
+      </View>
+      <View style={styles.tableCell}>
+        <StatusBadge
+          status={
+            item.active_status === true || item.active_status === "active"
+              ? UserStatus.ACTIVE
+              : UserStatus.INACTIVE
+          }
+          size="small"
+        />
+      </View>
+      <View style={styles.actionCell}>
+        <IconButton
+          icon="eye"
+          size={20}
+          onPress={(e) => {
+            e.stopPropagation();
+            navigation.navigate("EmployeeDetailedScreen", {
+              employeeId: item.id,
+              companyId: item.company_id,
+            });
+          }}
+          style={styles.actionIcon}
+        />
+      </View>
+    </Pressable>
+  );
+  const windowWidth = Dimensions.get("window").width;
+  const isLargeScreen = windowWidth >= 1440;
+  const isMediumScreen = windowWidth >= 768 && windowWidth < 1440;
+  const useTableLayout = isLargeScreen || isMediumScreen;
+
   const renderCurrentList = () => {
     if (loading && !refreshing) {
-      return <LoadingIndicator />;
+      if (useTableLayout) {
+        // Table view skeleton
+        return (
+          <View style={styles.tableContainer}>
+            {selectedTab === UserListType.SUPER_ADMIN && (
+              <SuperAdminTableHeader />
+            )}
+            {selectedTab === UserListType.COMPANY_ADMIN && (
+              <CompanyAdminTableHeader />
+            )}
+            {selectedTab === UserListType.EMPLOYEE && <EmployeeTableHeader />}
+
+            {Array(6)
+              .fill(0)
+              .map((_, index) => (
+                <View key={`skeleton-${index}`} style={styles.tableRow}>
+                  <View style={styles.tableCell}>
+                    <Shimmer width={160} height={16} />
+                  </View>
+                  <View style={styles.tableCell}>
+                    <Shimmer width={180} height={16} />
+                  </View>
+                  <View style={styles.tableCell}>
+                    <Shimmer width={140} height={16} />
+                  </View>
+                  <View style={styles.tableCell}>
+                    <Shimmer width={100} height={16} />
+                  </View>
+                  <View style={styles.tableCell}>
+                    <Shimmer
+                      width={80}
+                      height={24}
+                      style={{ borderRadius: 12 }}
+                    />
+                  </View>
+                  <View style={styles.actionCell}>
+                    <Shimmer
+                      width={40}
+                      height={40}
+                      style={{ borderRadius: 20, marginRight: 8 }}
+                    />
+                    <Shimmer
+                      width={40}
+                      height={40}
+                      style={{ borderRadius: 20 }}
+                    />
+                  </View>
+                </View>
+              ))}
+          </View>
+        );
+      }
+
+      // Card view skeleton
+      return (
+        <FlatList
+          data={Array(4).fill(0)}
+          renderItem={() => (
+            <View style={styles.cardContainer}>
+              <Card style={[styles.card]} elevation={0}>
+                <Card.Content style={styles.cardContent}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.userInfo}>
+                      <Shimmer
+                        width={50}
+                        height={50}
+                        style={{ borderRadius: 25, marginRight: 16 }}
+                      />
+                      <View style={styles.userTextContainer}>
+                        <Shimmer
+                          width={180}
+                          height={16}
+                          style={{ marginBottom: 8 }}
+                        />
+                        <Shimmer
+                          width={140}
+                          height={14}
+                          style={{ marginBottom: 8 }}
+                        />
+                        <View style={styles.badgeContainer}>
+                          <Shimmer
+                            width={120}
+                            height={24}
+                            style={{ borderRadius: 12, marginBottom: 4 }}
+                          />
+                        </View>
+                      </View>
+                    </View>
+                    <View style={styles.statusContainer}>
+                      <Shimmer
+                        width={80}
+                        height={24}
+                        style={{ borderRadius: 12 }}
+                      />
+                    </View>
+                  </View>
+                </Card.Content>
+              </Card>
+            </View>
+          )}
+          keyExtractor={(_, index) => `skeleton-${index}`}
+          contentContainerStyle={styles.listContent}
+        />
+      );
     }
+
+    // Get window dimensions
 
     switch (selectedTab) {
       case UserListType.SUPER_ADMIN:
         if (filteredSuperAdmins.length === 0) {
           return renderEmptyState();
         }
-        return (
-          <>
+        return useTableLayout ? (
+          <View style={styles.tableContainer}>
+            <SuperAdminTableHeader />
             <FlatList
               data={filteredSuperAdmins}
-              renderItem={renderSuperAdminItem}
+              renderItem={({ item }) => <SuperAdminTableRow item={item} />}
               keyExtractor={(item) => `super-${item.id}`}
-              contentContainerStyle={styles.listContent}
+              contentContainerStyle={styles.tableContent}
               refreshControl={
                 <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
               }
             />
-          </>
+          </View>
+        ) : (
+          <FlatList
+            data={filteredSuperAdmins}
+            renderItem={renderSuperAdminItem}
+            keyExtractor={(item) => `super-${item.id}`}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+          />
         );
 
       case UserListType.COMPANY_ADMIN:
         if (filteredCompanyAdmins.length === 0) {
           return renderEmptyState();
         }
-        return (
-          <>
+        return useTableLayout ? (
+          <View style={styles.tableContainer}>
+            <CompanyAdminTableHeader />
             <FlatList
               data={filteredCompanyAdmins}
-              renderItem={renderCompanyAdminItem}
+              renderItem={({ item }) => <CompanyAdminTableRow item={item} />}
               keyExtractor={(item) => `admin-${item.id}`}
-              contentContainerStyle={styles.listContent}
+              contentContainerStyle={styles.tableContent}
               refreshControl={
                 <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
               }
             />
-          </>
+          </View>
+        ) : (
+          <FlatList
+            data={filteredCompanyAdmins}
+            renderItem={renderCompanyAdminItem}
+            keyExtractor={(item) => `admin-${item.id}`}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+          />
         );
 
       case UserListType.EMPLOYEE:
         if (filteredEmployees.length === 0) {
           return renderEmptyState();
         }
-        return (
-          <>
+        return useTableLayout ? (
+          <View style={styles.tableContainer}>
+            <EmployeeTableHeader />
             <FlatList
               data={filteredEmployees}
-              renderItem={renderEmployeeItem}
+              renderItem={({ item }) => <EmployeeTableRow item={item} />}
               keyExtractor={(item) => `emp-${item.id}`}
-              contentContainerStyle={styles.listContent}
+              contentContainerStyle={styles.tableContent}
               refreshControl={
                 <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
               }
             />
-          </>
+          </View>
+        ) : (
+          <FlatList
+            data={filteredEmployees}
+            renderItem={renderEmployeeItem}
+            keyExtractor={(item) => `emp-${item.id}`}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+          />
         );
 
       default:
@@ -915,7 +1508,6 @@ const SuperAdminUsersScreen = () => {
                 </View>
               </RadioButton.Group>
             </View>
-
 
             {/* Company section - only for Company Admin and Employee tabs */}
             {selectedTab !== UserListType.SUPER_ADMIN && (
@@ -1495,7 +2087,7 @@ const SuperAdminUsersScreen = () => {
           {/* Employee Option */}
           <TouchableOpacity
             style={[
-              styles.enhancedMenuItem, 
+              styles.enhancedMenuItem,
               { borderBottomWidth: 0, paddingBottom: 5 },
               selectedTab === UserListType.EMPLOYEE && styles.selectedMenuItem,
             ]}
@@ -1628,11 +2220,7 @@ const SuperAdminUsersScreen = () => {
           activeOpacity={0.7}
         >
           <View style={styles.userTypeDropdownContent}>
-            <View
-              style={[
-                styles.iconContainer,
-              ]}
-            >
+            <View style={[styles.iconContainer]}>
               <IconButton
                 icon={userTypeInfo.icon}
                 size={22}
@@ -1677,9 +2265,17 @@ const SuperAdminUsersScreen = () => {
         showLogo={false}
         subtitle="Manage all system users"
       />
-
-      <View style={[styles.mainContent, { backgroundColor: theme.colors.backgroundSecondary }]}>
-        <View style={styles.searchContainer}>
+      <View
+        style={[
+          styles.searchContainer,
+          {
+            maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
+            alignSelf: "center",
+            width: "100%",
+          },
+        ]}
+      >
+        <View style={styles.searchBarContainer}>
           <Searchbar
             placeholder="Search users..."
             onChangeText={setSearchQuery}
@@ -1698,7 +2294,6 @@ const SuperAdminUsersScreen = () => {
             }
             icon="magnify"
           />
-          {/* Enable filter button for all tabs */}
           <View style={styles.filterButtonContainer}>
             <IconButton
               icon="filter-variant"
@@ -1714,52 +2309,147 @@ const SuperAdminUsersScreen = () => {
           </View>
         </View>
 
-        {searchQuery && searchQuery.length > 0 && searchQuery.length < 3 && (
-          <View style={styles.searchTips}>
-            <Text style={styles.searchTipsText}>
-              Type at least 3 characters for better search results.
-            </Text>
-          </View>
-        )}
-
-        {renderEnhancedDropdown()}
-
-        {renderUserTypeMenu()}
-
-        {renderActiveFilterIndicator()}
-        {renderFilterModal()}
-
-        {searchQuery && searchQuery.length > 0 && (
-          <View style={styles.searchResultsContainer}>
-            <Text style={styles.searchResultsText}>
-              Found:{" "}
-              {selectedTab === UserListType.SUPER_ADMIN
-                ? `${filteredSuperAdmins.length} super admins`
-                : selectedTab === UserListType.COMPANY_ADMIN
-                  ? `${filteredCompanyAdmins.length} company admins`
-                  : `${filteredEmployees.length} employees`}
-            </Text>
-          </View>
-        )}
-
-        <View style={styles.listContainer}>{renderCurrentList()}</View>
+        <FAB
+          icon="plus"
+          style={[
+            styles.fab,
+            {
+              backgroundColor: theme.colors.primary,
+              position: "relative",
+              margin: 0,
+              marginLeft: 16,
+              elevation: 0,
+              shadowColor: "transparent",
+            },
+          ]}
+          onPress={() => {
+            if (selectedTab === UserListType.SUPER_ADMIN) {
+              navigation.navigate("CreateSuperAdmin");
+            } else if (selectedTab === UserListType.COMPANY_ADMIN) {
+              navigation.navigate("CreateCompanyAdmin");
+            } else {
+              navigation.navigate("CreateEmployee");
+            }
+          }}
+          color={theme.colors.surface}
+        />
       </View>
 
-      <FAB
-        icon="plus"
-        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
-        onPress={() => {
-          if (selectedTab === UserListType.SUPER_ADMIN) {
-            navigation.navigate("CreateSuperAdmin");
-          } else if (selectedTab === UserListType.COMPANY_ADMIN) {
-            navigation.navigate("CreateCompanyAdmin");
-          } else {
-            // Show company list to add employees
-            navigation.navigate("CreateEmployee");
-          }
-        }}
-        color={theme.colors.surface}
-      />
+      {searchQuery && searchQuery.length > 0 && searchQuery.length < 3 && (
+        <View style={styles.searchTips}>
+          <Text style={styles.searchTipsText}>
+            Type at least 3 characters for better search results.
+          </Text>
+        </View>
+      )}
+      <View
+        style={[
+          styles.contentContainer,
+          {
+            maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
+            alignSelf: "center",
+            width: "100%",
+            flex: 1,
+          },
+        ]}
+      >
+        <View style={styles.tabsContainer}>
+          <View style={styles.tabsWrapper}>
+            <TouchableOpacity
+              style={[
+                styles.tab,
+                selectedTab === UserListType.SUPER_ADMIN && {
+                  borderBottomColor: theme.colors.primary,
+                  borderBottomWidth: 2,
+                },
+              ]}
+              onPress={() => {
+                setSelectedTab(UserListType.SUPER_ADMIN);
+                setSelectedCompanyIds([]);
+                setSelectedCompanyId("all");
+                if (searchQuery) setSearchQuery("");
+              }}
+            >
+              <Text
+                style={[
+                  styles.tabText,
+                  selectedTab === UserListType.SUPER_ADMIN && {
+                    color: theme.colors.primary,
+                  },
+                ]}
+              >
+                Admin Users
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.tab,
+                selectedTab === UserListType.COMPANY_ADMIN && {
+                  borderBottomColor: theme.colors.primary,
+                  borderBottomWidth: 2,
+                },
+              ]}
+              onPress={() => {
+                setSelectedTab(UserListType.COMPANY_ADMIN);
+                if (searchQuery) setSearchQuery("");
+              }}
+            >
+              <Text
+                style={[
+                  styles.tabText,
+                  selectedTab === UserListType.COMPANY_ADMIN && {
+                    color: theme.colors.primary,
+                  },
+                ]}
+              >
+                Company Users
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.tab,
+                selectedTab === UserListType.EMPLOYEE && {
+                  borderBottomColor: theme.colors.primary,
+                  borderBottomWidth: 2,
+                },
+              ]}
+              onPress={() => {
+                setSelectedTab(UserListType.EMPLOYEE);
+                if (searchQuery) setSearchQuery("");
+              }}
+            >
+              <Text
+                style={[
+                  styles.tabText,
+                  selectedTab === UserListType.EMPLOYEE && {
+                    color: theme.colors.primary,
+                  },
+                ]}
+              >
+                Company Employees
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        <View style={styles.listContainer}>{renderCurrentList()}</View>
+      </View>
+      {renderUserTypeMenu()}
+
+      {renderActiveFilterIndicator()}
+      {renderFilterModal()}
+
+      {searchQuery && searchQuery.length > 0 && (
+        <View style={styles.searchResultsContainer}>
+          <Text style={styles.searchResultsText}>
+            Found:{" "}
+            {selectedTab === UserListType.SUPER_ADMIN
+              ? `${filteredSuperAdmins.length} super admins`
+              : selectedTab === UserListType.COMPANY_ADMIN
+                ? `${filteredCompanyAdmins.length} company admins`
+                : `${filteredEmployees.length} employees`}
+          </Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -1770,14 +2460,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F5F7F9",
   },
-  mainContent: {
-    flex: 1,
-    paddingHorizontal: 16,
-    // marginBottom: 76,
-  },
   contentContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+    flex: 1,
+    paddingHorizontal: Platform.OS === "web" ? 24 : 16,
+    paddingVertical: 16,
   },
   filterCard: {
     marginBottom: 12,
@@ -1809,21 +2495,26 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   searchContainer: {
+    padding: Platform.OS === "web" ? 24 : 16,
+    paddingTop: 10,
+    paddingBottom: 8,
     flexDirection: "row",
     alignItems: "center",
-    height: 60,
-    marginTop: 8,
-    marginBottom: 8,
+    justifyContent: "space-between",
+  },
+  searchBarContainer: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
   },
   searchbar: {
-    flex: 1,
-    elevation: 1,
+    elevation: 0,
     borderRadius: 18,
-    height: 60,
+    height: 56,
     backgroundColor: "#fff",
     borderWidth: 1,
     borderColor: "#e0e0e0",
-    fontSize: 16,
+    flex: 1,
   },
   filterButtonContainer: {
     position: "relative",
@@ -1989,8 +2680,10 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     margin: 16,
     overflow: "hidden",
-    maxHeight: "80%",
+    maxHeight: "100%",
     elevation: 5,
+    maxWidth: "40%",
+    justifyContent: "center",
   },
   modalHeaderContainer: {
     backgroundColor: "white",
@@ -2159,11 +2852,9 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   fab: {
-    position: "absolute",
-    margin: 16,
-    right: 0,
-    bottom: Platform.OS === 'web' ? 0 : 80,
-    borderRadius: 28,
+    borderRadius: 17,
+    height: 56,
+    elevation: 0,
   },
   avatarContainer: {
     width: 50,
@@ -2343,7 +3034,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
-    paddingHorizontal:10,
+    paddingHorizontal: 10,
   },
   userTypeDropdownContent: {
     flexDirection: "row",
@@ -2434,6 +3125,145 @@ const styles = StyleSheet.create({
   },
   checkIconContainer: {
     marginLeft: 8,
+  },
+  tabsContainer: {
+    paddingHorizontal: 24,
+    paddingBottom: 16,
+  },
+  tabsWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    maxWidth: 600,
+  },
+  tab: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    marginRight: 8,
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
+  },
+  activeTab: {},
+  tabText: {
+    fontSize: 14,
+    fontFamily: "Poppins-Medium",
+    color: "#616161",
+  },
+  activeTabText: {
+    color: "#1a73e8",
+  },
+  tableContainer: {
+    flex: 1,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    overflow: "hidden",
+  },
+  tableHeader: {
+    flexDirection: "row",
+    backgroundColor: "#f8fafc",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
+    paddingVertical: 16,
+    paddingHorizontal: 26,
+    alignContent: "center",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  tableHeaderCell: {
+    flex: 1,
+    paddingHorizontal: 16,
+    justifyContent: "space-around",
+    paddingLeft: 25,
+    alignItems: "flex-start",
+  },
+  tableHeaderText: {
+    fontSize: 14,
+    color: "#64748b",
+  },
+  tableRow: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
+    paddingVertical: 16,
+    backgroundColor: "#fff",
+    paddingHorizontal: 26,
+    alignItems: "center",
+  },
+  tableCell: {
+    flex: 1,
+    paddingHorizontal: 26,
+    justifyContent: "space-evenly",
+    alignItems: "flex-start",
+  },
+  tableCellText: {
+    fontSize: 14,
+    color: "#334155",
+  },
+  tableContent: {
+    flexGrow: 1,
+  },
+  actionCell: {
+    flex: 1,
+    flexDirection: "row",
+    justifyContent: "flex-start",
+    alignItems: "center",
+    paddingHorizontal: 26,
+  },
+  actionIcon: {
+    margin: 0,
+    marginRight: 8,
+  },
+  tooltipContainer: {
+    position: "relative",
+    flex: 1,
+    maxWidth: "100%",
+    zIndex: 10, // Higher z-index to appear above table header
+  },
+  tooltip: {
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    padding: 8,
+    marginLeft: 30,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    maxWidth: 300,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    zIndex: 9999,
+    ...(Platform.OS === "web"
+      ? {
+          // @ts-ignore - web specific style
+          willChange: "transform",
+          // @ts-ignore - web specific style
+          isolation: "isolate",
+        }
+      : {}),
+  },
+  tooltipText: {
+    color: "#000",
+    fontSize: 12,
+    fontFamily: "Poppins-Regular",
+    lineHeight: 16,
+  },
+  skeleton: {
+    backgroundColor: "#F3F4F6",
+    borderRadius: 4,
+    overflow: "hidden",
+  },
+  skeletonCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#F0F0F0",
+    padding: 16,
+    marginBottom: 16,
   },
 });
 

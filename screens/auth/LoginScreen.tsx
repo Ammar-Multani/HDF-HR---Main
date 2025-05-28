@@ -443,8 +443,10 @@ const styles = StyleSheet.create({
   },
   formContainer: {
     width: "100%",
-    marginBottom: 20,
+    marginBottom: 10,
+    marginTop: Platform.OS === "web" ? 40 : 100,
     maxWidth: Platform.OS === "web" ? 480 : undefined,
+    maxHeight: Platform.OS === "web" ? height - 100 : undefined,
     alignSelf: "center",
   },
   glassSurface: {
@@ -499,7 +501,7 @@ const styles = StyleSheet.create({
   dividerContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginVertical: 16,
+    marginVertical: 10,
   },
   divider: {
     flex: 1,
@@ -548,11 +550,10 @@ const styles = StyleSheet.create({
   contactContainer: {
     flexDirection: "row",
     justifyContent: "center",
-    marginTop: 24,
+    marginTop: 4,
     marginBottom: Platform.OS === "web" ? 32 : 24,
   },
   contactButton: {
-    paddingVertical: 8,
     paddingHorizontal: 16,
   },
   contactText: {
@@ -562,7 +563,7 @@ const styles = StyleSheet.create({
     }),
   },
   languageSelectorContainer: {
-    marginTop: Platform.OS === "web" ? 0 : 20,
+    marginTop: Platform.OS === "web" ? 0 : -15,
     alignItems: "center",
     width: "100%",
     maxWidth: Platform.OS === "web" ? 320 : undefined,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   StyleSheet,
   View,
@@ -10,6 +10,9 @@ import {
   AppStateStatus,
   ScrollView,
   Platform,
+  Dimensions,
+  Pressable,
+  PressableStateCallbackType,
 } from "react-native";
 import {
   Card,
@@ -46,10 +49,183 @@ import Text from "../../components/Text";
 import { globalStyles } from "../../utils/globalStyles";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTranslation } from "react-i18next";
+import Animated, {
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
+
+// Add TooltipText component after imports and before other components
+const TooltipText = ({
+  text,
+  numberOfLines = 1,
+}: {
+  text: string;
+  numberOfLines?: number;
+}) => {
+  const [isHovered, setIsHovered] = useState(false);
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+  const containerRef = useRef<View>(null);
+
+  const updateTooltipPosition = () => {
+    if (Platform.OS === "web" && containerRef.current) {
+      // @ts-ignore - web specific
+      const rect = containerRef.current.getBoundingClientRect();
+      const windowHeight = window.innerHeight;
+      const spaceAbove = rect.top;
+      const spaceBelow = windowHeight - rect.bottom;
+
+      // Calculate horizontal position to prevent overflow
+      const windowWidth = window.innerWidth;
+      let xPos = rect.left;
+
+      // Ensure tooltip doesn't overflow right edge
+      if (xPos + 300 > windowWidth) {
+        // 300 is max tooltip width
+        xPos = windowWidth - 310; // Add some padding
+      }
+
+      // Position vertically based on available space
+      let yPos;
+      if (spaceBelow >= 100) {
+        // If enough space below
+        yPos = rect.bottom + window.scrollY + 5;
+      } else if (spaceAbove >= 100) {
+        // If enough space above
+        yPos = rect.top + window.scrollY - 5;
+      } else {
+        // If neither, position it where there's more space
+        yPos =
+          spaceAbove > spaceBelow
+            ? rect.top + window.scrollY - 5
+            : rect.bottom + window.scrollY + 5;
+      }
+
+      setTooltipPosition({ x: xPos, y: yPos });
+    }
+  };
+
+  useEffect(() => {
+    if (isHovered) {
+      updateTooltipPosition();
+      // Add scroll and resize listeners
+      if (Platform.OS === "web") {
+        window.addEventListener("scroll", updateTooltipPosition);
+        window.addEventListener("resize", updateTooltipPosition);
+
+        return () => {
+          window.removeEventListener("scroll", updateTooltipPosition);
+          window.removeEventListener("resize", updateTooltipPosition);
+        };
+      }
+    }
+  }, [isHovered]);
+
+  if (Platform.OS !== "web") {
+    return (
+      <Text style={styles.tableCellText} numberOfLines={numberOfLines}>
+        {text}
+      </Text>
+    );
+  }
+
+  return (
+    <View
+      ref={containerRef}
+      style={styles.tooltipContainer}
+      // @ts-ignore - web specific props
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <Text style={styles.tableCellText} numberOfLines={numberOfLines}>
+        {text}
+      </Text>
+      {isHovered && (
+        <Portal>
+          <View
+            style={[
+              styles.tooltip,
+              {
+                position: "absolute",
+                left: tooltipPosition.x,
+                top: tooltipPosition.y,
+              },
+            ]}
+          >
+            <Text style={styles.tooltipText}>{text}</Text>
+          </View>
+        </Portal>
+      )}
+    </View>
+  );
+};
+
+// Add Shimmer component after TooltipText component
+interface ShimmerProps {
+  width: number | string;
+  height: number;
+  style?: any;
+}
+
+const Shimmer: React.FC<ShimmerProps> = ({ width, height, style }) => {
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        {
+          translateX: withRepeat(
+            withSequence(
+              withTiming(typeof width === "number" ? -width : -200, {
+                duration: 800,
+              }),
+              withTiming(typeof width === "number" ? width : 200, {
+                duration: 800,
+              })
+            ),
+            -1
+          ),
+        },
+      ],
+    };
+  });
+
+  return (
+    <View
+      style={[
+        {
+          width,
+          height,
+          backgroundColor: "#E8E8E8",
+          overflow: "hidden",
+          borderRadius: 4,
+        },
+        style,
+      ]}
+    >
+      <Animated.View
+        style={[
+          {
+            width: "100%",
+            height: "100%",
+            position: "absolute",
+            backgroundColor: "transparent",
+          },
+          animatedStyle,
+        ]}
+      >
+        <LinearGradient
+          colors={["transparent", "rgba(255, 255, 255, 0.4)", "transparent"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{ width: "100%", height: "100%" }}
+        />
+      </Animated.View>
+    </View>
+  );
+};
 
 // Component for skeleton loading UI
 const CompanyItemSkeleton = () => {
-  const theme = useTheme();
   return (
     <Card
       style={[
@@ -63,40 +239,29 @@ const CompanyItemSkeleton = () => {
     >
       <Card.Content>
         <View style={styles.cardHeader}>
-          <View
-            style={[
-              styles.skeleton,
-              styles.skeletonTitle,
-              { backgroundColor: theme.colors.surfaceVariant },
-            ]}
-          />
-          <View
-            style={[
-              styles.skeleton,
-              styles.skeletonBadge,
-              { backgroundColor: theme.colors.surfaceVariant },
-            ]}
-          />
+          <View style={{ flex: 1 }}>
+            <Shimmer width={180} height={16} style={{ marginBottom: 8 }} />
+          </View>
+          <Shimmer width={80} height={24} style={{ borderRadius: 12 }} />
         </View>
+
         <View style={styles.cardDetails}>
-          {[1, 2, 3].map((i) => (
-            <View key={i} style={styles.detailItem}>
-              <View
-                style={[
-                  styles.skeleton,
-                  styles.skeletonLabel,
-                  { backgroundColor: theme.colors.surfaceVariant },
-                ]}
-              />
-              <View
-                style={[
-                  styles.skeleton,
-                  styles.skeletonValue,
-                  { backgroundColor: theme.colors.surfaceVariant },
-                ]}
-              />
-            </View>
-          ))}
+          <View style={styles.detailItem}>
+            <Shimmer width={100} height={14} style={{ marginRight: 8 }} />
+            <Shimmer width={150} height={14} />
+          </View>
+          <View style={styles.detailItem}>
+            <Shimmer width={100} height={14} style={{ marginRight: 8 }} />
+            <Shimmer width={120} height={14} />
+          </View>
+          <View style={styles.detailItem}>
+            <Shimmer width={100} height={14} style={{ marginRight: 8 }} />
+            <Shimmer width={140} height={14} />
+          </View>
+          <View style={styles.detailItem}>
+            <Shimmer width={100} height={14} style={{ marginRight: 8 }} />
+            <Shimmer width={160} height={14} />
+          </View>
         </View>
       </Card.Content>
     </Card>
@@ -107,6 +272,33 @@ const CompanyListScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const { t } = useTranslation();
+  const [windowDimensions, setWindowDimensions] = useState({
+    width: Dimensions.get("window").width,
+    height: Dimensions.get("window").height,
+  });
+
+  // Add window resize listener
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      const handleResize = () => {
+        setWindowDimensions({
+          width: Dimensions.get("window").width,
+          height: Dimensions.get("window").height,
+        });
+      };
+
+      window.addEventListener("resize", handleResize);
+
+      // Cleanup
+      return () => window.removeEventListener("resize", handleResize);
+    }
+  }, []);
+
+  // Calculate responsive breakpoints
+  const isLargeScreen = windowDimensions.width >= 1440;
+  const isMediumScreen =
+    windowDimensions.width >= 768 && windowDimensions.width < 1440;
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -482,6 +674,99 @@ const CompanyListScreen = () => {
     </TouchableOpacity>
   );
 
+  // Add table header component
+  const TableHeader = () => (
+    <View style={styles.tableHeader}>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          {t("superAdmin.companies.company")}
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          {t("superAdmin.companies.registration")}
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          {t("superAdmin.companies.industry")}
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          {t("superAdmin.companies.onboardingDate")}
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          {t("superAdmin.companies.status")}
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          {t("superAdmin.companies.actions")}
+        </Text>
+      </View>
+    </View>
+  );
+
+  // Update the TableRow component to use TooltipText
+  const TableRow = ({ item }: { item: Company }) => (
+    <Pressable
+      onPress={() => {
+        navigation.navigate("CompanyDetails", { companyId: item.id });
+      }}
+      style={({ pressed }: PressableStateCallbackType) => [
+        styles.tableRow,
+        pressed && { backgroundColor: "#f8fafc" },
+      ]}
+    >
+      <View style={styles.tableCell}>
+        <TooltipText text={item.company_name} />
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText text={item.registration_number || "-"} />
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText text={item.industry_type || "-"} />
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText
+          text={
+            item.created_at
+              ? new Date(item.created_at).toLocaleDateString()
+              : "-"
+          }
+        />
+      </View>
+      <View style={styles.tableCell}>
+        <StatusBadge
+          status={item.active ? UserStatus.ACTIVE : UserStatus.INACTIVE}
+        />
+      </View>
+      <View style={styles.actionCell}>
+        <IconButton
+          icon="pencil"
+          size={20}
+          onPress={(e) => {
+            e.stopPropagation();
+            navigation.navigate("EditCompany", { companyId: item.id });
+          }}
+          style={styles.actionIcon}
+        />
+        <IconButton
+          icon="eye"
+          size={20}
+          onPress={(e) => {
+            e.stopPropagation();
+            navigation.navigate("CompanyDetails", { companyId: item.id });
+          }}
+          style={styles.actionIcon}
+        />
+      </View>
+    </Pressable>
+  );
+
   const renderContent = () => {
     // Show empty state when no results and not loading
     if (filteredCompanies.length === 0 && !loading && !refreshing) {
@@ -506,7 +791,6 @@ const CompanyListScreen = () => {
             if (searchQuery) {
               setSearchQuery("");
             } else {
-              // @ts-ignore - Navigation typing is complex but this works
               navigation.navigate("CreateCompany");
             }
           }}
@@ -516,6 +800,50 @@ const CompanyListScreen = () => {
 
     // Show skeleton loaders when initially loading
     if (loading && filteredCompanies.length === 0) {
+      if (isMediumScreen || isLargeScreen) {
+        return (
+          <View style={styles.tableContainer}>
+            <TableHeader />
+            {Array(5)
+              .fill(0)
+              .map((_, index) => (
+                <View key={`skeleton-${index}`} style={styles.tableRow}>
+                  <View style={styles.tableCell}>
+                    <Shimmer width={160} height={16} />
+                  </View>
+                  <View style={styles.tableCell}>
+                    <Shimmer width={120} height={16} />
+                  </View>
+                  <View style={styles.tableCell}>
+                    <Shimmer width={140} height={16} />
+                  </View>
+                  <View style={styles.tableCell}>
+                    <Shimmer width={100} height={16} />
+                  </View>
+                  <View style={styles.tableCell}>
+                    <Shimmer
+                      width={80}
+                      height={24}
+                      style={{ borderRadius: 12 }}
+                    />
+                  </View>
+                  <View style={styles.actionCell}>
+                    <Shimmer
+                      width={40}
+                      height={40}
+                      style={{ borderRadius: 20, marginRight: 8 }}
+                    />
+                    <Shimmer
+                      width={40}
+                      height={40}
+                      style={{ borderRadius: 20 }}
+                    />
+                  </View>
+                </View>
+              ))}
+          </View>
+        );
+      }
       return (
         <FlatList
           data={Array(3).fill(0)}
@@ -527,6 +855,44 @@ const CompanyListScreen = () => {
     }
 
     // Show the actual data
+    if (isMediumScreen || isLargeScreen) {
+      return (
+        <View style={styles.tableContainer}>
+          <TableHeader />
+          <FlatList
+            data={filteredCompanies}
+            renderItem={({ item }) => <TableRow item={item} />}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.tableContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+            onEndReached={loadMoreCompanies}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={() => (
+              <>
+                {totalCount > 0 && (
+                  <Text style={styles.resultsCount}>
+                    {t("superAdmin.companies.showing")}{" "}
+                    {filteredCompanies.length} {t("superAdmin.companies.of")}{" "}
+                    {totalCount} {t("superAdmin.companies.companies")}
+                  </Text>
+                )}
+                {loadingMore && hasMoreData && (
+                  <View style={styles.loadingFooter}>
+                    <ActivityIndicator
+                      size="small"
+                      color={theme.colors.primary}
+                    />
+                  </View>
+                )}
+              </>
+            )}
+          />
+        </View>
+      );
+    }
+
     return (
       <FlatList
         data={filteredCompanies}
@@ -878,110 +1244,164 @@ const CompanyListScreen = () => {
         showHelpButton={true}
         absolute={false}
       />
-      <View style={{ flex: 1, backgroundColor: theme.colors.backgroundSecondary,  }}>
-
-      {networkStatus === false && (
-        <Banner
-          visible={true}
-          icon="wifi-off"
-          actions={[
-            {
-              label: t("common.retry"),
-              onPress: async () => {
-                const isAvailable = await isNetworkAvailable();
-                setNetworkStatus(isAvailable);
-                if (isAvailable) {
-                  setRefreshing(true);
-                  fetchCompanies(true);
-                }
+      <View
+        style={[
+          styles.mainContent,
+          { backgroundColor: theme.colors.surface, flex: 1 },
+        ]}
+      >
+        {networkStatus === false && (
+          <Banner
+            visible={true}
+            icon="wifi-off"
+            actions={[
+              {
+                label: t("common.retry"),
+                onPress: async () => {
+                  const isAvailable = await isNetworkAvailable();
+                  setNetworkStatus(isAvailable);
+                  if (isAvailable) {
+                    setRefreshing(true);
+                    fetchCompanies(true);
+                  }
+                },
               },
-            },
-          ]}
-        >
-          {t("common.offline")}
-        </Banner>
-      )}
-
-      {error && error !== t("common.offline") && (
-        <Banner
-          visible={true}
-          icon="alert-circle"
-          actions={[
-            {
-              label: t("common.dismiss"),
-              onPress: () => setError(null),
-            },
-          ]}
-        >
-          {error}
-        </Banner>
-      )}
-
-      <View style={styles.searchContainer}>
-        <Searchbar
-          placeholder={t("superAdmin.companies.search")}
-          onChangeText={networkStatus === false ? undefined : setSearchQuery}
-          value={searchQuery}
-          style={[
-            styles.searchbar,
-            networkStatus === false && { opacity: 0.6 },
-          ]}
-          loading={refreshing && searchQuery.length > 0}
-          onClearIconPress={() => {
-            if (networkStatus !== false) {
-              setSearchQuery("");
-            }
-          }}
-          theme={{ colors: { primary: theme.colors.primary } }}
-          clearIcon={() =>
-            searchQuery ? (
-              <IconButton
-                icon="close-circle"
-                size={18}
-                onPress={() => setSearchQuery("")}
-              />
-            ) : null
-          }
-          icon="magnify"
-        />
-        <View style={styles.filterButtonContainer}>
-          <IconButton
-            icon="filter-variant"
-            size={24}
-            style={[
-              styles.filterButton,
-              hasActiveFilters() && styles.activeFilterButton,
             ]}
-            iconColor={hasActiveFilters() ? theme.colors.primary : undefined}
-            onPress={() => setFilterModalVisible(true)}
+          >
+            {t("common.offline")}
+          </Banner>
+        )}
+
+        {error && error !== t("common.offline") && (
+          <Banner
+            visible={true}
+            icon="alert-circle"
+            actions={[
+              {
+                label: t("common.dismiss"),
+                onPress: () => setError(null),
+              },
+            ]}
+          >
+            {error}
+          </Banner>
+        )}
+
+        <View
+          style={[
+            styles.searchContainer,
+            {
+              maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
+              alignSelf: "center",
+              width: "100%",
+            },
+          ]}
+        >
+          <View style={styles.searchBarContainer}>
+            <Searchbar
+              placeholder={t("superAdmin.companies.search")}
+              onChangeText={
+                networkStatus === false ? undefined : setSearchQuery
+              }
+              value={searchQuery}
+              style={[
+                styles.searchbar,
+                networkStatus === false && { opacity: 0.6 },
+              ]}
+              loading={refreshing && searchQuery.length > 0}
+              onClearIconPress={() => {
+                if (networkStatus !== false) {
+                  setSearchQuery("");
+                }
+              }}
+              theme={{ colors: { primary: theme.colors.primary } }}
+              clearIcon={() =>
+                searchQuery ? (
+                  <IconButton
+                    icon="close-circle"
+                    size={18}
+                    onPress={() => setSearchQuery("")}
+                  />
+                ) : null
+              }
+              icon="magnify"
+            />
+            <View style={styles.filterButtonContainer}>
+              <IconButton
+                icon="filter-variant"
+                size={30}
+                style={[
+                  styles.filterButton,
+                  hasActiveFilters() && styles.activeFilterButton,
+                ]}
+                iconColor={
+                  hasActiveFilters() ? theme.colors.primary : undefined
+                }
+                onPress={() => setFilterModalVisible(true)}
+              />
+              {hasActiveFilters() && <View style={styles.filterBadge} />}
+            </View>
+          </View>
+
+          <FAB
+            icon="plus"
+            label="Add Company"
+            style={[
+              styles.fab,
+              {
+                backgroundColor: theme.colors.primary,
+                position: "relative",
+                margin: 0,
+                marginLeft: 16,
+              },
+            ]}
+            onPress={() => {
+              navigation.navigate("CreateCompany");
+            }}
+            color={theme.colors.surface}
+            mode="flat"
+            theme={{ colors: { accent: theme.colors.surface } }}
+            accessibilityLabel={t("superAdmin.companies.addCompany")}
+            accessibilityHint={t("superAdmin.companies.addCompanyHint")}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: networkStatus === false }}
+            disabled={networkStatus === false}
           />
-          {hasActiveFilters() && <View style={styles.filterBadge} />}
         </View>
-      </View>
 
-      {searchQuery && searchQuery.length > 0 && searchQuery.length < 3 && (
-        <View style={styles.searchTips}>
-          <Text style={styles.searchTipsText}>
-            {t("superAdmin.companies.typeMoreChars")}
-          </Text>
+        {searchQuery && searchQuery.length > 0 && searchQuery.length < 3 && (
+          <View
+            style={[
+              styles.searchTips,
+              {
+                maxWidth: isLargeScreen ? 1200 : isMediumScreen ? 900 : "100%",
+                alignSelf: "center",
+                width: "100%",
+                paddingHorizontal: isLargeScreen ? 24 : 16,
+              },
+            ]}
+          >
+            <Text style={styles.searchTipsText}>
+              {t("superAdmin.companies.typeMoreChars")}
+            </Text>
+          </View>
+        )}
+
+        {renderActiveFilterIndicator()}
+        {renderFilterModal()}
+
+        <View
+          style={[
+            styles.contentContainer,
+            {
+              maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
+              alignSelf: "center",
+              width: "100%",
+            },
+          ]}
+        >
+          {renderContent()}
         </View>
-      )}
-
-      {renderActiveFilterIndicator()}
-      {renderFilterModal()}
-
-      {renderContent()}
-
-      <FAB
-        icon="plus"
-        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
-        onPress={() => {
-          // @ts-ignore - Navigation typing is complex but this works
-          navigation.navigate("CreateCompany");
-        }}
-        color={theme.colors.surface}
-        disabled={networkStatus === false}
-      />
       </View>
     </SafeAreaView>
   );
@@ -991,30 +1411,25 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  scrollContainer: {
+  mainContent: {
     flex: 1,
   },
-  scrollContent: {
-    paddingBottom: 100,
-  },
-  welcomeHeader: {
-    paddingHorizontal: 16,
-    marginBottom: 8,
-    marginTop: 5,
-  },
-  welcomeTitle: {
-    fontSize: 22,
-    color: "#333",
-    paddingBottom: 3,
-  },
-  welcomeSubtitle: {
-    fontSize: 14,
-    color: "#666",
+  contentContainer: {
+    flex: 1,
+    paddingHorizontal: Platform.OS === "web" ? 24 : 16,
+    paddingVertical: 16,
+    maxHeight: "90%",
   },
   searchContainer: {
-    padding: 16,
+    padding: Platform.OS === "web" ? 24 : 16,
     paddingTop: 10,
     paddingBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  searchBarContainer: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
   },
@@ -1025,17 +1440,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderWidth: 1,
     borderColor: "#e0e0e0",
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
     flex: 1,
   },
   listContent: {
-    padding: 16,
+    padding: Platform.OS === "web" ? 24 : 16,
     paddingTop: 8,
     paddingBottom: 100,
   },
@@ -1068,7 +1476,6 @@ const styles = StyleSheet.create({
   detailItem: {
     flexDirection: "row",
     marginBottom: 4,
-    gap: 1,
   },
   detailLabel: {
     opacity: 0.7,
@@ -1082,11 +1489,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   fab: {
-    borderRadius: 35,
-    position: "absolute",
-    margin: 16,
-    right: Platform.OS === "web" ? 15 : 0,
-    bottom: Platform.OS === "web" ? 10 : 80,
+    borderRadius: 17,
+    height: 56,
   },
   loadingFooter: {
     paddingVertical: 20,
@@ -1094,12 +1498,14 @@ const styles = StyleSheet.create({
   },
   // Skeleton styles
   skeleton: {
+    backgroundColor: "#F3F4F6",
     borderRadius: 4,
-    opacity: 0.3,
+    overflow: "hidden",
   },
   skeletonTitle: {
     height: 22,
     width: "70%",
+    marginBottom: 8,
   },
   skeletonBadge: {
     height: 24,
@@ -1109,6 +1515,7 @@ const styles = StyleSheet.create({
   skeletonLabel: {
     height: 16,
     width: 90,
+    marginRight: 8,
   },
   skeletonValue: {
     height: 16,
@@ -1117,13 +1524,14 @@ const styles = StyleSheet.create({
   resultsCount: {
     textAlign: "center",
     marginBottom: 10,
+    marginTop: 20,
     opacity: 0.7,
     fontSize: 12,
   },
   // Filter styles
   filterButtonContainer: {
     position: "relative",
-    marginLeft: 8,
+    marginLeft: 15,
   },
   filterButton: {
     borderWidth: 1,
@@ -1261,6 +1669,108 @@ const styles = StyleSheet.create({
     color: "#666",
     fontStyle: "italic",
   },
-});
+  // Add new table styles
+  tableContainer: {
+    flex: 1,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    overflow: "hidden",
+  },
+  tableHeader: {
+    flexDirection: "row",
+    backgroundColor: "#f8fafc",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
+    paddingVertical: 16,
+    paddingHorizontal: 26,
+    alignContent: "center",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  tableHeaderCell: {
+    flex: 1,
+    paddingHorizontal: 16,
+    justifyContent: "space-around",
+    paddingLeft: 25,
+    alignItems: "flex-start",
+  },
+  tableHeaderText: {
+    fontSize: 14,
+    color: "#64748b",
+  },
+  tableRow: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
+    paddingVertical: 16,
+    backgroundColor: "#fff",
+    paddingHorizontal: 26,
+    alignItems: "center",
+  },
+  tableCell: {
+    flex: 1,
+    paddingHorizontal: 26,
+    justifyContent: "space-evenly",
+    alignItems: "flex-start",
+  },
+  tableCellText: {
+    fontSize: 14,
+    color: "#334155",
+  },
+  tableContent: {
+    flexGrow: 1,
+  },
+  actionCell: {
+    flex: 1,
+    flexDirection: "row",
+    justifyContent: "flex-start",
+    alignItems: "center",
+    paddingHorizontal: 26,
+  },
+  actionIcon: {
+    margin: 0,
+    marginRight: 8,
+  },
+  tooltipContainer: {
+    position: "relative",
+    flex: 1,
+    maxWidth: "100%",
+    zIndex: 10, // Higher z-index to appear above table header
+  },
+  tooltip: {
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    padding: 8,
+    marginLeft: 30,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    maxWidth: 300,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    zIndex: 9999,
+    ...(Platform.OS === "web"
+      ? {
+          // @ts-ignore - web specific style
+          willChange: "transform",
+          // @ts-ignore - web specific style
+          isolation: "isolate",
+        }
+      : {}),
+  },
+  tooltipText: {
+    color: "#000",
+    fontSize: 12,
+    fontFamily: "Poppins-Regular",
+    lineHeight: 16,
+  },
+} as const);
 
 export default CompanyListScreen;
