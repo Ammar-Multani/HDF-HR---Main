@@ -1844,7 +1844,9 @@ const styles = StyleSheet.create({
   },
   tableContainer: {
     backgroundColor: "white",
-    borderRadius: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
     overflow: "hidden",
     marginTop: 16,
     flex: 1,

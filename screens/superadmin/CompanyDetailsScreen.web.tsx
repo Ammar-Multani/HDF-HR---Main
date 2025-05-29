@@ -301,14 +301,113 @@ const TooltipText = ({
   );
 };
 
+// Add interface for CustomAlert props
+interface CustomAlertProps {
+  visible: boolean;
+  title: string;
+  message: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  confirmText?: string;
+  cancelText?: string;
+  isDestructive?: boolean;
+}
+
+const CustomAlert: React.FC<CustomAlertProps> = ({
+  visible,
+  title,
+  message,
+  onConfirm,
+  onCancel,
+  confirmText = "Confirm",
+  cancelText = "Cancel",
+  isDestructive = false,
+}) => {
+  if (!visible) return null;
+
+  return (
+    <View style={styles.modalOverlay}>
+      <View style={styles.modalContent}>
+        <Text style={styles.modalTitle}>{title}</Text>
+        <Text style={styles.modalMessage}>{message}</Text>
+        <View style={styles.modalButtons}>
+          <TouchableOpacity
+            style={[styles.modalButton, styles.modalCancelButton]}
+            onPress={onCancel}
+          >
+            <Text style={styles.modalButtonText}>{cancelText}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.modalButton,
+              styles.modalConfirmButton,
+              isDestructive && styles.modalDestructiveButton,
+            ]}
+            onPress={onConfirm}
+          >
+            <Text
+              style={[
+                styles.modalButtonText,
+                styles.modalConfirmText,
+                isDestructive && styles.modalDestructiveText,
+              ]}
+            >
+              {confirmText}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
+};
+
+// Add interface for alert config
+interface AlertConfig {
+  title: string;
+  message: string;
+  confirmText: string;
+  cancelText: string;
+  isDestructive: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+// Update the CompanyAdmin interface
+interface CompanyAdmin {
+  id: string;
+  company_id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone_number?: string;
+  role: string;
+  active_status: UserStatus;
+  job_title?: string;
+  created_at: string;
+}
+
 const CompanyDetailsScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const route =
     useRoute<RouteProp<Record<string, CompanyDetailsRouteParams>, string>>();
-  const { companyId } = route.params;
   const { t } = useTranslation();
   const dimensions = useWindowDimensions();
+
+  // Store companyId in state to persist through rerenders
+  const [persistedCompanyId, setPersistedCompanyId] = useState<string | null>(
+    null
+  );
+
+  // Get companyId from route params or use persisted value
+  const companyId = route.params?.companyId || persistedCompanyId;
+
+  // Update persisted companyId when route params change
+  useEffect(() => {
+    if (route.params?.companyId) {
+      setPersistedCompanyId(route.params.companyId);
+    }
+  }, [route.params?.companyId]);
 
   // Calculate responsive breakpoints
   const isLargeScreen = dimensions.width >= 1440;
@@ -319,12 +418,22 @@ const CompanyDetailsScreen = () => {
   const [loadingAction, setLoadingAction] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
-  const [companyAdmins, setCompanyAdmins] = useState<CompanyUser[]>([]);
+  const [companyAdmins, setCompanyAdmins] = useState<CompanyAdmin[]>([]);
   const [employeeCount, setEmployeeCount] = useState(0);
   const [activeEmployeeCount, setActiveEmployeeCount] = useState(0);
   const [networkStatus, setNetworkStatus] = useState<boolean | null>(null);
+  const [showAlert, setShowAlert] = useState<boolean>(false);
+  const [alertConfig, setAlertConfig] = useState<AlertConfig>({
+    title: "",
+    message: "",
+    confirmText: "Confirm",
+    cancelText: "Cancel",
+    isDestructive: false,
+    onConfirm: () => {},
+    onCancel: () => {},
+  });
 
-  // Check network status when screen focuses - more reliable implementation
+  // Check network status when screen focuses
   useFocusEffect(
     useCallback(() => {
       const checkNetwork = async () => {
@@ -332,7 +441,6 @@ const CompanyDetailsScreen = () => {
           const isAvailable = await isNetworkAvailable();
           setNetworkStatus(isAvailable);
         } catch (e) {
-          // If there's an error checking network status, assume we're online
           console.warn("Error checking network status:", e);
           setNetworkStatus(true);
         }
@@ -340,7 +448,6 @@ const CompanyDetailsScreen = () => {
 
       checkNetwork();
 
-      // Also set up AppState listener to recheck when app comes to foreground
       const subscription = AppState.addEventListener(
         "change",
         async (nextAppState: AppStateStatus) => {
@@ -356,206 +463,240 @@ const CompanyDetailsScreen = () => {
     }, [])
   );
 
-  const fetchCompanyDetails = async (isRefreshing = false) => {
-    try {
-      // Clear any previous errors
-      setError(null);
-
-      if (isRefreshing) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
+  const fetchCompanyDetails = useCallback(
+    async (isRefreshing = false) => {
+      if (!companyId) {
+        setError(t("superAdmin.companies.invalidCompanyId"));
+        setLoading(false);
+        return;
       }
 
-      // Create a unique cache key for this company
-      const cacheKey = `company_details_${companyId}`;
+      try {
+        // Clear any previous errors
+        setError(null);
 
-      // Force refresh only when explicitly requested through pull-to-refresh
-      const forceRefresh = isRefreshing;
-
-      // Define the async function to fetch company data
-      const fetchCompanyData = async () => {
-        try {
-          // Optimize by using a single combined query to fetch all details
-          // This reduces the number of network requests dramatically
-          const companyDetailsPromise = supabase
-            .from("company")
-            .select(
-              `
-              id, 
-              company_name, 
-              registration_number, 
-              industry_type, 
-              contact_number, 
-              contact_email,
-              address, 
-              active, 
-              vat_type, 
-              stakeholders,
-              created_at,
-              company_user!company_id (
-                id, 
-                first_name, 
-                last_name, 
-                email, 
-                phone_number, 
-                role, 
-                active_status
-              )
-            `
-            )
-            .eq("id", companyId)
-            .single();
-
-          // If we need to optimize for mobile performance, we can still split this
-          // into two separate queries - one for company details and one for related data
-          const countPromise = supabase.rpc("get_company_counts", {
-            company_id: companyId,
-          });
-
-          // Execute queries in parallel
-          const [companyDetailsResult, countResult] = await Promise.all([
-            companyDetailsPromise,
-            countPromise,
-          ]);
-
-          // Process company details and related records
-          let companyData = companyDetailsResult.data;
-          let companyAdmins: CompanyUser[] = [];
-          let totalEmployeeCount = 0;
-          let activeEmployeeCount = 0;
-
-          if (companyData) {
-            // Extract company admins from the nested company_user data
-            if (companyData.company_user) {
-              // Safely cast to CompanyUser[] if the structure matches
-              const users = companyData.company_user as CompanyUser[];
-              companyAdmins = users
-                .filter((user) => user.role === UserRole.COMPANY_ADMIN)
-                .sort((a, b) => a.first_name.localeCompare(b.first_name));
-
-              // Use optional chaining to avoid TypeScript errors when deleting property
-              // @ts-ignore - we need to remove this property but TypeScript doesn't like it
-              if (companyData.company_user) delete companyData.company_user;
-            }
-          }
-
-          // Extract counts from the RPC call
-          if (countResult.data) {
-            totalEmployeeCount = countResult.data.total_count || 0;
-            activeEmployeeCount = countResult.data.active_count || 0;
-          }
-
-          // Construct a combined result object in the expected format
-          return {
-            data: {
-              companyDetails: {
-                data: companyData,
-                error: companyDetailsResult.error,
-              },
-              companyAdmins: {
-                data: companyAdmins,
-                error: null,
-              },
-              totalEmployees: {
-                count: totalEmployeeCount,
-                error: null,
-              },
-              activeEmployees: {
-                count: activeEmployeeCount,
-                error: null,
-              },
-            },
-            error: companyDetailsResult.error || countResult.error,
-          };
-        } catch (error) {
-          console.error("Error in optimized company data fetch:", error);
-          return { data: null, error };
+        if (isRefreshing) {
+          setRefreshing(true);
+        } else {
+          setLoading(true);
         }
-      };
 
-      // Use the cached query with enhanced options for large user bases
-      const result = await cachedQuery<any>(fetchCompanyData, cacheKey, {
-        forceRefresh,
-        cacheTtl: 10 * 60 * 1000, // 10 minute cache for company details
-        criticalData: true, // Mark as critical data for offline fallback
-      });
+        // Create a unique cache key for this company
+        const cacheKey = `company_details_${companyId}`;
 
-      // Check if we're using stale data
-      if (result.fromCache && result.error) {
-        // Show a gentle warning about using stale data
-        setError(t("superAdmin.companies.cachedData"));
-      }
+        // Force refresh only when explicitly requested through pull-to-refresh
+        const forceRefresh = isRefreshing;
 
-      // Safely extract data from the result
-      const combinedData = result.data;
+        // Define the async function to fetch company data
+        const fetchCompanyData = async () => {
+          try {
+            // Fetch company details, admins, and employee counts in parallel
+            const [
+              companyDetailsResult,
+              employeeCountsResult,
+              companyAdminsResult,
+            ] = await Promise.all([
+              // Company details query
+              supabase
+                .from("company")
+                .select(
+                  `
+                  id, 
+                  company_name, 
+                  registration_number, 
+                  industry_type, 
+                  contact_number, 
+                  contact_email,
+                  address, 
+                  active, 
+                  vat_type, 
+                  stakeholders,
+                  created_at
+                `
+                )
+                .eq("id", companyId)
+                .single(),
 
-      if (!combinedData) {
-        throw new Error("Failed to fetch company details");
-      }
+              // Employee counts query - get all employees for this company
+              supabase
+                .from("company_user")
+                .select(
+                  `
+                  id,
+                  active_status
+                `,
+                  { count: "exact" }
+                )
+                .eq("company_id", companyId)
+                .eq("role", "employee"),
 
-      // Process company details
-      const companyDetailsResult = combinedData.companyDetails;
-      if (companyDetailsResult.error) {
-        throw new Error(
-          `Error fetching company details: ${companyDetailsResult.error.message}`
+              // Company admins query
+              supabase
+                .from("company_user")
+                .select(
+                  `
+                  id,
+                  first_name,
+                  last_name,
+                  email,
+                  phone_number,
+                  role,
+                  active_status,
+                  job_title,
+                  created_at
+                `
+                )
+                .eq("company_id", companyId)
+                .eq("role", "admin") // Only get users with role="admin"
+                .order("first_name", { ascending: true }),
+            ]);
+
+            // Process company details
+            let companyData = companyDetailsResult.data;
+            let totalEmployeeCount = 0;
+            let activeEmployeeCount = 0;
+
+            // Process employee counts
+            if (employeeCountsResult.data) {
+              totalEmployeeCount = employeeCountsResult.count || 0;
+              activeEmployeeCount = employeeCountsResult.data.filter(
+                (user: any) => user.active_status === "active"
+              ).length;
+            }
+
+            // Process company admins
+            let processedAdmins: CompanyAdmin[] = [];
+            if (companyAdminsResult.data) {
+              // Double check to ensure only admin roles are included
+              processedAdmins = companyAdminsResult.data
+                .filter((admin) => admin.role === "admin") // Extra filter to ensure only admins
+                .map((admin) => ({
+                  id: admin.id,
+                  company_id: companyId,
+                  first_name: admin.first_name || "",
+                  last_name: admin.last_name || "",
+                  email: admin.email || "",
+                  phone_number: admin.phone_number,
+                  role: "admin",
+                  active_status:
+                    admin.active_status === "active"
+                      ? UserStatus.ACTIVE
+                      : UserStatus.INACTIVE,
+                  job_title: admin.job_title,
+                  created_at: admin.created_at,
+                }));
+            }
+
+            // Construct a combined result object
+            return {
+              data: {
+                companyDetails: {
+                  data: companyData,
+                  error: companyDetailsResult.error,
+                },
+                companyAdmins: {
+                  data: processedAdmins,
+                  error: companyAdminsResult.error,
+                },
+                totalEmployees: {
+                  count: totalEmployeeCount,
+                  error: null,
+                },
+                activeEmployees: {
+                  count: activeEmployeeCount,
+                  error: null,
+                },
+              },
+              error:
+                companyDetailsResult.error ||
+                employeeCountsResult.error ||
+                companyAdminsResult.error,
+            };
+          } catch (error) {
+            console.error("Error in optimized company data fetch:", error);
+            return { data: null, error };
+          }
+        };
+
+        // Use the cached query with enhanced options for large user bases
+        const result = await cachedQuery<any>(fetchCompanyData, cacheKey, {
+          forceRefresh,
+          cacheTtl: 10 * 60 * 1000, // 10 minute cache for company details
+          criticalData: true, // Mark as critical data for offline fallback
+        });
+
+        // Check if we're using stale data
+        if (result.fromCache && result.error) {
+          // Show a gentle warning about using stale data
+          setError(t("superAdmin.companies.cachedData"));
+        }
+
+        // Safely extract data from the result
+        const combinedData = result.data;
+
+        if (!combinedData) {
+          throw new Error("Failed to fetch company details");
+        }
+
+        // Process company details
+        const companyDetailsResult = combinedData.companyDetails;
+        if (companyDetailsResult.error) {
+          throw new Error(
+            `Error fetching company details: ${companyDetailsResult.error.message}`
+          );
+        }
+        setCompany(companyDetailsResult.data as Company);
+
+        // Process company admins
+        const companyAdminsResult = combinedData.companyAdmins;
+        if (!companyAdminsResult.error) {
+          setCompanyAdmins((companyAdminsResult.data as CompanyAdmin[]) || []);
+        } else {
+          console.error(
+            "Error fetching company admins:",
+            companyAdminsResult.error
+          );
+        }
+
+        // Process employee counts
+        const totalEmployeesResult = combinedData.totalEmployees;
+        if (!totalEmployeesResult.error) {
+          setEmployeeCount(totalEmployeesResult.count || 0);
+        } else {
+          console.error(
+            "Error fetching total employees:",
+            totalEmployeesResult.error
+          );
+        }
+
+        const activeEmployeesResult = combinedData.activeEmployees;
+        if (!activeEmployeesResult.error) {
+          setActiveEmployeeCount(activeEmployeesResult.count || 0);
+        } else {
+          console.error(
+            "Error fetching active employees:",
+            activeEmployeesResult.error
+          );
+        }
+      } catch (error) {
+        console.error("Error fetching company details:", error);
+        setError(
+          error instanceof Error
+            ? error.message
+            : t("superAdmin.companies.failedToLoad")
         );
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-      setCompany(companyDetailsResult.data as Company);
+    },
+    [companyId, t]
+  );
 
-      // Process company admins
-      const companyAdminsResult = combinedData.companyAdmins;
-      if (!companyAdminsResult.error) {
-        setCompanyAdmins((companyAdminsResult.data as CompanyUser[]) || []);
-      } else {
-        console.error(
-          "Error fetching company admins:",
-          companyAdminsResult.error
-        );
-      }
-
-      // Process employee counts
-      const totalEmployeesResult = combinedData.totalEmployees;
-      if (!totalEmployeesResult.error) {
-        setEmployeeCount(totalEmployeesResult.count || 0);
-      } else {
-        console.error(
-          "Error fetching total employees:",
-          totalEmployeesResult.error
-        );
-      }
-
-      const activeEmployeesResult = combinedData.activeEmployees;
-      if (!activeEmployeesResult.error) {
-        setActiveEmployeeCount(activeEmployeesResult.count || 0);
-      } else {
-        console.error(
-          "Error fetching active employees:",
-          activeEmployeesResult.error
-        );
-      }
-    } catch (error) {
-      console.error("Error fetching company details:", error);
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Failed to load company details"
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
+  // Fetch data when companyId changes or component mounts
   useEffect(() => {
     fetchCompanyDetails();
-
-    // Cleanup function
-    return () => {
-      setCompany(null);
-      setCompanyAdmins([]);
-    };
-  }, [companyId]);
+  }, [fetchCompanyDetails]);
 
   const onRefresh = () => {
     // Always allow refresh attempts - the network check will happen in fetchCompanyDetails
@@ -563,99 +704,94 @@ const CompanyDetailsScreen = () => {
   };
 
   const handleToggleStatus = async () => {
-    if (!company) return;
-
-    // First check network availability, but be more lenient
-    try {
-      const isAvailable = await isNetworkAvailable();
-      if (!isAvailable) {
-        Alert.alert(
-          t("superAdmin.companies.networkCheck"),
-          t("superAdmin.companies.limitedConnection"),
-          [
-            { text: t("superAdmin.profile.cancel"), style: "cancel" },
-            {
-              text: t("superAdmin.companies.tryAnyway"),
-              onPress: () => performToggleStatus(company),
-            },
-          ]
-        );
-        return;
-      }
-    } catch (e) {
-      console.warn("Error checking network status:", e);
-      // Continue even if network check fails
+    if (Platform.OS === "web") {
+      setAlertConfig({
+        title: company?.active ? "Deactivate Company" : "Activate Company",
+        message: company?.active
+          ? "Are you sure you want to deactivate this company?"
+          : "Are you sure you want to activate this company?",
+        onConfirm: async () => {
+          await performToggleStatus();
+        },
+        onCancel: () => setShowAlert(false),
+        confirmText: company?.active ? "Deactivate" : "Activate",
+        cancelText: "Cancel",
+        isDestructive: company?.active ?? false,
+      });
+      setShowAlert(true);
+    } else {
+      Alert.alert(
+        company?.active ? "Deactivate Company" : "Activate Company",
+        company?.active
+          ? "Are you sure you want to deactivate this company?"
+          : "Are you sure you want to activate this company?",
+        [
+          {
+            text: "Cancel",
+            style: "cancel",
+          },
+          {
+            text: company?.active ? "Deactivate" : "Activate",
+            style: company?.active ? "destructive" : "default",
+            onPress: performToggleStatus,
+          },
+        ]
+      );
     }
+  };
 
-    // If network seems available, proceed normally
-    performToggleStatus(company);
+  const handleError = (error: any) => {
+    if (Platform.OS === "web") {
+      setAlertConfig({
+        title: "Error",
+        message: error?.message || "An error occurred",
+        onConfirm: () => setShowAlert(false),
+        onCancel: () => setShowAlert(false),
+        confirmText: "OK",
+        cancelText: "Cancel",
+        isDestructive: false,
+      });
+      setShowAlert(true);
+    } else {
+      Alert.alert("Error", error?.message || "An error occurred");
+    }
   };
 
   // Move the actual toggle logic to a separate function
-  const performToggleStatus = (company: Company) => {
-    Alert.alert(
-      company.active
-        ? t("superAdmin.companies.deactivateCompany")
-        : t("superAdmin.companies.activateCompany"),
-      t("superAdmin.companies.confirmToggleStatus", {
-        action: company.active
-          ? t("superAdmin.companies.deactivate")
-          : t("superAdmin.companies.activate"),
-        name: company.company_name,
-      }),
-      [
-        {
-          text: t("superAdmin.profile.cancel"),
-          style: "cancel",
-        },
-        {
-          text: t("common.confirm"),
-          onPress: async () => {
-            try {
-              setLoadingAction(true);
+  const performToggleStatus = async () => {
+    if (!company) return;
 
-              const { error } = await supabase
-                .from("company")
-                .update({ active: !company.active })
-                .eq("id", company.id);
+    try {
+      setLoadingAction(true);
+      const { error } = await supabase
+        .from("company")
+        .update({ active: !company.active })
+        .eq("id", company.id);
 
-              if (error) {
-                throw error;
-              }
+      if (error) {
+        throw error;
+      }
 
-              // Update local state
-              setCompany({
-                ...company,
-                active: !company.active,
-              });
+      // Update local state
+      setCompany({
+        ...company,
+        active: !company.active,
+      });
 
-              // Clear the cache for this company after update
-              await clearCache(`company_details_${companyId}`);
+      // Clear the cache for this company after update
+      await clearCache(`company_details_${companyId}`);
 
-              // Also clear any company list caches - using wildcard pattern
-              await clearCache(`companies_*`);
+      // Also clear any company list caches - using wildcard pattern
+      await clearCache(`companies_*`);
 
-              Alert.alert(
-                t("common.success"),
-                t("superAdmin.companies.statusUpdateSuccess", {
-                  action: company.active
-                    ? t("superAdmin.companies.deactivated")
-                    : t("superAdmin.companies.activated"),
-                })
-              );
-            } catch (error: any) {
-              console.error("Error toggling company status:", error);
-              Alert.alert(
-                t("common.error"),
-                error.message || t("superAdmin.companies.statusUpdateFailed")
-              );
-            } finally {
-              setLoadingAction(false);
-            }
-          },
-        },
-      ]
-    );
+      // Close the alert modal after successful update
+      setShowAlert(false);
+    } catch (error: any) {
+      console.error("Error toggling company status:", error);
+      handleError(error);
+    } finally {
+      setLoadingAction(false);
+    }
   };
 
   const renderStatsCard = () => (
@@ -904,8 +1040,10 @@ const CompanyDetailsScreen = () => {
                   ? `${admin.first_name} ${admin.last_name}`
                   : admin.email}
               </Text>
-              <Text style={[styles.tableCell, { flex: 2 }]}>{admin.email}</Text>
-              <Text style={[styles.tableCell, { flex: 1 }]}>
+              <Text style={[styles.tableCell, { flex: 2 }]} numberOfLines={1}>
+                {admin.email}
+              </Text>
+              <Text style={[styles.tableCell, { flex: 1 }]} numberOfLines={1}>
                 {admin.phone_number || "-"}
               </Text>
               <View style={[{ flex: 1 }]}>
@@ -924,6 +1062,14 @@ const CompanyDetailsScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      <CustomAlert
+        visible={showAlert}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        onConfirm={alertConfig.onConfirm}
+        onCancel={() => setShowAlert(false)}
+        isDestructive={alertConfig.isDestructive}
+      />
       <AppHeader
         showLogo={false}
         showBackButton={true}
@@ -940,71 +1086,97 @@ const CompanyDetailsScreen = () => {
         </View>
       )}
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[
-          styles.scrollContent,
-          {
-            maxWidth: isLargeScreen ? 1400 : isMediumScreen ? 1100 : "100%",
-            paddingHorizontal: isLargeScreen ? 48 : isMediumScreen ? 32 : 16,
-          },
-        ]}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        <View style={styles.headerSection}>
-          <View style={styles.headerLeft}>
-            <Text style={styles.companyName}>{company?.company_name}</Text>
-            <StatusBadge
-              status={company?.active ? UserStatus.ACTIVE : UserStatus.INACTIVE}
-              size="large"
-            />
-          </View>
-          <View style={styles.headerRight}>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.editButton]}
-              onPress={() =>
-                navigation.navigate("EditCompany", { companyId: company?.id })
-              }
-            >
-              <MaterialCommunityIcons name="pencil" size={20} color="#ffffff" />
-              <Text style={styles.buttonText}>
-                {t("superAdmin.companies.editCompany")}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.actionButton,
-                company?.active
-                  ? styles.deactivateButton
-                  : styles.activateButton,
-              ]}
-              onPress={handleToggleStatus}
-            >
-              <MaterialCommunityIcons name="power" size={20} color="#ffffff" />
-              <Text style={styles.buttonText}>
-                {company?.active
-                  ? t("superAdmin.companies.deactivateCompany")
-                  : t("superAdmin.companies.activateCompany")}
-              </Text>
-            </TouchableOpacity>
-          </View>
+      {error ? (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
         </View>
-
-        {renderStatsCard()}
-
-        <View style={styles.gridContainer}>
-          <View style={styles.gridColumn}>
-            {renderCompanyInfo()}
-            {renderStakeholders()}
+      ) : (
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              maxWidth: isLargeScreen ? 1400 : isMediumScreen ? 1100 : "100%",
+              paddingHorizontal: isLargeScreen ? 48 : isMediumScreen ? 32 : 16,
+            },
+          ]}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        >
+          <View style={styles.headerSection}>
+            <View style={styles.headerLeft}>
+              <Text style={styles.companyName}>{company?.company_name}</Text>
+              <StatusBadge
+                status={
+                  company?.active ? UserStatus.ACTIVE : UserStatus.INACTIVE
+                }
+                size="large"
+              />
+            </View>
+            <View style={styles.headerRight}>
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  { backgroundColor: theme.colors.primary },
+                ]}
+                onPress={() =>
+                  navigation.navigate("EditCompany", { companyId: company?.id })
+                }
+              >
+                <MaterialCommunityIcons
+                  name="pencil"
+                  size={20}
+                  color="#ffffff"
+                />
+                <Text style={styles.buttonText}>
+                  {t("superAdmin.companies.editCompany")}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  {
+                    backgroundColor: company?.active
+                      ? "rgba(239, 68, 68, 0.1)" // Subtle red for deactivate
+                      : "rgba(16, 185, 129, 0.1)", // Subtle green for activate
+                  },
+                ]}
+                onPress={handleToggleStatus}
+              >
+                <MaterialCommunityIcons
+                  name="power"
+                  size={20}
+                  color={company?.active ? "#EF4444" : "#10B981"}
+                />
+                <Text
+                  style={[
+                    styles.buttonText,
+                    { color: company?.active ? "#EF4444" : "#10B981" },
+                  ]}
+                >
+                  {company?.active
+                    ? t("superAdmin.companies.deactivateCompany")
+                    : t("superAdmin.companies.activateCompany")}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
-          <View style={styles.gridColumn}>
-            {renderAddress()}
-            {renderAdmins()}
+
+          {renderStatsCard()}
+
+          <View style={styles.gridContainer}>
+            <View style={styles.gridColumn}>
+              {renderCompanyInfo()}
+              {renderStakeholders()}
+            </View>
+            <View style={styles.gridColumn}>
+              {renderAddress()}
+              {renderAdmins()}
+            </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 };
@@ -1047,18 +1219,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 20,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: 16,
     gap: 8,
   },
-  editButton: {
-    backgroundColor: "#3b82f6",
-  },
-  deactivateButton: {
-    backgroundColor: "#ef4444",
-  },
-  activateButton: {
-    backgroundColor: "#10b981",
-  },
+  editButton: {},
+  deactivateButton: {},
+  activateButton: {},
   buttonText: {
     color: "#ffffff",
     fontSize: 14,
@@ -1272,6 +1438,84 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Poppins-Regular",
     lineHeight: 16,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  errorText: {
+    fontSize: 16,
+    color: "#ef4444",
+    textAlign: "center",
+  },
+  modalOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 1000,
+  },
+  modalContent: {
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    padding: 24,
+    width: "90%",
+    maxWidth: 400,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#1e293b",
+    marginBottom: 12,
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: "#64748b",
+    marginBottom: 24,
+    lineHeight: 24,
+  },
+  modalButtons: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+  },
+  modalButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    minWidth: 80,
+    alignItems: "center",
+  },
+  modalCancelButton: {
+    backgroundColor: "#f1f5f9",
+  },
+  modalConfirmButton: {
+    backgroundColor: "#3b82f6",
+  },
+  modalDestructiveButton: {
+    backgroundColor: "#ef4444",
+  },
+  modalButtonText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#64748b",
+  },
+  modalConfirmText: {
+    color: "#ffffff",
+  },
+  modalDestructiveText: {
+    color: "#ffffff",
   },
 });
 

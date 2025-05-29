@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import Text from "../components/Text";
+import { SidebarLayout } from "./components/SidebarLayout";
 
 // Super Admin Screens
 import SuperAdminDashboard from "../screens/superadmin/SuperAdminDashboard";
@@ -121,132 +122,135 @@ const useWindowDimensions = () => {
   return dimensions;
 };
 
-// WebLayout component update
-const WebLayout = ({ children }: { children: React.ReactNode }) => {
-  const navigation = useNavigation<any>();
+// Web Layout with SidebarLayout
+const WebStackNavigator = () => {
   const [activeScreen, setActiveScreen] = useState("Dashboard");
-  const { width } = useWindowDimensions();
-  const showSidebar = width > 768;
+  const navigation = useNavigation();
+  const [currentStackScreen, setCurrentStackScreen] = useState(null);
 
-  const handleNavigation = (screen: string) => {
-    setActiveScreen(screen);
-    navigation.navigate(screen);
+  const navigationItems = [
+    { icon: "home", label: "Dashboard", screen: "Dashboard" },
+    { icon: "domain", label: "Companies", screen: "Companies" },
+    { icon: "account-group", label: "Users", screen: "Users" },
+    { icon: "file-document", label: "Forms", screen: "Forms" },
+    { icon: "receipt", label: "Receipts", screen: "Receipts" },
+    { icon: "clipboard-text", label: "Tasks", screen: "Tasks" },
+    { icon: "account-circle", label: "Profile", screen: "Profile" },
+  ];
+
+  // Define the main content screens
+  const mainContent = {
+    Dashboard: <SuperAdminDashboard />,
+    Companies: <CompanyListScreen />,
+    Users: <SuperAdminUsersScreen />,
+    Forms: <SuperAdminFormsScreen />,
+    Receipts: <ReceiptsListScreen />,
+    Tasks: <SuperAdminTasksScreen />,
+    Profile: <SuperAdminProfileScreen />,
   };
 
-  if (!showSidebar) {
-    return <View style={{ flex: 1 }}>{children}</View>;
-  }
+  // Create a stack navigator for the content area
+  const ContentStack = createNativeStackNavigator();
+
+  // Content area component that includes both main screens and stack screens
+  const ContentArea = () => {
+    return (
+      <ContentStack.Navigator screenOptions={{ headerShown: false }}>
+        <ContentStack.Screen name="MainContent">
+          {() => mainContent[activeScreen]}
+        </ContentStack.Screen>
+        <ContentStack.Screen
+          name="CompanyDetails"
+          component={CompanyDetailsScreen}
+        />
+        <ContentStack.Screen
+          name="CreateCompany"
+          component={CreateCompanyScreen}
+        />
+        <ContentStack.Screen name="EditCompany" component={EditCompanyScreen} />
+        <ContentStack.Screen
+          name="TaskDetails"
+          component={SuperAdminTaskDetailsScreen}
+        />
+        <ContentStack.Screen name="CreateTask" component={CreateTaskScreen} />
+        <ContentStack.Screen
+          name="CreateSuperAdmin"
+          component={CreateSuperAdminScreen}
+        />
+        <ContentStack.Screen
+          name="SuperAdminDetailsScreen"
+          component={SuperAdminDetailsScreen}
+        />
+        <ContentStack.Screen
+          name="EditSuperAdmin"
+          component={EditSuperAdminScreen}
+        />
+        <ContentStack.Screen
+          name="CompanyAdminDetailsScreen"
+          component={CompanyAdminDetailsScreen}
+        />
+        <ContentStack.Screen
+          name="EditCompanyAdmin"
+          component={EditCompanyAdminScreen}
+        />
+        <ContentStack.Screen
+          name="EmployeeDetailedScreen"
+          component={EmployeeDetailedScreen}
+        />
+        <ContentStack.Screen
+          name="CreateCompanyAdmin"
+          component={CreateCompanyAdminScreen}
+        />
+        <ContentStack.Screen
+          name="CreateEmployee"
+          component={CreateEmployeesScreen}
+        />
+        <ContentStack.Screen
+          name="SuperAdminFormDetailsScreen"
+          component={SuperAdminFormDetailsScreen}
+        />
+        <ContentStack.Screen
+          name="CreateReceipt"
+          component={CreateReceiptScreen}
+        />
+        <ContentStack.Screen
+          name="ReceiptDetails"
+          component={ReceiptDetailsScreen}
+        />
+        <ContentStack.Screen name="EditTask" component={EditTaskScreen} />
+        <ContentStack.Screen name="EditReceipt" component={EditReceiptScreen} />
+      </ContentStack.Navigator>
+    );
+  };
+
+  // Handle navigation
+  const handleNavigation = (screen: string) => {
+    // Check if the screen is a main navigation item
+    if (navigationItems.some((item) => item.screen === screen)) {
+      setActiveScreen(screen);
+      navigation.navigate("MainContent");
+    } else {
+      // It's a stack screen
+      navigation.navigate(screen);
+    }
+  };
 
   return (
-    <View style={{ flexDirection: "row", height: "100%" }}>
-      {/* Sidebar Navigation */}
-      <View
-        style={{
-          width: 220,
-          height: "100%",
-          backgroundColor: "transparent",
-          paddingTop: 10,
-          paddingBottom: 20,
-          borderRightWidth: 0,
-          position: "relative",
-        }}
-      >
-        {/* Background gradient */}
-        <LinearGradient
-          colors={[
-            "rgba(10,185,129,255)",
-            "rgba(6,169,169,255)",
-            "rgba(38,127,161,255)",
-            "rgba(54,105,157,255)",
-            "rgba(74,78,153,255)",
-            "rgba(94,52,149,255)",
-          ]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-
-        {/* Logo at the top */}
-        <View
-          style={{
-            paddingHorizontal: 20,
-            paddingVertical: 29,
-            alignItems: "center",
-            borderBottomWidth: 1,
-            borderBottomColor: "rgba(255, 255, 255, 0.1)",
-          }}
-        >
-          <View
-            style={{
-              width: 160,
-              height: 70,
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
-            <Image
-              source={require("../assets/splash-icon-mono.png")}
-              style={{
-                width: 170,
-                height: 130,
-                resizeMode: "contain",
-                alignSelf: "center",
-              }}
-            />
-          </View>
-        </View>
-
-        {/* Navigation Items */}
-        <View style={{ paddingLeft: 20, paddingRight: 20, marginTop: 25 }}>
-          <NavItem
-            icon="home"
-            label="Dashboard"
-            isActive={activeScreen === "Dashboard"}
-            onPress={() => handleNavigation("Dashboard")}
-          />
-          <NavItem
-            icon="domain"
-            label="Companies"
-            isActive={activeScreen === "Companies"}
-            onPress={() => handleNavigation("Companies")}
-          />
-          <NavItem
-            icon="account-group"
-            label="Users"
-            isActive={activeScreen === "Users"}
-            onPress={() => handleNavigation("Users")}
-          />
-
-          <NavItem
-            icon="file-document"
-            label="Forms"
-            isActive={activeScreen === "Forms"}
-            onPress={() => handleNavigation("Forms")}
-          />
-          <NavItem
-            icon="receipt"
-            label="Receipts"
-            isActive={activeScreen === "Receipts"}
-            onPress={() => handleNavigation("Receipts")}
-          />
-          <NavItem
-            icon="clipboard-text"
-            label="Tasks"
-            isActive={activeScreen === "Tasks"}
-            onPress={() => handleNavigation("Tasks")}
-          />
-
-          <NavItem
-            icon="account-circle"
-            label="Profile"
-            isActive={activeScreen === "Profile"}
-            onPress={() => handleNavigation("Profile")}
-          />
-        </View>
-      </View>
-      {/* Main Content */}
-      <View style={{ flex: 1 }}>{children}</View>
-    </View>
+    <SidebarLayout
+      activeScreen={activeScreen}
+      setActiveScreen={setActiveScreen}
+      navigationItems={navigationItems}
+      content={{
+        Dashboard: <ContentArea />,
+        Companies: <ContentArea />,
+        Users: <ContentArea />,
+        Forms: <ContentArea />,
+        Receipts: <ContentArea />,
+        Tasks: <ContentArea />,
+        Profile: <ContentArea />,
+      }}
+      onNavigate={handleNavigation}
+    />
   );
 };
 
@@ -321,7 +325,7 @@ const SuperAdminTabNavigator = () => {
           name="Dashboard"
           component={SuperAdminDashboard}
           options={{
-            tabBarIcon: ({ color, size }) => (
+            tabBarIcon: ({ color }) => (
               <MaterialCommunityIcons name="home" color={color} size={24} />
             ),
           }}
@@ -330,7 +334,7 @@ const SuperAdminTabNavigator = () => {
           name="Companies"
           component={CompanyListScreen}
           options={{
-            tabBarIcon: ({ color, size }) => (
+            tabBarIcon: ({ color }) => (
               <MaterialCommunityIcons name="domain" color={color} size={24} />
             ),
           }}
@@ -339,7 +343,7 @@ const SuperAdminTabNavigator = () => {
           name="Utilities"
           component={SuperAdminUtilitiesScreen}
           options={{
-            tabBarIcon: ({ color, size }) => (
+            tabBarIcon: ({ color }) => (
               <MaterialCommunityIcons name="tools" color={color} size={24} />
             ),
           }}
@@ -348,7 +352,7 @@ const SuperAdminTabNavigator = () => {
           name="Users"
           component={SuperAdminUsersScreen}
           options={{
-            tabBarIcon: ({ color, size }) => (
+            tabBarIcon: ({ color }) => (
               <MaterialCommunityIcons
                 name="account-group"
                 color={color}
@@ -361,7 +365,7 @@ const SuperAdminTabNavigator = () => {
           name="Profile"
           component={SuperAdminProfileScreen}
           options={{
-            tabBarIcon: ({ color, size }) => (
+            tabBarIcon: ({ color }) => (
               <MaterialCommunityIcons
                 name="account-circle"
                 color={color}
@@ -374,110 +378,8 @@ const SuperAdminTabNavigator = () => {
     );
   }
 
-  // For web with large screen: Use stack navigator with WebLayout
-  return (
-    <WebLayout>
-      <SuperAdminStack.Navigator screenOptions={{ headerShown: false }}>
-        <SuperAdminStack.Screen
-          name="Dashboard"
-          component={SuperAdminDashboard}
-        />
-        <SuperAdminStack.Screen
-          name="Companies"
-          component={CompanyListScreen}
-        />
-        <SuperAdminStack.Screen
-          name="Tasks"
-          component={SuperAdminTasksScreen}
-        />
-        <SuperAdminStack.Screen
-          name="Forms"
-          component={SuperAdminFormsScreen}
-        />
-        <SuperAdminStack.Screen
-          name="Receipts"
-          component={ReceiptsListScreen}
-        />
-        <SuperAdminStack.Screen
-          name="Users"
-          component={SuperAdminUsersScreen}
-        />
-        <SuperAdminStack.Screen
-          name="Profile"
-          component={SuperAdminProfileScreen}
-        />
-        <SuperAdminStack.Screen
-          name="CompanyDetails"
-          component={CompanyDetailsScreen}
-        />
-        <SuperAdminStack.Screen
-          name="CreateCompany"
-          component={CreateCompanyScreen}
-        />
-        <SuperAdminStack.Screen
-          name="EditCompany"
-          component={EditCompanyScreen}
-        />
-        <SuperAdminStack.Screen
-          name="TaskDetails"
-          component={SuperAdminTaskDetailsScreen}
-        />
-        <SuperAdminStack.Screen
-          name="CreateTask"
-          component={CreateTaskScreen}
-        />
-        <SuperAdminStack.Screen
-          name="CreateSuperAdmin"
-          component={CreateSuperAdminScreen}
-        />
-        <SuperAdminStack.Screen
-          name="SuperAdminDetailsScreen"
-          component={SuperAdminDetailsScreen}
-        />
-        <SuperAdminStack.Screen
-          name="EditSuperAdmin"
-          component={EditSuperAdminScreen}
-        />
-        <SuperAdminStack.Screen
-          name="CompanyAdminDetailsScreen"
-          component={CompanyAdminDetailsScreen}
-        />
-        <SuperAdminStack.Screen
-          name="EditCompanyAdmin"
-          component={EditCompanyAdminScreen}
-        />
-        <SuperAdminStack.Screen
-          name="EmployeeDetailedScreen"
-          component={EmployeeDetailedScreen}
-        />
-        <SuperAdminStack.Screen
-          name="CreateCompanyAdmin"
-          component={CreateCompanyAdminScreen}
-        />
-        <SuperAdminStack.Screen
-          name="CreateEmployee"
-          component={CreateEmployeesScreen}
-        />
-        <SuperAdminStack.Screen
-          name="SuperAdminFormDetailsScreen"
-          component={SuperAdminFormDetailsScreen}
-        />
-        <SuperAdminStack.Screen
-          name="CreateReceipt"
-          component={CreateReceiptScreen}
-        />
-        <SuperAdminStack.Screen
-          name="ReceiptDetails"
-          component={ReceiptDetailsScreen}
-        />
-        <SuperAdminStack.Screen
-          name="EditReceipt"
-          component={EditReceiptScreen}
-        />
-        <SuperAdminStack.Screen name="EditTask" component={EditTaskScreen} />
-      </SuperAdminStack.Navigator>
-    </WebLayout>
-  );
+  // For web with large screen: Use SidebarLayout
+  return <WebStackNavigator />;
 };
 
 // Super Admin Navigator

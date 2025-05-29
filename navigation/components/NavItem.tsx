@@ -23,8 +23,8 @@ export const NavItem = ({
       style={{
         flexDirection: "row",
         alignItems: "center",
-        paddingVertical: 16,
-        paddingHorizontal: 16,
+        paddingVertical: 10,
+        paddingHorizontal: 15,
         borderRadius: 10,
         marginBottom: 10,
         backgroundColor: isActive ? "rgba(255, 255, 255, 0.15)" : "transparent",

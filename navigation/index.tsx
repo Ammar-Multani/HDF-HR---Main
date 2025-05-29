@@ -7,7 +7,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "../contexts/AuthContext";
 import { UserRole } from "../types";
-import { Dimensions, Platform } from "react-native";
+import { Dimensions, Platform, Text } from "react-native";
 
 // Import navigators from separate files
 import { AuthNavigator } from "./AuthNavigator";
@@ -18,7 +18,8 @@ import { EmployeeNavigator } from "./EmployeeNavigator";
 // Import linking configuration
 import { linking } from "./linkingConfiguration";
 
-// Key for navigation request from auth context
+// Keys for storage
+const NAVIGATION_STATE_KEY = "@navigation_state";
 const NAVIGATE_TO_DASHBOARD_KEY = "NAVIGATE_TO_DASHBOARD";
 
 // Create a navigation ref that can be used outside of the Navigation Provider
@@ -73,11 +74,40 @@ export const AppNavigator = ({ initialAuthState = null }) => {
   const { user, userRole } = useAuth();
   const navRef = useNavigationContainerRef();
   const { width } = useWindowDimensions();
+  const [isReady, setIsReady] = useState(false);
+  const [initialState, setInitialState] = useState(null);
+
+  // Load saved navigation state
+  useEffect(() => {
+    const loadNavigationState = async () => {
+      try {
+        const savedState = await AsyncStorage.getItem(NAVIGATION_STATE_KEY);
+        if (savedState) {
+          setInitialState(JSON.parse(savedState));
+        }
+      } catch (err) {
+        console.warn("Failed to load navigation state:", err);
+      } finally {
+        setIsReady(true);
+      }
+    };
+
+    loadNavigationState();
+  }, []);
 
   // Set the navigationRef for use outside of the component
   useEffect(() => {
     (navigationRef as any).current = navRef;
   }, [navRef]);
+
+  // Save navigation state on changes
+  const handleStateChange = async (state: any) => {
+    try {
+      await AsyncStorage.setItem(NAVIGATION_STATE_KEY, JSON.stringify(state));
+    } catch (err) {
+      console.warn("Failed to save navigation state:", err);
+    }
+  };
 
   // Force navigation update on window resize
   useEffect(() => {
@@ -120,21 +150,18 @@ export const AppNavigator = ({ initialAuthState = null }) => {
     return () => clearInterval(intervalId);
   }, [navRef]);
 
-  // For debugging - show what screen will be displayed
-  if (!user) {
-    console.log("No user found, showing auth navigator");
-  } else if (userRole === UserRole.SUPER_ADMIN) {
-    console.log("User is super admin, showing super admin navigator");
-  } else if (userRole === UserRole.COMPANY_ADMIN) {
-    console.log("User is company admin, showing company admin navigator");
-  } else if (userRole === UserRole.EMPLOYEE) {
-    console.log("User is employee, showing employee navigator");
-  } else {
-    console.log("User has no role or invalid role:", userRole);
+  if (!isReady) {
+    return null; // or a loading indicator
   }
 
   return (
-    <NavigationContainer ref={navRef} linking={linking}>
+    <NavigationContainer
+      ref={navRef}
+      linking={linking}
+      initialState={initialState}
+      onStateChange={handleStateChange}
+      fallback={<Text>Loading...</Text>}
+    >
       {!user ? (
         <AuthNavigator />
       ) : (
