@@ -32,17 +32,17 @@ export const prefetchCommonData = async (): Promise<void> => {
             .from("company")
             .select("id, company_name, active")
             .limit(25);
-          
+
           return result;
         },
         "prefetch_companies",
         { cacheTtl: 15 * 60 * 1000 } // 15 minutes
       );
     }, 2000);
-    
+
     // Prefetch any other important data with delays
   } catch (error) {
     console.warn("Background prefetch failed:", error);
     // Non-critical, so just log and continue
   }
-}; 
+};

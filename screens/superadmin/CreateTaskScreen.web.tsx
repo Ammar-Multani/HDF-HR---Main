@@ -6,6 +6,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  TouchableOpacity,
 } from "react-native";
 import {
   Text,
@@ -18,6 +19,9 @@ import {
   Menu,
   Portal,
   Modal,
+  Surface,
+  IconButton,
+  Divider,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -29,6 +33,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import { TaskPriority, UserRole, TaskStatus } from "../../types";
+import Animated, { FadeIn } from "react-native-reanimated";
 
 interface TaskFormData {
   title: string;
@@ -344,14 +349,12 @@ const CreateTaskScreen = () => {
   }
 
   return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
+    <SafeAreaView style={styles.container}>
       <AppHeader
         title="Create Task"
+        subtitle="Add new task information"
         showBackButton
         showLogo={false}
-        showHelpButton={false}
       />
 
       <KeyboardAvoidingView
@@ -362,194 +365,262 @@ const CreateTaskScreen = () => {
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
         >
-          <Text
-            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
-          >
-            Task Details
-          </Text>
+          <View style={styles.headerSection}>
+            <Text style={styles.pageTitle}>Create New Task</Text>
+          </View>
 
-          <Text style={styles.inputLabel}>Select Company *</Text>
-          <View style={styles.companySelector}>
+          <View style={styles.gridContainer}>
+            <View style={styles.gridColumn}>
+              <Animated.View entering={FadeIn.delay(100)}>
+                {/* Basic Information */}
+                <Surface style={styles.formCard}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="clipboard-text"
+                          size={20}
+                          iconColor="#64748b"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>Basic Information</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardContent}>
+                    <Text style={styles.inputLabel}>Select Company *</Text>
+                    <Button
+                      mode="outlined"
+                      onPress={() => setMenuVisible(true)}
+                      style={styles.companyButton}
+                      icon="office-building"
+                    >
+                      {selectedCompany
+                        ? selectedCompany.company_name
+                        : "Select Company"}
+                    </Button>
+
+                    <Controller
+                      control={control}
+                      rules={{ required: "Title is required" }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <>
+                          <TextInput
+                            label="Title *"
+                            mode="outlined"
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
+                            error={!!errors.title}
+                            style={styles.input}
+                            disabled={loading}
+                          />
+                          {errors.title && (
+                            <Text style={styles.errorText}>
+                              {errors.title.message}
+                            </Text>
+                          )}
+                        </>
+                      )}
+                      name="title"
+                    />
+
+                    <Controller
+                      control={control}
+                      rules={{ required: "Description is required" }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <>
+                          <TextInput
+                            label="Description *"
+                            mode="outlined"
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
+                            error={!!errors.description}
+                            style={styles.input}
+                            multiline
+                            numberOfLines={4}
+                            disabled={loading}
+                          />
+                          {errors.description && (
+                            <Text style={styles.errorText}>
+                              {errors.description.message}
+                            </Text>
+                          )}
+                        </>
+                      )}
+                      name="description"
+                    />
+                  </View>
+                </Surface>
+
+                {/* Task Settings */}
+                <Surface style={[styles.formCard, { marginTop: 24 }]}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="cog"
+                          size={20}
+                          iconColor="#64748b"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>Task Settings</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardContent}>
+                    <Text style={styles.inputLabel}>Deadline *</Text>
+                    <Button
+                      mode="outlined"
+                      onPress={() => setShowDatePicker(true)}
+                      style={styles.dateButton}
+                      icon="calendar"
+                    >
+                      {format(deadline, "MMMM d, yyyy")}
+                    </Button>
+
+                    <Text style={styles.inputLabel}>Priority *</Text>
+                    <Controller
+                      control={control}
+                      render={({ field: { onChange, value } }) => (
+                        <SegmentedButtons
+                          value={value}
+                          onValueChange={onChange}
+                          buttons={[
+                            { value: TaskPriority.LOW, label: "Low" },
+                            { value: TaskPriority.MEDIUM, label: "Medium" },
+                            { value: TaskPriority.HIGH, label: "High" },
+                          ]}
+                          style={styles.segmentedButtons}
+                        />
+                      )}
+                      name="priority"
+                    />
+
+                    <Controller
+                      control={control}
+                      rules={{
+                        required: "Reminder days is required",
+                        validate: (value) =>
+                          !isNaN(parseInt(value)) &&
+                          parseInt(value) >= 0 &&
+                          parseInt(value) <= 365
+                            ? true
+                            : "Please enter a value between 0 and 365 days",
+                      }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <>
+                          <TextInput
+                            label="Reminder (days before deadline) *"
+                            mode="outlined"
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
+                            error={!!errors.reminder_days_before}
+                            style={styles.input}
+                            keyboardType="numeric"
+                            disabled={loading}
+                          />
+                          {errors.reminder_days_before && (
+                            <Text style={styles.errorText}>
+                              {errors.reminder_days_before.message}
+                            </Text>
+                          )}
+                        </>
+                      )}
+                      name="reminder_days_before"
+                    />
+                  </View>
+                </Surface>
+              </Animated.View>
+            </View>
+
+            <View style={styles.gridColumn}>
+              <Animated.View entering={FadeIn.delay(200)}>
+                {/* Assign Users */}
+                <Surface style={styles.formCard}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="account-multiple"
+                          size={20}
+                          iconColor="#64748b"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>Assign Users</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardContent}>
+                    <Text style={styles.helperText}>
+                      Select one admin to assign this task to (required)
+                    </Text>
+
+                    <View style={styles.usersContainer}>
+                      {availableUsers.map((user) => (
+                        <Chip
+                          key={`assignee-${user.id}`}
+                          selected={selectedAssignees.includes(user.id)}
+                          onPress={() => toggleAssignee(user.id)}
+                          style={styles.userChip}
+                          showSelectedCheck
+                          mode="outlined"
+                        >
+                          {user.name} (
+                          {user.role === UserRole.SUPER_ADMIN
+                            ? "Super Admin"
+                            : "Company Admin"}
+                          )
+                        </Chip>
+                      ))}
+                    </View>
+                  </View>
+                </Surface>
+              </Animated.View>
+            </View>
+          </View>
+        </ScrollView>
+
+        <Surface style={styles.bottomBar}>
+          <View style={styles.bottomBarContent}>
             <Button
               mode="outlined"
-              onPress={() => setMenuVisible(true)}
-              style={styles.companyButton}
+              onPress={() => navigation.goBack()}
+              style={[styles.button, styles.cancelButton]}
+              disabled={loading}
             >
-              {selectedCompany
-                ? selectedCompany.company_name
-                : "Select Company"}
+              Cancel
             </Button>
-            <Menu
-              visible={menuVisible}
-              onDismiss={() => setMenuVisible(false)}
-              anchor={{ x: 0, y: 0 }}
+            <Button
+              mode="contained"
+              onPress={handleSubmit(onSubmit)}
+              style={[styles.button, styles.saveButton]}
+              loading={loading}
+              disabled={loading}
             >
-              {companies.map((company) => (
-                <Menu.Item
-                  key={company.id}
-                  title={company.company_name}
-                  onPress={() => {
-                    setSelectedCompany(company);
-                    setMenuVisible(false);
-                  }}
-                />
-              ))}
-            </Menu>
+              Create Task
+            </Button>
           </View>
-
-          <Controller
-            control={control}
-            rules={{ required: "Title is required" }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Title *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.title}
-                style={styles.input}
-                disabled={loading}
-              />
-            )}
-            name="title"
-          />
-          {errors.title && (
-            <Text style={styles.errorText}>{errors.title.message}</Text>
-          )}
-
-          <Controller
-            control={control}
-            rules={{ required: "Description is required" }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Description *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.description}
-                style={styles.input}
-                multiline
-                numberOfLines={4}
-                disabled={loading}
-              />
-            )}
-            name="description"
-          />
-          {errors.description && (
-            <Text style={styles.errorText}>{errors.description.message}</Text>
-          )}
-
-          <Text style={styles.inputLabel}>Deadline *</Text>
-          <Button
-            mode="outlined"
-            onPress={() => setShowDatePicker(true)}
-            style={styles.dateButton}
-            icon="calendar"
-          >
-            {format(deadline, "MMMM d, yyyy")}
-          </Button>
-
-          {Platform.OS === "web" ? (
-            <WebDatePicker />
-          ) : (
-            <DateTimePickerModal
-              isVisible={showDatePicker}
-              mode="date"
-              onConfirm={handleDateConfirm}
-              onCancel={handleDateCancel}
-              date={deadline}
-              minimumDate={new Date()}
-            />
-          )}
-
-          <Text style={styles.inputLabel}>Priority *</Text>
-          <Controller
-            control={control}
-            render={({ field: { onChange, value } }) => (
-              <SegmentedButtons
-                value={value}
-                onValueChange={onChange}
-                buttons={[
-                  { value: TaskPriority.LOW, label: "Low" },
-                  { value: TaskPriority.MEDIUM, label: "Medium" },
-                  { value: TaskPriority.HIGH, label: "High" },
-                ]}
-                style={styles.segmentedButtons}
-              />
-            )}
-            name="priority"
-          />
-
-          <Controller
-            control={control}
-            rules={{
-              required: "Reminder days is required",
-              validate: (value) =>
-                !isNaN(parseInt(value)) &&
-                parseInt(value) >= 0 &&
-                parseInt(value) <= 365
-                  ? true
-                  : "Please enter a value between 0 and 365 days",
-            }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Reminder (days before deadline) *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.reminder_days_before}
-                style={styles.input}
-                keyboardType="numeric"
-                disabled={loading}
-              />
-            )}
-            name="reminder_days_before"
-          />
-          {errors.reminder_days_before && (
-            <Text style={styles.errorText}>
-              {errors.reminder_days_before.message}
-            </Text>
-          )}
-
-          <Text
-            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
-          >
-            Assign Users
-          </Text>
-
-          <Text style={styles.helperText}>
-            Select one admin to assign this task to (required)
-          </Text>
-
-          <View style={styles.usersContainer}>
-            {availableUsers.map((user) => (
-              <Chip
-                key={`assignee-${user.id}`}
-                selected={selectedAssignees.includes(user.id)}
-                onPress={() => toggleAssignee(user.id)}
-                style={styles.userChip}
-                showSelectedCheck
-                mode="outlined"
-              >
-                {user.name} (Company Admin)
-              </Chip>
-            ))}
-          </View>
-
-          <Button
-            mode="contained"
-            onPress={handleSubmit(onSubmit)}
-            style={styles.submitButton}
-            loading={loading}
-            disabled={loading}
-          >
-            Create Task
-          </Button>
-        </ScrollView>
+        </Surface>
       </KeyboardAvoidingView>
+
+      {Platform.OS === "web" ? (
+        <WebDatePicker />
+      ) : (
+        <DateTimePickerModal
+          isVisible={showDatePicker}
+          mode="date"
+          onConfirm={handleDateConfirm}
+          onCancel={handleDateCancel}
+          date={deadline}
+          minimumDate={new Date()}
+        />
+      )}
 
       <Snackbar
         visible={snackbarVisible}
@@ -562,6 +633,75 @@ const CreateTaskScreen = () => {
       >
         {snackbarMessage}
       </Snackbar>
+
+      {/* Company Selection Modal */}
+      <Portal>
+        <Modal
+          visible={menuVisible}
+          onDismiss={() => setMenuVisible(false)}
+          contentContainerStyle={styles.modalContainer}
+        >
+          <Surface style={styles.modalSurface}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Company</Text>
+              <IconButton icon="close" onPress={() => setMenuVisible(false)} />
+            </View>
+            <Divider />
+
+            <ScrollView style={styles.companyOptionsContainer}>
+              {companies.map((company) => (
+                <TouchableOpacity
+                  key={company.id}
+                  style={[
+                    styles.companyOption,
+                    selectedCompany?.id === company.id &&
+                      styles.selectedCompanyOption,
+                  ]}
+                  onPress={() => {
+                    setSelectedCompany(company);
+                    setMenuVisible(false);
+                  }}
+                >
+                  <View style={styles.companyOptionContent}>
+                    <View style={styles.companyIconContainer}>
+                      <IconButton
+                        icon="office-building"
+                        size={20}
+                        iconColor={
+                          selectedCompany?.id === company.id
+                            ? theme.colors.primary
+                            : "#64748b"
+                        }
+                        style={{ margin: 0 }}
+                      />
+                    </View>
+                    <View style={styles.companyTextContainer}>
+                      <Text
+                        style={[
+                          styles.companyName,
+                          selectedCompany?.id === company.id && {
+                            color: theme.colors.primary,
+                          },
+                        ]}
+                      >
+                        {company.company_name}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {selectedCompany?.id === company.id && (
+                    <IconButton
+                      icon="check"
+                      size={20}
+                      iconColor={theme.colors.primary}
+                    />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </Surface>
+        </Modal>
+      </Portal>
     </SafeAreaView>
   );
 };
@@ -569,6 +709,7 @@ const CreateTaskScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#F8F9FA",
   },
   keyboardAvoidingView: {
     flex: 1,
@@ -577,17 +718,76 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
+    padding: 24,
     paddingBottom: 40,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginTop: 24,
-    marginBottom: 16,
+  headerSection: {
+    marginBottom: 32,
+  },
+  pageTitle: {
+    fontSize: Platform.OS === "web" ? 32 : 24,
+    fontWeight: "600",
+    color: "#1e293b",
+    fontFamily: "Poppins-SemiBold",
+  },
+  gridContainer: {
+    flexDirection: "row",
+    gap: 24,
+    flexWrap: "wrap",
+  },
+  gridColumn: {
+    flex: 1,
+    minWidth: 320,
+    gap: 24,
+  },
+  formCard: {
+    borderRadius: 16,
+    overflow: "hidden",
+    elevation: 1,
+    shadowColor: "rgba(0,0,0,0.1)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  iconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "#f1f5f9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerIcon: {
+    margin: 0,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1e293b",
+    fontFamily: "Poppins-SemiBold",
+  },
+  cardContent: {
+    padding: 24,
   },
   input: {
     marginBottom: 12,
+    backgroundColor: "#FFFFFF",
   },
   inputLabel: {
     fontSize: 14,
@@ -604,7 +804,7 @@ const styles = StyleSheet.create({
     color: "#EF4444",
     fontSize: 12,
     marginTop: -8,
-    marginBottom: 8,
+    marginBottom: 12,
     marginLeft: 4,
   },
   helperText: {
@@ -615,14 +815,10 @@ const styles = StyleSheet.create({
   usersContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginBottom: 16,
+    gap: 8,
   },
   userChip: {
-    margin: 4,
-  },
-  submitButton: {
-    marginTop: 24,
-    paddingVertical: 6,
+    marginBottom: 8,
   },
   companySelector: {
     marginBottom: 16,
@@ -631,6 +827,25 @@ const styles = StyleSheet.create({
   companyButton: {
     width: "100%",
   },
+  bottomBar: {
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+    padding: 16,
+  },
+  bottomBarContent: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+    maxWidth: 1400,
+    marginHorizontal: "auto",
+    width: "100%",
+  },
+  button: {
+    minWidth: 120,
+  },
+  cancelButton: {},
+  saveButton: {},
   webDatePickerModal: {
     backgroundColor: "white",
     padding: 20,
@@ -669,6 +884,74 @@ const styles = StyleSheet.create({
   },
   webDatePickerButton: {
     marginLeft: 10,
+  },
+  modalContainer: {
+    margin: 20,
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: "transparent",
+  },
+  modalSurface: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    overflow: "hidden",
+    elevation: 1,
+    shadowColor: "rgba(0,0,0,0.1)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    maxWidth: 500,
+    width: "100%",
+    alignSelf: "center",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 18,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontFamily: "Poppins-SemiBold",
+    color: "#424242",
+  },
+  companyOptionsContainer: {
+    maxHeight: 400,
+    padding: 12,
+  },
+  companyOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 12,
+    borderRadius: 12,
+    marginVertical: 6,
+    backgroundColor: "#f8fafc",
+  },
+  selectedCompanyOption: {
+    backgroundColor: "#f0f9ff",
+  },
+  companyOptionContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  companyIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#f1f5f9",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 14,
+  },
+  companyTextContainer: {
+    flex: 1,
+  },
+  companyName: {
+    fontSize: 15,
+    fontFamily: "Poppins-Medium",
+    color: "#334155",
   },
 });
 

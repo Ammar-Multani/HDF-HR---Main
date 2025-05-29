@@ -416,69 +416,60 @@ const createStyles = (theme: MD3Theme) =>
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
-      paddingHorizontal: 16,
-      paddingVertical: 16,
     },
     modalTitle: {
-      fontSize: 18,
-      fontWeight: "600",
+      fontFamily: "Poppins-SemiBold",
       color: "#212121",
     },
     modalContent: {
-      padding: 16,
       maxHeight: 400,
     },
     modalDivider: {
       height: 1,
-      backgroundColor: "#EEEEEE",
-      marginVertical: 8,
+      backgroundColor: "#E0E0E0",
+      marginTop: 16,
     },
     modalSection: {
-      marginBottom: 20,
+      marginBottom: 24,
     },
     sectionHeader: {
-      marginBottom: 12,
+      marginBottom: 16,
     },
     sectionTitle: {
       fontSize: 16,
-      fontWeight: "600",
+      fontFamily: "Poppins-SemiBold",
       color: "#212121",
     },
     radioItem: {
       flexDirection: "row",
       alignItems: "center",
-      marginVertical: 6,
+      marginVertical: 8,
     },
     radioLabel: {
       fontSize: 16,
-      marginLeft: 8,
+      marginLeft: 12,
+      fontFamily: "Poppins-Regular",
       color: "#424242",
     },
     modalFooter: {
       flexDirection: "row",
       justifyContent: "flex-end",
-      padding: 16,
       borderTopWidth: 1,
-      borderTopColor: "#EEEEEE",
+      borderTopColor: "#E0E0E0",
     },
     footerButton: {
-      paddingVertical: 10,
-      paddingHorizontal: 20,
-      borderRadius: 12,
-      marginLeft: 12,
+      borderRadius: 8,
+      marginLeft: 16,
     },
     applyButton: {
       elevation: 2,
-      backgroundColor: "#1a73e8",
     },
     clearButtonText: {
-      fontSize: 14,
-      fontWeight: "500",
+      fontFamily: "Poppins-Medium",
       color: "#616161",
     },
     applyButtonText: {
-      fontSize: 14,
-      fontWeight: "500",
+      fontFamily: "Poppins-Medium",
       color: "#FFFFFF",
     },
     contentContainer: {
@@ -763,144 +754,213 @@ const ReceiptsListScreen = () => {
 
   // Render filter modal
   const renderFilterModal = () => {
+    const modalWidth =
+      Platform.OS === "web"
+        ? isLargeScreen
+          ? 600
+          : isMediumScreen
+            ? 500
+            : "90%"
+        : "90%";
+
+    const modalPadding =
+      Platform.OS === "web"
+        ? isLargeScreen
+          ? 32
+          : isMediumScreen
+            ? 24
+            : 16
+        : 16;
+
     return (
       <Portal>
         <Modal
           visible={filterModalVisible}
           onDismiss={() => setFilterModalVisible(false)}
-          contentContainerStyle={styles.modalContainer}
+          contentContainerStyle={[
+            styles.modalContainer,
+            {
+              width: modalWidth,
+              maxWidth: Platform.OS === "web" ? 600 : "100%",
+              alignSelf: "center",
+            },
+          ]}
         >
-          <View style={styles.modalHeaderContainer}>
+          <View
+            style={[styles.modalHeaderContainer, { padding: modalPadding }]}
+          >
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Filter Options</Text>
+              <Text
+                style={[
+                  styles.modalTitle,
+                  { fontSize: isLargeScreen ? 24 : isMediumScreen ? 22 : 20 },
+                ]}
+              >
+                Filter Options
+              </Text>
               <IconButton
                 icon="close"
-                size={24}
+                size={isLargeScreen ? 28 : 24}
                 onPress={() => setFilterModalVisible(false)}
               />
             </View>
             <Divider style={styles.modalDivider} />
           </View>
 
-          <FlatList
-            style={styles.modalContent}
-            data={[]}
-            ListHeaderComponent={
-              <>
-                <View style={styles.modalSection}>
-                  <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>Company</Text>
-                  </View>
-                  <RadioButton.Group
-                    onValueChange={(value) =>
-                      setSelectedCompany(value === "all" ? null : value)
-                    }
-                    value={selectedCompany || "all"}
-                  >
-                    <View style={styles.radioItem}>
-                      <RadioButton.Android
-                        value="all"
-                        color={theme.colors.primary}
-                      />
-                      <Text style={styles.radioLabel}>All Companies</Text>
-                    </View>
-                    {companies.map((company) => (
-                      <View key={company.id} style={styles.radioItem}>
-                        <RadioButton.Android
-                          value={company.id}
-                          color={theme.colors.primary}
-                        />
-                        <Text style={styles.radioLabel}>
-                          {company.company_name}
-                        </Text>
-                      </View>
-                    ))}
-                  </RadioButton.Group>
+          <ScrollView style={[styles.modalContent, { padding: modalPadding }]}>
+            <View style={styles.modalSection}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Company</Text>
+              </View>
+              <RadioButton.Group
+                onValueChange={(value) =>
+                  setSelectedCompany(value === "all" ? null : value)
+                }
+                value={selectedCompany || "all"}
+              >
+                <View style={styles.radioItem}>
+                  <RadioButton.Android
+                    value="all"
+                    color={theme.colors.primary}
+                  />
+                  <Text style={styles.radioLabel}>All Companies</Text>
                 </View>
-
-                <Divider style={styles.modalDivider} />
-
-                <View style={styles.modalSection}>
-                  <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>Sort By</Text>
+                {companies.map((company) => (
+                  <View key={company.id} style={styles.radioItem}>
+                    <RadioButton.Android
+                      value={company.id}
+                      color={theme.colors.primary}
+                    />
+                    <Text style={styles.radioLabel}>
+                      {company.company_name}
+                    </Text>
                   </View>
-                  <RadioButton.Group
-                    onValueChange={(value) => setSortBy(value)}
-                    value={sortBy}
-                  >
-                    <View style={styles.radioItem}>
-                      <RadioButton.Android
-                        value="date"
-                        color={theme.colors.primary}
-                      />
-                      <Text style={styles.radioLabel}>Date</Text>
-                    </View>
-                    <View style={styles.radioItem}>
-                      <RadioButton.Android
-                        value="total_amount"
-                        color={theme.colors.primary}
-                      />
-                      <Text style={styles.radioLabel}>Amount</Text>
-                    </View>
-                    <View style={styles.radioItem}>
-                      <RadioButton.Android
-                        value="merchant_name"
-                        color={theme.colors.primary}
-                      />
-                      <Text style={styles.radioLabel}>Merchant</Text>
-                    </View>
-                  </RadioButton.Group>
+                ))}
+              </RadioButton.Group>
+            </View>
+
+            <Divider style={styles.modalDivider} />
+
+            <View style={styles.modalSection}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Sort By</Text>
+              </View>
+              <RadioButton.Group
+                onValueChange={(value) => setSortBy(value)}
+                value={sortBy}
+              >
+                <View style={styles.radioItem}>
+                  <RadioButton.Android
+                    value="date"
+                    color={theme.colors.primary}
+                  />
+                  <Text style={styles.radioLabel}>Date</Text>
                 </View>
-
-                <Divider style={styles.modalDivider} />
-
-                <View style={styles.modalSection}>
-                  <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>Sort Order</Text>
-                  </View>
-                  <RadioButton.Group
-                    onValueChange={(value) =>
-                      setSortOrder(value as "asc" | "desc")
-                    }
-                    value={sortOrder}
-                  >
-                    <View style={styles.radioItem}>
-                      <RadioButton.Android
-                        value="desc"
-                        color={theme.colors.primary}
-                      />
-                      <Text style={styles.radioLabel}>
-                        {sortBy === "date" ? "Newest First" : "Highest First"}
-                      </Text>
-                    </View>
-                    <View style={styles.radioItem}>
-                      <RadioButton.Android
-                        value="asc"
-                        color={theme.colors.primary}
-                      />
-                      <Text style={styles.radioLabel}>
-                        {sortBy === "date" ? "Oldest First" : "Lowest First"}
-                      </Text>
-                    </View>
-                  </RadioButton.Group>
+                <View style={styles.radioItem}>
+                  <RadioButton.Android
+                    value="total_amount"
+                    color={theme.colors.primary}
+                  />
+                  <Text style={styles.radioLabel}>Amount</Text>
                 </View>
-              </>
-            }
-            renderItem={() => null}
-          />
+                <View style={styles.radioItem}>
+                  <RadioButton.Android
+                    value="merchant_name"
+                    color={theme.colors.primary}
+                  />
+                  <Text style={styles.radioLabel}>Merchant</Text>
+                </View>
+              </RadioButton.Group>
+            </View>
 
-          <View style={styles.modalFooter}>
+            <Divider style={styles.modalDivider} />
+
+            <View style={styles.modalSection}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Sort Order</Text>
+              </View>
+              <RadioButton.Group
+                onValueChange={(value) => setSortOrder(value as "asc" | "desc")}
+                value={sortOrder}
+              >
+                <View style={styles.radioItem}>
+                  <RadioButton.Android
+                    value="desc"
+                    color={theme.colors.primary}
+                  />
+                  <Text style={styles.radioLabel}>
+                    {sortBy === "date" ? "Newest First" : "Highest First"}
+                  </Text>
+                </View>
+                <View style={styles.radioItem}>
+                  <RadioButton.Android
+                    value="asc"
+                    color={theme.colors.primary}
+                  />
+                  <Text style={styles.radioLabel}>
+                    {sortBy === "date" ? "Oldest First" : "Lowest First"}
+                  </Text>
+                </View>
+              </RadioButton.Group>
+            </View>
+          </ScrollView>
+
+          <View style={[styles.modalFooter, { padding: modalPadding }]}>
             <TouchableOpacity
-              style={styles.footerButton}
+              style={[
+                styles.footerButton,
+                {
+                  paddingVertical: isLargeScreen
+                    ? 14
+                    : isMediumScreen
+                      ? 12
+                      : 10,
+                  paddingHorizontal: isLargeScreen
+                    ? 28
+                    : isMediumScreen
+                      ? 24
+                      : 20,
+                },
+              ]}
               onPress={clearFilters}
             >
-              <Text style={styles.clearButtonText}>Clear Filters</Text>
+              <Text
+                style={[
+                  styles.clearButtonText,
+                  { fontSize: isLargeScreen ? 16 : 14 },
+                ]}
+              >
+                Clear Filters
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.footerButton, styles.applyButton]}
+              style={[
+                styles.footerButton,
+                styles.applyButton,
+                {
+                  paddingVertical: isLargeScreen
+                    ? 14
+                    : isMediumScreen
+                      ? 12
+                      : 10,
+                  paddingHorizontal: isLargeScreen
+                    ? 28
+                    : isMediumScreen
+                      ? 24
+                      : 20,
+                  backgroundColor: theme.colors.primary,
+                },
+              ]}
               onPress={applyFilters}
             >
-              <Text style={styles.applyButtonText}>Apply</Text>
+              <Text
+                style={[
+                  styles.applyButtonText,
+                  { fontSize: isLargeScreen ? 16 : 14 },
+                ]}
+              >
+                Apply
+              </Text>
             </TouchableOpacity>
           </View>
         </Modal>

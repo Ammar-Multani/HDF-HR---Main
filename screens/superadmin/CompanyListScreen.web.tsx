@@ -1132,26 +1132,60 @@ const CompanyListScreen = () => {
 
   // Render the filter modal
   const renderFilterModal = () => {
+    const modalWidth =
+      Platform.OS === "web"
+        ? isLargeScreen
+          ? 600
+          : isMediumScreen
+            ? 500
+            : "90%"
+        : "90%";
+
+    const modalPadding =
+      Platform.OS === "web"
+        ? isLargeScreen
+          ? 32
+          : isMediumScreen
+            ? 24
+            : 16
+        : 16;
+
     return (
       <Portal>
         <Modal
           visible={filterModalVisible}
           onDismiss={() => setFilterModalVisible(false)}
-          contentContainerStyle={styles.modalContainer}
+          contentContainerStyle={[
+            styles.modalContainer,
+            {
+              width: modalWidth,
+              maxWidth: Platform.OS === "web" ? 600 : "100%",
+              alignSelf: "center",
+            },
+          ]}
         >
-          <View style={styles.modalHeaderContainer}>
+          <View
+            style={[styles.modalHeaderContainer, { padding: modalPadding }]}
+          >
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Filter Options</Text>
+              <Text
+                style={[
+                  styles.modalTitle,
+                  { fontSize: isLargeScreen ? 24 : isMediumScreen ? 22 : 20 },
+                ]}
+              >
+                Filter Options
+              </Text>
               <IconButton
                 icon="close"
-                size={24}
+                size={isLargeScreen ? 28 : 24}
                 onPress={() => setFilterModalVisible(false)}
               />
             </View>
             <Divider style={styles.modalDivider} />
           </View>
 
-          <ScrollView style={styles.modalContent}>
+          <ScrollView style={[styles.modalContent, { padding: modalPadding }]}>
             <View style={styles.modalSection}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Status</Text>
@@ -1209,22 +1243,62 @@ const CompanyListScreen = () => {
             </View>
           </ScrollView>
 
-          <View style={styles.modalFooter}>
+          <View style={[styles.modalFooter, { padding: modalPadding }]}>
             <TouchableOpacity
-              style={styles.footerButton}
+              style={[
+                styles.footerButton,
+                {
+                  paddingVertical: isLargeScreen
+                    ? 14
+                    : isMediumScreen
+                      ? 12
+                      : 10,
+                  paddingHorizontal: isLargeScreen
+                    ? 28
+                    : isMediumScreen
+                      ? 24
+                      : 20,
+                },
+              ]}
               onPress={clearFilters}
             >
-              <Text style={styles.clearButtonText}>Clear Filters</Text>
+              <Text
+                style={[
+                  styles.clearButtonText,
+                  { fontSize: isLargeScreen ? 16 : 14 },
+                ]}
+              >
+                Clear Filters
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[
                 styles.footerButton,
                 styles.applyButton,
-                { backgroundColor: theme.colors.primary },
+                {
+                  paddingVertical: isLargeScreen
+                    ? 14
+                    : isMediumScreen
+                      ? 12
+                      : 10,
+                  paddingHorizontal: isLargeScreen
+                    ? 28
+                    : isMediumScreen
+                      ? 24
+                      : 20,
+                  backgroundColor: theme.colors.primary,
+                },
               ]}
               onPress={applyFilters}
             >
-              <Text style={styles.applyButtonText}>Apply</Text>
+              <Text
+                style={[
+                  styles.applyButtonText,
+                  { fontSize: isLargeScreen ? 16 : 14 },
+                ]}
+              >
+                Apply
+              </Text>
             </TouchableOpacity>
           </View>
         </Modal>
@@ -1594,28 +1668,24 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 16,
   },
   modalTitle: {
-    fontSize: 20,
     fontFamily: "Poppins-SemiBold",
     color: "#212121",
   },
   modalContent: {
-    padding: 16,
     maxHeight: 400,
   },
   modalDivider: {
     height: 1,
     backgroundColor: "#E0E0E0",
-    marginVertical: 8,
+    marginTop: 16,
   },
   modalSection: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   sectionHeader: {
-    marginBottom: 12,
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 16,
@@ -1625,37 +1695,32 @@ const styles = StyleSheet.create({
   radioItem: {
     flexDirection: "row",
     alignItems: "center",
-    marginVertical: 4,
+    marginVertical: 8,
   },
   radioLabel: {
     fontSize: 16,
-    marginLeft: 8,
+    marginLeft: 12,
     fontFamily: "Poppins-Regular",
     color: "#424242",
   },
   modalFooter: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    padding: 16,
     borderTopWidth: 1,
     borderTopColor: "#E0E0E0",
   },
   footerButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
     borderRadius: 8,
-    marginLeft: 12,
+    marginLeft: 16,
   },
   applyButton: {
     elevation: 2,
   },
   clearButtonText: {
-    fontSize: 14,
     fontFamily: "Poppins-Medium",
     color: "#616161",
   },
   applyButtonText: {
-    fontSize: 14,
     fontFamily: "Poppins-Medium",
     color: "#FFFFFF",
   },

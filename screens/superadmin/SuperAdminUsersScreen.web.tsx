@@ -1426,6 +1426,24 @@ const SuperAdminUsersScreen = () => {
     const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
     const dropdownRef = React.useRef(null);
 
+    const modalWidth =
+      Platform.OS === "web"
+        ? isLargeScreen
+          ? 600
+          : isMediumScreen
+            ? 500
+            : "90%"
+        : "90%";
+
+    const modalPadding =
+      Platform.OS === "web"
+        ? isLargeScreen
+          ? 32
+          : isMediumScreen
+            ? 24
+            : 16
+        : 16;
+
     const showMenu = () => {
       if (dropdownRef.current) {
         // @ts-ignore - Getting layout measurements
@@ -1467,22 +1485,37 @@ const SuperAdminUsersScreen = () => {
         <Modal
           visible={filterModalVisible}
           onDismiss={() => setFilterModalVisible(false)}
-          contentContainerStyle={styles.modalContainer}
+          contentContainerStyle={[
+            styles.modalContainer,
+            {
+              width: modalWidth,
+              maxWidth: Platform.OS === "web" ? 600 : "100%",
+              alignSelf: "center",
+            },
+          ]}
         >
-          <View style={styles.modalHeaderContainer}>
+          <View
+            style={[styles.modalHeaderContainer, { padding: modalPadding }]}
+          >
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Filter Options</Text>
+              <Text
+                style={[
+                  styles.modalTitle,
+                  { fontSize: isLargeScreen ? 24 : isMediumScreen ? 22 : 20 },
+                ]}
+              >
+                Filter Options
+              </Text>
               <IconButton
                 icon="close"
-                size={24}
+                size={isLargeScreen ? 28 : 24}
                 onPress={() => setFilterModalVisible(false)}
               />
             </View>
-
             <Divider style={styles.modalDivider} />
           </View>
 
-          <ScrollView style={styles.modalContent}>
+          <ScrollView style={[styles.modalContent, { padding: modalPadding }]}>
             {/* Date Sort Section - Available for all tabs */}
             <View style={styles.modalSection}>
               <View style={styles.sectionHeader}>
@@ -1634,9 +1667,23 @@ const SuperAdminUsersScreen = () => {
             )}
           </ScrollView>
 
-          <View style={styles.modalFooter}>
+          <View style={[styles.modalFooter, { padding: modalPadding }]}>
             <TouchableOpacity
-              style={styles.footerButton}
+              style={[
+                styles.footerButton,
+                {
+                  paddingVertical: isLargeScreen
+                    ? 14
+                    : isMediumScreen
+                      ? 12
+                      : 10,
+                  paddingHorizontal: isLargeScreen
+                    ? 28
+                    : isMediumScreen
+                      ? 24
+                      : 20,
+                },
+              ]}
               onPress={() => {
                 setSelectedCompanyIds([]);
                 setSelectedCompanyId("all");
@@ -1648,20 +1695,46 @@ const SuperAdminUsersScreen = () => {
                 setMenuVisible(false);
               }}
             >
-              <Text style={styles.clearButtonText}>Clear Filters</Text>
+              <Text
+                style={[
+                  styles.clearButtonText,
+                  { fontSize: isLargeScreen ? 16 : 14 },
+                ]}
+              >
+                Clear Filters
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[
                 styles.footerButton,
                 styles.applyButton,
-                { backgroundColor: theme.colors.primary },
+                {
+                  paddingVertical: isLargeScreen
+                    ? 14
+                    : isMediumScreen
+                      ? 12
+                      : 10,
+                  paddingHorizontal: isLargeScreen
+                    ? 28
+                    : isMediumScreen
+                      ? 24
+                      : 20,
+                  backgroundColor: theme.colors.primary,
+                },
               ]}
               onPress={() => {
                 // Use our new direct filter approach that works on first click
                 applyFiltersDirect();
               }}
             >
-              <Text style={styles.applyButtonText}>Apply</Text>
+              <Text
+                style={[
+                  styles.applyButtonText,
+                  { fontSize: isLargeScreen ? 16 : 14 },
+                ]}
+              >
+                Apply
+              </Text>
             </TouchableOpacity>
           </View>
         </Modal>

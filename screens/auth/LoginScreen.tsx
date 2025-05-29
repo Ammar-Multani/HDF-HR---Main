@@ -202,15 +202,11 @@ const LoginScreen = () => {
                 },
               ]}
             >
-              <BlurView
-                intensity={50}
-                tint={theme.dark ? "dark" : "light"}
+              <View
                 style={[
                   styles.glassSurface,
                   {
-                    backgroundColor: theme.dark
-                      ? "rgba(30, 30, 50, 0.75)"
-                      : "rgba(255, 255, 255, 0.75)",
+                    backgroundColor: theme.colors.background,
                     borderColor: theme.colors.outlineVariant,
                   },
                 ]}
@@ -340,7 +336,7 @@ const LoginScreen = () => {
                     )}
                   </LinearGradient>
                 </TouchableOpacity>
-              </BlurView>
+              </View>
             </Animated.View>
 
             <Animated.View

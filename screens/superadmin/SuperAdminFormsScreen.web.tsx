@@ -206,8 +206,12 @@ const Shimmer: React.FC<ShimmerProps> = ({ width, height, style }) => {
         {
           translateX: withRepeat(
             withSequence(
-              withTiming(typeof width === 'number' ? -width : -200, { duration: 800 }),
-              withTiming(typeof width === 'number' ? width : 200, { duration: 800 })
+              withTiming(typeof width === "number" ? -width : -200, {
+                duration: 800,
+              }),
+              withTiming(typeof width === "number" ? width : 200, {
+                duration: 800,
+              })
             ),
             -1
           ),
@@ -319,28 +323,30 @@ const TableSkeleton = () => {
   return (
     <View style={styles.tableContainer}>
       <TableHeader />
-      {Array(5).fill(0).map((_, index) => (
-        <View key={`skeleton-${index}`} style={styles.tableRow}>
-          <View style={styles.tableCell}>
-            <Shimmer width={140} height={16} />
+      {Array(5)
+        .fill(0)
+        .map((_, index) => (
+          <View key={`skeleton-${index}`} style={styles.tableRow}>
+            <View style={styles.tableCell}>
+              <Shimmer width={140} height={16} />
+            </View>
+            <View style={styles.tableCell}>
+              <Shimmer width={160} height={16} />
+            </View>
+            <View style={styles.tableCell}>
+              <Shimmer width={180} height={16} />
+            </View>
+            <View style={styles.tableCell}>
+              <Shimmer width={100} height={16} />
+            </View>
+            <View style={styles.tableCell}>
+              <Shimmer width={80} height={24} style={{ borderRadius: 12 }} />
+            </View>
+            <View style={styles.actionCell}>
+              <Shimmer width={40} height={40} style={{ borderRadius: 20 }} />
+            </View>
           </View>
-          <View style={styles.tableCell}>
-            <Shimmer width={160} height={16} />
-          </View>
-          <View style={styles.tableCell}>
-            <Shimmer width={180} height={16} />
-          </View>
-          <View style={styles.tableCell}>
-            <Shimmer width={100} height={16} />
-          </View>
-          <View style={styles.tableCell}>
-            <Shimmer width={80} height={24} style={{ borderRadius: 12 }} />
-          </View>
-          <View style={styles.actionCell}>
-            <Shimmer width={40} height={40} style={{ borderRadius: 20 }} />
-          </View>
-        </View>
-      ))}
+        ))}
     </View>
   );
 };
@@ -873,28 +879,60 @@ const SuperAdminFormsScreen = () => {
 
   // Render the filter modal
   const renderFilterModal = () => {
+    const modalWidth =
+      Platform.OS === "web"
+        ? isLargeScreen
+          ? 600
+          : isMediumScreen
+            ? 500
+            : "90%"
+        : "90%";
+
+    const modalPadding =
+      Platform.OS === "web"
+        ? isLargeScreen
+          ? 32
+          : isMediumScreen
+            ? 24
+            : 16
+        : 16;
+
     return (
       <Portal>
         <Modal
           visible={filterModalVisible}
           onDismiss={() => setFilterModalVisible(false)}
-          contentContainerStyle={styles.modalContainer}
+          contentContainerStyle={[
+            styles.modalContainer,
+            {
+              width: modalWidth,
+              maxWidth: Platform.OS === "web" ? 600 : "100%",
+              alignSelf: "center",
+            },
+          ]}
         >
-          <View style={styles.modalHeaderContainer}>
+          <View
+            style={[styles.modalHeaderContainer, { padding: modalPadding }]}
+          >
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
+              <Text
+                style={[
+                  styles.modalTitle,
+                  { fontSize: isLargeScreen ? 24 : isMediumScreen ? 22 : 20 },
+                ]}
+              >
                 {t("superAdmin.forms.filterOptions")}
               </Text>
               <IconButton
                 icon="close"
-                size={24}
+                size={isLargeScreen ? 28 : 24}
                 onPress={() => setFilterModalVisible(false)}
               />
             </View>
             <Divider style={styles.modalDivider} />
           </View>
 
-          <ScrollView style={styles.modalContent}>
+          <ScrollView style={[styles.modalContent, { padding: modalPadding }]}>
             <View style={styles.modalSection}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>
@@ -908,14 +946,20 @@ const SuperAdminFormsScreen = () => {
                 value={statusFilter}
               >
                 <View style={styles.radioItem}>
-                  <RadioButton.Android value="all" color="#1a73e8" />
+                  <RadioButton.Android
+                    value="all"
+                    color={theme.colors.primary}
+                  />
                   <Text style={styles.radioLabel}>
                     {t("superAdmin.forms.all")}
                   </Text>
                 </View>
                 {Object.values(FormStatus).map((status) => (
                   <View key={status} style={styles.radioItem}>
-                    <RadioButton.Android value={status} color="#1a73e8" />
+                    <RadioButton.Android
+                      value={status}
+                      color={theme.colors.primary}
+                    />
                     <Text style={styles.radioLabel}>{status}</Text>
                   </View>
                 ))}
@@ -935,25 +979,37 @@ const SuperAdminFormsScreen = () => {
                 value={formTypeFilter}
               >
                 <View style={styles.radioItem}>
-                  <RadioButton.Android value="all" color="#1a73e8" />
+                  <RadioButton.Android
+                    value="all"
+                    color={theme.colors.primary}
+                  />
                   <Text style={styles.radioLabel}>
                     {t("superAdmin.forms.all")}
                   </Text>
                 </View>
                 <View style={styles.radioItem}>
-                  <RadioButton.Android value="accident" color="#1a73e8" />
+                  <RadioButton.Android
+                    value="accident"
+                    color={theme.colors.primary}
+                  />
                   <Text style={styles.radioLabel}>
                     {t("superAdmin.forms.accidentReport")}
                   </Text>
                 </View>
                 <View style={styles.radioItem}>
-                  <RadioButton.Android value="illness" color="#1a73e8" />
+                  <RadioButton.Android
+                    value="illness"
+                    color={theme.colors.primary}
+                  />
                   <Text style={styles.radioLabel}>
                     {t("superAdmin.forms.illnessReport")}
                   </Text>
                 </View>
                 <View style={styles.radioItem}>
-                  <RadioButton.Android value="departure" color="#1a73e8" />
+                  <RadioButton.Android
+                    value="departure"
+                    color={theme.colors.primary}
+                  />
                   <Text style={styles.radioLabel}>
                     {t("superAdmin.forms.departureReport")}
                   </Text>
@@ -974,13 +1030,19 @@ const SuperAdminFormsScreen = () => {
                 value={sortOrder}
               >
                 <View style={styles.radioItem}>
-                  <RadioButton.Android value="desc" color="#1a73e8" />
+                  <RadioButton.Android
+                    value="desc"
+                    color={theme.colors.primary}
+                  />
                   <Text style={styles.radioLabel}>
                     {t("superAdmin.forms.newestFirst")}
                   </Text>
                 </View>
                 <View style={styles.radioItem}>
-                  <RadioButton.Android value="asc" color="#1a73e8" />
+                  <RadioButton.Android
+                    value="asc"
+                    color={theme.colors.primary}
+                  />
                   <Text style={styles.radioLabel}>
                     {t("superAdmin.forms.oldestFirst")}
                   </Text>
@@ -989,20 +1051,60 @@ const SuperAdminFormsScreen = () => {
             </View>
           </ScrollView>
 
-          <View style={styles.modalFooter}>
+          <View style={[styles.modalFooter, { padding: modalPadding }]}>
             <TouchableOpacity
-              style={styles.footerButton}
+              style={[
+                styles.footerButton,
+                {
+                  paddingVertical: isLargeScreen
+                    ? 14
+                    : isMediumScreen
+                      ? 12
+                      : 10,
+                  paddingHorizontal: isLargeScreen
+                    ? 28
+                    : isMediumScreen
+                      ? 24
+                      : 20,
+                },
+              ]}
               onPress={clearFilters}
             >
-              <Text style={styles.clearButtonText}>
+              <Text
+                style={[
+                  styles.clearButtonText,
+                  { fontSize: isLargeScreen ? 16 : 14 },
+                ]}
+              >
                 {t("superAdmin.forms.clearFilters")}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.footerButton, styles.applyButton]}
+              style={[
+                styles.footerButton,
+                styles.applyButton,
+                {
+                  paddingVertical: isLargeScreen
+                    ? 14
+                    : isMediumScreen
+                      ? 12
+                      : 10,
+                  paddingHorizontal: isLargeScreen
+                    ? 28
+                    : isMediumScreen
+                      ? 24
+                      : 20,
+                  backgroundColor: theme.colors.primary,
+                },
+              ]}
               onPress={applyFilters}
             >
-              <Text style={styles.applyButtonText}>
+              <Text
+                style={[
+                  styles.applyButtonText,
+                  { fontSize: isLargeScreen ? 16 : 14 },
+                ]}
+              >
                 {t("superAdmin.forms.apply")}
               </Text>
             </TouchableOpacity>
@@ -1195,7 +1297,8 @@ const SuperAdminFormsScreen = () => {
 
   if (loading && !refreshing) {
     const isLargeScreen = windowDimensions.width >= 1440;
-    const isMediumScreen = windowDimensions.width >= 768 && windowDimensions.width < 1440;
+    const isMediumScreen =
+      windowDimensions.width >= 768 && windowDimensions.width < 1440;
     const useTableLayout = isLargeScreen || isMediumScreen;
 
     return (
@@ -1209,36 +1312,46 @@ const SuperAdminFormsScreen = () => {
           showLogo={false}
           showTitle={true}
         />
-        <View style={[styles.searchContainer, {
-          maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
-          alignSelf: "center",
-          width: "100%",
-        }]}>
+        <View
+          style={[
+            styles.searchContainer,
+            {
+              maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
+              alignSelf: "center",
+              width: "100%",
+            },
+          ]}
+        >
           <View style={styles.searchBarContainer}>
-            <Shimmer 
-              width="100%" 
-              height={60} 
-              style={{ 
+            <Shimmer
+              width="100%"
+              height={60}
+              style={{
                 borderRadius: 18,
                 marginRight: 8,
-              }} 
+              }}
             />
-            <Shimmer 
-              width={48} 
-              height={48} 
-              style={{ 
+            <Shimmer
+              width={48}
+              height={48}
+              style={{
                 borderRadius: 8,
-              }} 
+              }}
             />
           </View>
         </View>
 
-        <View style={[styles.contentContainer, {
-          maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
-          alignSelf: "center",
-          width: "100%",
-          flex: 1,
-        }]}>
+        <View
+          style={[
+            styles.contentContainer,
+            {
+              maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
+              alignSelf: "center",
+              width: "100%",
+              flex: 1,
+            },
+          ]}
+        >
           {useTableLayout ? (
             <TableSkeleton />
           ) : (
@@ -1607,28 +1720,24 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 16,
   },
   modalTitle: {
-    fontSize: 20,
     fontFamily: "Poppins-SemiBold",
     color: "#212121",
   },
   modalContent: {
-    padding: 16,
     maxHeight: 400,
   },
   modalDivider: {
     height: 1,
     backgroundColor: "#E0E0E0",
-    marginVertical: 8,
+    marginTop: 16,
   },
   modalSection: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   sectionHeader: {
-    marginBottom: 12,
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 16,
@@ -1638,38 +1747,32 @@ const styles = StyleSheet.create({
   radioItem: {
     flexDirection: "row",
     alignItems: "center",
-    marginVertical: 4,
+    marginVertical: 8,
   },
   radioLabel: {
     fontSize: 16,
-    marginLeft: 8,
+    marginLeft: 12,
     fontFamily: "Poppins-Regular",
     color: "#424242",
   },
   modalFooter: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    padding: 16,
     borderTopWidth: 1,
     borderTopColor: "#E0E0E0",
   },
   footerButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
     borderRadius: 8,
-    marginLeft: 12,
+    marginLeft: 16,
   },
   applyButton: {
     elevation: 2,
-    backgroundColor: "#1a73e8",
   },
   clearButtonText: {
-    fontSize: 14,
     fontFamily: "Poppins-Medium",
     color: "#616161",
   },
   applyButtonText: {
-    fontSize: 14,
     fontFamily: "Poppins-Medium",
     color: "#FFFFFF",
   },

@@ -19,6 +19,8 @@ import {
   Card,
   IconButton,
   Surface,
+  Portal,
+  Modal,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
@@ -32,6 +34,223 @@ import { useTranslation } from "react-i18next";
 import { useLanguage } from "../../contexts/LanguageContext";
 import CustomLanguageSelector from "../../components/CustomLanguageSelector";
 import Animated, { FadeIn } from "react-native-reanimated";
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 80,
+  },
+  gridContainer: {
+    flexDirection: "column",
+    gap: 24,
+  },
+  profileSection: {
+    width: "100%",
+    marginBottom: 24,
+  },
+  profileCard: {
+    borderRadius: 16,
+    overflow: "hidden",
+    elevation: 1,
+    shadowColor: "rgba(0,0,0,0.1)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    marginTop: 24,
+  },
+  headerGradient: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 160,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+  },
+  profileHeader: {
+    alignItems: "center",
+    paddingVertical: 32,
+    position: "relative",
+  },
+  avatar: {
+    borderWidth: 4,
+    borderColor: "#fff",
+    backgroundColor: "rgba(54,105,157,255)",
+    marginBottom: 16,
+  },
+  userName: {
+    fontSize: 24,
+    color: "#1e293b",
+    marginBottom: 8,
+  },
+  userEmail: {
+    fontSize: 16,
+    color: "#64748b",
+    marginBottom: 16,
+  },
+  roleBadge: {
+    backgroundColor: "#ffffff",
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(54,105,157,255)",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  roleText: {
+    fontSize: 14,
+    color: "rgba(54,105,157,255)",
+  },
+  contentContainer: {
+    flex: 1,
+  },
+  gridColumns: {
+    flexDirection: "row",
+    gap: 24,
+    flexWrap: "wrap",
+  },
+  gridColumn: {
+    minWidth: 320,
+    flex: 1,
+  },
+  detailsCard: {
+    borderRadius: 16,
+    overflow: "hidden",
+    elevation: 1,
+    shadowColor: "rgba(0,0,0,0.1)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  iconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "#f1f5f9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerIcon: {
+    margin: 0,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1e293b",
+    fontFamily: "Poppins-SemiBold",
+  },
+  cardContent: {
+    padding: 24,
+  },
+  input: {
+    marginBottom: 16,
+    backgroundColor: "#fff",
+  },
+  updateButton: {
+    marginTop: 8,
+    borderRadius: 12,
+    paddingVertical: 4,
+  },
+  settingItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+  },
+  settingItemContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+  },
+  settingText: {
+    fontSize: 16,
+    color: "#1e293b",
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "#e2e8f0",
+  },
+  languageSelectorContainer: {
+    marginLeft: "auto",
+  },
+  signOutModal: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    elevation: 5,
+    overflow: "hidden",
+  },
+  signOutModalContent: {
+    alignItems: "center",
+  },
+  signOutModalHeader: {
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  signOutModalTitle: {
+    fontSize: 20,
+    fontFamily: "Poppins-SemiBold",
+    color: "#1e293b",
+    marginTop: 16,
+    textAlign: "center",
+  },
+  signOutModalMessage: {
+    fontSize: 16,
+    fontFamily: "Poppins-Regular",
+    color: "#64748b",
+    textAlign: "center",
+    marginBottom: 24,
+  },
+  signOutModalActions: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 12,
+    marginTop: 8,
+  },
+  signOutModalButton: {
+    borderRadius: 8,
+    minWidth: 100,
+  },
+  signOutModalButtonText: {
+    fontFamily: "Poppins-Medium",
+  },
+  cancelButton: {
+    borderColor: "#e2e8f0",
+  },
+  confirmButton: {
+    borderWidth: 0,
+  },
+});
 
 const SuperAdminProfileScreen = () => {
   const theme = useTheme();
@@ -51,6 +270,7 @@ const SuperAdminProfileScreen = () => {
   const [email, setEmail] = useState("");
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
+  const [signOutModalVisible, setSignOutModalVisible] = useState(false);
 
   // Gradient colors used across the app
   const gradientColors = [
@@ -131,26 +351,38 @@ const SuperAdminProfileScreen = () => {
   };
 
   const handleSignOut = async () => {
-    Alert.alert(
-      t("superAdmin.profile.signOut"),
-      t("superAdmin.profile.confirmSignOut"),
-      [
-        {
-          text: t("superAdmin.profile.cancel"),
-          style: "cancel",
-        },
-        {
-          text: t("superAdmin.profile.signOut"),
-          onPress: async () => {
-            try {
-              await signOut();
-            } catch (error) {
-              console.error("Error signing out:", error);
-            }
+    if (Platform.OS === "web") {
+      // For web, show modal dialog
+      setSignOutModalVisible(true);
+    } else {
+      // For mobile, show alert dialog
+      Alert.alert(
+        t("superAdmin.profile.signOut"),
+        t("superAdmin.profile.confirmSignOut"),
+        [
+          {
+            text: t("superAdmin.profile.cancel"),
+            style: "cancel",
           },
-        },
-      ]
-    );
+          {
+            text: t("superAdmin.profile.signOut"),
+            onPress: performSignOut,
+          },
+        ]
+      );
+    }
+  };
+
+  const performSignOut = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.error("Error signing out:", error);
+      setSnackbarMessage(t("superAdmin.profile.signOutFailed"));
+      setSnackbarVisible(true);
+    } finally {
+      setSignOutModalVisible(false);
+    }
   };
 
   const getInitials = () => {
@@ -162,6 +394,72 @@ const SuperAdminProfileScreen = () => {
     return (
       nameParts[0].charAt(0).toUpperCase() +
       nameParts[nameParts.length - 1].charAt(0).toUpperCase()
+    );
+  };
+
+  // Add the sign out confirmation modal component
+  const renderSignOutModal = () => {
+    const modalWidth = isLargeScreen ? 400 : isMediumScreen ? 360 : "90%";
+    const modalPadding = isLargeScreen ? 32 : isMediumScreen ? 24 : 16;
+
+    return (
+      <Portal>
+        <Modal
+          visible={signOutModalVisible}
+          onDismiss={() => setSignOutModalVisible(false)}
+          contentContainerStyle={[
+            styles.signOutModal,
+            {
+              width: modalWidth,
+              maxWidth: 400,
+              alignSelf: "center",
+            },
+          ]}
+        >
+          <View style={[styles.signOutModalContent, { padding: modalPadding }]}>
+            <View style={styles.signOutModalHeader}>
+              <MaterialCommunityIcons
+                name="logout"
+                size={32}
+                color={theme.colors.error}
+              />
+              <Text style={styles.signOutModalTitle}>
+                {t("superAdmin.profile.signOut")}
+              </Text>
+            </View>
+
+            <Text style={styles.signOutModalMessage}>
+              {t("superAdmin.profile.confirmSignOut")}
+            </Text>
+
+            <View style={styles.signOutModalActions}>
+              <Button
+                mode="outlined"
+                onPress={() => setSignOutModalVisible(false)}
+                style={[styles.signOutModalButton, styles.cancelButton]}
+                labelStyle={[
+                  styles.signOutModalButtonText,
+                  { fontSize: isLargeScreen ? 16 : 14 },
+                ]}
+              >
+                {t("superAdmin.profile.cancel")}
+              </Button>
+              <Button
+                mode="contained"
+                onPress={performSignOut}
+                style={[styles.signOutModalButton, styles.confirmButton]}
+                buttonColor={theme.colors.error}
+                labelStyle={[
+                  styles.signOutModalButtonText,
+                  { fontSize: isLargeScreen ? 16 : 14 },
+                ]}
+              >
+                {t("superAdmin.profile.signOut")}
+              </Button>
+            </View>
+          </View>
+        </Modal>
+      </Portal>
     );
   };
 
@@ -204,7 +502,6 @@ const SuperAdminProfileScreen = () => {
               ]}
             >
               <Surface style={styles.profileCard}>
-
                 <View style={styles.profileHeader}>
                   <Avatar.Text
                     size={100}
@@ -413,6 +710,7 @@ const SuperAdminProfileScreen = () => {
         </ScrollView>
       </KeyboardAvoidingView>
 
+      {renderSignOutModal()}
       <Snackbar
         visible={snackbarVisible}
         onDismiss={() => setSnackbarVisible(false)}
@@ -427,176 +725,5 @@ const SuperAdminProfileScreen = () => {
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  keyboardAvoidingView: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 80,
-  },
-  gridContainer: {
-    flexDirection: "column",
-    gap: 24,
-  },
-  profileSection: {
-    width: "100%",
-    marginBottom: 24,
-  },
-  profileCard: {
-    borderRadius: 16,
-    overflow: "hidden",
-    elevation: 1,
-    shadowColor: "rgba(0,0,0,0.1)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    marginTop: 24,
-  },
-  headerGradient: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 160,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-  },
-  profileHeader: {
-    alignItems: "center",
-    paddingVertical: 32,
-    position: "relative",
-  },
-  avatar: {
-    borderWidth: 4,
-    borderColor: "#fff",
-    backgroundColor: "rgba(54,105,157,255)",
-    marginBottom: 16,
-  },
-  userName: {
-    fontSize: 24,
-    color: "#1e293b",
-    marginBottom: 8,
-  },
-  userEmail: {
-    fontSize: 16,
-    color: "#64748b",
-    marginBottom: 16,
-  },
-  roleBadge: {
-    backgroundColor: "#ffffff",
-    paddingVertical: 6,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(54,105,157,255)",
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-  },
-  roleText: {
-    fontSize: 14,
-    color: "rgba(54,105,157,255)",
-  },
-  contentContainer: {
-    flex: 1,
-  },
-  gridColumns: {
-    flexDirection: "row",
-    gap: 24,
-    flexWrap: "wrap",
-  },
-  gridColumn: {
-    minWidth: 320,
-    flex: 1,
-  },
-  detailsCard: {
-    borderRadius: 16,
-    overflow: "hidden",
-    elevation: 1,
-    shadowColor: "rgba(0,0,0,0.1)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
-  },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  iconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: "#f1f5f9",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerIcon: {
-    margin: 0,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1e293b",
-    fontFamily: "Poppins-SemiBold",
-  },
-  cardContent: {
-    padding: 24,
-  },
-  input: {
-    marginBottom: 16,
-    backgroundColor: "#fff",
-  },
-  updateButton: {
-    marginTop: 8,
-    borderRadius: 12,
-    paddingVertical: 4,
-  },
-  settingItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 12,
-  },
-  settingItemContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-  },
-  settingText: {
-    fontSize: 16,
-    color: "#1e293b",
-  },
-  divider: {
-    height: 1,
-    backgroundColor: "#e2e8f0",
-  },
-  languageSelectorContainer: {
-    marginLeft: "auto",
-  },
-});
 
 export default SuperAdminProfileScreen;

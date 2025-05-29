@@ -881,28 +881,60 @@ const SuperAdminTasksScreen = () => {
 
   // Render the filter modal
   const renderFilterModal = () => {
+    const modalWidth =
+      Platform.OS === "web"
+        ? isLargeScreen
+          ? 600
+          : isMediumScreen
+            ? 500
+            : "90%"
+        : "90%";
+
+    const modalPadding =
+      Platform.OS === "web"
+        ? isLargeScreen
+          ? 32
+          : isMediumScreen
+            ? 24
+            : 16
+        : 16;
+
     return (
       <Portal>
         <Modal
           visible={filterModalVisible}
           onDismiss={() => setFilterModalVisible(false)}
-          contentContainerStyle={styles.modalContainer}
+          contentContainerStyle={[
+            styles.modalContainer,
+            {
+              width: modalWidth,
+              maxWidth: Platform.OS === "web" ? 600 : "100%",
+              alignSelf: "center",
+            },
+          ]}
         >
-          <View style={styles.modalHeaderContainer}>
+          <View
+            style={[styles.modalHeaderContainer, { padding: modalPadding }]}
+          >
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
+              <Text
+                style={[
+                  styles.modalTitle,
+                  { fontSize: isLargeScreen ? 24 : isMediumScreen ? 22 : 20 },
+                ]}
+              >
                 {t("superAdmin.tasks.filterOptions")}
               </Text>
               <IconButton
                 icon="close"
-                size={24}
+                size={isLargeScreen ? 28 : 24}
                 onPress={() => setFilterModalVisible(false)}
               />
             </View>
             <Divider style={styles.modalDivider} />
           </View>
 
-          <ScrollView style={styles.modalContent}>
+          <ScrollView style={[styles.modalContent, { padding: modalPadding }]}>
             <View style={styles.modalSection}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>
@@ -916,14 +948,20 @@ const SuperAdminTasksScreen = () => {
                 value={statusFilter}
               >
                 <View style={styles.radioItem}>
-                  <RadioButton.Android value="all" color="#1a73e8" />
+                  <RadioButton.Android
+                    value="all"
+                    color={theme.colors.primary}
+                  />
                   <Text style={styles.radioLabel}>
                     {t("superAdmin.tasks.all")}
                   </Text>
                 </View>
                 {Object.values(TaskStatus).map((status) => (
                   <View key={status} style={styles.radioItem}>
-                    <RadioButton.Android value={status} color="#1a73e8" />
+                    <RadioButton.Android
+                      value={status}
+                      color={theme.colors.primary}
+                    />
                     <Text style={styles.radioLabel}>
                       {t(`superAdmin.tasks.${status}`)}
                     </Text>
@@ -947,14 +985,20 @@ const SuperAdminTasksScreen = () => {
                 value={priorityFilter}
               >
                 <View style={styles.radioItem}>
-                  <RadioButton.Android value="all" color="#1a73e8" />
+                  <RadioButton.Android
+                    value="all"
+                    color={theme.colors.primary}
+                  />
                   <Text style={styles.radioLabel}>
                     {t("superAdmin.tasks.all")}
                   </Text>
                 </View>
                 {Object.values(TaskPriority).map((priority) => (
                   <View key={priority} style={styles.radioItem}>
-                    <RadioButton.Android value={priority} color="#1a73e8" />
+                    <RadioButton.Android
+                      value={priority}
+                      color={theme.colors.primary}
+                    />
                     <Text style={styles.radioLabel}>
                       {getTranslatedPriority(priority)}
                     </Text>
@@ -976,13 +1020,19 @@ const SuperAdminTasksScreen = () => {
                 value={sortOrder}
               >
                 <View style={styles.radioItem}>
-                  <RadioButton.Android value="desc" color="#1a73e8" />
+                  <RadioButton.Android
+                    value="desc"
+                    color={theme.colors.primary}
+                  />
                   <Text style={styles.radioLabel}>
                     {t("superAdmin.tasks.newestFirst")}
                   </Text>
                 </View>
                 <View style={styles.radioItem}>
-                  <RadioButton.Android value="asc" color="#1a73e8" />
+                  <RadioButton.Android
+                    value="asc"
+                    color={theme.colors.primary}
+                  />
                   <Text style={styles.radioLabel}>
                     {t("superAdmin.tasks.oldestFirst")}
                   </Text>
@@ -991,20 +1041,60 @@ const SuperAdminTasksScreen = () => {
             </View>
           </ScrollView>
 
-          <View style={styles.modalFooter}>
+          <View style={[styles.modalFooter, { padding: modalPadding }]}>
             <TouchableOpacity
-              style={styles.footerButton}
+              style={[
+                styles.footerButton,
+                {
+                  paddingVertical: isLargeScreen
+                    ? 14
+                    : isMediumScreen
+                      ? 12
+                      : 10,
+                  paddingHorizontal: isLargeScreen
+                    ? 28
+                    : isMediumScreen
+                      ? 24
+                      : 20,
+                },
+              ]}
               onPress={clearFilters}
             >
-              <Text style={styles.clearButtonText}>
+              <Text
+                style={[
+                  styles.clearButtonText,
+                  { fontSize: isLargeScreen ? 16 : 14 },
+                ]}
+              >
                 {t("superAdmin.tasks.clearFilters")}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.footerButton, styles.applyButton]}
+              style={[
+                styles.footerButton,
+                styles.applyButton,
+                {
+                  paddingVertical: isLargeScreen
+                    ? 14
+                    : isMediumScreen
+                      ? 12
+                      : 10,
+                  paddingHorizontal: isLargeScreen
+                    ? 28
+                    : isMediumScreen
+                      ? 24
+                      : 20,
+                  backgroundColor: theme.colors.primary,
+                },
+              ]}
               onPress={applyFilters}
             >
-              <Text style={styles.applyButtonText}>
+              <Text
+                style={[
+                  styles.applyButtonText,
+                  { fontSize: isLargeScreen ? 16 : 14 },
+                ]}
+              >
                 {t("superAdmin.tasks.apply")}
               </Text>
             </TouchableOpacity>
@@ -1761,28 +1851,24 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 16,
   },
   modalTitle: {
-    fontSize: 18,
     fontFamily: "Poppins-SemiBold",
     color: "#212121",
   },
   modalContent: {
-    padding: 16,
     maxHeight: 400,
   },
   modalDivider: {
     height: 1,
-    backgroundColor: "#EEEEEE",
-    marginVertical: 8,
+    backgroundColor: "#E0E0E0",
+    marginTop: 16,
   },
   modalSection: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   sectionHeader: {
-    marginBottom: 12,
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 16,
@@ -1792,38 +1878,32 @@ const styles = StyleSheet.create({
   radioItem: {
     flexDirection: "row",
     alignItems: "center",
-    marginVertical: 6,
+    marginVertical: 8,
   },
   radioLabel: {
     fontSize: 16,
-    marginLeft: 8,
+    marginLeft: 12,
     fontFamily: "Poppins-Regular",
     color: "#424242",
   },
   modalFooter: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    padding: 16,
     borderTopWidth: 1,
-    borderTopColor: "#EEEEEE",
+    borderTopColor: "#E0E0E0",
   },
   footerButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    marginLeft: 12,
+    borderRadius: 8,
+    marginLeft: 16,
   },
   applyButton: {
     elevation: 2,
-    backgroundColor: "#1a73e8",
   },
   clearButtonText: {
-    fontSize: 14,
     fontFamily: "Poppins-Medium",
     color: "#616161",
   },
   applyButtonText: {
-    fontSize: 14,
     fontFamily: "Poppins-Medium",
     color: "#FFFFFF",
   },

@@ -74,6 +74,7 @@
     },
     "profile": {
       "title": "Profile",
+      "subtitle": "Manage your account information",
       "personalInfo": "Personal Information",
       "accountSettings": "Account Settings",
       "name": "Name",
@@ -196,6 +197,7 @@
       "title": "Tasks",
       "company": "Company",
       "createTask": "Create Task",
+      "filterOptions": "Filter Options",
       "taskTitle": "Title",
       "description": "Description",
       "assignedTo": "Assigned To",
