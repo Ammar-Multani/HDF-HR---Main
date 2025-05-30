@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   StyleSheet,
   View,
@@ -11,6 +11,9 @@ import {
   ScrollView,
   Animated,
   Platform,
+  Dimensions,
+  Pressable,
+  PressableStateCallbackType,
 } from "react-native";
 import {
   Text,
@@ -47,6 +50,18 @@ import EmptyState from "../../components/EmptyState";
 import StatusBadge from "../../components/StatusBadge";
 import { CompanyUser, UserStatus } from "../../types";
 import { LinearGradient } from "expo-linear-gradient";
+import {
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
+import { getFontFamily } from "../../utils/globalStyles";
+
+// Update the CompanyUser interface to include created_at
+interface ExtendedCompanyUser extends CompanyUser {
+  created_at?: string;
+}
 
 // Date sort options
 enum DateSortOrder {
@@ -54,55 +69,195 @@ enum DateSortOrder {
   OLDEST_FIRST = "asc",
 }
 
+// Add Shimmer component definition
+interface ShimmerProps {
+  width: number | string;
+  height: number;
+  style?: any;
+}
+
+const Shimmer: React.FC<ShimmerProps> = ({ width, height, style }) => {
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        {
+          translateX: withRepeat(
+            withSequence(
+              withTiming(typeof width === "number" ? -width : -200, {
+                duration: 800,
+              }),
+              withTiming(typeof width === "number" ? width : 200, {
+                duration: 800,
+              })
+            ),
+            -1
+          ),
+        },
+      ],
+    };
+  });
+
+  return (
+    <View
+      style={[
+        {
+          width,
+          height,
+          backgroundColor: "#E8E8E8",
+          overflow: "hidden",
+          borderRadius: 4,
+        },
+        style,
+      ]}
+    >
+      <Animated.View
+        style={[
+          {
+            width: "100%",
+            height: "100%",
+            position: "absolute",
+            backgroundColor: "transparent",
+          },
+          animatedStyle,
+        ]}
+      >
+        <LinearGradient
+          colors={["transparent", "rgba(255, 255, 255, 0.4)", "transparent"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{ width: "100%", height: "100%" }}
+        />
+      </Animated.View>
+    </View>
+  );
+};
+
 // Component for skeleton loading UI
 const EmployeeItemSkeleton = () => {
   const theme = useTheme();
   return (
-    <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+    <Card style={[styles.card]} elevation={0}>
       <Card.Content>
         <View style={styles.cardHeader}>
           <View style={styles.userInfo}>
-            <View
-              style={[
-                styles.skeleton,
-                styles.skeletonAvatar,
-                { backgroundColor: theme.colors.surfaceVariant },
-              ]}
-            />
+            <Shimmer width={40} height={40} style={{ borderRadius: 20 }} />
             <View style={styles.userTextContainer}>
-              <View
-                style={[
-                  styles.skeleton,
-                  styles.skeletonName,
-                  { backgroundColor: theme.colors.surfaceVariant },
-                ]}
-              />
-              <View
-                style={[
-                  styles.skeleton,
-                  styles.skeletonEmail,
-                  { backgroundColor: theme.colors.surfaceVariant },
-                ]}
-              />
-              <View
-                style={[
-                  styles.skeleton,
-                  styles.skeletonJob,
-                  { backgroundColor: theme.colors.surfaceVariant },
-                ]}
-              />
+              <Shimmer width={160} height={18} style={{ marginBottom: 4 }} />
+              <Shimmer width={140} height={14} style={{ marginBottom: 4 }} />
+              <Shimmer width={100} height={14} />
             </View>
           </View>
-          <View
-            style={[
-              styles.skeleton,
-              styles.skeletonBadge,
-              { backgroundColor: theme.colors.surfaceVariant },
-            ]}
-          />
+          <View style={styles.statusContainer}>
+            <Shimmer width={80} height={24} style={{ borderRadius: 12 }} />
+          </View>
         </View>
       </Card.Content>
     </Card>
+  );
+};
+
+// Add TooltipText component for table cells
+const TooltipText = ({
+  text,
+  numberOfLines = 1,
+}: {
+  text: string;
+  numberOfLines?: number;
+}) => {
+  const [isHovered, setIsHovered] = useState(false);
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+  const containerRef = useRef<View>(null);
+
+  const updateTooltipPosition = () => {
+    if (Platform.OS === "web" && containerRef.current) {
+      // @ts-ignore - web specific
+      const rect = containerRef.current.getBoundingClientRect();
+      const windowHeight = window.innerHeight;
+      const spaceAbove = rect.top;
+      const spaceBelow = windowHeight - rect.bottom;
+
+      // Calculate horizontal position to prevent overflow
+      const windowWidth = window.innerWidth;
+      let xPos = rect.left;
+
+      // Ensure tooltip doesn't overflow right edge
+      if (xPos + 300 > windowWidth) {
+        // 300 is max tooltip width
+        xPos = windowWidth - 310; // Add some padding
+      }
+
+      // Position vertically based on available space
+      let yPos;
+      if (spaceBelow >= 100) {
+        // If enough space below
+        yPos = rect.bottom + window.scrollY + 5;
+      } else if (spaceAbove >= 100) {
+        // If enough space above
+        yPos = rect.top + window.scrollY - 5;
+      } else {
+        // If neither, position it where there's more space
+        yPos =
+          spaceAbove > spaceBelow
+            ? rect.top + window.scrollY - 5
+            : rect.bottom + window.scrollY + 5;
+      }
+
+      setTooltipPosition({ x: xPos, y: yPos });
+    }
+  };
+
+  useEffect(() => {
+    if (isHovered) {
+      updateTooltipPosition();
+      // Add scroll and resize listeners
+      if (Platform.OS === "web") {
+        window.addEventListener("scroll", updateTooltipPosition);
+        window.addEventListener("resize", updateTooltipPosition);
+
+        return () => {
+          window.removeEventListener("scroll", updateTooltipPosition);
+          window.removeEventListener("resize", updateTooltipPosition);
+        };
+      }
+    }
+  }, [isHovered]);
+
+  if (Platform.OS !== "web") {
+    return (
+      <Text style={styles.tableCellText} numberOfLines={numberOfLines}>
+        {text}
+      </Text>
+    );
+  }
+
+  return (
+    <View
+      ref={containerRef}
+      style={styles.tooltipContainer}
+      // @ts-ignore - web specific props
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <Text style={styles.tableCellText} numberOfLines={numberOfLines}>
+        {text}
+      </Text>
+      {isHovered && (
+        <Portal>
+          <View
+            style={[
+              styles.tooltip,
+              {
+                position: "absolute",
+                left: tooltipPosition.x,
+                top: tooltipPosition.y,
+              },
+            ]}
+          >
+            <Text style={styles.tooltipText}>{text}</Text>
+          </View>
+        </Portal>
+      )}
+    </View>
   );
 };
 
@@ -137,6 +292,108 @@ const EmployeeListScreen = () => {
   const dropdownRef = React.useRef(null);
   const [menuVisible, setMenuVisible] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
+
+  // Add window dimensions state
+  const [windowDimensions, setWindowDimensions] = useState({
+    width: Dimensions.get("window").width,
+    height: Dimensions.get("window").height,
+  });
+
+  // Add window resize listener
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      const handleResize = () => {
+        setWindowDimensions({
+          width: Dimensions.get("window").width,
+          height: Dimensions.get("window").height,
+        });
+      };
+
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }
+  }, []);
+
+  // Use windowDimensions.width instead of direct width reference
+  const isLargeScreen = windowDimensions.width >= 1440;
+  const isMediumScreen =
+    windowDimensions.width >= 768 && windowDimensions.width < 1440;
+  const useTableLayout = isLargeScreen || isMediumScreen;
+
+  // Add table header component
+  const EmployeeTableHeader = () => (
+    <View style={styles.tableHeader}>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Name</Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Email</Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Job Title</Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Created Date</Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Status</Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Actions</Text>
+      </View>
+    </View>
+  );
+
+  // Add table row component
+  const EmployeeTableRow = ({ item }: { item: ExtendedCompanyUser }) => (
+    <Pressable
+      onPress={() => {
+        navigation.navigate("EmployeeDetails", { employeeId: item.id });
+      }}
+      style={({ pressed }: PressableStateCallbackType) => [
+        styles.tableRow,
+        pressed && { backgroundColor: "#f8fafc" },
+      ]}
+    >
+      <View style={styles.tableCell}>
+        <TooltipText
+          text={
+            `${item.first_name || ""} ${item.last_name || ""}`.trim() ||
+            "Unnamed Employee"
+          }
+        />
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText text={item.email} />
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText text={item.job_title || "-"} />
+      </View>
+      <View style={styles.tableCell}>
+        <Text style={styles.tableCellText}>
+          {item.created_at
+            ? new Date(item.created_at).toLocaleDateString()
+            : "-"}
+        </Text>
+      </View>
+      <View style={styles.tableCell}>
+        <StatusBadge status={item.active_status} size="small" />
+      </View>
+      <View style={styles.actionCell}>
+        <IconButton
+          icon="eye"
+          size={20}
+          onPress={(e) => {
+            e.stopPropagation();
+            navigation.navigate("EmployeeDetails", {
+              employeeId: item.id,
+            });
+          }}
+          style={styles.actionIcon}
+        />
+      </View>
+    </Pressable>
+  );
 
   // Check network status when screen focuses
   useFocusEffect(
@@ -556,35 +813,54 @@ const EmployeeListScreen = () => {
     );
   };
 
+  // Update renderContent to use table layout on larger screens
   const renderContent = () => {
-    // Show empty state when no results and not loading
-    if (filteredEmployees.length === 0 && !loading && !refreshing) {
-      return (
-        <EmptyState
-          icon="account-off"
-          title="No Employees Found"
-          message={
-            searchQuery
-              ? "No employees match your search criteria."
-              : "You haven't added any employees yet."
-          }
-          buttonTitle={searchQuery ? "Clear Search" : "Add Employee"}
-          onButtonPress={() => {
-            if (searchQuery) {
-              setSearchQuery("");
-            } else {
-              navigation.navigate("CreateEmployee" as never);
-            }
-          }}
-        />
-      );
-    }
+    if (loading && !refreshing) {
+      if (useTableLayout) {
+        // Table view skeleton
+        return (
+          <View style={styles.tableContainer}>
+            <EmployeeTableHeader />
+            {Array(6)
+              .fill(0)
+              .map((_, index) => (
+                <View key={`skeleton-${index}`} style={styles.tableRow}>
+                  <View style={styles.tableCell}>
+                    <Shimmer width={160} height={16} />
+                  </View>
+                  <View style={styles.tableCell}>
+                    <Shimmer width={180} height={16} />
+                  </View>
+                  <View style={styles.tableCell}>
+                    <Shimmer width={140} height={16} />
+                  </View>
+                  <View style={styles.tableCell}>
+                    <Shimmer width={100} height={16} />
+                  </View>
+                  <View style={styles.tableCell}>
+                    <Shimmer
+                      width={80}
+                      height={24}
+                      style={{ borderRadius: 12 }}
+                    />
+                  </View>
+                  <View style={styles.actionCell}>
+                    <Shimmer
+                      width={40}
+                      height={40}
+                      style={{ borderRadius: 20 }}
+                    />
+                  </View>
+                </View>
+              ))}
+          </View>
+        );
+      }
 
-    // Show skeleton loaders when initially loading
-    if (loading && filteredEmployees.length === 0) {
+      // Card view skeleton
       return (
         <FlatList
-          data={Array(3).fill(0)}
+          data={Array(4).fill(0)}
           renderItem={() => <EmployeeItemSkeleton />}
           keyExtractor={(_, index) => `skeleton-${index}`}
           contentContainerStyle={styles.listContent}
@@ -592,8 +868,66 @@ const EmployeeListScreen = () => {
       );
     }
 
+    // Show empty state when no results
+    if (filteredEmployees.length === 0 && !loading && !refreshing) {
+      return (
+        <EmptyState
+          icon="account-off"
+          title="No Employees Found"
+          message={
+            searchQuery || hasActiveFilters()
+              ? "No employees match your search criteria."
+              : "You haven't added any employees yet."
+          }
+          buttonTitle={
+            searchQuery || hasActiveFilters() ? "Clear Filters" : "Add Employee"
+          }
+          onButtonPress={() => {
+            if (searchQuery || hasActiveFilters()) {
+              setSearchQuery("");
+              handleClearFilters();
+            } else {
+              navigation.navigate("CreateEmployee");
+            }
+          }}
+        />
+      );
+    }
+
     // Show the actual data
-    return (
+    return useTableLayout ? (
+      <View style={styles.tableContainer}>
+        <EmployeeTableHeader />
+        <FlatList
+          data={filteredEmployees}
+          renderItem={({ item }) => <EmployeeTableRow item={item} />}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.tableContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+          onEndReached={loadMoreEmployees}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={() => (
+            <>
+              {loadingMore && hasMoreData && (
+                <View style={styles.loadingFooter}>
+                  <ActivityIndicator
+                    size="small"
+                    color={theme.colors.primary}
+                  />
+                </View>
+              )}
+              {totalCount > 0 && (
+                <Text style={styles.resultsCount}>
+                  Showing {filteredEmployees.length} of {totalCount} employees
+                </Text>
+              )}
+            </>
+          )}
+        />
+      </View>
+    ) : (
       <FlatList
         data={filteredEmployees}
         renderItem={renderEmployeeItem}
@@ -923,7 +1257,7 @@ const EmployeeListScreen = () => {
         showBackButton={false}
         showHelpButton={true}
         onHelpPress={() => {
-          navigation.navigate("Help" as never);
+          navigation.navigate("Help");
         }}
         showLogo={false}
       />
@@ -950,23 +1284,31 @@ const EmployeeListScreen = () => {
         </Banner>
       )}
 
-      {error &&
-        error !== "You're offline. Some features may be unavailable." && (
-          <Banner
-            visible={true}
-            icon="alert-circle"
-            actions={[
-              {
-                label: "Dismiss",
-                onPress: () => setError(null),
-              },
-            ]}
-          >
-            {error}
-          </Banner>
-        )}
+      {error && (
+        <Banner
+          visible={true}
+          icon="alert-circle"
+          actions={[
+            {
+              label: "Dismiss",
+              onPress: () => setError(null),
+            },
+          ]}
+        >
+          {error}
+        </Banner>
+      )}
 
-      <View style={styles.mainContent}>
+      <View
+        style={[
+          styles.contentContainer,
+          {
+            maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
+            alignSelf: "center",
+            width: "100%",
+          },
+        ]}
+      >
         <View style={styles.searchContainer}>
           <Searchbar
             placeholder="Search employees..."
@@ -993,7 +1335,6 @@ const EmployeeListScreen = () => {
             }
             icon="magnify"
           />
-          {/* Filter button */}
           <View style={styles.filterButtonContainer}>
             <IconButton
               icon="filter-variant"
@@ -1007,6 +1348,24 @@ const EmployeeListScreen = () => {
             />
             {hasActiveFilters() && <View style={styles.filterBadge} />}
           </View>
+          <FAB
+            label="Add Employee"
+            icon="plus"
+            style={[
+              styles.fab,
+              {
+                backgroundColor: theme.colors.primary,
+                position: "relative",
+                margin: 0,
+                marginLeft: 16,
+                elevation: 0,
+                shadowColor: "transparent",
+              },
+            ]}
+            onPress={() => navigation.navigate("CreateEmployee")}
+            color={theme.colors.surface}
+            disabled={networkStatus === false}
+          />
         </View>
 
         {searchQuery && searchQuery.length > 0 && searchQuery.length < 3 && (
@@ -1028,78 +1387,8 @@ const EmployeeListScreen = () => {
           </View>
         )}
 
-        {/* Show empty state when no results and not loading */}
-        {filteredEmployees.length === 0 && !loading && !refreshing ? (
-          <EmptyState
-            icon="account-off"
-            title="No Employees Found"
-            message={
-              searchQuery || hasActiveFilters()
-                ? "No employees match your search criteria."
-                : "You haven't added any employees yet."
-            }
-            buttonTitle={
-              searchQuery || hasActiveFilters()
-                ? "Clear Filters"
-                : "Add Employee"
-            }
-            onButtonPress={() => {
-              if (searchQuery || hasActiveFilters()) {
-                setSearchQuery("");
-                handleClearFilters();
-              } else {
-                navigation.navigate("CreateEmployee" as never);
-              }
-            }}
-          />
-        ) : // Show skeleton loaders when initially loading
-        loading && filteredEmployees.length === 0 ? (
-          <FlatList
-            data={Array(3).fill(0)}
-            renderItem={() => <EmployeeItemSkeleton />}
-            keyExtractor={(_, index) => `skeleton-${index}`}
-            contentContainerStyle={styles.listContent}
-          />
-        ) : (
-          // Show the actual data
-          <FlatList
-            data={filteredEmployees}
-            renderItem={renderEmployeeItem}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.listContent}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
-            onEndReached={loadMoreEmployees}
-            onEndReachedThreshold={0.5}
-            ListHeaderComponent={
-              totalCount > 0 ? (
-                <Text style={styles.resultsCount}>
-                  Showing {filteredEmployees.length} of {totalCount} employees
-                </Text>
-              ) : null
-            }
-            ListFooterComponent={
-              loadingMore && hasMoreData ? (
-                <View style={styles.loadingFooter}>
-                  <ActivityIndicator
-                    size="small"
-                    color={theme.colors.primary}
-                  />
-                </View>
-              ) : null
-            }
-          />
-        )}
+        <View style={styles.listContainer}>{renderContent()}</View>
       </View>
-
-      <FAB
-        icon="plus"
-        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
-        onPress={() => navigation.navigate("CreateEmployee" as never)}
-        color={theme.colors.surface}
-        disabled={networkStatus === false}
-      />
     </SafeAreaView>
   );
 };
@@ -1107,27 +1396,30 @@ const EmployeeListScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#f5f7fa",
   },
   mainContent: {
     flex: 1,
-    paddingHorizontal: 16,
+    paddingHorizontal: Platform.OS === "web" ? 24 : 16,
+  },
+  contentContainer: {
+    flex: 1,
+    paddingHorizontal: Platform.OS === "web" ? 24 : 16,
+    paddingVertical: 16,
   },
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    height: 60,
-    marginTop: 8,
-    marginBottom: 8,
+    marginBottom: 16,
   },
   searchbar: {
     flex: 1,
-    elevation: 1,
+    elevation: 0,
     borderRadius: 18,
-    height: 60,
+    height: 56,
     backgroundColor: "#fff",
     borderWidth: 1,
     borderColor: "#e0e0e0",
-    fontSize: 16,
   },
   filterButtonContainer: {
     position: "relative",
@@ -1154,126 +1446,135 @@ const styles = StyleSheet.create({
     right: 8,
     zIndex: 2,
   },
+  fab: {
+    borderRadius: 17,
+    height: 56,
+    elevation: 0,
+  },
+  listContainer: {
+    flex: 1,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    overflow: "hidden",
+  },
   listContent: {
     paddingTop: 8,
   },
-  card: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#F0F0F0",
-    elevation: 0,
-    backgroundColor: "#FFFFFF",
-    marginBottom: 0,
-    marginHorizontal: 0,
-  },
-  cardContainer: {
-    marginBottom: 12,
-    marginHorizontal: 0,
-  },
-  cardContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-  },
-  userInfo: {
-    flexDirection: "row",
-    alignItems: "flex-start",
+  tableContainer: {
     flex: 1,
-  },
-  userTextContainer: {
-    marginLeft: 16,
-    flex: 1,
-  },
-  userName: {
-    fontSize: 16,
-    fontFamily: "Poppins-SemiBold",
-    marginBottom: 4,
-    color: "#212121",
-  },
-  userEmail: {
-    fontSize: 14,
-    color: "#757575",
-    fontFamily: "Poppins-Regular",
-    marginBottom: 8,
-  },
-  badgeContainer: {
-    flexDirection: "column",
-    marginTop: 2,
-  },
-  jobTitleBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F5F5F5",
+    backgroundColor: "#fff",
     borderRadius: 16,
-    paddingRight: 8,
-    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    overflow: "hidden",
   },
-  jobTitleIcon: {
-    margin: 0,
-    padding: 0,
+  tableHeader: {
+    flexDirection: "row",
+    backgroundColor: "#f8fafc",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
+    paddingVertical: 16,
+    paddingHorizontal: 26,
+    alignContent: "center",
+    justifyContent: "center",
+    alignItems: "center",
   },
-  jobTitleBadgeText: {
-    color: "#616161",
-    fontSize: 12,
-    fontFamily: "Poppins-Regular",
+  tableHeaderCell: {
+    flex: 1,
+    paddingHorizontal: 16,
+    justifyContent: "space-around",
+    paddingLeft: 25,
+    alignItems: "flex-start",
   },
-  statusContainer: {
-    flexDirection: "column",
-    alignItems: "flex-end",
+  tableHeaderText: {
+    fontSize: 14,
+    color: "#64748b",
+    fontFamily: getFontFamily("500"),
+  },
+  tableRow: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
+    paddingVertical: 16,
+    backgroundColor: "#fff",
+    paddingHorizontal: 26,
+    alignItems: "center",
+  },
+  tableCell: {
+    flex: 1,
+    paddingHorizontal: 26,
+    justifyContent: "space-evenly",
+    alignItems: "flex-start",
+  },
+  tableCellText: {
+    fontSize: 14,
+    color: "#334155",
+    fontFamily: getFontFamily("normal"),
+  },
+  tableContent: {
+    flexGrow: 1,
+  },
+  actionCell: {
+    flex: 1,
+    flexDirection: "row",
     justifyContent: "flex-start",
+    alignItems: "center",
+    paddingHorizontal: 26,
   },
-  fab: {
-    position: "absolute",
-    margin: 16,
-    right: 0,
-    bottom: Platform.OS === "web" ? 0 : 80,
-    borderRadius: 28,
+  actionIcon: {
+    margin: 0,
+    marginRight: 8,
+  },
+  tooltipContainer: {
+    position: "relative",
+    flex: 1,
+    maxWidth: "100%",
+    zIndex: 10,
+  },
+  tooltip: {
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    padding: 8,
+    marginLeft: 30,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    maxWidth: 300,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    zIndex: 9999,
+    ...(Platform.OS === "web"
+      ? {
+          // @ts-ignore - web specific style
+          willChange: "transform",
+          // @ts-ignore - web specific style
+          isolation: "isolate",
+        }
+      : {}),
+  },
+  tooltipText: {
+    color: "#000",
+    fontSize: 12,
+    fontFamily: getFontFamily("normal"),
+    lineHeight: 16,
   },
   loadingFooter: {
     paddingVertical: 20,
     alignItems: "center",
   },
-  // Skeleton styles
-  skeleton: {
-    borderRadius: 4,
-    opacity: 0.3,
-  },
-  skeletonAvatar: {
-    height: 40,
-    width: 40,
-    borderRadius: 20,
-  },
-  skeletonName: {
-    height: 18,
-    width: "70%",
-    marginLeft: 12,
-    marginBottom: 4,
-  },
-  skeletonEmail: {
-    height: 14,
-    width: "60%",
-    marginLeft: 12,
-    marginBottom: 4,
-  },
-  skeletonJob: {
-    height: 14,
-    width: "40%",
-    marginLeft: 12,
-  },
-  skeletonBadge: {
-    height: 24,
-    width: 80,
-    borderRadius: 12,
-  },
   resultsCount: {
     textAlign: "center",
-    marginBottom: 8,
+    marginTop: 18,
     opacity: 0.7,
     fontSize: 12,
+    fontFamily: getFontFamily("normal"),
   },
   avatarContainer: {
     width: 50,
@@ -1291,7 +1592,7 @@ const styles = StyleSheet.create({
   avatarText: {
     color: "#FFFFFF",
     fontSize: 18,
-    fontFamily: "Poppins-Bold",
+    fontFamily: getFontFamily("700"),
   },
   // Filter modal styles
   modalContainer: {
@@ -1317,7 +1618,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 20,
-    fontFamily: "Poppins-SemiBold",
+    fontFamily: getFontFamily("600"),
     color: "#212121",
   },
   modalContent: {
@@ -1346,7 +1647,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 16,
-    fontFamily: "Poppins-SemiBold",
+    fontFamily: getFontFamily("600"),
     color: "#212121",
     marginBottom: 0,
   },
@@ -1358,7 +1659,7 @@ const styles = StyleSheet.create({
   radioLabel: {
     fontSize: 16,
     marginLeft: 8,
-    fontFamily: "Poppins-Regular",
+    fontFamily: getFontFamily("normal"),
     color: "#424242",
   },
   chipContainer: {
@@ -1378,7 +1679,7 @@ const styles = StyleSheet.create({
   selectionHint: {
     fontSize: 12,
     color: "#616161",
-    fontFamily: "Poppins-Medium",
+    fontFamily: getFontFamily("500"),
   },
   footerButton: {
     paddingVertical: 10,
@@ -1388,7 +1689,7 @@ const styles = StyleSheet.create({
   },
   clearButtonText: {
     fontSize: 14,
-    fontFamily: "Poppins-Medium",
+    fontFamily: getFontFamily("500"),
     color: "#616161",
   },
   applyButton: {
@@ -1396,7 +1697,7 @@ const styles = StyleSheet.create({
   },
   applyButtonText: {
     fontSize: 14,
-    fontFamily: "Poppins-Medium",
+    fontFamily: getFontFamily("500"),
     color: "#FFFFFF",
   },
   // Active filter indicator styles
@@ -1409,7 +1710,7 @@ const styles = StyleSheet.create({
   },
   activeFiltersText: {
     fontSize: 14,
-    fontFamily: "Poppins-Regular",
+    fontFamily: getFontFamily("normal"),
     color: "#616161",
     marginRight: 8,
   },
@@ -1425,7 +1726,7 @@ const styles = StyleSheet.create({
   },
   searchTipsText: {
     color: "#0066cc",
-    fontWeight: "500",
+    fontFamily: getFontFamily("500"),
     fontSize: 14,
   },
   searchResultsContainer: {
@@ -1436,8 +1737,75 @@ const styles = StyleSheet.create({
   },
   searchResultsText: {
     color: "#0066cc",
-    fontWeight: "500",
+    fontFamily: getFontFamily("500"),
     fontSize: 14,
+  },
+  card: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#F0F0F0",
+    elevation: 0,
+    backgroundColor: "#FFFFFF",
+    marginBottom: 0,
+    marginHorizontal: 0,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  userInfo: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    flex: 1,
+  },
+  userTextContainer: {
+    marginLeft: 16,
+    flex: 1,
+  },
+  statusContainer: {
+    marginLeft: 16,
+  },
+  userName: {
+    fontSize: 16,
+    fontFamily: getFontFamily("600"),
+    color: "#212121",
+  },
+  userEmail: {
+    fontSize: 14,
+    fontFamily: getFontFamily("normal"),
+    color: "#616161",
+  },
+  badgeContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  jobTitleBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 4,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    borderRadius: 8,
+  },
+  jobTitleBadgeText: {
+    fontSize: 12,
+    fontFamily: getFontFamily("normal"),
+    color: "#616161",
+    marginLeft: 4,
+  },
+  jobTitleIcon: {
+    margin: 0,
+    marginRight: 4,
+  },
+  cardContainer: {
+    marginBottom: 16,
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  cardContent: {
+    padding: 16,
   },
 });
 

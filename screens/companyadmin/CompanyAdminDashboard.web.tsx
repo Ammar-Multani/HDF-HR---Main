@@ -6,6 +6,8 @@ import {
   RefreshControl,
   StatusBar,
   Dimensions,
+  Platform,
+  TouchableOpacity,
 } from "react-native";
 import { useTheme } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -17,8 +19,16 @@ import LoadingIndicator from "../../components/LoadingIndicator";
 import { TaskStatus, FormStatus } from "../../types";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Text from "../../components/Text";
-import { globalStyles } from "../../utils/globalStyles";
+import { globalStyles, createTextStyle } from "../../utils/globalStyles";
 import DynamicChart from "../../components/DynamicChart";
+import { LinearGradient } from "expo-linear-gradient";
+import Animated, {
+  FadeIn,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  withSequence,
+} from "react-native-reanimated";
 
 const { width } = Dimensions.get("window");
 
@@ -26,6 +36,76 @@ const { width } = Dimensions.get("window");
 interface CompanyData {
   company_name: string;
 }
+
+// Add EmployeeData interface after CompanyData interface
+interface EmployeeData {
+  id: string;
+  name: string;
+  forms_count: number;
+}
+
+// Add Shimmer component
+interface ShimmerProps {
+  width: number | string;
+  height: number;
+  style?: any;
+}
+
+const Shimmer: React.FC<ShimmerProps> = ({ width, height, style }) => {
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        {
+          translateX: withRepeat(
+            withSequence(
+              withTiming(typeof width === "number" ? -width : -200, {
+                duration: 800,
+              }),
+              withTiming(typeof width === "number" ? width : 200, {
+                duration: 800,
+              })
+            ),
+            -1
+          ),
+        },
+      ],
+    };
+  });
+
+  return (
+    <View
+      style={[
+        {
+          width,
+          height,
+          backgroundColor: "#E8E8E8",
+          overflow: "hidden",
+          borderRadius: 4,
+        },
+        style,
+      ]}
+    >
+      <Animated.View
+        style={[
+          {
+            width: "100%",
+            height: "100%",
+            position: "absolute",
+            backgroundColor: "transparent",
+          },
+          animatedStyle,
+        ]}
+      >
+        <LinearGradient
+          colors={["transparent", "rgba(255, 255, 255, 0.4)", "transparent"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{ width: "100%", height: "100%" }}
+        />
+      </Animated.View>
+    </View>
+  );
+};
 
 const CompanyAdminDashboard = () => {
   const theme = useTheme();
@@ -37,6 +117,7 @@ const CompanyAdminDashboard = () => {
   const [companyName, setCompanyName] = useState<string>("");
   const [networkStatus, setNetworkStatus] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showAllEmployees, setShowAllEmployees] = useState(false);
   const [stats, setStats] = useState({
     totalEmployees: 0,
     activeEmployees: 0,
@@ -52,7 +133,35 @@ const CompanyAdminDashboard = () => {
     monthlyEmployees: [] as number[],
     monthlyForms: [] as number[],
     monthLabels: [] as string[],
+    topEmployees: [] as EmployeeData[],
   });
+
+  const [windowDimensions, setWindowDimensions] = useState({
+    width: Dimensions.get("window").width,
+    height: Dimensions.get("window").height,
+  });
+
+  // Add window resize listener
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      const handleResize = () => {
+        setWindowDimensions({
+          width: Dimensions.get("window").width,
+          height: Dimensions.get("window").height,
+        });
+      };
+
+      window.addEventListener("resize", handleResize);
+
+      // Cleanup
+      return () => window.removeEventListener("resize", handleResize);
+    }
+  }, []);
+
+  // Use windowDimensions.width instead of direct width reference
+  const isLargeScreen = windowDimensions.width >= 1440;
+  const isMediumScreen =
+    windowDimensions.width >= 768 && windowDimensions.width < 1440;
 
   const checkNetworkStatus = async () => {
     const isAvailable = await isNetworkAvailable();
@@ -449,7 +558,112 @@ const CompanyAdminDashboard = () => {
         monthlyEmployees: recentMonthsEmployeeData,
         monthlyForms: recentMonthsFormData,
         monthLabels: recentMonthsLabels,
+        topEmployees: [],
       });
+
+      // Fetch top employees by forms count for this company
+      const [
+        { data: accidentForms, error: accidentFormsError },
+        { data: illnessForms, error: illnessFormsError },
+        { data: departureForms, error: departureFormsError },
+        { data: companyEmployees, error: companyEmployeesError },
+      ] = await Promise.all([
+        supabase
+          .from("accident_report")
+          .select("employee_id")
+          .eq("company_id", currentCompanyId)
+          .neq("status", FormStatus.DRAFT),
+        supabase
+          .from("illness_report")
+          .select("employee_id")
+          .eq("company_id", currentCompanyId)
+          .neq("status", FormStatus.DRAFT),
+        supabase
+          .from("staff_departure_report")
+          .select("employee_id")
+          .eq("company_id", currentCompanyId)
+          .neq("status", FormStatus.DRAFT),
+        supabase
+          .from("company_user")
+          .select("id, first_name, last_name")
+          .eq("company_id", currentCompanyId)
+          .eq("role", "employee")
+          .limit(100),
+      ]);
+
+      if (
+        accidentFormsError ||
+        illnessFormsError ||
+        departureFormsError ||
+        companyEmployeesError
+      ) {
+        console.error("Error fetching forms or employees data:", {
+          accidentFormsError,
+          illnessFormsError,
+          departureFormsError,
+          companyEmployeesError,
+        });
+      } else {
+        // Count forms per employee
+        const employeeFormCounts: Record<string, number> = {};
+
+        // Initialize all employees with 0 forms
+        if (companyEmployees) {
+          companyEmployees.forEach((employee) => {
+            employeeFormCounts[employee.id] = 0;
+          });
+        }
+
+        // Count accident reports
+        if (accidentForms) {
+          accidentForms.forEach((form) => {
+            if (form.employee_id) {
+              employeeFormCounts[form.employee_id] =
+                (employeeFormCounts[form.employee_id] || 0) + 1;
+            }
+          });
+        }
+
+        // Count illness reports
+        if (illnessForms) {
+          illnessForms.forEach((form) => {
+            if (form.employee_id) {
+              employeeFormCounts[form.employee_id] =
+                (employeeFormCounts[form.employee_id] || 0) + 1;
+            }
+          });
+        }
+
+        // Count departure reports
+        if (departureForms) {
+          departureForms.forEach((form) => {
+            if (form.employee_id) {
+              employeeFormCounts[form.employee_id] =
+                (employeeFormCounts[form.employee_id] || 0) + 1;
+            }
+          });
+        }
+
+        // Process all employees with their form counts
+        if (companyEmployees) {
+          const employeesWithFormCounts = companyEmployees.map((employee) => ({
+            id: employee.id,
+            name: `${employee.first_name || ""} ${employee.last_name || ""}`.trim(),
+            forms_count: employeeFormCounts[employee.id] || 0,
+          }));
+
+          // Sort by form count (highest first)
+          const topEmployees = employeesWithFormCounts.sort(
+            (a, b) => b.forms_count - a.forms_count
+          );
+
+          // Update stats with top employees
+          setStats((prevStats) => ({
+            ...prevStats,
+            topEmployees,
+          }));
+        }
+      }
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
       setError("Error fetching dashboard data");
@@ -475,7 +689,109 @@ const CompanyAdminDashboard = () => {
   };
 
   if (loading && !refreshing) {
-    return <LoadingIndicator />;
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
+        <StatusBar barStyle={theme.dark ? "light-content" : "dark-content"} />
+        <AppHeader
+          showProfileMenu={true}
+          userEmail={user?.email || ""}
+          isAdmin={true}
+          onSignOut={signOut}
+          showHelpButton={false}
+          showLogo={Platform.OS !== "web"}
+          title={Platform.OS === "web" ? "" : undefined}
+        />
+
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {Platform.OS !== "web" && (
+            <View style={styles.welcomeHeader}>
+              <Shimmer width={200} height={28} style={styles.skeletonTitle} />
+              <Shimmer
+                width={300}
+                height={16}
+                style={styles.skeletonSubtitle}
+              />
+            </View>
+          )}
+
+          <View style={[styles.statsGridContainer, { gap: 16 }]}>
+            {[1, 2, 3, 4].map((_, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.statsGridItem,
+                  {
+                    width: isLargeScreen
+                      ? "23.5%"
+                      : isMediumScreen
+                        ? "31.33%"
+                        : "100%",
+                    minWidth: isMediumScreen || isLargeScreen ? 275 : "100%",
+                    marginBottom: isMediumScreen || isLargeScreen ? 0 : 16,
+                  },
+                ]}
+              >
+                <View style={[styles.statsCard, styles.skeletonStatsCard]}>
+                  <View style={styles.statRow}>
+                    <Shimmer
+                      width={140}
+                      height={16}
+                      style={{ marginBottom: 4 }}
+                    />
+                    <Shimmer
+                      width={45}
+                      height={14}
+                      style={{ marginLeft: "auto" }}
+                    />
+                  </View>
+                  <Shimmer width={90} height={36} style={{ marginTop: 20 }} />
+                </View>
+              </View>
+            ))}
+          </View>
+
+          <View
+            style={[
+              styles.chartsContainer,
+              { flexDirection: isLargeScreen ? "row" : "column" },
+            ]}
+          >
+            {[1, 2].map((_, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.chartWrapper,
+                  {
+                    flex: isLargeScreen ? 1 : undefined,
+                    width: "100%",
+                    maxWidth: isLargeScreen ? "50%" : 1000,
+                    marginBottom: isLargeScreen ? 0 : 24,
+                  },
+                ]}
+              >
+                <View style={styles.chartCard}>
+                  <Shimmer
+                    width={200}
+                    height={24}
+                    style={{ marginBottom: 24, marginLeft: 24, marginTop: 24 }}
+                  />
+                  <Shimmer
+                    width="90%"
+                    height={200}
+                    style={{ marginHorizontal: "5%" }}
+                  />
+                </View>
+              </View>
+            ))}
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -483,160 +799,367 @@ const CompanyAdminDashboard = () => {
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
       <StatusBar barStyle={theme.dark ? "light-content" : "dark-content"} />
-      <AppHeader
-        showProfileMenu={true}
-        userEmail={user?.email || ""}
-        isAdmin={true}
-        onSignOut={signOut}
-        showHelpButton={false}
-      />
+      <View style={styles.container}>
+        <AppHeader
+          showProfileMenu={true}
+          userEmail={user?.email || ""}
+          isAdmin={true}
+          onSignOut={signOut}
+          showHelpButton={false}
+          showLogo={Platform.OS !== "web"}
+          title={
+            Platform.OS === "web"
+              ? companyName
+                ? `${companyName} Dashboard`
+                : "Company Admin Dashboard"
+              : undefined
+          }
+          subtitle={
+            Platform.OS === "web"
+              ? "Manage your company data and operations"
+              : undefined
+          }
+        />
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        <View style={styles.welcomeHeader}>
-          <Text variant={"bold"} style={styles.welcomeTitle}>
-            {companyName
-              ? `${companyName} Dashboard`
-              : "Company Admin Dashboard"}
-          </Text>
-          <Text style={styles.welcomeSubtitle}>
-            Manage your company data and operations
-          </Text>
-        </View>
+        <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+          >
+            {Platform.OS !== "web" && (
+              <View style={styles.welcomeHeader}>
+                <Text variant={"bold"} style={styles.welcomeTitle}>
+                  {companyName
+                    ? `${companyName} Dashboard`
+                    : "Company Admin Dashboard"}
+                </Text>
+                <Text style={styles.welcomeSubtitle}>
+                  Manage your company data and operations
+                </Text>
+              </View>
+            )}
 
-        <View style={styles.statsCard}>
-          <View style={styles.statRow}>
-            <Text variant={"medium"} style={styles.statLabel}>
-              Total Employees
-            </Text>
-            <Text
-              variant={"bold"}
+            <View
               style={[
-                styles.statGrowth,
-                stats.employeeGrowth.startsWith("-")
-                  ? styles.negativeGrowth
-                  : {},
+                styles.statsGridContainer,
+                {
+                  justifyContent: isLargeScreen ? "flex-start" : "center",
+                  gap: isMediumScreen || isLargeScreen ? 24 : 16,
+                  marginBottom: isMediumScreen || isLargeScreen ? 32 : 24,
+                },
               ]}
             >
-              {stats.employeeGrowth}
-            </Text>
-          </View>
-          <Text variant={"bold"} style={styles.statValue}>
-            {stats.totalEmployees.toLocaleString()}
-          </Text>
-        </View>
+              {/* Stats Grid Items */}
+              {[
+                {
+                  label: "Total Employees",
+                  value: stats.totalEmployees,
+                  growth: stats.employeeGrowth,
+                },
+                {
+                  label: "Total Tasks",
+                  value: stats.totalTasks,
+                  growth: stats.tasksGrowth,
+                },
+                {
+                  label: "Total Forms",
+                  value: stats.totalForms,
+                  growth: stats.formsGrowth,
+                },
+                {
+                  label: "Active Employees",
+                  value: stats.activeEmployees,
+                  growth: "+0%",
+                },
+              ].map((stat, index) => (
+                <View
+                  key={index}
+                  style={[
+                    styles.statsGridItem,
+                    {
+                      width: isLargeScreen
+                        ? "23.5%" // Approximately 25% - 18px gap
+                        : isMediumScreen
+                          ? "31%" // Approximately 33.33% - 16px gap
+                          : "100%",
+                      minWidth: isMediumScreen || isLargeScreen ? 275 : "100%",
+                      marginBottom: isMediumScreen || isLargeScreen ? 0 : 16,
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.statsCard,
+                      {
+                        padding: isMediumScreen || isLargeScreen ? 24 : 20,
+                      },
+                    ]}
+                  >
+                    <View style={styles.statRow}>
+                      <Text variant={"medium"} style={styles.statLabel}>
+                        {stat.label}
+                      </Text>
+                      <Text
+                        variant={"bold"}
+                        style={[
+                          styles.statGrowth,
+                          stat.growth.startsWith("-")
+                            ? styles.negativeGrowth
+                            : {},
+                        ]}
+                      >
+                        {stat.growth}
+                      </Text>
+                    </View>
+                    <Text variant={"bold"} style={styles.statValue}>
+                      {stat.value.toLocaleString()}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
 
-        <View style={styles.chartCard}>
-          <Text variant={"bold"} style={styles.sectionTitle}>
-            Monthly Employee Onboarding
-          </Text>
-          <DynamicChart
-            monthlyData={stats.monthlyEmployees}
-            monthLabels={stats.monthLabels}
-            width={width - 10}
-          />
-        </View>
-
-        <View style={styles.statsCard}>
-          <View style={styles.statRow}>
-            <Text variant={"medium"} style={styles.statLabel}>
-              Total Tasks
-            </Text>
-            <Text
-              variant={"bold"}
+            <View
               style={[
-                styles.statGrowth,
-                stats.tasksGrowth.startsWith("-") ? styles.negativeGrowth : {},
+                styles.chartsContainer,
+                { flexDirection: isLargeScreen ? "row" : "column" },
               ]}
             >
-              {stats.tasksGrowth}
-            </Text>
-          </View>
-          <Text variant={"bold"} style={styles.statValue}>
-            {stats.totalTasks.toLocaleString()}
-          </Text>
-        </View>
+              <View
+                style={[
+                  styles.chartWrapper,
+                  {
+                    flex: isLargeScreen ? 1 : undefined,
+                    width: "100%",
+                    maxWidth: isLargeScreen ? "50%" : 1000,
+                    marginBottom: isLargeScreen ? 0 : 24,
+                  },
+                ]}
+              >
+                <View style={styles.chartCard}>
+                  <Text variant={"bold"} style={styles.sectionTitle}>
+                    Monthly Employee Onboarding
+                  </Text>
+                  <DynamicChart
+                    monthlyData={stats.monthlyEmployees}
+                    monthLabels={stats.monthLabels}
+                    width={
+                      Platform.OS === "web"
+                        ? isLargeScreen
+                          ? Math.min((windowDimensions.width - 72) / 2, 600)
+                          : isMediumScreen
+                            ? Math.min((windowDimensions.width - 48) / 2, 850)
+                            : Math.min(windowDimensions.width - 48, 1000)
+                        : windowDimensions.width - 32
+                    }
+                  />
+                </View>
+              </View>
 
-        <View style={styles.statCardsContainer}>
-          <View style={styles.statCardSmall}>
-            <Text variant={"medium"} style={styles.statCardLabel}>
-              Pending
-            </Text>
-            <Text variant={"bold"} style={styles.statCardValue}>
-              {stats.pendingTasks}
-            </Text>
-            <MaterialCommunityIcons
-              name="clipboard-clock"
-              size={24}
-              color="#F59E0B"
-            />
-          </View>
+              <View
+                style={[
+                  styles.chartWrapper,
+                  {
+                    flex: isLargeScreen ? 1 : undefined,
+                    width: "100%",
+                    maxWidth: isLargeScreen ? "50%" : 1000,
+                    marginBottom: isLargeScreen ? 0 : 24,
+                  },
+                ]}
+              >
+                <View style={styles.chartCard}>
+                  <Text variant={"bold"} style={styles.sectionTitle}>
+                    Monthly Forms Submitted
+                  </Text>
+                  <DynamicChart
+                    monthlyData={stats.monthlyForms}
+                    monthLabels={stats.monthLabels}
+                    width={
+                      Platform.OS === "web"
+                        ? isLargeScreen
+                          ? Math.min((windowDimensions.width - 72) / 2, 600)
+                          : isMediumScreen
+                            ? Math.min((windowDimensions.width - 48) / 2, 850)
+                            : Math.min(windowDimensions.width - 48, 1000)
+                        : windowDimensions.width - 32
+                    }
+                  />
+                </View>
+              </View>
+            </View>
 
-          <View style={styles.statCardSmall}>
-            <Text variant={"medium"} style={styles.statCardLabel}>
-              Completed
-            </Text>
-            <Text variant={"bold"} style={styles.statCardValue}>
-              {stats.completedTasks}
-            </Text>
-            <MaterialCommunityIcons
-              name="clipboard-check"
-              size={24}
-              color="#10B981"
-            />
-          </View>
-
-          <View style={styles.statCardSmall}>
-            <Text variant={"medium"} style={styles.statCardLabel}>
-              Overdue
-            </Text>
-            <Text variant={"bold"} style={styles.statCardValue}>
-              {stats.overdueTasks}
-            </Text>
-            <MaterialCommunityIcons
-              name="clipboard-alert"
-              size={24}
-              color="#EF4444"
-            />
-          </View>
-        </View>
-
-        <View style={styles.statsCard}>
-          <View style={styles.statRow}>
-            <Text variant={"medium"} style={styles.statLabel}>
-              Total Forms
-            </Text>
-            <Text
-              variant={"bold"}
+            <View
               style={[
-                styles.statGrowth,
-                stats.formsGrowth.startsWith("-") ? styles.negativeGrowth : {},
+                styles.gridContainer,
+                { flexDirection: isLargeScreen ? "row" : "column" },
               ]}
             >
-              {stats.formsGrowth}
-            </Text>
-          </View>
-          <Text variant={"bold"} style={styles.statValue}>
-            {stats.totalForms.toLocaleString()}
-          </Text>
-        </View>
+              {/* Top Employees Card */}
+              <View
+                style={[
+                  styles.gridItem,
+                  {
+                    flex: isLargeScreen ? 1 : undefined,
+                    width: "100%",
+                    maxWidth: isLargeScreen ? "50%" : 1000,
+                    marginBottom: isLargeScreen ? 0 : 24,
+                  },
+                ]}
+              >
+                <View style={styles.listCard}>
+                  <Text variant={"bold"} style={styles.sectionTitle}>
+                    Top Performing Employees
+                  </Text>
+                  {stats.topEmployees.length > 0 ? (
+                    <>
+                      {stats.topEmployees
+                        .slice(
+                          0,
+                          showAllEmployees ? stats.topEmployees.length : 3
+                        )
+                        .map((employee, index) => (
+                          <View
+                            key={index}
+                            style={[
+                              styles.employeeCard,
+                              index ===
+                                (showAllEmployees
+                                  ? stats.topEmployees.length
+                                  : Math.min(3, stats.topEmployees.length)) -
+                                  1 && {
+                                borderBottomWidth: 0,
+                                marginBottom: 0,
+                              },
+                            ]}
+                          >
+                            <View style={styles.employeeInfo}>
+                              <Text
+                                variant={"bold"}
+                                style={styles.employeeName}
+                              >
+                                {employee.name}
+                              </Text>
+                            </View>
+                            <View style={styles.formsCountContainer}>
+                              <Text variant={"bold"} style={styles.formsCount}>
+                                {employee.forms_count}
+                              </Text>
+                              <Text style={styles.formsLabel}>Forms</Text>
+                            </View>
+                          </View>
+                        ))}
+                      {stats.topEmployees.length > 3 && (
+                        <TouchableOpacity
+                          style={styles.showMoreButton}
+                          onPress={() => setShowAllEmployees(!showAllEmployees)}
+                        >
+                          <Text style={styles.showMoreText}>
+                            {showAllEmployees ? "Show Less" : "Show More"}
+                          </Text>
+                          <MaterialCommunityIcons
+                            name={
+                              showAllEmployees ? "chevron-up" : "chevron-down"
+                            }
+                            size={16}
+                            color="#3b82f6"
+                          />
+                        </TouchableOpacity>
+                      )}
+                    </>
+                  ) : (
+                    <View style={styles.emptyState}>
+                      <MaterialCommunityIcons
+                        name="account-group"
+                        size={48}
+                        color={theme.colors.outlineVariant}
+                      />
+                      <Text style={styles.emptyStateText}>
+                        No employee data found
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </View>
 
-        <View style={styles.chartCard}>
-          <Text variant={"bold"} style={styles.sectionTitle}>
-            Monthly Forms Submitted
-          </Text>
-          <DynamicChart
-            monthlyData={stats.monthlyForms}
-            monthLabels={stats.monthLabels}
-            width={width - 10}
-          />
-        </View>
-      </ScrollView>
+              {/* Task Status Cards */}
+              <View
+                style={[
+                  styles.gridItem,
+                  {
+                    flex: isLargeScreen ? 1 : undefined,
+                    width: "100%",
+                    maxWidth: isLargeScreen ? "50%" : 1000,
+                  },
+                ]}
+              >
+                <View style={styles.taskCardsWrapper}>
+                  <View style={styles.taskCardsGrid}>
+                    <View
+                      style={[
+                        styles.statCardSmall,
+                        { width: "100%", marginBottom: 14 },
+                      ]}
+                    >
+                      <Text variant={"medium"} style={styles.statCardLabel}>
+                        Pending Tasks
+                      </Text>
+                      <Text variant={"bold"} style={styles.statCardValue}>
+                        {stats.pendingTasks}
+                      </Text>
+                      <MaterialCommunityIcons
+                        name="clipboard-clock"
+                        size={24}
+                        color="#F59E0B"
+                      />
+                    </View>
+
+                    <View
+                      style={[
+                        styles.statCardSmall,
+                        { width: "100%", marginBottom: 16 },
+                      ]}
+                    >
+                      <Text variant={"medium"} style={styles.statCardLabel}>
+                        Completed Tasks
+                      </Text>
+                      <Text variant={"bold"} style={styles.statCardValue}>
+                        {stats.completedTasks}
+                      </Text>
+                      <MaterialCommunityIcons
+                        name="clipboard-check"
+                        size={24}
+                        color="#10B981"
+                      />
+                    </View>
+
+                    <View
+                      style={[
+                        styles.statCardSmall,
+                        { width: "100%", marginBottom: 0 },
+                      ]}
+                    >
+                      <Text variant={"medium"} style={styles.statCardLabel}>
+                        Overdue Tasks
+                      </Text>
+                      <Text variant={"bold"} style={styles.statCardValue}>
+                        {stats.overdueTasks}
+                      </Text>
+                      <MaterialCommunityIcons
+                        name="clipboard-alert"
+                        size={24}
+                        color="#EF4444"
+                      />
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </View>
+          </ScrollView>
+        </Animated.View>
+      </View>
     </SafeAreaView>
   );
 };
@@ -650,91 +1173,254 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    paddingBottom: 90, // Extra padding for bottom tab bar
+    paddingHorizontal: Platform.OS === "web" ? (width >= 768 ? 24 : 16) : 16,
+    paddingVertical: Platform.OS === "web" ? (width >= 768 ? 24 : 16) : 16,
+    paddingBottom: 90,
+    maxWidth: Platform.OS === "web" ? 1400 : undefined,
+    alignSelf: "center",
+    width: "100%",
   },
   welcomeHeader: {
-    marginBottom: 16,
-    marginTop: 5,
+    marginBottom: Platform.OS === "web" ? 24 : 16,
+    marginTop: Platform.OS === "web" ? 8 : 5,
     marginLeft: 5,
   },
   welcomeTitle: {
-    fontSize: 22,
+    ...createTextStyle({
+      fontWeight: "600",
+      fontSize: Platform.OS === "web" ? (width >= 768 ? 28 : 22) : 22,
+    }),
     color: "#333",
     paddingBottom: 3,
   },
   welcomeSubtitle: {
-    fontSize: 14,
+    ...createTextStyle({
+      fontWeight: "400",
+      fontSize: Platform.OS === "web" ? (width >= 768 ? 16 : 14) : 14,
+    }),
     color: "#666",
   },
-  sectionTitle: {
-    fontSize: 18,
-    marginBottom: 16,
-    color: "#333",
+  statsGridContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    width: "100%",
+    marginBottom: 24,
+    justifyContent: "space-between",
+  },
+  statsGridItem: {
+    // Base styles only, dynamic values applied inline
   },
   statsCard: {
     backgroundColor: "#fff",
     borderRadius: 16,
-    padding: 16,
-    marginBottom: 11,
     borderWidth: 1,
     borderColor: "#e0e0e0",
+    height: "100%",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  skeletonStatsCard: {
+    padding: Platform.OS === "web" ? 24 : 20,
+    minHeight: 120,
   },
   statRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 5,
+    width: "100%",
   },
   statLabel: {
-    fontSize: 16,
+    ...createTextStyle({
+      fontWeight: "500",
+      fontSize: Platform.OS === "web" ? (width >= 768 ? 14 : 13) : 13,
+    }),
     color: "#333",
+    right: 5,
+    paddingRight: 3,
   },
   statGrowth: {
-    fontSize: 14,
+    fontSize: 10,
     color: "#4CAF50",
   },
   negativeGrowth: {
     color: "#F44336",
   },
   statValue: {
-    fontSize: 25,
+    ...createTextStyle({
+      fontWeight: "600",
+      fontSize: Platform.OS === "web" ? (width >= 768 ? 32 : 25) : 25,
+    }),
     color: "#111",
+    marginTop: Platform.OS === "web" ? 16 : 8,
   },
-  statCardsContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 16,
+  chartsContainer: {
+    flexDirection: width >= 1440 ? "row" : "column",
+    gap: 24,
+    marginBottom: 24,
+    width: "100%",
+    alignItems: "center",
   },
-  statCardSmall: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 14,
-    width: (width - 42) / 3,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    alignItems: "flex-start",
-  },
-  statCardLabel: {
-    fontSize: 14,
-    color: "#555",
-    marginBottom: 8,
-  },
-  statCardValue: {
-    fontSize: 20,
-    color: "#111",
-    marginBottom: 8,
+  chartWrapper: {
+    flex: width >= 1440 ? 1 : undefined,
+    width: "100%",
+    maxWidth: width >= 1440 ? "50%" : 1000,
+    marginBottom: width >= 1440 ? 0 : 24,
   },
   chartCard: {
     backgroundColor: "#fff",
     borderRadius: 16,
-    padding: 16,
-    paddingBottom: 10,
-    marginBottom: 16,
-    minHeight: 280,
+    padding: 0,
+    marginBottom: Platform.OS === "web" ? 0 : 1,
+    minHeight: width >= 768 ? 290 : 290,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    flex: 1,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    overflow: "hidden",
+  },
+  sectionTitle: {
+    ...createTextStyle({
+      fontWeight: "600",
+      fontSize: Platform.OS === "web" ? (width >= 768 ? 18 : 16) : 16,
+    }),
+    marginBottom: Platform.OS === "web" ? (width >= 768 ? 20 : 16) : 16,
+    color: "#374151",
+    paddingHorizontal: Platform.OS === "web" ? 24 : 16,
+    paddingTop: Platform.OS === "web" ? 24 : 16,
+  },
+  gridContainer: {
+    gap: 24,
+    width: "100%",
+    marginBottom: 24,
+  },
+  gridItem: {
+    flex: 1,
+  },
+  taskCardsWrapper: {
+    
+  },
+  taskCardsGrid: {
+    width: "100%",
+  },
+  statCardSmall: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: Platform.OS === "web" ? (width >= 768 ? 24 : 20) : 20,
     borderWidth: 1,
     borderColor: "#e0e0e0",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  statCardLabel: {
+    fontSize: Platform.OS === "web" ? (width >= 768 ? 14 : 13) : 13,
+    color: "#555",
+    marginBottom: 8,
+  },
+  statCardValue: {
+    fontSize: Platform.OS === "web" ? (width >= 768 ? 24 : 20) : 20,
+    color: "#111",
+    marginBottom: 8,
+  },
+  skeleton: {
+    backgroundColor: "#F3F4F6",
+    borderRadius: 4,
+    overflow: "hidden",
+  },
+  skeletonTitle: {
+    marginBottom: 8,
+  },
+  skeletonSubtitle: {
+    marginBottom: 24,
+  },
+  listCard: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: Platform.OS === "web" ? (width >= 768 ? 24 : 16) : 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  employeeCard: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    padding: Platform.OS === "web" ? (width >= 768 ? 20 : 16) : 16,
+    marginBottom: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
+  },
+  employeeInfo: {
+    flex: 1,
+  },
+  employeeName: {
+    ...createTextStyle({
+      fontWeight: "600",
+      fontSize: Platform.OS === "web" ? (width >= 768 ? 16 : 14) : 14,
+    }),
+    color: "#333",
+  },
+  formsCountContainer: {
+    alignItems: "center",
+  },
+  formsCount: {
+    fontSize: 18,
+    color: "#3b82f6",
+  },
+  formsLabel: {
+    fontSize: 12,
+    color: "#666",
+  },
+  showMoreButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  showMoreText: {
+    color: "#3b82f6",
+    fontSize: 14,
+    fontFamily: "Poppins-Medium",
+    marginRight: 5,
+  },
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+  },
+  emptyStateText: {
+    marginTop: 8,
+    fontSize: 16,
+    color: "#999",
   },
 });
 

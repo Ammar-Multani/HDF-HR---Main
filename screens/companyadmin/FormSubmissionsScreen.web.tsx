@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import {
   StyleSheet,
   View,
@@ -6,8 +12,11 @@ import {
   TouchableOpacity,
   RefreshControl,
   ScrollView,
-  ActivityIndicator,
   Platform,
+  ActivityIndicator,
+  Dimensions,
+  Pressable,
+  PressableStateCallbackType,
 } from "react-native";
 import {
   Text,
@@ -21,7 +30,6 @@ import {
   Portal,
   Modal,
   RadioButton,
-  Button,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -37,7 +45,64 @@ import LoadingIndicator from "../../components/LoadingIndicator";
 import EmptyState from "../../components/EmptyState";
 import StatusBadge from "../../components/StatusBadge";
 import { FormStatus } from "../../types";
-import { Icon } from "react-native-elements";
+import { LinearGradient } from "expo-linear-gradient";
+import {
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
+import Animated from "react-native-reanimated";
+
+// Add navigation type definitions
+type RootStackParamList = {
+  FormDetails: {
+    formId: string;
+    formType: string;
+  };
+  Help: undefined;
+};
+
+type FormNavigationProp = NavigationProp<RootStackParamList>;
+
+// Add database types
+interface CompanyUser {
+  first_name: string;
+  last_name: string;
+}
+
+interface AccidentReport {
+  id: string;
+  employee_id: string;
+  status: FormStatus;
+  created_at: string;
+  updated_at: string;
+  modified_by: string;
+  accident_description: string;
+  company_user: CompanyUser;
+}
+
+interface IllnessReport {
+  id: string;
+  employee_id: string;
+  status: FormStatus;
+  submission_date: string;
+  updated_at: string;
+  modified_by: string;
+  leave_description: string;
+  company_user: CompanyUser;
+}
+
+interface DepartureReport {
+  id: string;
+  employee_id: string;
+  status: FormStatus;
+  submission_date: string;
+  updated_at: string;
+  modified_by: string;
+  departure_description: string;
+  company_user: CompanyUser;
+}
 
 // Enhanced FormSubmission interface with additional fields
 interface FormSubmission {
@@ -54,79 +119,359 @@ interface FormSubmission {
   modifier_name?: string;
 }
 
-// Component for skeleton loading UI
+// Add getFormTypeColor helper function
+const getFormTypeColor = (type: string) => {
+  switch (type) {
+    case "accident":
+      return "#F44336"; // Red for accident reports
+    case "illness":
+      return "#FF9800"; // Orange for illness reports
+    case "departure":
+      return "#2196F3"; // Blue for departure reports
+    default:
+      return "#9C27B0"; // Purple for unknown types
+  }
+};
+
+// Add TableHeader component
+const TableHeader = () => (
+  <View style={styles.tableHeader}>
+    <View style={styles.tableHeaderCell}>
+      <Text style={styles.tableHeaderText}>Form Type</Text>
+    </View>
+    <View style={styles.tableHeaderCell}>
+      <Text style={styles.tableHeaderText}>Employee</Text>
+    </View>
+    <View style={styles.tableHeaderCell}>
+      <Text style={styles.tableHeaderText}>Submitted Date</Text>
+    </View>
+    <View style={styles.tableHeaderCell}>
+      <Text style={styles.tableHeaderText}>Status</Text>
+    </View>
+    <View style={styles.tableHeaderCell}>
+      <Text style={styles.tableHeaderText}>Actions</Text>
+    </View>
+  </View>
+);
+
+// Update TableRowProps interface
+interface TableRowProps {
+  item: FormSubmission;
+  navigation: FormNavigationProp;
+}
+
+const TableRow = ({ item, navigation }: TableRowProps) => (
+  <Pressable
+    onPress={() =>
+      navigation.navigate("FormDetails", {
+        formId: item.id,
+        formType: item.type,
+      })
+    }
+    style={({ pressed }: PressableStateCallbackType) => [
+      styles.tableRow,
+      pressed && { backgroundColor: "#f8fafc" },
+    ]}
+  >
+    <View style={styles.tableCell}>
+      <Text
+        style={[
+          styles.tableCellText,
+          {
+            color: getFormTypeColor(item.type),
+            fontFamily: "Poppins-Medium",
+          },
+        ]}
+      >
+        {item.title}
+      </Text>
+    </View>
+    <View style={styles.tableCell}>
+      <TooltipText text={item.employee_name} />
+    </View>
+    <View style={styles.tableCell}>
+      <TooltipText
+        text={format(new Date(item.submission_date), "MMM d, yyyy")}
+      />
+    </View>
+    <View style={styles.tableCell}>
+      <StatusBadge status={item.status} />
+    </View>
+    <View style={styles.actionCell}>
+      <IconButton
+        icon="eye"
+        size={20}
+        onPress={(e) => {
+          e.stopPropagation();
+          navigation.navigate("FormDetails", {
+            formId: item.id,
+            formType: item.type,
+          });
+        }}
+        style={styles.actionIcon}
+      />
+    </View>
+  </Pressable>
+);
+
+// Update TooltipText component to disable tooltips on large screens
+const TooltipText = ({
+  text,
+  numberOfLines = 1,
+}: {
+  text: string;
+  numberOfLines?: number;
+}) => {
+  const [isHovered, setIsHovered] = useState(false);
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+  const containerRef = useRef<View>(null);
+  const [isLargeScreen, setIsLargeScreen] = useState(window.innerWidth >= 1440);
+
+  // Add window resize listener for screen size
+  useEffect(() => {
+    const handleResize = () => {
+      setIsLargeScreen(window.innerWidth >= 1440);
+    };
+
+    if (Platform.OS === "web") {
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }
+  }, []);
+
+  const updateTooltipPosition = () => {
+    if (Platform.OS === "web" && containerRef.current && !isLargeScreen) {
+      // @ts-ignore - web specific
+      const rect = containerRef.current.getBoundingClientRect();
+      const windowHeight = window.innerHeight;
+      const spaceAbove = rect.top;
+      const spaceBelow = windowHeight - rect.bottom;
+
+      // Calculate horizontal position to prevent overflow
+      const windowWidth = window.innerWidth;
+      let xPos = rect.left;
+
+      // Ensure tooltip doesn't overflow right edge
+      if (xPos + 300 > windowWidth) {
+        // 300 is max tooltip width
+        xPos = windowWidth - 310; // Add some padding
+      }
+
+      // Position vertically based on available space
+      let yPos;
+      if (spaceBelow >= 100) {
+        // If enough space below
+        yPos = rect.bottom + window.scrollY + 5;
+      } else if (spaceAbove >= 100) {
+        // If enough space above
+        yPos = rect.top + window.scrollY - 5;
+      } else {
+        // If neither, position it where there's more space
+        yPos =
+          spaceAbove > spaceBelow
+            ? rect.top + window.scrollY - 5
+            : rect.bottom + window.scrollY + 5;
+      }
+
+      setTooltipPosition({ x: xPos, y: yPos });
+    }
+  };
+
+  useEffect(() => {
+    if (isHovered && !isLargeScreen) {
+      updateTooltipPosition();
+      // Add scroll and resize listeners
+      if (Platform.OS === "web") {
+        window.addEventListener("scroll", updateTooltipPosition);
+        window.addEventListener("resize", updateTooltipPosition);
+
+        return () => {
+          window.removeEventListener("scroll", updateTooltipPosition);
+          window.removeEventListener("resize", updateTooltipPosition);
+        };
+      }
+    }
+  }, [isHovered, isLargeScreen]);
+
+  if (Platform.OS !== "web" || isLargeScreen) {
+    return (
+      <Text
+        style={styles.tableCellText}
+        numberOfLines={isLargeScreen ? undefined : numberOfLines}
+      >
+        {text}
+      </Text>
+    );
+  }
+
+  return (
+    <View
+      ref={containerRef}
+      style={styles.tooltipContainer}
+      // @ts-ignore - web specific props
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <Text style={styles.tableCellText} numberOfLines={numberOfLines}>
+        {text}
+      </Text>
+      {isHovered && !isLargeScreen && (
+        <Portal>
+          <View
+            style={[
+              styles.tooltip,
+              {
+                position: "absolute",
+                left: tooltipPosition.x,
+                top: tooltipPosition.y,
+              },
+            ]}
+          >
+            <Text style={styles.tooltipText}>{text}</Text>
+          </View>
+        </Portal>
+      )}
+    </View>
+  );
+};
+
+// Add Shimmer component
+interface ShimmerProps {
+  width: number | string;
+  height: number;
+  style?: any;
+}
+
+const Shimmer: React.FC<ShimmerProps> = ({ width, height, style }) => {
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        {
+          translateX: withRepeat(
+            withSequence(
+              withTiming(typeof width === "number" ? -width : -200, {
+                duration: 800,
+              }),
+              withTiming(typeof width === "number" ? width : 200, {
+                duration: 800,
+              })
+            ),
+            -1
+          ),
+        },
+      ],
+    };
+  });
+
+  return (
+    <View
+      style={[
+        {
+          width,
+          height,
+          backgroundColor: "#E8E8E8",
+          overflow: "hidden",
+          borderRadius: 4,
+        },
+        style,
+      ]}
+    >
+      <Animated.View
+        style={[
+          {
+            width: "100%",
+            height: "100%",
+            position: "absolute",
+            backgroundColor: "transparent",
+          },
+          animatedStyle,
+        ]}
+      >
+        <LinearGradient
+          colors={["transparent", "rgba(255, 255, 255, 0.4)", "transparent"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{ width: "100%", height: "100%" }}
+        />
+      </Animated.View>
+    </View>
+  );
+};
+
+// Update FormItemSkeleton component
 const FormItemSkeleton = () => {
   return (
-    <Surface style={[styles.cardSurface, { backgroundColor: "#fff" }]}>
+    <Surface style={[styles.cardSurface, { backgroundColor: "#FFFFFF" }]}>
       <View style={styles.cardTouchable}>
         <View style={styles.cardHeader}>
-          <View style={{ flex: 1 }}>
-            <View
-              style={{
-                width: "40%",
-                height: 20,
-                backgroundColor: "#E0E0E0",
-                borderRadius: 4,
-                marginBottom: 8,
-              }}
-            />
-            <View
-              style={{
-                width: "70%",
-                height: 24,
-                backgroundColor: "#E0E0E0",
-                borderRadius: 4,
-              }}
-            />
+          <View style={styles.titleContainer}>
+            <Shimmer width={180} height={20} style={{ marginBottom: 8 }} />
           </View>
-          <View
-            style={{
-              width: 80,
-              height: 24,
-              backgroundColor: "#E0E0E0",
-              borderRadius: 12,
-            }}
-          />
+          <Shimmer width={80} height={24} style={{ borderRadius: 12 }} />
         </View>
-        <View style={styles.cardDetails}>
-          <View
-            style={{
-              width: "60%",
-              height: 16,
-              backgroundColor: "#E0E0E0",
-              borderRadius: 4,
-              marginBottom: 8,
-            }}
-          />
-          <View
-            style={{
-              width: "80%",
-              height: 16,
-              backgroundColor: "#E0E0E0",
-              borderRadius: 4,
-            }}
-          />
+
+        <View style={[styles.cardDetails, { borderLeftColor: "#E0E0E0" }]}>
+          <View style={styles.detailItem}>
+            <Shimmer width={100} height={14} style={{ marginRight: 8 }} />
+            <Shimmer width={150} height={14} />
+          </View>
+          <View style={styles.detailItem}>
+            <Shimmer width={80} height={14} style={{ marginRight: 8 }} />
+            <Shimmer width={120} height={14} />
+          </View>
+          <View style={styles.detailItem}>
+            <Shimmer width={90} height={14} style={{ marginRight: 8 }} />
+            <Shimmer width={140} height={14} />
+          </View>
         </View>
+
         <View style={styles.cardFooter}>
-          <View
-            style={{
-              width: 100,
-              height: 16,
-              backgroundColor: "#E0E0E0",
-              borderRadius: 4,
-            }}
-          />
+          <View style={styles.detailItem}>
+            <Shimmer width={160} height={16} />
+          </View>
+          <View style={styles.viewDetailsContainer}>
+            <Shimmer width={100} height={14} style={{ marginRight: 8 }} />
+            <Shimmer width={24} height={24} style={{ borderRadius: 12 }} />
+          </View>
         </View>
       </View>
     </Surface>
   );
 };
 
-
+// Add TableSkeleton component
+const TableSkeleton = () => {
+  return (
+    <View style={styles.tableContainer}>
+      <TableHeader />
+      {Array(5)
+        .fill(0)
+        .map((_, index) => (
+          <View key={`skeleton-${index}`} style={styles.tableRow}>
+            <View style={styles.tableCell}>
+              <Shimmer width={140} height={16} />
+            </View>
+            <View style={styles.tableCell}>
+              <Shimmer width={160} height={16} />
+            </View>
+            <View style={styles.tableCell}>
+              <Shimmer width={100} height={16} />
+            </View>
+            <View style={styles.tableCell}>
+              <Shimmer width={80} height={24} style={{ borderRadius: 12 }} />
+            </View>
+            <View style={styles.actionCell}>
+              <Shimmer width={40} height={40} style={{ borderRadius: 20 }} />
+            </View>
+          </View>
+        ))}
+    </View>
+  );
+};
 
 const FormSubmissionsScreen = () => {
   const theme = useTheme();
-  const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  const navigation = useNavigation<FormNavigationProp>();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -138,6 +483,34 @@ const FormSubmissionsScreen = () => {
   const [page, setPage] = useState(0);
   const [hasMoreData, setHasMoreData] = useState(true);
   const PAGE_SIZE = 10;
+
+  // Add window dimensions state
+  const [windowDimensions, setWindowDimensions] = useState({
+    width: Dimensions.get("window").width,
+    height: Dimensions.get("window").height,
+  });
+
+  // Add window resize listener
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      const handleResize = () => {
+        setWindowDimensions({
+          width: Dimensions.get("window").width,
+          height: Dimensions.get("window").height,
+        });
+      };
+
+      window.addEventListener("resize", handleResize);
+
+      // Cleanup
+      return () => window.removeEventListener("resize", handleResize);
+    }
+  }, []);
+
+  // Calculate responsive breakpoints
+  const isLargeScreen = windowDimensions.width >= 1440;
+  const isMediumScreen =
+    windowDimensions.width >= 768 && windowDimensions.width < 1440;
 
   // Filter modal state
   const [filterModalVisible, setFilterModalVisible] = useState(false);
@@ -245,8 +618,8 @@ const FormSubmissionsScreen = () => {
       const from = currentPage * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      // Fetch accident reports
-      const { data: accidentData, error: accidentError } = await supabase
+      // Fetch accident reports with proper typing
+      const { data: accidentData, error: accidentError } = (await supabase
         .from("accident_report")
         .select(
           `
@@ -267,10 +640,10 @@ const FormSubmissionsScreen = () => {
         .order("created_at", {
           ascending: appliedFilters.sortOrder === "asc",
         })
-        .range(from, to);
+        .range(from, to)) as { data: AccidentReport[] | null; error: any };
 
-      // Fetch illness reports
-      const { data: illnessData, error: illnessError } = await supabase
+      // Fetch illness reports with proper typing
+      const { data: illnessData, error: illnessError } = (await supabase
         .from("illness_report")
         .select(
           `
@@ -291,7 +664,7 @@ const FormSubmissionsScreen = () => {
         .order("submission_date", {
           ascending: appliedFilters.sortOrder === "asc",
         })
-        .range(from, to);
+        .range(from, to)) as { data: IllnessReport[] | null; error: any };
 
       // Fetch staff departure reports
       const { data: departureData, error: departureError } = await supabase
@@ -326,151 +699,80 @@ const FormSubmissionsScreen = () => {
         return;
       }
 
-      // Get all unique modifier IDs
-      const allModifierIds = [
-        ...(accidentData || []).map((form) => form.modified_by),
-        ...(illnessData || []).map((form) => form.modified_by),
-        ...(departureData || []).map((form) => form.modified_by),
-      ].filter(Boolean);
-
-      // Fetch modifiers info
-      let modifiersInfo: Record<string, string> = {};
-      if (allModifierIds.length > 0) {
-        const uniqueModifierIds = Array.from(new Set(allModifierIds));
-
-        // Fetch admin modifiers
-        const { data: adminModifiers } = await supabase
-          .from("admin")
-          .select("id, name")
-          .in("id", uniqueModifierIds);
-
-        // Fetch company_user modifiers
-        const { data: companyUserModifiers } = await supabase
-          .from("company_user")
-          .select("id, first_name, last_name")
-          .in("id", uniqueModifierIds);
-
-        // Create a lookup map for modifier names
-        modifiersInfo = {
-          ...(adminModifiers || []).reduce(
-            (acc: Record<string, string>, admin: any) => {
-              acc[admin.id] = admin.name;
-              return acc;
-            },
-            {}
-          ),
-          ...(companyUserModifiers || []).reduce(
-            (acc: Record<string, string>, user: any) => {
-              acc[user.id] = `${user.first_name} ${user.last_name}`;
-              return acc;
-            },
-            {}
-          ),
-        };
-      }
-
-      // Format accident reports
-      const formattedAccidents = (accidentData || []).map((report) => {
-        const employeeName = report.company_user
-          ? `${report.company_user.first_name} ${report.company_user.last_name}`
-          : "Unknown Employee";
-
-        return {
+      // Process accident reports
+      const processedAccidentReports: FormSubmission[] =
+        accidentData?.map((report) => ({
           id: report.id,
-          type: "accident" as const,
+          type: "accident",
           title: "Accident Report",
-          employee_name: employeeName,
+          employee_name: `${report.company_user.first_name} ${report.company_user.last_name}`,
           employee_id: report.employee_id,
           status: report.status,
           submission_date: report.created_at,
           updated_at: report.updated_at,
           modified_by: report.modified_by,
-          modified_at: report.updated_at,
-          modifier_name: report.modified_by
-            ? modifiersInfo[report.modified_by]
-            : undefined,
-        };
-      });
+        })) || [];
 
-      // Format illness reports
-      const formattedIllness = (illnessData || []).map((report) => {
-        const employeeName = report.company_user
-          ? `${report.company_user.first_name} ${report.company_user.last_name}`
-          : "Unknown Employee";
-
-        return {
+      // Process illness reports
+      const processedIllnessReports: FormSubmission[] =
+        illnessData?.map((report) => ({
           id: report.id,
-          type: "illness" as const,
+          type: "illness",
           title: "Illness Report",
-          employee_name: employeeName,
+          employee_name: `${report.company_user.first_name} ${report.company_user.last_name}`,
           employee_id: report.employee_id,
           status: report.status,
           submission_date: report.submission_date,
           updated_at: report.updated_at,
           modified_by: report.modified_by,
-          modified_at: report.updated_at,
-          modifier_name: report.modified_by
-            ? modifiersInfo[report.modified_by]
-            : undefined,
-        };
-      });
+        })) || [];
 
-      // Format departure reports
-      const formattedDeparture = (departureData || []).map((report) => {
-        const employeeName = report.company_user
-          ? `${report.company_user.first_name} ${report.company_user.last_name}`
-          : "Unknown Employee";
-
-        return {
+      // Process departure reports
+      const processedDepartureReports: FormSubmission[] =
+        departureData?.map((report) => ({
           id: report.id,
-          type: "departure" as const,
+          type: "departure",
           title: "Staff Departure Report",
-          employee_name: employeeName,
+          employee_name: `${report.company_user.first_name} ${report.company_user.last_name}`,
           employee_id: report.employee_id,
           status: report.status,
-          submission_date: report.created_at,
+          submission_date: report.submission_date,
           updated_at: report.updated_at,
           modified_by: report.modified_by,
-          modified_at: report.updated_at,
-          modifier_name: report.modified_by
-            ? modifiersInfo[report.modified_by]
-            : undefined,
-        };
-      });
+        })) || [];
 
-      // Combine all reports and sort by created date
+      // Combine all reports
       const allForms = [
-        ...formattedAccidents,
-        ...formattedIllness,
-        ...formattedDeparture,
-      ].sort((a, b) => {
-        if (appliedFilters.sortOrder === "asc") {
-          return (
-            new Date(a.submission_date).getTime() -
-            new Date(b.submission_date).getTime()
-          );
-        } else {
-          return (
-            new Date(b.submission_date).getTime() -
-            new Date(a.submission_date).getTime()
-          );
-        }
+        ...processedAccidentReports,
+        ...processedIllnessReports,
+        ...processedDepartureReports,
+      ];
+
+      // Sort combined forms by submission date
+      const sortedForms = allForms.sort((a, b) => {
+        const dateA = new Date(a.submission_date).getTime();
+        const dateB = new Date(b.submission_date).getTime();
+        return appliedFilters.sortOrder === "asc"
+          ? dateA - dateB
+          : dateB - dateA;
       });
 
-      // Update forms state
+      // Update state
       if (refresh) {
-        setForms(allForms);
+        setForms(sortedForms);
       } else {
-        setForms((prevForms) => [...prevForms, ...allForms]);
+        setForms((prevForms) => [...prevForms, ...sortedForms]);
       }
 
-      // Check if we have more data
-      setHasMoreData(allForms.length >= PAGE_SIZE);
+      // Update pagination state
+      setHasMoreData(allForms.length === PAGE_SIZE);
+      if (!refresh) {
+        setPage((prevPage) => prevPage + 1);
+      }
     } catch (error) {
       console.error("Error fetching forms:", error);
     } finally {
       setLoading(false);
-      setRefreshing(false);
       setLoadingMore(false);
     }
   };
@@ -543,33 +845,16 @@ const FormSubmissionsScreen = () => {
     }
   };
 
-  // Get appropriate color for form type
-  const getFormTypeColor = (formType: string) => {
-    switch (formType) {
-      case "accident":
-        return "#F44336"; // Red for accident reports
-      case "illness":
-        return "#FF9800"; // Orange for illness reports
-      case "departure":
-        return "#2196F3"; // Blue for departure reports
-      default:
-        return "#9C27B0"; // Purple for unknown types
-    }
-  };
-
   // Create memoized renderFormItem function to prevent unnecessary re-renders
   const renderFormItem = useCallback(
     ({ item }: { item: FormSubmission }) => (
       <Surface style={[styles.cardSurface, { backgroundColor: "#FFFFFF" }]}>
         <TouchableOpacity
           onPress={() =>
-            navigation.navigate(
-              "FormDetails" as never,
-              {
-                formId: item.id,
-                formType: item.type,
-              } as never
-            )
+            navigation.navigate("FormDetails", {
+              formId: item.id,
+              formType: item.type,
+            })
           }
           style={styles.cardTouchable}
         >
@@ -859,31 +1144,70 @@ const FormSubmissionsScreen = () => {
   };
 
   if (loading && !refreshing) {
+    const useTableLayout = isLargeScreen || isMediumScreen;
+
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: "#F5F5F5" }]}>
+      <SafeAreaView style={[styles.container, { backgroundColor: "#F8F9FA" }]}>
         <AppHeader
           title="Form Submissions"
           showBackButton={Platform.OS !== "web"}
           showHelpButton={true}
           onHelpPress={() => {
-            navigation.navigate("Help" as never);
+            navigation.navigate("Help");
           }}
           showLogo={false}
         />
-        <View style={styles.searchContainer}>
-          <View style={[styles.searchbar, { backgroundColor: "#E0E0E0" }]} />
-          <View style={styles.filterButtonContainer}>
-            <View
-              style={[styles.filterButton, { backgroundColor: "#E0E0E0" }]}
+        <View
+          style={[
+            styles.searchContainer,
+            {
+              maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
+              alignSelf: "center",
+              width: "100%",
+            },
+          ]}
+        >
+          <View style={styles.searchBarContainer}>
+            <Shimmer
+              width="100%"
+              height={60}
+              style={{
+                borderRadius: 18,
+                marginRight: 8,
+              }}
+            />
+            <Shimmer
+              width={48}
+              height={48}
+              style={{
+                borderRadius: 8,
+              }}
             />
           </View>
         </View>
-        <FlatList
-          data={Array(3).fill(0)}
-          renderItem={() => <FormItemSkeleton />}
-          keyExtractor={(_, index) => `skeleton-${index}`}
-          contentContainerStyle={styles.listContent}
-        />
+
+        <View
+          style={[
+            styles.contentContainer,
+            {
+              maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
+              alignSelf: "center",
+              width: "100%",
+              flex: 1,
+            },
+          ]}
+        >
+          {useTableLayout ? (
+            <TableSkeleton />
+          ) : (
+            <FlatList
+              data={Array(4).fill(0)}
+              renderItem={() => <FormItemSkeleton />}
+              keyExtractor={(_, index) => `skeleton-${index}`}
+              contentContainerStyle={styles.listContent}
+            />
+          )}
+        </View>
       </SafeAreaView>
     );
   }
@@ -895,91 +1219,143 @@ const FormSubmissionsScreen = () => {
         showBackButton={Platform.OS !== "web"}
         showHelpButton={true}
         onHelpPress={() => {
-          navigation.navigate("Help" as never);
+          navigation.navigate("Help");
         }}
         showLogo={false}
       />
 
-      <View style={styles.searchContainer}>
-        <Searchbar
-          placeholder="Search forms..."
-          onChangeText={setSearchQuery}
-          value={searchQuery}
-          style={styles.searchbar}
-          theme={{ colors: { primary: "#1a73e8" } }}
-          clearIcon={() =>
-            searchQuery ? (
-              <IconButton
-                icon="close-circle"
-                size={18}
-                onPress={() => setSearchQuery("")}
-              />
-            ) : null
-          }
-          icon="magnify"
-        />
-        <View style={styles.filterButtonContainer}>
-          <IconButton
-            icon="filter-variant"
-            size={24}
-            style={[
-              styles.filterButton,
-              hasActiveFilters() && styles.activeFilterButton,
-            ]}
-            iconColor={hasActiveFilters() ? "#1a73e8" : undefined}
-            onPress={() => setFilterModalVisible(true)}
+      <View
+        style={[
+          styles.searchContainer,
+          {
+            maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
+            alignSelf: "center",
+            width: "100%",
+          },
+        ]}
+      >
+        <View style={styles.searchBarContainer}>
+          <Searchbar
+            placeholder="Search forms..."
+            onChangeText={setSearchQuery}
+            value={searchQuery}
+            style={styles.searchbar}
+            theme={{ colors: { primary: "#1a73e8" } }}
+            clearIcon={() =>
+              searchQuery ? (
+                <IconButton
+                  icon="close-circle"
+                  size={18}
+                  onPress={() => setSearchQuery("")}
+                />
+              ) : null
+            }
+            icon="magnify"
           />
-          {hasActiveFilters() && <View style={styles.filterBadge} />}
+          <View style={styles.filterButtonContainer}>
+            <IconButton
+              icon="filter-variant"
+              size={30}
+              style={[
+                styles.filterButton,
+                hasActiveFilters() && styles.activeFilterButton,
+              ]}
+              iconColor={hasActiveFilters() ? "#1a73e8" : undefined}
+              onPress={() => setFilterModalVisible(true)}
+            />
+            {hasActiveFilters() && <View style={styles.filterBadge} />}
+          </View>
         </View>
       </View>
 
       {renderActiveFilterIndicator()}
       {renderFilterModal()}
 
-      {filteredForms.length === 0 ? (
-        <EmptyState
-          icon="file-document"
-          title="No Forms Found"
-          message={
-            searchQuery || hasActiveFilters()
-              ? "No forms match your search criteria."
-              : "No form submissions yet."
-          }
-          buttonTitle={
-            searchQuery || hasActiveFilters() ? "Clear Filters" : undefined
-          }
-          onButtonPress={
-            searchQuery || hasActiveFilters()
-              ? () => {
-                  setSearchQuery("");
-                  clearFilters();
-                }
-              : undefined
-          }
-        />
-      ) : (
-        <FlatList
-          data={filteredForms}
-          renderItem={renderFormItem}
-          keyExtractor={(item) => `${item.type}-${item.id}`}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-          onEndReached={loadMoreForms}
-          onEndReachedThreshold={0.3}
-          ListFooterComponent={() => (
-            <View style={styles.loadingFooter}>
-              {loadingMore && hasMoreData && (
-                <ActivityIndicator size="small" color="#1a73e8" />
+      <View
+        style={[
+          styles.contentContainer,
+          {
+            maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
+            alignSelf: "center",
+            width: "100%",
+            flex: 1,
+          },
+        ]}
+      >
+        {filteredForms.length === 0 ? (
+          <EmptyState
+            icon="file-document"
+            title="No Forms Found"
+            message={
+              searchQuery || hasActiveFilters()
+                ? "No forms match your search criteria."
+                : "No form submissions yet."
+            }
+            buttonTitle={
+              searchQuery || hasActiveFilters() ? "Clear Filters" : undefined
+            }
+            onButtonPress={
+              searchQuery || hasActiveFilters()
+                ? () => {
+                    setSearchQuery("");
+                    clearFilters();
+                  }
+                : undefined
+            }
+          />
+        ) : isMediumScreen || isLargeScreen ? (
+          <View style={styles.tableContainer}>
+            <TableHeader />
+            <FlatList
+              data={filteredForms}
+              renderItem={({ item }) => (
+                <TableRow item={item} navigation={navigation} />
               )}
-              {!hasMoreData && filteredForms.length > 0 && (
-                <Text style={styles.endListText}>No more forms to load</Text>
+              keyExtractor={(item) => `${item.type}-${item.id}`}
+              contentContainerStyle={styles.tableContent}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+              }
+              onEndReached={loadMoreForms}
+              onEndReachedThreshold={0.3}
+              ListFooterComponent={() => (
+                <View style={styles.loadingFooter}>
+                  {loadingMore && hasMoreData && (
+                    <ActivityIndicator size="small" color="#1a73e8" />
+                  )}
+                  {!hasMoreData && filteredForms.length > 0 && (
+                    <Text style={styles.endListText}>
+                      No more forms to load
+                    </Text>
+                  )}
+                </View>
               )}
-            </View>
-          )}
-        />
-      )}
+            />
+          </View>
+        ) : (
+          <FlatList
+            data={filteredForms}
+            renderItem={renderFormItem}
+            keyExtractor={(item) => `${item.type}-${item.id}`}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+            onEndReached={loadMoreForms}
+            onEndReachedThreshold={0.3}
+            ListFooterComponent={() => (
+              <View style={styles.loadingFooter}>
+                {loadingMore && hasMoreData && (
+                  <ActivityIndicator size="small" color="#1a73e8" />
+                )}
+                {!hasMoreData && filteredForms.length > 0 && (
+                  <Text style={styles.endListText}>No more forms to load</Text>
+                )}
+              </View>
+            )}
+          />
+        )}
+      </View>
     </SafeAreaView>
   );
 };
@@ -990,24 +1366,26 @@ const styles = StyleSheet.create({
     backgroundColor: "#F8F9FA",
   },
   searchContainer: {
-    padding: 16,
+    padding: Platform.OS === "web" ? 24 : 16,
     paddingTop: 10,
-    paddingBottom: 12,
+    paddingBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  searchBarContainer: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
   },
   searchbar: {
-    elevation: 2,
-    borderRadius: 12,
-    height: 58,
+    elevation: 0,
+    borderRadius: 18,
+    height: 60,
     backgroundColor: "#fff",
     borderWidth: 1,
     borderColor: "#e0e0e0",
     flex: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
   },
   filterButtonContainer: {
     position: "relative",
@@ -1034,16 +1412,6 @@ const styles = StyleSheet.create({
     right: 8,
     zIndex: 2,
   },
-  filterContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-  },
-  filterChip: {
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    backgroundColor: "#fff",
-  },
   activeFiltersContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -1054,6 +1422,7 @@ const styles = StyleSheet.create({
   },
   activeFiltersText: {
     fontSize: 14,
+    fontFamily: "Poppins-Regular",
     color: "#616161",
     marginRight: 8,
   },
@@ -1128,7 +1497,7 @@ const styles = StyleSheet.create({
   },
   cardFooter: {
     flexDirection: "row",
-    justifyContent: "flex-end",
+    justifyContent: "space-between",
     alignItems: "center",
     marginTop: 4,
   },
@@ -1138,7 +1507,7 @@ const styles = StyleSheet.create({
   },
   viewDetailsText: {
     fontSize: 12,
-    fontWeight: "600",
+    fontFamily: "Poppins-SemiBold",
   },
   chevronIcon: {
     margin: 0,
@@ -1163,6 +1532,7 @@ const styles = StyleSheet.create({
   },
   endListText: {
     fontSize: 14,
+    fontFamily: "Poppins-Regular",
     color: "#616161",
   },
   // Modal styles
@@ -1184,71 +1554,170 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 16,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: "600",
+    fontFamily: "Poppins-SemiBold",
     color: "#212121",
   },
   modalContent: {
-    padding: 16,
     maxHeight: 400,
   },
   modalDivider: {
     height: 1,
     backgroundColor: "#E0E0E0",
-    marginVertical: 8,
+    marginTop: 16,
   },
   modalSection: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   sectionHeader: {
-    marginBottom: 12,
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: "600",
+    fontFamily: "Poppins-SemiBold",
     color: "#212121",
   },
   radioItem: {
     flexDirection: "row",
     alignItems: "center",
-    marginVertical: 4,
+    marginVertical: 8,
   },
   radioLabel: {
     fontSize: 16,
-    marginLeft: 8,
+    marginLeft: 12,
+    fontFamily: "Poppins-Regular",
     color: "#424242",
   },
   modalFooter: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    padding: 16,
     borderTopWidth: 1,
     borderTopColor: "#E0E0E0",
   },
   footerButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
     borderRadius: 8,
-    marginLeft: 12,
+    marginLeft: 16,
   },
   applyButton: {
     elevation: 2,
-    backgroundColor: "#1a73e8",
   },
   clearButtonText: {
-    fontSize: 14,
-    fontWeight: "500",
+    fontFamily: "Poppins-Medium",
     color: "#616161",
   },
   applyButtonText: {
-    fontSize: 14,
-    fontWeight: "500",
+    fontFamily: "Poppins-Medium",
     color: "#FFFFFF",
   },
-});
+  contentContainer: {
+    flex: 1,
+    paddingHorizontal: Platform.OS === "web" ? 24 : 16,
+    paddingVertical: 16,
+  },
+  tableContainer: {
+    flex: 1,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    overflow: "hidden",
+  },
+  tableHeader: {
+    flexDirection: "row",
+    backgroundColor: "#f8fafc",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
+    paddingVertical: 16,
+    paddingHorizontal: 26,
+    alignContent: "center",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  tableHeaderCell: {
+    flex: 1,
+    paddingHorizontal: 16,
+    justifyContent: "space-around",
+    paddingLeft: 25,
+    alignItems: "flex-start",
+  },
+  tableHeaderText: {
+    fontSize: 14,
+    color: "#64748b",
+    fontFamily: "Poppins-Medium",
+  },
+  tableRow: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
+    paddingVertical: 16,
+    backgroundColor: "#fff",
+    paddingHorizontal: 26,
+    alignItems: "center",
+  },
+  tableCell: {
+    flex: 1,
+    paddingHorizontal: 26,
+    justifyContent: "space-evenly",
+    alignItems: "flex-start",
+  },
+  tableCellText: {
+    fontSize: 14,
+    color: "#334155",
+    fontFamily: "Poppins-Regular",
+  },
+  tableContent: {
+    flexGrow: 1,
+  },
+  actionCell: {
+    flex: 1,
+    flexDirection: "row",
+    justifyContent: "flex-start",
+    alignItems: "center",
+    paddingHorizontal: 26,
+  },
+  actionIcon: {
+    margin: 0,
+    marginRight: 8,
+  },
+  tooltipContainer: {
+    position: "relative",
+    flex: 1,
+    maxWidth: "100%",
+    zIndex: 10,
+  },
+  tooltip: {
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    padding: 8,
+    marginLeft: 30,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    maxWidth: 300,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    zIndex: 9999,
+    ...(Platform.OS === "web"
+      ? {
+          // @ts-ignore - web specific style
+          willChange: "transform",
+          // @ts-ignore - web specific style
+          isolation: "isolate",
+        }
+      : {}),
+  },
+  tooltipText: {
+    color: "#000",
+    fontSize: 12,
+    fontFamily: "Poppins-Regular",
+    lineHeight: 16,
+  },
+} as const);
 
 export default FormSubmissionsScreen;

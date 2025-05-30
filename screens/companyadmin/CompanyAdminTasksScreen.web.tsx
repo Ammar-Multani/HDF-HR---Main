@@ -9,6 +9,10 @@ import {
   Platform,
   ActivityIndicator,
   AppState,
+  Dimensions,
+  Pressable,
+  PressableStateCallbackType,
+  ViewStyle,
 } from "react-native";
 import {
   Text,
@@ -44,6 +48,240 @@ import LoadingIndicator from "../../components/LoadingIndicator";
 import EmptyState from "../../components/EmptyState";
 import StatusBadge from "../../components/StatusBadge";
 import { Task, TaskPriority, TaskStatus } from "../../types";
+import Animated, {
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+  useSharedValue,
+  interpolate,
+} from "react-native-reanimated";
+import { LinearGradient } from "expo-linear-gradient";
+
+// Add window dimensions hook
+const useWindowDimensions = () => {
+  const [dimensions, setDimensions] = useState({
+    width: Dimensions.get("window").width,
+    height: Dimensions.get("window").height,
+  });
+
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      const handleResize = () => {
+        setDimensions({
+          width: Dimensions.get("window").width,
+          height: Dimensions.get("window").height,
+        });
+      };
+
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }
+  }, []);
+
+  return dimensions;
+};
+
+// Add TooltipText component
+const TooltipText = ({
+  text,
+  numberOfLines = 1,
+}: {
+  text: string;
+  numberOfLines?: number;
+}) => {
+  const [isHovered, setIsHovered] = useState(false);
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+  const containerRef = React.useRef<View>(null);
+  const [isLargeScreen, setIsLargeScreen] = useState(window.innerWidth >= 1440);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsLargeScreen(window.innerWidth >= 1440);
+    };
+
+    if (Platform.OS === "web") {
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }
+  }, []);
+
+  const updateTooltipPosition = () => {
+    if (Platform.OS === "web" && containerRef.current && !isLargeScreen) {
+      // @ts-ignore - web specific
+      const rect = containerRef.current.getBoundingClientRect();
+      const windowHeight = window.innerHeight;
+      const spaceAbove = rect.top;
+      const spaceBelow = windowHeight - rect.bottom;
+
+      const windowWidth = window.innerWidth;
+      let xPos = rect.left;
+
+      if (xPos + 300 > windowWidth) {
+        xPos = windowWidth - 310;
+      }
+
+      let yPos;
+      if (spaceBelow >= 100) {
+        yPos = rect.bottom + window.scrollY + 5;
+      } else if (spaceAbove >= 100) {
+        yPos = rect.top + window.scrollY - 5;
+      } else {
+        yPos =
+          spaceAbove > spaceBelow
+            ? rect.top + window.scrollY - 5
+            : rect.bottom + window.scrollY + 5;
+      }
+
+      setTooltipPosition({ x: xPos, y: yPos });
+    }
+  };
+
+  return (
+    <Text
+      ref={containerRef}
+      numberOfLines={numberOfLines}
+      onMouseEnter={updateTooltipPosition}
+      onMouseLeave={() => setIsHovered(false)}
+      style={[
+        {
+          color: isHovered ? "#1a73e8" : "#666",
+          fontSize: 13,
+          lineHeight: 20,
+        },
+      ]}
+    >
+      {text}
+    </Text>
+  );
+};
+
+// Add Shimmer component
+interface ShimmerProps {
+  width: number;
+  height: number;
+  style?: ViewStyle;
+}
+
+const Shimmer: React.FC<ShimmerProps> = ({ width, height, style }) => {
+  const animatedValue = useSharedValue(0);
+
+  useEffect(() => {
+    animatedValue.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 1000 }),
+        withTiming(0, { duration: 1000 })
+      ),
+      -1
+    );
+  }, []);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: interpolate(animatedValue.value, [0, 1], [-width, width]) },
+    ],
+  }));
+
+  return (
+    <View
+      style={[
+        {
+          width,
+          height,
+          overflow: "hidden",
+          backgroundColor: "#E5E7EB",
+          borderRadius: 4,
+        },
+        style,
+      ]}
+    >
+      <Animated.View style={[{ width: "100%", height: "100%" }, animatedStyle]}>
+        <LinearGradient
+          colors={["transparent", "rgba(255, 255, 255, 0.4)", "transparent"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{ width: "100%", height: "100%" }}
+        />
+      </Animated.View>
+    </View>
+  );
+};
+
+// Add TableHeader component
+const TableHeader = () => {
+  return (
+    <View style={styles.tableHeaderRow}>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Title</Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Assigned To</Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Deadline</Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Priority</Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Status</Text>
+      </View>
+    </View>
+  );
+};
+
+// Add TableHeaderSkeleton component
+const TableHeaderSkeleton = () => {
+  return (
+    <View style={styles.tableHeaderRow}>
+      <View style={styles.tableHeaderCell}>
+        <Shimmer width={160} height={20} />
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Shimmer width={140} height={20} />
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Shimmer width={120} height={20} />
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Shimmer width={100} height={20} />
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Shimmer width={80} height={20} />
+      </View>
+    </View>
+  );
+};
+
+// Add TableSkeleton component
+const TableSkeleton = () => {
+  return (
+    <View style={styles.tableContainer}>
+      <TableHeaderSkeleton />
+      {Array(5)
+        .fill(0)
+        .map((_, index) => (
+          <View key={`skeleton-${index}`} style={styles.tableRow}>
+            <View style={styles.tableCell}>
+              <Shimmer width={160} height={16} />
+            </View>
+            <View style={styles.tableCell}>
+              <Shimmer width={140} height={16} />
+            </View>
+            <View style={styles.tableCell}>
+              <Shimmer width={120} height={16} />
+            </View>
+            <View style={styles.tableCell}>
+              <Shimmer width={80} height={24} style={{ borderRadius: 12 }} />
+            </View>
+            <View style={styles.tableCell}>
+              <Shimmer width={80} height={24} style={{ borderRadius: 12 }} />
+            </View>
+          </View>
+        ))}
+    </View>
+  );
+};
 
 // Component for skeleton loading UI
 const TaskItemSkeleton = () => {
@@ -194,6 +432,12 @@ const CompanyAdminTasksScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const { user } = useAuth();
+  const dimensions = useWindowDimensions();
+
+  // Calculate responsive breakpoints
+  const isLargeScreen = dimensions.width >= 1440;
+  const isMediumScreen = dimensions.width >= 768 && dimensions.width < 1440;
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -941,7 +1185,7 @@ const CompanyAdminTasksScreen = () => {
           style={{
             flexDirection: "row",
             justifyContent: "space-between",
-            alignItems: "flex-start"
+            alignItems: "flex-start",
           }}
         >
           <View style={{ flex: 1, marginRight: 8 }}>
@@ -1038,35 +1282,148 @@ const CompanyAdminTasksScreen = () => {
     </TouchableOpacity>
   );
 
-  if (loading && !refreshing) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: "#F5F5F5" }]}>
-        <AppHeader
-          title="Tasks"
-          showBackButton={false}
-          showHelpButton={true}
-          onHelpPress={() => {
-            navigation.navigate("Help" as never);
+  // Add TableRow component
+  const TableRow = ({ item }: { item: Task }) => (
+    <Pressable
+      onPress={() => navigation.navigate("TaskDetails", { taskId: item.id })}
+      style={({ pressed }: PressableStateCallbackType) => [
+        styles.tableRow,
+        pressed && { backgroundColor: "#f8fafc" },
+      ]}
+    >
+      <View style={styles.tableCell}>
+        <TooltipText text={item.title} />
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText text={item.assigned_to || "-"} />
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText text={format(new Date(item.deadline), "MMM d, yyyy")} />
+      </View>
+      <View style={styles.tableCell}>
+        <Chip
+          style={{
+            borderRadius: 25,
+            backgroundColor: getPriorityColor(item.priority) + "20",
           }}
-          showLogo={false}
-        />
-        <View style={styles.searchContainer}>
-          <View style={[styles.searchbar, { backgroundColor: "#E0E0E0" }]} />
-          <View style={styles.filterButtonContainer}>
-            <View
-              style={[styles.filterButton, { backgroundColor: "#E0E0E0" }]}
-            />
-          </View>
-        </View>
+          textStyle={{
+            color: getPriorityColor(item.priority),
+            fontSize: 11,
+          }}
+        >
+          {item.priority.charAt(0).toUpperCase() + item.priority.slice(1)}
+        </Chip>
+      </View>
+      <View style={styles.tableCell}>
+        <StatusBadge status={item.status} />
+      </View>
+    </Pressable>
+  );
+
+  // Update renderContent to handle table layout
+  const renderContent = () => {
+    if (filteredTasks.length === 0 && !loading && !refreshing) {
+      return (
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1 }}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        >
+          <EmptyState
+            icon="clipboard-text-off"
+            title="No Tasks Found"
+            message={
+              searchQuery || hasActiveFilters()
+                ? "No tasks match your search criteria."
+                : "You haven't created any tasks yet."
+            }
+            buttonTitle={
+              searchQuery || hasActiveFilters()
+                ? "Clear Filters"
+                : "Create Task"
+            }
+            onButtonPress={() => {
+              if (searchQuery || hasActiveFilters()) {
+                setSearchQuery("");
+                clearFilters();
+              } else {
+                navigation.navigate("CreateTask" as never);
+              }
+            }}
+          />
+        </ScrollView>
+      );
+    }
+
+    // Show skeleton loaders when initially loading
+    if (loading && filteredTasks.length === 0) {
+      if (isMediumScreen || isLargeScreen) {
+        return <TableSkeleton />;
+      }
+      return (
         <FlatList
           data={Array(3).fill(0)}
           renderItem={() => <TaskItemSkeleton />}
           keyExtractor={(_, index) => `skeleton-${index}`}
           contentContainerStyle={styles.listContent}
         />
-      </SafeAreaView>
+      );
+    }
+
+    if (isMediumScreen || isLargeScreen) {
+      return (
+        <View style={styles.tableContainer}>
+          <TableHeader />
+          <FlatList
+            data={filteredTasks}
+            renderItem={({ item }) => <TableRow item={item} />}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.tableContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+            onEndReached={loadMoreTasks}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={() => (
+              <View style={styles.loadingFooter}>
+                {loadingMore && hasMoreData && (
+                  <ActivityIndicator size="small" color="#1a73e8" />
+                )}
+                {!hasMoreData && filteredTasks.length > 0 && (
+                  <Text style={styles.endListText}>No more tasks to load</Text>
+                )}
+              </View>
+            )}
+          />
+        </View>
+      );
+    }
+
+    return (
+      <FlatList
+        data={filteredTasks}
+        renderItem={renderTaskItem}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        onEndReached={loadMoreTasks}
+        onEndReachedThreshold={0.3}
+        ListFooterComponent={() => (
+          <View style={styles.loadingFooter}>
+            {loadingMore && hasMoreData && (
+              <ActivityIndicator size="small" color="#1a73e8" />
+            )}
+            {!hasMoreData && filteredTasks.length > 0 && (
+              <Text style={styles.endListText}>No more tasks to load</Text>
+            )}
+          </View>
+        )}
+      />
     );
-  }
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: "#F5F5F5" }]}>
@@ -1117,133 +1474,93 @@ const CompanyAdminTasksScreen = () => {
         </Banner>
       )}
 
-      <View style={styles.searchContainer}>
-        <Searchbar
-          placeholder="Search tasks..."
-          onChangeText={networkStatus === false ? undefined : setSearchQuery}
-          value={searchQuery}
-          style={[
-            styles.searchbar,
-            networkStatus === false && { opacity: 0.6 },
-          ]}
-          loading={refreshing && searchQuery.length > 0}
-          onClearIconPress={() => {
-            if (networkStatus !== false) {
-              setSearchQuery("");
-            }
-          }}
-          clearIcon={() =>
-            searchQuery ? (
-              <IconButton
-                icon="close-circle"
-                size={18}
-                onPress={() => setSearchQuery("")}
-              />
-            ) : null
-          }
-          icon="magnify"
-          theme={{ colors: { primary: "#1a73e8" } }}
-        />
-        {/* Filter button */}
-        <View style={styles.filterButtonContainer}>
-          <IconButton
-            icon="filter-variant"
-            size={24}
+      <View
+        style={[
+          styles.searchContainer,
+          {
+            maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
+            alignSelf: "center",
+            width: "100%",
+          },
+        ]}
+      >
+        <View style={styles.searchBarContainer}>
+          <Searchbar
+            placeholder="Search tasks..."
+            onChangeText={networkStatus === false ? undefined : setSearchQuery}
+            value={searchQuery}
             style={[
-              styles.filterButton,
-              hasActiveFilters() && styles.activeFilterButton,
+              styles.searchbar,
+              networkStatus === false && { opacity: 0.6 },
             ]}
-            iconColor={hasActiveFilters() ? "#1a73e8" : undefined}
-            onPress={() => setFilterModalVisible(true)}
+            loading={refreshing && searchQuery.length > 0}
+            onClearIconPress={() => {
+              if (networkStatus !== false) {
+                setSearchQuery("");
+              }
+            }}
+            clearIcon={() =>
+              searchQuery ? (
+                <IconButton
+                  icon="close-circle"
+                  size={18}
+                  onPress={() => setSearchQuery("")}
+                />
+              ) : null
+            }
+            icon="magnify"
+            theme={{ colors: { primary: "#1a73e8" } }}
           />
-          {hasActiveFilters() && <View style={styles.filterBadge} />}
+          <View style={styles.filterButtonContainer}>
+            <IconButton
+              icon="filter-variant"
+              size={24}
+              style={[
+                styles.filterButton,
+                hasActiveFilters() && styles.activeFilterButton,
+              ]}
+              iconColor={hasActiveFilters() ? "#1a73e8" : undefined}
+              onPress={() => setFilterModalVisible(true)}
+            />
+            {hasActiveFilters() && <View style={styles.filterBadge} />}
+          </View>
         </View>
-      </View>
 
-      {searchQuery && searchQuery.length > 0 && searchQuery.length < 3 && (
-        <View style={styles.searchTips}>
-          <Text style={styles.searchTipsText}>
-            Type at least 3 characters for better search results.
-          </Text>
-        </View>
-      )}
+        <FAB
+          icon="plus"
+          label={isLargeScreen ? "Create Task" : undefined}
+          style={[
+            styles.fab,
+            {
+              backgroundColor: theme.colors.primary,
+              position: "relative",
+              margin: 0,
+              marginLeft: 16,
+            },
+          ]}
+          onPress={() => navigation.navigate("CreateTask")}
+          color={theme.colors.surface}
+          mode="flat"
+          theme={{ colors: { accent: theme.colors.surface } }}
+        />
+      </View>
 
       {renderActiveFilterIndicator()}
       {renderFilterModal()}
 
-      {searchQuery && searchQuery.length > 0 && (
-        <View style={styles.searchResultsContainer}>
-          <Text style={styles.searchResultsText}>
-            Found: {filteredTasks.length} tasks
-          </Text>
-        </View>
-      )}
-
-      {filteredTasks.length === 0 && !loading && !refreshing ? (
-        <ScrollView
-          contentContainerStyle={{ flexGrow: 1 }}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-        >
-          <EmptyState
-            icon="clipboard-text-off"
-            title="No Tasks Found"
-            message={
-              searchQuery || hasActiveFilters()
-                ? "No tasks match your search criteria."
-                : "You haven't created any tasks yet."
-            }
-            buttonTitle={
-              searchQuery || hasActiveFilters()
-                ? "Clear Filters"
-                : "Create Task"
-            }
-            onButtonPress={() => {
-              if (searchQuery || hasActiveFilters()) {
-                setSearchQuery("");
-                clearFilters();
-              } else {
-                navigation.navigate("CreateTask" as never);
-              }
-            }}
-          />
-        </ScrollView>
-      ) : (
-        <FlatList
-          data={filteredTasks}
-          renderItem={renderTaskItem}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-          onEndReached={loadMoreTasks}
-          onEndReachedThreshold={0.5}
-          ListHeaderComponent={
-            totalCount > 0 ? (
-              <Text style={styles.resultsCount}>
-                Showing {filteredTasks.length} of {totalCount} tasks
-              </Text>
-            ) : null
-          }
-          ListFooterComponent={
-            loadingMore && hasMoreData ? (
-              <View style={styles.loadingFooter}>
-                <ActivityIndicator size="small" color={theme.colors.primary} />
-              </View>
-            ) : null
-          }
-        />
-      )}
-
-      <FAB
-        icon="plus"
-        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
-        onPress={() => navigation.navigate("CreateTask" as never)}
-        color="#FFFFFF"
-        disabled={networkStatus === false}
-      />
+      <View
+        style={[
+          styles.contentContainer,
+          {
+            maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
+            alignSelf: "center",
+            width: "100%",
+            flex: 1,
+          },
+        ]}
+      >
+        {renderContent()}
+      </View>
     </SafeAreaView>
   );
 };
@@ -1253,24 +1570,32 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F8F9FA",
   },
+  contentContainer: {
+    flex: 1,
+    paddingHorizontal: Platform.OS === "web" ? 24 : 16,
+    paddingVertical: 16,
+  },
   searchContainer: {
-    padding: 16,
+    padding: Platform.OS === "web" ? 24 : 16,
+    paddingTop: 10,
     paddingBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  searchBarContainer: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
   },
   searchbar: {
-    elevation: 1,
-    borderRadius: 16,
+    elevation: 0,
+    borderRadius: 18,
     height: 56,
     backgroundColor: "#fff",
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.05)",
+    borderColor: "#e0e0e0",
     flex: 1,
-    shadowColor: "rgba(0,0,0,0.1)",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
   },
   filterButtonContainer: {
     position: "relative",
@@ -1297,20 +1622,6 @@ const styles = StyleSheet.create({
     right: 8,
     zIndex: 2,
   },
-  filterContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-  },
-  filterChip: {
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.05)",
-    backgroundColor: "#fff",
-  },
-  selectedChip: {
-    borderWidth: 0,
-    backgroundColor: "rgba(54,105,157,255)",
-  },
   activeFiltersContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -1321,6 +1632,7 @@ const styles = StyleSheet.create({
   },
   activeFiltersText: {
     fontSize: 14,
+    fontFamily: "Poppins-Regular",
     color: "#616161",
     marginRight: 8,
   },
@@ -1392,31 +1704,10 @@ const styles = StyleSheet.create({
     color: "#666",
     fontSize: 13,
   },
-  cardFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 4,
-  },
-  priorityChip: {
-    height: 30,
-    borderRadius: 25,
-    borderWidth: 1,
-  },
-  deadline: {
-    opacity: 0.8,
-    fontSize: 13,
-    color: "#555",
-  },
   fab: {
-    position: "absolute",
-    margin: 16,
-    right: Platform.OS === "web" ? 15 : 0,
-    bottom: Platform.OS === "web" ? 10 : 80,
-    borderRadius: 28,
-    elevation: 4,
+    borderRadius: 17,
+    height: 56,
   },
-  // Modal styles
   modalContainer: {
     backgroundColor: "white",
     borderRadius: 16,
@@ -1435,131 +1726,163 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 16,
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: "600",
+    fontFamily: "Poppins-SemiBold",
     color: "#212121",
   },
   modalContent: {
-    padding: 16,
     maxHeight: 400,
   },
   modalDivider: {
     height: 1,
-    backgroundColor: "#EEEEEE",
-    marginVertical: 8,
+    backgroundColor: "#E0E0E0",
+    marginTop: 16,
   },
   modalSection: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   sectionHeader: {
-    marginBottom: 12,
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: "600",
+    fontFamily: "Poppins-SemiBold",
     color: "#212121",
   },
   radioItem: {
     flexDirection: "row",
     alignItems: "center",
-    marginVertical: 6,
+    marginVertical: 8,
   },
   radioLabel: {
     fontSize: 16,
-    marginLeft: 8,
+    marginLeft: 12,
+    fontFamily: "Poppins-Regular",
     color: "#424242",
   },
   modalFooter: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    padding: 16,
     borderTopWidth: 1,
-    borderTopColor: "#EEEEEE",
+    borderTopColor: "#E0E0E0",
   },
   footerButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    marginLeft: 12,
+    borderRadius: 8,
+    marginLeft: 16,
   },
   applyButton: {
     elevation: 2,
-    backgroundColor: "#1a73e8",
   },
   clearButtonText: {
-    fontSize: 14,
-    fontWeight: "500",
+    fontFamily: "Poppins-Medium",
     color: "#616161",
   },
   applyButtonText: {
-    fontSize: 14,
-    fontWeight: "500",
+    fontFamily: "Poppins-Medium",
     color: "#FFFFFF",
   },
   loadingFooter: {
     padding: 16,
     alignItems: "center",
   },
-  resultsCount: {
-    textAlign: "center",
-    marginBottom: 8,
-    opacity: 0.7,
-    fontSize: 12,
-  },
-  searchTips: {
-    backgroundColor: "#e8f4fd",
-    padding: 12,
-    borderRadius: 8,
-    marginHorizontal: 16,
-    marginBottom: 12,
-  },
-  searchTipsText: {
-    color: "#0066cc",
-    fontWeight: "500",
+  endListText: {
     fontSize: 14,
+    fontFamily: "Poppins-Regular",
+    color: "#616161",
   },
-  searchResultsContainer: {
-    backgroundColor: "#e8f4fd",
-    padding: 12,
-    borderRadius: 8,
-    marginHorizontal: 16,
-    marginBottom: 12,
-  },
-  searchResultsText: {
-    color: "#0066cc",
-    fontWeight: "500",
-    fontSize: 14,
-  },
-  taskCard: {
-    backgroundColor: "#FFFFFF",
+  tableContainer: {
+    backgroundColor: "white",
     borderRadius: 16,
-    marginBottom: 16,
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.03)",
-    elevation: 1,
-    shadowColor: "rgba(0,0,0,0.1)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    padding: 16,
+    borderColor: "#e0e0e0",
+    overflow: "hidden",
+    marginTop: 16,
+    flex: 1,
   },
-  superAdminWarning: {
+  tableHeaderRow: {
     flexDirection: "row",
+    backgroundColor: "#f8fafc",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
+    paddingVertical: 16,
+    paddingHorizontal: 26,
+    alignContent: "center",
+    justifyContent: "center",
     alignItems: "center",
-    marginTop: 8,
-    backgroundColor: "#F3E5F5",
-    padding: 8,
-    borderRadius: 8,
   },
-  superAdminWarningText: {
+  tableHeaderCell: {
+    flex: 1,
+    paddingHorizontal: 16,
+    justifyContent: "space-around",
+    paddingLeft: 25,
+    alignItems: "flex-start",
+  },
+  tableHeaderText: {
+    fontSize: 14,
+    color: "#64748b",
+    fontFamily: "Poppins-Medium",
+  },
+  tableRow: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
+    paddingVertical: 16,
+    backgroundColor: "#fff",
+    paddingHorizontal: 26,
+    alignItems: "center",
+  },
+  tableCell: {
+    flex: 1,
+    paddingHorizontal: 26,
+    justifyContent: "space-evenly",
+    alignItems: "flex-start",
+  },
+  tableCellText: {
+    fontSize: 14,
+    color: "#334155",
+    fontFamily: "Poppins-Regular",
+  },
+  tableContent: {
+    flexGrow: 1,
+  },
+  tooltipContainer: {
+    position: "relative",
+    flex: 1,
+    maxWidth: "100%",
+    zIndex: 10,
+  },
+  tooltip: {
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    padding: 8,
+    marginLeft: 30,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    maxWidth: 300,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    zIndex: 9999,
+    ...(Platform.OS === "web"
+      ? {
+          // @ts-ignore - web specific style
+          willChange: "transform",
+          // @ts-ignore - web specific style
+          isolation: "isolate",
+        }
+      : {}),
+  },
+  tooltipText: {
+    color: "#000",
     fontSize: 12,
-    color: "#8E24AA",
-    marginLeft: 4,
-    fontStyle: "italic",
+    fontFamily: "Poppins-Regular",
+    lineHeight: 16,
   },
 });
 

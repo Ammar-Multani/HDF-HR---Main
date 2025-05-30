@@ -7,6 +7,8 @@ import {
   Alert,
   Linking,
   TouchableOpacity,
+  Platform,
+  Dimensions,
 } from "react-native";
 import {
   Card,
@@ -31,8 +33,33 @@ import StatusBadge from "../../components/StatusBadge";
 import { FormStatus, DocumentType } from "../../types";
 import Text from "../../components/Text";
 import { useAuth } from "../../contexts/AuthContext";
+import Animated, { FadeIn } from "react-native-reanimated";
 
-// Add SUBMITTED to FormStatus for backward compatibility if needed
+// Add window dimensions hook
+const useWindowDimensions = () => {
+  const [dimensions, setDimensions] = useState({
+    width: Dimensions.get("window").width,
+    height: Dimensions.get("window").height,
+  });
+
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      const handleResize = () => {
+        setDimensions({
+          width: Dimensions.get("window").width,
+          height: Dimensions.get("window").height,
+        });
+      };
+
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }
+  }, []);
+
+  return dimensions;
+};
+
+// Add SUBMITTED to FormStatus for backward compatibility
 const ExtendedFormStatus = {
   ...FormStatus,
   SUBMITTED: "submitted" as const,
@@ -52,6 +79,11 @@ const FormDetailsScreen = () => {
   const route =
     useRoute<RouteProp<Record<string, FormDetailsRouteParams>, string>>();
   const { formId, formType } = route.params;
+  const dimensions = useWindowDimensions();
+
+  // Calculate responsive breakpoints
+  const isLargeScreen = dimensions.width >= 1440;
+  const isMediumScreen = dimensions.width >= 768 && dimensions.width < 1440;
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -242,8 +274,17 @@ const FormDetailsScreen = () => {
       <Surface style={styles.detailsCard}>
         <View style={styles.cardHeader}>
           <View style={styles.simpleCardHeader}>
-            <IconButton icon="alert-circle" size={22} iconColor="#F44336" />
-            <Text style={styles.simpleCardHeaderTitle}>Accident Details</Text>
+            <View style={styles.headerLeft}>
+              <View style={styles.iconContainer}>
+                <IconButton
+                  icon="alert-circle"
+                  size={20}
+                  iconColor="#F44336"
+                  style={styles.headerIcon}
+                />
+              </View>
+              <Text style={styles.cardTitle}>Accident Details</Text>
+            </View>
           </View>
         </View>
 
@@ -308,8 +349,17 @@ const FormDetailsScreen = () => {
       <Surface style={styles.detailsCard}>
         <View style={styles.cardHeader}>
           <View style={styles.simpleCardHeader}>
-            <IconButton icon="hospital-box" size={22} iconColor="#FF9800" />
-            <Text style={styles.simpleCardHeaderTitle}>Illness Details</Text>
+            <View style={styles.headerLeft}>
+              <View style={styles.iconContainer}>
+                <IconButton
+                  icon="hospital-box"
+                  size={20}
+                  iconColor="#FF9800"
+                  style={styles.headerIcon}
+                />
+              </View>
+              <Text style={styles.cardTitle}>Illness Details</Text>
+            </View>
           </View>
         </View>
 
@@ -349,8 +399,17 @@ const FormDetailsScreen = () => {
       <Surface style={styles.detailsCard}>
         <View style={styles.cardHeader}>
           <View style={styles.simpleCardHeader}>
-            <IconButton icon="exit-to-app" size={22} iconColor="#2196F3" />
-            <Text style={styles.simpleCardHeaderTitle}>Departure Details</Text>
+            <View style={styles.headerLeft}>
+              <View style={styles.iconContainer}>
+                <IconButton
+                  icon="exit-to-app"
+                  size={20}
+                  iconColor="#2196F3"
+                  style={styles.headerIcon}
+                />
+              </View>
+              <Text style={styles.cardTitle}>Departure Details</Text>
+            </View>
           </View>
         </View>
 
@@ -474,21 +533,41 @@ const FormDetailsScreen = () => {
         <Modal
           visible={statusMenuVisible}
           onDismiss={() => setStatusMenuVisible(false)}
-          contentContainerStyle={styles.modalContainer}
+          contentContainerStyle={[
+            styles.modalContainer,
+            {
+              maxWidth: isLargeScreen ? 480 : isMediumScreen ? 420 : "90%",
+              width: isLargeScreen ? 480 : isMediumScreen ? 420 : "90%",
+              alignSelf: "center",
+              top: isLargeScreen ? "10%" : isMediumScreen ? "8%" : "5%",
+            },
+          ]}
         >
           <Surface style={styles.modalSurface}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Update Status</Text>
+              <View style={styles.modalHeaderLeft}>
+                <IconButton
+                  icon="check-circle"
+                  size={24}
+                  iconColor={theme.colors.primary}
+                  style={styles.modalHeaderIcon}
+                />
+                <Text style={styles.modalTitle}>Update Status</Text>
+              </View>
               <IconButton
                 icon="close"
+                size={24}
                 onPress={() => setStatusMenuVisible(false)}
               />
             </View>
-            <Divider />
+            <Divider style={styles.modalDivider} />
 
-            <ScrollView style={styles.statusOptionsContainer}>
+            <ScrollView
+              style={styles.statusOptionsContainer}
+              showsVerticalScrollIndicator={Platform.OS === "web"}
+            >
               {Object.values(ExtendedFormStatus)
-                .filter((status) => status !== FormStatus.DRAFT) // Remove only DRAFT status
+                .filter((status) => status !== FormStatus.DRAFT)
                 .map((status) => (
                   <TouchableOpacity
                     key={status}
@@ -521,7 +600,7 @@ const FormDetailsScreen = () => {
                       <View style={styles.statusTextContainer}>
                         <Text
                           style={[
-                            styles.statusText,
+                            styles.statusOptionTitle,
                             { color: getStatusTextColor(status) },
                           ]}
                         >
@@ -557,7 +636,13 @@ const FormDetailsScreen = () => {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            maxWidth: isLargeScreen ? 1400 : isMediumScreen ? 1100 : "100%",
+            paddingHorizontal: isLargeScreen ? 48 : isMediumScreen ? 32 : 16,
+          },
+        ]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
@@ -579,14 +664,11 @@ const FormDetailsScreen = () => {
             >
               <Text
                 style={[
+                  styles.statusText,
                   {
                     color: getStatusTextColor(
                       form.status as ExtendedFormStatusType
                     ),
-                    fontSize: 16,
-                    fontWeight: "500",
-                    textTransform: "capitalize",
-                    paddingLeft: 12,
                   },
                 ]}
               >
@@ -604,81 +686,67 @@ const FormDetailsScreen = () => {
           </View>
         </View>
 
-        <Surface style={styles.detailsCard}>
-          <View style={styles.cardHeader}>
-            <View style={styles.simpleCardHeader}>
-              <IconButton
-                icon="account"
-                size={22}
-                iconColor={theme.colors.primary}
-              />
-              <Text style={styles.simpleCardHeaderTitle}>
-                Employee Information
-              </Text>
-            </View>
+        <View style={styles.gridContainer}>
+          <View style={styles.gridColumn}>
+            <Animated.View entering={FadeIn.delay(100)}>
+              <Surface style={styles.detailsCard}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.simpleCardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="account"
+                          size={20}
+                          iconColor="#64748b"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>Employee Information</Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.cardContent}>
+                  <View style={styles.detailsSection}>
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Name:</Text>
+                      <Text style={styles.detailValue}>
+                        {employee.first_name} {employee.last_name}
+                      </Text>
+                    </View>
+
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Email:</Text>
+                      <Text style={styles.detailValue}>{employee.email}</Text>
+                    </View>
+
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Job Title:</Text>
+                      <Text style={styles.detailValue}>
+                        {employee.job_title || "N/A"}
+                      </Text>
+                    </View>
+
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Submission Date:</Text>
+                      <Text style={styles.detailValue}>
+                        {formatDate(form.submission_date || form.created_at)}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </Surface>
+            </Animated.View>
           </View>
 
-          <View style={styles.cardContent}>
-            <View style={styles.detailsSection}>
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Name:</Text>
-                <Text style={styles.detailValue}>
-                  {employee.first_name} {employee.last_name}
-                </Text>
-              </View>
-
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Email:</Text>
-                <Text style={styles.detailValue}>{employee.email}</Text>
-              </View>
-
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Job Title:</Text>
-                <Text style={styles.detailValue}>
-                  {employee.job_title || "N/A"}
-                </Text>
-              </View>
-
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Submission Date:</Text>
-                <Text style={styles.detailValue}>
-                  {formatDate(form.submission_date || form.created_at)}
-                </Text>
-              </View>
-            </View>
+          <View style={styles.gridColumn}>
+            <Animated.View entering={FadeIn.delay(200)}>
+              {formType === "accident" && renderAccidentDetails()}
+              {formType === "illness" && renderIllnessDetails()}
+              {formType === "departure" && renderDepartureDetails()}
+            </Animated.View>
           </View>
-        </Surface>
-
-        {/* Type-specific details */}
-        {formType === "accident" && renderAccidentDetails()}
-        {formType === "illness" && renderIllnessDetails()}
-        {formType === "departure" && renderDepartureDetails()}
-
-        {/* <Surface style={styles.detailsCard}>
-          <View style={styles.cardHeader}>
-            <View style={styles.simpleCardHeader}>
-              <IconButton
-                icon="comment-text"
-                size={22}
-                iconColor={theme.colors.primary}
-              />
-              <Text style={styles.simpleCardHeaderTitle}>Admin Comments</Text>
-            </View>
-          </View>
-
-          <View style={styles.cardContent}>
-            <TextInput
-              mode="outlined"
-              value={comments}
-              onChangeText={setComments}
-              multiline
-              numberOfLines={4}
-              style={styles.commentsInput}
-              placeholder="Add comments about this form..."
-              disabled={submitting}
-            />
-          </View>
-        </Surface> */}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -693,37 +761,53 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
+    paddingVertical: 32,
+    alignSelf: "center",
+    width: "100%",
+  },
+  gridContainer: {
+    flexDirection: "row",
+    gap: 24,
+    flexWrap: "wrap",
+  },
+  gridColumn: {
+    flex: 1,
+    minWidth: 320,
+    gap: 24,
   },
   statusSection: {
-    marginBottom: 20,
-    paddingHorizontal: 6,
+    marginBottom: 32,
   },
   statusRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 0,
   },
   statusLabel: {
     fontSize: 16,
-    fontWeight: "500",
-    marginRight: 8,
-    color: "#616161",
+    fontFamily: "Poppins-Medium",
+    marginRight: 12,
+    color: "#64748b",
   },
   statusBadgeClickable: {
     flexDirection: "row",
     alignItems: "center",
     borderRadius: 20,
+    paddingLeft: 8,
+    paddingRight: 4,
     borderWidth: 1,
     borderColor: "rgba(0,0,0,0.05)",
+  },
+  statusText: {
+    fontSize: 14,
+    fontFamily: "Poppins-Medium",
+    textTransform: "capitalize",
+    marginLeft: 4,
   },
   editStatusIcon: {
     margin: 0,
     marginLeft: 4,
   },
   detailsCard: {
-    marginBottom: 20,
     borderRadius: 16,
     overflow: "hidden",
     elevation: 1,
@@ -733,28 +817,41 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.03)",
+    borderColor: "#e2e8f0",
   },
   cardHeader: {
-    width: "100%",
-  },
-  cardHeaderGradient: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 14,
+    justifyContent: "space-between",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  iconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "#f1f5f9",
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerIcon: {
     margin: 0,
   },
-  cardHeaderTitle: {
-    fontSize: 17,
+  cardTitle: {
+    fontSize: 16,
     fontWeight: "600",
-    color: "#FFFFFF",
-    marginLeft: 8,
-    opacity: 0.95,
+    color: "#1e293b",
+    fontFamily: "Poppins-SemiBold",
   },
   cardContent: {
-    padding: 20,
+    padding: 24,
+    backgroundColor: "#ffffff",
   },
   sectionDivider: {
     marginVertical: 16,
@@ -763,7 +860,7 @@ const styles = StyleSheet.create({
   },
   sectionSubtitle: {
     fontSize: 16,
-    fontWeight: "500",
+    fontFamily: "Poppins-Medium",
     marginBottom: 8,
     color: "#424242",
   },
@@ -771,6 +868,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     marginBottom: 16,
+    fontFamily: "Poppins-Regular",
     color: "#616161",
   },
   detailRow: {
@@ -779,13 +877,14 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   detailLabel: {
-    fontWeight: "500",
+    fontFamily: "Poppins-Medium",
     width: 120,
     color: "#757575",
     fontSize: 13,
   },
   detailValue: {
     flex: 1,
+    fontFamily: "Poppins-Regular",
     color: "#212121",
     fontSize: 13,
   },
@@ -802,23 +901,6 @@ const styles = StyleSheet.create({
     marginTop: 20,
     borderRadius: 12,
   },
-  commentsInput: {
-    marginBottom: 16,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 8,
-  },
-  statusButtonsContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  statusButton: {
-    flex: 1,
-    marginHorizontal: 4,
-    borderRadius: 12,
-  },
-  activeStatusButton: {
-    borderWidth: 1,
-  },
   button: {
     marginTop: 16,
     borderRadius: 12,
@@ -829,9 +911,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 20,
   },
-  // Modal styles
+  // Updated modal styles
   modalContainer: {
-    margin: 20,
+    margin: 0,
     borderRadius: 16,
     overflow: "hidden",
     backgroundColor: "transparent",
@@ -840,26 +922,39 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     borderRadius: 16,
     overflow: "hidden",
-    elevation: 1,
-    shadowColor: "rgba(0,0,0,0.1)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
+    elevation: 4,
+    shadowColor: "rgba(0,0,0,0.25)",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 18,
+    padding: 16,
+    paddingLeft: 12,
+  },
+  modalHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  modalHeaderIcon: {
+    margin: 0,
   },
   modalTitle: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: "#424242",
+    fontSize: 18,
+    fontFamily: "Poppins-SemiBold",
+    color: "#1e293b",
+  },
+  modalDivider: {
+    backgroundColor: "#e2e8f0",
+    height: 1,
   },
   statusOptionsContainer: {
-    maxHeight: 400,
-    padding: 12,
+    maxHeight: Platform.OS === "web" ? 400 : 400,
+    padding: 16,
   },
   statusOption: {
     flexDirection: "row",
@@ -867,12 +962,19 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     padding: 12,
     borderRadius: 12,
-    marginVertical: 6,
+    marginVertical: 4,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    backgroundColor: "#ffffff",
+    ...(Platform.OS === "web" && {
+      cursor: "pointer",
+    }),
   },
   statusOptionContent: {
     flexDirection: "row",
     alignItems: "center",
     flex: 1,
+    gap: 12,
   },
   statusIconContainer: {
     width: 40,
@@ -880,31 +982,30 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 14,
   },
   statusTextContainer: {
     flex: 1,
   },
-  statusText: {
-    fontSize: 16,
-    fontWeight: "500",
+  statusOptionTitle: {
+    fontSize: 15,
+    fontFamily: "Poppins-Medium",
     textTransform: "capitalize",
+    marginBottom: 2,
   },
   statusDescription: {
-    fontSize: 12,
-    color: "#757575",
+    fontSize: 13,
+    color: "#64748b",
+    fontFamily: "Poppins-Regular",
   },
   simpleCardHeader: {
     flexDirection: "row",
     alignItems: "center",
     padding: 5,
     backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(0,0,0,0.05)",
   },
   simpleCardHeaderTitle: {
     fontSize: 17,
-    fontWeight: "600",
+    fontFamily: "Poppins-SemiBold",
     color: "#424242",
   },
   detailsSection: {},

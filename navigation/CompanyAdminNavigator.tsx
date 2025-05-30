@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import Text from "../components/Text";
+import { SidebarLayout } from "./components/SidebarLayout";
 
 // Company Admin Screens
 import CompanyAdminDashboard from "../screens/companyadmin/CompanyAdminDashboard";
@@ -36,167 +37,129 @@ import CompanyAdminEditTaskScreen from "../screens/companyadmin/CompanyAdminEdit
 const CompanyAdminStack = createNativeStackNavigator();
 const CompanyAdminTab = createBottomTabNavigator();
 
-// Custom navigation item component for sidebar
-interface NavItemProps {
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
-  label: string;
-  onPress: () => void;
-  isActive?: boolean;
-}
+// Add a custom hook for window dimensions
+const useWindowDimensions = () => {
+  const [dimensions, setDimensions] = useState({
+    width: Dimensions.get("window").width,
+    height: Dimensions.get("window").height,
+  });
 
-const NavItem = ({ icon, label, onPress, isActive = false }: NavItemProps) => {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        paddingVertical: 16,
-        paddingHorizontal: 16,
-        borderRadius: 10,
-        marginBottom: 10,
-        backgroundColor: isActive ? "rgba(255, 255, 255, 0.15)" : "transparent",
-      }}
-    >
-      <MaterialCommunityIcons
-        name={icon}
-        color="#fff"
-        size={24}
-        style={{ marginRight: 16 }}
-      />
-      <View
-        style={{
-          height: 36,
-          flex: 1,
-          borderRadius: 8,
-          justifyContent: "center",
-        }}
-      >
-        <Text variant={"semibold"} style={{ fontSize: 16, color: "#fff" }}>
-          {label}
-        </Text>
-      </View>
-    </Pressable>
-  );
+  useEffect(() => {
+    const handleResize = () => {
+      setDimensions({
+        width: Dimensions.get("window").width,
+        height: Dimensions.get("window").height,
+      });
+    };
+
+    // Set up event listener
+    if (Platform.OS === "web") {
+      window.addEventListener("resize", handleResize);
+
+      // Clean up
+      return () => window.removeEventListener("resize", handleResize);
+    }
+  }, []);
+
+  return dimensions;
 };
 
-// Web layout component that includes the sidebar
-const WebLayout = ({ children }: { children: React.ReactNode }) => {
-  const navigation = useNavigation<any>();
+// Web Layout with SidebarLayout
+const WebStackNavigator = () => {
   const [activeScreen, setActiveScreen] = useState("Dashboard");
+  const navigation = useNavigation();
 
+  const navigationItems = [
+    { icon: "home", label: "Dashboard", screen: "Dashboard" },
+    { icon: "account-group", label: "Employees", screen: "Employees" },
+    { icon: "clipboard-text", label: "Tasks", screen: "Tasks" },
+    { icon: "file-document", label: "Forms", screen: "FormSubmissions" },
+    { icon: "account-circle", label: "Profile", screen: "Profile" },
+  ];
+
+  // Define the main content screens
+  const mainContent = {
+    Dashboard: <CompanyAdminDashboard />,
+    Employees: <EmployeeListScreen />,
+    Tasks: <CompanyAdminTasksScreen />,
+    FormSubmissions: <FormSubmissionsScreen />,
+    Profile: <CompanyAdminProfileScreen />,
+  };
+
+  // Create a stack navigator for the content area
+  const ContentStack = createNativeStackNavigator();
+
+  // Content area component that includes both main screens and stack screens
+  const ContentArea = () => {
+    return (
+      <ContentStack.Navigator screenOptions={{ headerShown: false }}>
+        <ContentStack.Screen name="MainContent">
+          {() => mainContent[activeScreen]}
+        </ContentStack.Screen>
+        <ContentStack.Screen
+          name="EmployeeDetails"
+          component={EmployeeDetailsScreen}
+        />
+        <ContentStack.Screen
+          name="CreateEmployee"
+          component={CreateEmployeeScreen}
+        />
+        <ContentStack.Screen
+          name="EditEmployee"
+          component={EditEmployeeScreen}
+        />
+        <ContentStack.Screen
+          name="TaskDetails"
+          component={CompanyAdminTaskDetailsScreen}
+        />
+        <ContentStack.Screen
+          name="CreateTask"
+          component={CompanyAdminCreateTaskScreen}
+        />
+        <ContentStack.Screen
+          name="EditTask"
+          component={CompanyAdminEditTaskScreen}
+        />
+        <ContentStack.Screen name="FormDetails" component={FormDetailsScreen} />
+      </ContentStack.Navigator>
+    );
+  };
+
+  // Handle navigation
   const handleNavigation = (screen: string) => {
-    setActiveScreen(screen);
-    navigation.navigate(screen);
+    // Check if the screen is a main navigation item
+    if (navigationItems.some((item) => item.screen === screen)) {
+      setActiveScreen(screen);
+      navigation.navigate("MainContent");
+    } else {
+      // It's a stack screen
+      navigation.navigate(screen);
+    }
   };
 
   return (
-    <View style={{ flexDirection: "row", height: "100%" }}>
-      {/* Sidebar Navigation */}
-      <View
-        style={{
-          width: 220,
-          height: "100%",
-          backgroundColor: "transparent",
-          paddingTop: 20,
-          paddingBottom: 20,
-          borderRightWidth: 0,
-          position: "relative",
-        }}
-      >
-        {/* Background gradient */}
-        <LinearGradient
-          colors={[
-            "rgba(10,185,129,255)",
-            "rgba(6,169,169,255)",
-            "rgba(38,127,161,255)",
-            "rgba(54,105,157,255)",
-            "rgba(74,78,153,255)",
-            "rgba(94,52,149,255)",
-          ]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-
-        {/* Logo at the top */}
-        <View
-          style={{
-            paddingHorizontal: 20,
-            paddingVertical: 24,
-            marginBottom: 10,
-            alignItems: "center",
-            borderBottomWidth: 1,
-            borderBottomColor: "rgba(255, 255, 255, 0.1)",
-          }}
-        >
-          <View
-            style={{
-              width: 150,
-              height: 50,
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
-            <Image
-              source={require("../assets/splash-icon-mono.png")}
-              style={{
-                width: 160,
-                height: 120,
-                resizeMode: "contain",
-                alignSelf: "center",
-              }}
-            />
-          </View>
-        </View>
-
-        {/* Navigation Items */}
-        <View style={{ paddingLeft: 20, paddingRight: 20, marginTop: 20 }}>
-          <NavItem
-            icon="home"
-            label="Dashboard"
-            isActive={activeScreen === "Dashboard"}
-            onPress={() => handleNavigation("Dashboard")}
-          />
-          <NavItem
-            icon="account-group"
-            label="Employees"
-            isActive={activeScreen === "Employees"}
-            onPress={() => handleNavigation("Employees")}
-          />
-          <NavItem
-            icon="clipboard-text"
-            label="Tasks"
-            isActive={activeScreen === "Tasks"}
-            onPress={() => handleNavigation("Tasks")}
-          />
-          <NavItem
-            icon="file-document"
-            label="Forms"
-            isActive={activeScreen === "FormSubmissions"}
-            onPress={() => handleNavigation("FormSubmissions")}
-          />
-          <NavItem
-            icon="account-circle"
-            label="Profile"
-            isActive={activeScreen === "Profile"}
-            onPress={() => handleNavigation("Profile")}
-          />
-        </View>
-      </View>
-
-      {/* Main Content */}
-      <View style={{ flex: 1 }}>{children}</View>
-    </View>
+    <SidebarLayout
+      activeScreen={activeScreen}
+      setActiveScreen={setActiveScreen}
+      navigationItems={navigationItems}
+      content={{
+        Dashboard: <ContentArea />,
+        Employees: <ContentArea />,
+        Tasks: <ContentArea />,
+        FormSubmissions: <ContentArea />,
+        Profile: <ContentArea />,
+      }}
+      onNavigate={handleNavigation}
+    />
   );
 };
 
 // Tab Navigator for CompanyAdmin
 const CompanyAdminTabNavigator = () => {
   const theme = useTheme();
+  const { width } = useWindowDimensions();
   const isWeb = Platform.OS === "web";
-  const windowWidth = Dimensions.get("window").width;
-  const isLargeScreen = isWeb && windowWidth > 768;
+  const isLargeScreen = isWeb && width > 768;
 
   // For mobile or small screen: Use bottom tabs
   if (!isLargeScreen) {
@@ -262,7 +225,7 @@ const CompanyAdminTabNavigator = () => {
           name="Dashboard"
           component={CompanyAdminDashboard}
           options={{
-            tabBarIcon: ({ color, size }) => (
+            tabBarIcon: ({ color }) => (
               <MaterialCommunityIcons name="home" color={color} size={24} />
             ),
           }}
@@ -271,7 +234,7 @@ const CompanyAdminTabNavigator = () => {
           name="Employees"
           component={EmployeeListScreen}
           options={{
-            tabBarIcon: ({ color, size }) => (
+            tabBarIcon: ({ color }) => (
               <MaterialCommunityIcons
                 name="account-group"
                 color={color}
@@ -284,7 +247,7 @@ const CompanyAdminTabNavigator = () => {
           name="Tasks"
           component={CompanyAdminTasksScreen}
           options={{
-            tabBarIcon: ({ color, size }) => (
+            tabBarIcon: ({ color }) => (
               <MaterialCommunityIcons
                 name="clipboard-text"
                 color={color}
@@ -298,7 +261,7 @@ const CompanyAdminTabNavigator = () => {
           component={FormSubmissionsScreen}
           options={{
             tabBarLabel: "Forms",
-            tabBarIcon: ({ color, size }) => (
+            tabBarIcon: ({ color }) => (
               <MaterialCommunityIcons
                 name="file-document"
                 color={color}
@@ -311,7 +274,7 @@ const CompanyAdminTabNavigator = () => {
           name="Profile"
           component={CompanyAdminProfileScreen}
           options={{
-            tabBarIcon: ({ color, size }) => (
+            tabBarIcon: ({ color }) => (
               <MaterialCommunityIcons
                 name="account-circle"
                 color={color}
@@ -324,68 +287,15 @@ const CompanyAdminTabNavigator = () => {
     );
   }
 
-  // For web with large screen: Use stack navigator with WebLayout
-  return (
-    <WebLayout>
-      <CompanyAdminStack.Navigator screenOptions={{ headerShown: false }}>
-        <CompanyAdminStack.Screen
-          name="Dashboard"
-          component={CompanyAdminDashboard}
-        />
-        <CompanyAdminStack.Screen
-          name="Employees"
-          component={EmployeeListScreen}
-        />
-        <CompanyAdminStack.Screen
-          name="Tasks"
-          component={CompanyAdminTasksScreen}
-        />
-        <CompanyAdminStack.Screen
-          name="FormSubmissions"
-          component={FormSubmissionsScreen}
-        />
-        <CompanyAdminStack.Screen
-          name="Profile"
-          component={CompanyAdminProfileScreen}
-        />
-        <CompanyAdminStack.Screen
-          name="EmployeeDetails"
-          component={EmployeeDetailsScreen}
-        />
-        <CompanyAdminStack.Screen
-          name="CreateEmployee"
-          component={CreateEmployeeScreen}
-        />
-        <CompanyAdminStack.Screen
-          name="EditEmployee"
-          component={EditEmployeeScreen}
-        />
-        <CompanyAdminStack.Screen
-          name="TaskDetails"
-          component={CompanyAdminTaskDetailsScreen}
-        />
-        <CompanyAdminStack.Screen
-          name="CreateTask"
-          component={CompanyAdminCreateTaskScreen}
-        />
-        <CompanyAdminStack.Screen
-          name="EditTask"
-          component={CompanyAdminEditTaskScreen}
-        />
-        <CompanyAdminStack.Screen
-          name="FormDetails"
-          component={FormDetailsScreen}
-        />
-      </CompanyAdminStack.Navigator>
-    </WebLayout>
-  );
+  // For web with large screen: Use SidebarLayout
+  return <WebStackNavigator />;
 };
 
 // Company Admin Navigator
 export const CompanyAdminNavigator = () => {
+  const { width } = useWindowDimensions();
   const isWeb = Platform.OS === "web";
-  const windowWidth = Dimensions.get("window").width;
-  const isLargeScreen = isWeb && windowWidth > 768;
+  const isLargeScreen = isWeb && width > 768;
 
   if (isLargeScreen) {
     return <CompanyAdminTabNavigator />;

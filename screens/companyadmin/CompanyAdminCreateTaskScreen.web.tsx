@@ -6,6 +6,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Dimensions,
 } from "react-native";
 import {
   Text,
@@ -15,6 +16,11 @@ import {
   Chip,
   SegmentedButtons,
   Snackbar,
+  Portal,
+  Modal,
+  Surface,
+  IconButton,
+  Divider,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -26,6 +32,8 @@ import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import { TaskPriority, UserRole, TaskStatus } from "../../types";
+import Animated, { FadeIn } from "react-native-reanimated";
+import { getFontFamily } from "../../utils/globalStyles";
 
 interface TaskFormData {
   title: string;
@@ -35,19 +43,53 @@ interface TaskFormData {
   reminder_days_before: string;
 }
 
+// Add window dimensions hook
+const useWindowDimensions = () => {
+  const [dimensions, setDimensions] = useState({
+    width: Dimensions.get("window").width,
+    height: Dimensions.get("window").height,
+  });
+
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      const handleResize = () => {
+        setDimensions({
+          width: Dimensions.get("window").width,
+          height: Dimensions.get("window").height,
+        });
+      };
+
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }
+  }, []);
+
+  return dimensions;
+};
+
 const CompanyAdminCreateTaskScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
   const { user } = useAuth();
+  const dimensions = useWindowDimensions();
+
+  // Calculate responsive breakpoints
+  const isLargeScreen = dimensions.width >= 1440;
+  const isMediumScreen = dimensions.width >= 768 && dimensions.width < 1440;
 
   const [loading, setLoading] = useState(false);
   const [loadingUsers, setLoadingUsers] = useState(true);
-  const [companyId, setCompanyId] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [availableUsers, setAvailableUsers] = useState<any[]>([]);
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
+  const [companyId, setCompanyId] = useState<string | null>(null);
+
+  // Web-specific date picker state
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [month, setMonth] = useState(new Date().getMonth() + 1);
+  const [day, setDay] = useState(new Date().getDate());
 
   const {
     control,
@@ -222,23 +264,98 @@ const CompanyAdminCreateTaskScreen = () => {
     }
   };
 
+  // Web-specific date picker component
+  const WebDatePicker = () => {
+    return (
+      <Portal>
+        <Modal
+          visible={showDatePicker}
+          onDismiss={() => setShowDatePicker(false)}
+          contentContainerStyle={styles.webDatePickerModal}
+        >
+          <View style={styles.webDatePickerContainer}>
+            <Text style={styles.webDatePickerTitle}>Select Date</Text>
+
+            <View style={styles.webDateInputRow}>
+              <View style={styles.webDateInputContainer}>
+                <Text style={styles.webDateInputLabel}>Day</Text>
+                <TextInput
+                  mode="outlined"
+                  keyboardType="numeric"
+                  value={day.toString()}
+                  onChangeText={(text) => setDay(parseInt(text) || 1)}
+                  style={styles.webDateInput}
+                />
+              </View>
+
+              <View style={styles.webDateInputContainer}>
+                <Text style={styles.webDateInputLabel}>Month</Text>
+                <TextInput
+                  mode="outlined"
+                  keyboardType="numeric"
+                  value={month.toString()}
+                  onChangeText={(text) => {
+                    const newMonth = parseInt(text) || 1;
+                    setMonth(Math.min(Math.max(newMonth, 1), 12));
+                  }}
+                  style={styles.webDateInput}
+                />
+              </View>
+
+              <View style={styles.webDateInputContainer}>
+                <Text style={styles.webDateInputLabel}>Year</Text>
+                <TextInput
+                  mode="outlined"
+                  keyboardType="numeric"
+                  value={year.toString()}
+                  onChangeText={(text) => setYear(parseInt(text) || 2023)}
+                  style={styles.webDateInput}
+                />
+              </View>
+            </View>
+
+            <View style={styles.webDatePickerActions}>
+              <Button
+                onPress={() => setShowDatePicker(false)}
+                style={styles.webDatePickerButton}
+              >
+                Cancel
+              </Button>
+              <Button
+                mode="contained"
+                onPress={() => {
+                  const newDate = new Date(year, month - 1, day);
+                  setValue("deadline", newDate);
+                  setShowDatePicker(false);
+                }}
+                style={styles.webDatePickerButton}
+              >
+                Confirm
+              </Button>
+            </View>
+          </View>
+        </Modal>
+      </Portal>
+    );
+  };
+
   if (loadingUsers) {
     return <LoadingIndicator />;
   }
 
   return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
+    <SafeAreaView style={styles.container}>
       <AppHeader
         title="Create Task"
-        showBackButton={true}
+        subtitle="Add new task information"
+        showBackButton
         showHelpButton={true}
         onHelpPress={() => {
           navigation.navigate("Help" as never);
         }}
         showLogo={false}
       />
+
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardAvoidingView}
@@ -247,166 +364,253 @@ const CompanyAdminCreateTaskScreen = () => {
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
         >
-          <Text
-            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
-          >
-            Task Details
-          </Text>
-
-          <Controller
-            control={control}
-            rules={{ required: "Title is required" }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Title *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.title}
-                style={styles.input}
-                disabled={loading}
-              />
-            )}
-            name="title"
-          />
-          {errors.title && (
-            <Text style={styles.errorText}>{errors.title.message}</Text>
-          )}
-
-          <Controller
-            control={control}
-            rules={{ required: "Description is required" }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Description *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.description}
-                style={styles.input}
-                multiline
-                numberOfLines={4}
-                disabled={loading}
-              />
-            )}
-            name="description"
-          />
-          {errors.description && (
-            <Text style={styles.errorText}>{errors.description.message}</Text>
-          )}
-
-          <Text style={styles.inputLabel}>Deadline *</Text>
-          <Button
-            mode="outlined"
-            onPress={() => setShowDatePicker(true)}
-            style={styles.dateButton}
-            icon="calendar"
-          >
-            {format(deadline, "MMMM d, yyyy")}
-          </Button>
-
-          {showDatePicker && (
-            <DateTimePicker
-              value={deadline}
-              mode="date"
-              display="default"
-              onChange={handleDateChange}
-              minimumDate={new Date()}
-            />
-          )}
-
-          <Text style={styles.inputLabel}>Priority *</Text>
-          <Controller
-            control={control}
-            render={({ field: { onChange, value } }) => (
-              <SegmentedButtons
-                value={value}
-                onValueChange={onChange}
-                buttons={[
-                  { value: TaskPriority.LOW, label: "Low" },
-                  { value: TaskPriority.MEDIUM, label: "Medium" },
-                  { value: TaskPriority.HIGH, label: "High" },
-                ]}
-                style={styles.segmentedButtons}
-              />
-            )}
-            name="priority"
-          />
-
-          <Controller
-            control={control}
-            rules={{
-              required: "Reminder days is required",
-              validate: (value) =>
-                !isNaN(parseInt(value)) &&
-                parseInt(value) >= 0 &&
-                parseInt(value) <= 365
-                  ? true
-                  : "Please enter a value between 0 and 365 days",
-            }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Reminder (days before deadline) *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.reminder_days_before}
-                style={styles.input}
-                keyboardType="numeric"
-                disabled={loading}
-              />
-            )}
-            name="reminder_days_before"
-          />
-          {errors.reminder_days_before && (
-            <Text style={styles.errorText}>
-              {errors.reminder_days_before.message}
-            </Text>
-          )}
-
-          <Text
-            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
-          >
-            Assign Users
-          </Text>
-
-          <Text style={styles.helperText}>
-            Select one super admin to assign this task to (required)
-          </Text>
-
-          <View style={styles.usersContainer}>
-            {availableUsers.map((user) => (
-              <Chip
-                key={`assignee-${user.id}`}
-                selected={selectedAssignees.includes(user.id)}
-                onPress={() => toggleAssignee(user.id)}
-                style={styles.userChip}
-                showSelectedCheck
-                mode="outlined"
-              >
-                {user.name} (
-                {user.role === UserRole.SUPER_ADMIN
-                  ? "Super Admin"
-                  : "Employee"}
-                )
-              </Chip>
-            ))}
+          <View style={styles.headerSection}>
+            <Text style={styles.pageTitle}>Create New Task</Text>
           </View>
 
-          <Button
-            mode="contained"
-            onPress={handleSubmit(onSubmit)}
-            style={styles.submitButton}
-            loading={loading}
-            disabled={loading}
-          >
-            Create Task
-          </Button>
+          <View style={styles.gridContainer}>
+            <View style={styles.gridColumn}>
+              <Animated.View entering={FadeIn.delay(100)}>
+                {/* Basic Information */}
+                <Surface style={styles.formCard}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="clipboard-text"
+                          size={20}
+                          iconColor="#64748b"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>Basic Information</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardContent}>
+                    <Controller
+                      control={control}
+                      rules={{ required: "Title is required" }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <>
+                          <TextInput
+                            label="Title *"
+                            mode="outlined"
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
+                            error={!!errors.title}
+                            style={styles.input}
+                            disabled={loading}
+                          />
+                          {errors.title && (
+                            <Text style={styles.errorText}>
+                              {errors.title.message}
+                            </Text>
+                          )}
+                        </>
+                      )}
+                      name="title"
+                    />
+
+                    <Controller
+                      control={control}
+                      rules={{ required: "Description is required" }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <>
+                          <TextInput
+                            label="Description *"
+                            mode="outlined"
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
+                            error={!!errors.description}
+                            style={styles.input}
+                            multiline
+                            numberOfLines={4}
+                            disabled={loading}
+                          />
+                          {errors.description && (
+                            <Text style={styles.errorText}>
+                              {errors.description.message}
+                            </Text>
+                          )}
+                        </>
+                      )}
+                      name="description"
+                    />
+                  </View>
+                </Surface>
+
+                {/* Task Settings */}
+                <Surface style={[styles.formCard, { marginTop: 24 }]}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="cog"
+                          size={20}
+                          iconColor="#64748b"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>Task Settings</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardContent}>
+                    <Text style={styles.inputLabel}>Deadline *</Text>
+                    <Button
+                      mode="outlined"
+                      onPress={() => setShowDatePicker(true)}
+                      style={styles.dateButton}
+                      icon="calendar"
+                    >
+                      {format(deadline, "MMMM d, yyyy")}
+                    </Button>
+
+                    <Text style={styles.inputLabel}>Priority *</Text>
+                    <Controller
+                      control={control}
+                      render={({ field: { onChange, value } }) => (
+                        <SegmentedButtons
+                          value={value}
+                          onValueChange={onChange}
+                          buttons={[
+                            { value: TaskPriority.LOW, label: "Low" },
+                            { value: TaskPriority.MEDIUM, label: "Medium" },
+                            { value: TaskPriority.HIGH, label: "High" },
+                          ]}
+                          style={styles.segmentedButtons}
+                        />
+                      )}
+                      name="priority"
+                    />
+
+                    <Controller
+                      control={control}
+                      rules={{
+                        required: "Reminder days is required",
+                        validate: (value) =>
+                          !isNaN(parseInt(value)) &&
+                          parseInt(value) >= 0 &&
+                          parseInt(value) <= 365
+                            ? true
+                            : "Please enter a value between 0 and 365 days",
+                      }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <>
+                          <TextInput
+                            label="Reminder (days before deadline) *"
+                            mode="outlined"
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
+                            error={!!errors.reminder_days_before}
+                            style={styles.input}
+                            keyboardType="numeric"
+                            disabled={loading}
+                          />
+                          {errors.reminder_days_before && (
+                            <Text style={styles.errorText}>
+                              {errors.reminder_days_before.message}
+                            </Text>
+                          )}
+                        </>
+                      )}
+                      name="reminder_days_before"
+                    />
+                  </View>
+                </Surface>
+              </Animated.View>
+            </View>
+
+            <View style={styles.gridColumn}>
+              <Animated.View entering={FadeIn.delay(200)}>
+                {/* Assign Users */}
+                <Surface style={styles.formCard}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="account-multiple"
+                          size={20}
+                          iconColor="#64748b"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>Assign Users</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardContent}>
+                    <Text style={styles.helperText}>
+                      Select one super admin to assign this task to (required)
+                    </Text>
+
+                    <View style={styles.usersContainer}>
+                      {availableUsers.map((user) => (
+                        <Chip
+                          key={`assignee-${user.id}`}
+                          selected={selectedAssignees.includes(user.id)}
+                          onPress={() => toggleAssignee(user.id)}
+                          style={styles.userChip}
+                          showSelectedCheck
+                          mode="outlined"
+                        >
+                          {user.name} (
+                          {user.role === UserRole.SUPER_ADMIN
+                            ? "Super Admin"
+                            : "Employee"}
+                          )
+                        </Chip>
+                      ))}
+                    </View>
+                  </View>
+                </Surface>
+              </Animated.View>
+            </View>
+          </View>
         </ScrollView>
+
+        <Surface style={styles.bottomBar}>
+          <View style={styles.bottomBarContent}>
+            <Button
+              mode="outlined"
+              onPress={() => navigation.goBack()}
+              style={[styles.button, styles.cancelButton]}
+              disabled={loading}
+            >
+              Cancel
+            </Button>
+            <Button
+              mode="contained"
+              onPress={handleSubmit(onSubmit)}
+              style={[
+                styles.button,
+                styles.saveButton,
+                { backgroundColor: theme.colors.primary },
+              ]}
+              loading={loading}
+              disabled={loading}
+            >
+              Create Task
+            </Button>
+          </View>
+        </Surface>
       </KeyboardAvoidingView>
+
+      {Platform.OS === "web" ? (
+        <WebDatePicker />
+      ) : (
+        <DateTimePicker
+          value={deadline}
+          mode="date"
+          display="default"
+          onChange={handleDateChange}
+          minimumDate={new Date()}
+        />
+      )}
 
       <Snackbar
         visible={snackbarVisible}
@@ -426,6 +630,7 @@ const CompanyAdminCreateTaskScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#F9FAFB",
   },
   keyboardAvoidingView: {
     flex: 1,
@@ -434,22 +639,96 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
+    maxWidth: 1280,
+    width: "100%",
+    alignSelf: "center",
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 100,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginTop: 24,
-    marginBottom: 16,
+  headerSection: {
+    marginBottom: 32,
+  },
+  pageTitle: {
+    fontSize: 24,
+    fontWeight: "600",
+    color: "#111827",
+    fontFamily: getFontFamily("600"),
+  },
+  gridContainer: {
+    flexDirection: "row",
+    gap: 24,
+    flexWrap: "wrap",
+  },
+  gridColumn: {
+    flex: 1,
+    minWidth: 320,
+  },
+  formCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 24,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 24,
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  iconContainer: {
+    backgroundColor: "#F3F4F6",
+    borderRadius: 8,
+    padding: 8,
+  },
+  headerIcon: {
+    margin: 0,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#111827",
+    fontFamily: getFontFamily("600"),
+  },
+  cardContent: {
+    gap: 16,
   },
   input: {
-    marginBottom: 12,
+    backgroundColor: "#FFFFFF",
+    marginBottom: 16,
+    fontFamily: getFontFamily("400"),
   },
   inputLabel: {
     fontSize: 14,
+    fontWeight: "500",
+    color: "#374151",
     marginBottom: 8,
-    opacity: 0.7,
+    fontFamily: getFontFamily("500"),
+  },
+  errorText: {
+    color: "#DC2626",
+    fontSize: 12,
+    marginTop: -12,
+    marginBottom: 12,
+    fontFamily: getFontFamily("400"),
+  },
+  helperText: {
+    fontSize: 14,
+    color: "#6B7280",
+    marginBottom: 16,
+    fontFamily: getFontFamily("400"),
   },
   dateButton: {
     marginBottom: 16,
@@ -457,29 +736,93 @@ const styles = StyleSheet.create({
   segmentedButtons: {
     marginBottom: 16,
   },
-  errorText: {
-    color: "#EF4444",
-    fontSize: 12,
-    marginTop: -8,
-    marginBottom: 8,
-    marginLeft: 4,
-  },
-  helperText: {
-    fontSize: 14,
-    opacity: 0.7,
-    marginBottom: 12,
-  },
   usersContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginBottom: 16,
+    gap: 8,
   },
   userChip: {
-    margin: 4,
+    margin: 0,
   },
-  submitButton: {
-    marginTop: 24,
-    paddingVertical: 6,
+  bottomBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+    padding: 16,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: -2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  bottomBarContent: {
+    maxWidth: 1280,
+    width: "100%",
+    alignSelf: "center",
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+  },
+  button: {
+    minWidth: 120,
+  },
+  cancelButton: {
+    borderColor: "#D1D5DB",
+  },
+    saveButton: {
+  },
+  webDatePickerModal: {
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    padding: 24,
+  },
+  webDatePickerContainer: {
+    backgroundColor: "#FFFFFF",
+    padding: 24,
+    borderRadius: 12,
+    width: "100%",
+    maxWidth: 480,
+    alignSelf: "center",
+  },
+  webDatePickerTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#111827",
+    marginBottom: 24,
+    fontFamily: getFontFamily("600"),
+  },
+  webDateInputRow: {
+    flexDirection: "row",
+    gap: 16,
+    marginBottom: 24,
+  },
+  webDateInputContainer: {
+    flex: 1,
+  },
+  webDateInputLabel: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#374151",
+    marginBottom: 8,
+    fontFamily: getFontFamily("500"),
+  },
+  webDateInput: {
+    backgroundColor: "#FFFFFF",
+    fontFamily: getFontFamily("400"),
+  },
+  webDatePickerActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+  },
+  webDatePickerButton: {
+    minWidth: 100,
   },
 });
 

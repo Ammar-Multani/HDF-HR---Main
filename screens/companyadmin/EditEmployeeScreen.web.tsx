@@ -6,6 +6,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  TouchableOpacity,
+  Dimensions,
 } from "react-native";
 import {
   Text,
@@ -17,6 +19,9 @@ import {
   HelperText,
   Banner,
   Switch,
+  IconButton,
+  Surface,
+  Divider,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
@@ -31,6 +36,8 @@ import {
 } from "../../lib/supabase";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
+import Animated, { FadeIn } from "react-native-reanimated";
+import { getFontFamily } from "../../utils/globalStyles";
 import {
   Gender,
   MaritalStatus,
@@ -194,12 +201,41 @@ const EditEmployeeFormSkeleton = () => {
   );
 };
 
+// Add window dimensions hook
+const useWindowDimensions = () => {
+  const [dimensions, setDimensions] = useState({
+    width: Dimensions.get("window").width,
+    height: Dimensions.get("window").height,
+  });
+
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      const handleResize = () => {
+        setDimensions({
+          width: Dimensions.get("window").width,
+          height: Dimensions.get("window").height,
+        });
+      };
+
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }
+  }, []);
+
+  return dimensions;
+};
+
 const EditEmployeeScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
   const route =
     useRoute<RouteProp<Record<string, EditEmployeeRouteParams>, string>>();
   const { employeeId } = route.params;
+  const dimensions = useWindowDimensions();
+
+  // Calculate responsive breakpoints
+  const isLargeScreen = dimensions.width >= 1440;
+  const isMediumScreen = dimensions.width >= 768 && dimensions.width < 1440;
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -621,675 +657,758 @@ const EditEmployeeScreen = () => {
       >
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              maxWidth: isLargeScreen ? 1400 : isMediumScreen ? 1100 : "100%",
+              paddingHorizontal: isLargeScreen ? 48 : isMediumScreen ? 32 : 16,
+            },
+          ]}
         >
-          <Text
-            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
-          >
-            Personal Information
-          </Text>
-
-          <View style={styles.row}>
-            <View style={styles.halfInput}>
-              <Controller
-                control={control}
-                rules={{ required: "First name is required" }}
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <TextInput
-                    label="First Name *"
-                    mode="outlined"
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    error={!!errors.first_name}
-                    style={styles.input}
-                    disabled={submitting}
-                  />
-                )}
-                name="first_name"
-              />
-              {errors.first_name && (
-                <HelperText type="error">
-                  {errors.first_name.message}
-                </HelperText>
-              )}
-            </View>
-
-            <View style={styles.halfInput}>
-              <Controller
-                control={control}
-                rules={{ required: "Last name is required" }}
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <TextInput
-                    label="Last Name *"
-                    mode="outlined"
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    error={!!errors.last_name}
-                    style={styles.input}
-                    disabled={submitting}
-                  />
-                )}
-                name="last_name"
-              />
-              {errors.last_name && (
-                <HelperText type="error">{errors.last_name.message}</HelperText>
-              )}
-            </View>
-          </View>
-
-          <Text style={styles.emailLabel}>Email: {employee.email}</Text>
-
-          <Controller
-            control={control}
-            rules={{ required: "Phone number is required" }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Phone Number *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.phone_number}
-                style={styles.input}
-                keyboardType="phone-pad"
-                disabled={submitting}
-              />
-            )}
-            name="phone_number"
-          />
-          {errors.phone_number && (
-            <HelperText type="error">{errors.phone_number.message}</HelperText>
-          )}
-
-          <Text style={styles.inputLabel}>Date of Birth *</Text>
-          <Button
-            mode="outlined"
-            onPress={() => setShowDobPicker(true)}
-            style={styles.dateButton}
-            icon="calendar"
-            disabled={submitting}
-          >
-            {format(dateOfBirth, "MMMM d, yyyy")}
-          </Button>
-
-          {showDobPicker && (
-            <DateTimePicker
-              value={dateOfBirth}
-              mode="date"
-              display="default"
-              onChange={handleDobChange}
-              maximumDate={new Date()}
-            />
-          )}
-
-          <Text style={styles.inputLabel}>Gender *</Text>
-          <Controller
-            control={control}
-            render={({ field: { onChange, value } }) => (
-              <View style={{ opacity: submitting ? 0.5 : 1 }}>
-                <SegmentedButtons
-                  value={value}
-                  onValueChange={onChange}
-                  buttons={[
-                    { value: Gender.MALE, label: "Male" },
-                    { value: Gender.FEMALE, label: "Female" },
-                    { value: Gender.OTHER, label: "Other" },
-                  ]}
-                  style={styles.segmentedButtons}
-                />
-              </View>
-            )}
-            name="gender"
-          />
-
-          <Controller
-            control={control}
-            rules={{ required: "Nationality is required" }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Nationality *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.nationality}
-                style={styles.input}
-                disabled={submitting}
-              />
-            )}
-            name="nationality"
-          />
-          {errors.nationality && (
-            <HelperText type="error">{errors.nationality.message}</HelperText>
-          )}
-
-          <Text style={styles.inputLabel}>Marital Status *</Text>
-          <Controller
-            control={control}
-            render={({ field: { onChange, value } }) => (
-              <View style={{ opacity: submitting ? 0.5 : 1 }}>
-                <SegmentedButtons
-                  value={value}
-                  onValueChange={onChange}
-                  buttons={[
-                    { value: MaritalStatus.SINGLE, label: "Single" },
-                    { value: MaritalStatus.MARRIED, label: "Married" },
-                    { value: MaritalStatus.DIVORCED, label: "Divorced" },
-                    { value: MaritalStatus.WIDOWED, label: "Widowed" },
-                  ]}
-                  style={styles.segmentedButtons}
-                />
-              </View>
-            )}
-            name="marital_status"
-          />
-
-          <Text
-            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
-          >
-            Employment Details
-          </Text>
-
-          <Controller
-            control={control}
-            rules={{ required: "Job title is required" }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Job Title *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.job_title}
-                style={styles.input}
-                disabled={submitting}
-              />
-            )}
-            name="job_title"
-          />
-          {errors.job_title && (
-            <HelperText type="error">{errors.job_title.message}</HelperText>
-          )}
-
-          <Text style={styles.inputLabel}>Employment Type *</Text>
-          <Controller
-            control={control}
-            render={({ field: { onChange, value } }) => (
-              <View style={{ opacity: submitting ? 0.5 : 1 }}>
-                <SegmentedButtons
-                  value={value}
-                  onValueChange={onChange}
-                  buttons={[
-                    { value: EmploymentType.FULL_TIME, label: "Full Time" },
-                    { value: EmploymentType.PART_TIME, label: "Part Time" },
-                    { value: EmploymentType.CONTRACT, label: "Contract" },
-                    { value: EmploymentType.TEMPORARY, label: "Temporary" },
-                  ]}
-                  style={styles.segmentedButtons}
-                />
-              </View>
-            )}
-            name="employment_type"
-          />
-
-          <Controller
-            control={control}
-            rules={{
-              required: "Workload percentage is required",
-              validate: (value) =>
-                !isNaN(parseInt(value)) &&
-                parseInt(value) > 0 &&
-                parseInt(value) <= 100
-                  ? true
-                  : "Workload must be between 1 and 100",
-            }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Workload Percentage (%) *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.workload_percentage}
-                style={styles.input}
-                keyboardType="numeric"
-                disabled={submitting}
-              />
-            )}
-            name="workload_percentage"
-          />
-          {errors.workload_percentage && (
-            <HelperText type="error">
-              {errors.workload_percentage.message}
-            </HelperText>
-          )}
-
-          <Text style={styles.inputLabel}>Employment Start Date *</Text>
-          <Button
-            mode="outlined"
-            onPress={() => setShowStartDatePicker(true)}
-            style={styles.dateButton}
-            icon="calendar"
-            disabled={submitting}
-          >
-            {format(employmentStartDate, "MMMM d, yyyy")}
-          </Button>
-
-          {showStartDatePicker && (
-            <DateTimePicker
-              value={employmentStartDate}
-              mode="date"
-              display="default"
-              onChange={handleStartDateChange}
-            />
-          )}
-
-          <View style={styles.endDateContainer}>
-            <Button
-              mode={hasEndDate ? "contained" : "outlined"}
-              onPress={() => setHasEndDate(!hasEndDate)}
-              style={styles.endDateToggle}
-              disabled={submitting}
+          <View style={styles.gridContainer}>
+            <View
+              style={[
+                styles.gridColumn,
+                { flex: isLargeScreen ? 0.48 : isMediumScreen ? 0.48 : 1 },
+              ]}
             >
-              {hasEndDate ? "Has End Date" : "Add End Date"}
-            </Button>
+              <Animated.View entering={FadeIn.delay(100)}>
+                {/* Personal Information Card */}
+                <Surface style={styles.detailsCard}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="account"
+                          size={20}
+                          iconColor="#64748b"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>Personal Information</Text>
+                    </View>
+                  </View>
 
-            {hasEndDate && (
-              <>
-                <Button
-                  mode="outlined"
-                  onPress={() => setShowEndDatePicker(true)}
-                  style={styles.dateButton}
-                  icon="calendar"
-                  disabled={submitting}
-                >
-                  {employmentEndDate
-                    ? format(employmentEndDate, "MMMM d, yyyy")
-                    : "Select End Date"}
-                </Button>
+                  <View style={styles.cardContent}>
+                    <View style={styles.row}>
+                      <View style={styles.halfInput}>
+                        <Controller
+                          control={control}
+                          rules={{ required: "First name is required" }}
+                          render={({ field: { onChange, onBlur, value } }) => (
+                            <TextInput
+                              label="First Name *"
+                              mode="outlined"
+                              value={value}
+                              onChangeText={onChange}
+                              onBlur={onBlur}
+                              error={!!errors.first_name}
+                              style={styles.input}
+                              disabled={submitting}
+                            />
+                          )}
+                          name="first_name"
+                        />
+                        {errors.first_name && (
+                          <HelperText type="error">
+                            {errors.first_name.message}
+                          </HelperText>
+                        )}
+                      </View>
 
-                {showEndDatePicker && (
-                  <DateTimePicker
-                    value={employmentEndDate || new Date()}
-                    mode="date"
-                    display="default"
-                    onChange={handleEndDateChange}
-                    minimumDate={employmentStartDate}
-                  />
-                )}
-              </>
-            )}
-          </View>
+                      <View style={styles.halfInput}>
+                        <Controller
+                          control={control}
+                          rules={{ required: "Last name is required" }}
+                          render={({ field: { onChange, onBlur, value } }) => (
+                            <TextInput
+                              label="Last Name *"
+                              mode="outlined"
+                              value={value}
+                              onChangeText={onChange}
+                              onBlur={onBlur}
+                              error={!!errors.last_name}
+                              style={styles.input}
+                              disabled={submitting}
+                            />
+                          )}
+                          name="last_name"
+                        />
+                        {errors.last_name && (
+                          <HelperText type="error">
+                            {errors.last_name.message}
+                          </HelperText>
+                        )}
+                      </View>
+                    </View>
 
-          <Controller
-            control={control}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Education"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                style={styles.input}
-                disabled={submitting}
-              />
-            )}
-            name="education"
-          />
+                    <Text style={styles.emailLabel}>
+                      Email: {employee.email}
+                    </Text>
 
-          <Text
-            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
-          >
-            Access Level
-          </Text>
+                    <Controller
+                      control={control}
+                      rules={{ required: "Phone number is required" }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <TextInput
+                          label="Phone Number *"
+                          mode="outlined"
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          error={!!errors.phone_number}
+                          style={styles.input}
+                          keyboardType="phone-pad"
+                          disabled={submitting}
+                        />
+                      )}
+                      name="phone_number"
+                    />
+                    {errors.phone_number && (
+                      <HelperText type="error">
+                        {errors.phone_number.message}
+                      </HelperText>
+                    )}
 
-          <View style={styles.adminToggleContainer}>
-            <Text style={styles.adminToggleLabel}>
-              Company Administrator Access
-            </Text>
-            <Controller
-              control={control}
-              render={({ field: { value } }) => (
-                <Switch
-                  value={value}
-                  onValueChange={handleAdminToggle}
-                  disabled={submitting}
-                />
-              )}
-              name="is_admin"
-            />
-          </View>
+                    <Text style={styles.inputLabel}>Date of Birth *</Text>
+                    <Button
+                      mode="outlined"
+                      onPress={() => setShowDobPicker(true)}
+                      style={styles.dateButton}
+                      icon="calendar"
+                      disabled={submitting}
+                    >
+                      {format(dateOfBirth, "MMMM d, yyyy")}
+                    </Button>
 
-          <Text style={styles.helperText}>
-            {isAdmin
-              ? "This employee has full administrative access to manage company settings, employees, and other administrative functions."
-              : "Toggle to grant this employee administrative access."}
-          </Text>
+                    {showDobPicker && (
+                      <DateTimePicker
+                        value={dateOfBirth}
+                        mode="date"
+                        display="default"
+                        onChange={handleDobChange}
+                        maximumDate={new Date()}
+                      />
+                    )}
 
-          <Text
-            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
-          >
-            Identification
-          </Text>
+                    <Text style={styles.inputLabel}>Gender *</Text>
+                    <Controller
+                      control={control}
+                      render={({ field: { onChange, value } }) => (
+                        <View style={{ opacity: submitting ? 0.5 : 1 }}>
+                          <SegmentedButtons
+                            value={value}
+                            onValueChange={onChange}
+                            buttons={[
+                              { value: Gender.MALE, label: "Male" },
+                              { value: Gender.FEMALE, label: "Female" },
+                              { value: Gender.OTHER, label: "Other" },
+                            ]}
+                            style={styles.segmentedButtons}
+                          />
+                        </View>
+                      )}
+                      name="gender"
+                    />
 
-          <Text style={styles.inputLabel}>ID Type *</Text>
-          <Controller
-            control={control}
-            render={({ field: { onChange, value } }) => (
-              <View style={{ opacity: submitting ? 0.5 : 1 }}>
-                <SegmentedButtons
-                  value={value}
-                  onValueChange={onChange}
-                  buttons={[
-                    { value: IDType.ID_CARD, label: "ID Card" },
-                    { value: IDType.PASSPORT, label: "Passport" },
-                    {
-                      value: IDType.DRIVERS_LICENSE,
-                      label: "Driver's License",
-                    },
-                  ]}
-                  style={styles.segmentedButtons}
-                />
-              </View>
-            )}
-            name="id_type"
-          />
+                    <Controller
+                      control={control}
+                      rules={{ required: "Nationality is required" }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <TextInput
+                          label="Nationality *"
+                          mode="outlined"
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          error={!!errors.nationality}
+                          style={styles.input}
+                          disabled={submitting}
+                        />
+                      )}
+                      name="nationality"
+                    />
+                    {errors.nationality && (
+                      <HelperText type="error">
+                        {errors.nationality.message}
+                      </HelperText>
+                    )}
 
-          <Controller
-            control={control}
-            rules={{ required: "AHV number is required" }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="AHV Number *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.ahv_number}
-                style={styles.input}
-                disabled={submitting}
-              />
-            )}
-            name="ahv_number"
-          />
-          {errors.ahv_number && (
-            <HelperText type="error">{errors.ahv_number.message}</HelperText>
-          )}
+                    <Text style={styles.inputLabel}>Marital Status *</Text>
+                    <Controller
+                      control={control}
+                      render={({ field: { onChange, value } }) => (
+                        <View style={{ opacity: submitting ? 0.5 : 1 }}>
+                          <SegmentedButtons
+                            value={value}
+                            onValueChange={onChange}
+                            buttons={[
+                              { value: MaritalStatus.SINGLE, label: "Single" },
+                              {
+                                value: MaritalStatus.MARRIED,
+                                label: "Married",
+                              },
+                              {
+                                value: MaritalStatus.DIVORCED,
+                                label: "Divorced",
+                              },
+                              {
+                                value: MaritalStatus.WIDOWED,
+                                label: "Widowed",
+                              },
+                            ]}
+                            style={styles.segmentedButtons}
+                          />
+                        </View>
+                      )}
+                      name="marital_status"
+                    />
+                  </View>
+                </Surface>
 
-          <Text
-            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
-          >
-            Address
-          </Text>
+                {/* Employment Details Card */}
+                <Surface style={[styles.detailsCard, { marginTop: 24 }]}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="briefcase"
+                          size={20}
+                          iconColor="#64748b"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>Employment Details</Text>
+                    </View>
+                  </View>
 
-          <Controller
-            control={control}
-            rules={{ required: "Address line 1 is required" }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Address Line 1 *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.address_line1}
-                style={styles.input}
-                disabled={submitting}
-              />
-            )}
-            name="address_line1"
-          />
-          {errors.address_line1 && (
-            <HelperText type="error">{errors.address_line1.message}</HelperText>
-          )}
+                  <View style={styles.cardContent}>
+                    <Controller
+                      control={control}
+                      rules={{ required: "Job title is required" }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <TextInput
+                          label="Job Title *"
+                          mode="outlined"
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          error={!!errors.job_title}
+                          style={styles.input}
+                          disabled={submitting}
+                        />
+                      )}
+                      name="job_title"
+                    />
+                    {errors.job_title && (
+                      <HelperText type="error">
+                        {errors.job_title.message}
+                      </HelperText>
+                    )}
 
-          <Controller
-            control={control}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Address Line 2"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                style={styles.input}
-                disabled={submitting}
-              />
-            )}
-            name="address_line2"
-          />
+                    <Text style={styles.inputLabel}>Employment Type *</Text>
+                    <Controller
+                      control={control}
+                      render={({ field: { onChange, value } }) => (
+                        <View style={{ opacity: submitting ? 0.5 : 1 }}>
+                          <SegmentedButtons
+                            value={value}
+                            onValueChange={onChange}
+                            buttons={[
+                              {
+                                value: EmploymentType.FULL_TIME,
+                                label: "Full Time",
+                              },
+                              {
+                                value: EmploymentType.PART_TIME,
+                                label: "Part Time",
+                              },
+                              {
+                                value: EmploymentType.CONTRACT,
+                                label: "Contract",
+                              },
+                              {
+                                value: EmploymentType.TEMPORARY,
+                                label: "Temporary",
+                              },
+                            ]}
+                            style={styles.segmentedButtons}
+                          />
+                        </View>
+                      )}
+                      name="employment_type"
+                    />
 
-          <View style={styles.row}>
-            <View style={styles.halfInput}>
-              <Controller
-                control={control}
-                rules={{ required: "City is required" }}
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <TextInput
-                    label="City *"
-                    mode="outlined"
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    error={!!errors.address_city}
-                    style={styles.input}
-                    disabled={submitting}
-                  />
-                )}
-                name="address_city"
-              />
-              {errors.address_city && (
-                <HelperText type="error">
-                  {errors.address_city.message}
-                </HelperText>
-              )}
+                    <Controller
+                      control={control}
+                      rules={{
+                        required: "Workload percentage is required",
+                        validate: (value) =>
+                          !isNaN(parseInt(value)) &&
+                          parseInt(value) > 0 &&
+                          parseInt(value) <= 100
+                            ? true
+                            : "Workload must be between 1 and 100",
+                      }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <TextInput
+                          label="Workload Percentage (%) *"
+                          mode="outlined"
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          error={!!errors.workload_percentage}
+                          style={styles.input}
+                          keyboardType="numeric"
+                          disabled={submitting}
+                        />
+                      )}
+                      name="workload_percentage"
+                    />
+                    {errors.workload_percentage && (
+                      <HelperText type="error">
+                        {errors.workload_percentage.message}
+                      </HelperText>
+                    )}
+
+                    <Text style={styles.inputLabel}>
+                      Employment Start Date *
+                    </Text>
+                    <Button
+                      mode="outlined"
+                      onPress={() => setShowStartDatePicker(true)}
+                      style={styles.dateButton}
+                      icon="calendar"
+                      disabled={submitting}
+                    >
+                      {format(employmentStartDate, "MMMM d, yyyy")}
+                    </Button>
+
+                    {showStartDatePicker && (
+                      <DateTimePicker
+                        value={employmentStartDate}
+                        mode="date"
+                        display="default"
+                        onChange={handleStartDateChange}
+                      />
+                    )}
+
+                    <View style={styles.endDateContainer}>
+                      <Button
+                        mode={hasEndDate ? "contained" : "outlined"}
+                        onPress={() => setHasEndDate(!hasEndDate)}
+                        style={styles.endDateToggle}
+                        disabled={submitting}
+                      >
+                        {hasEndDate ? "Has End Date" : "Add End Date"}
+                      </Button>
+
+                      {hasEndDate && (
+                        <>
+                          <Button
+                            mode="outlined"
+                            onPress={() => setShowEndDatePicker(true)}
+                            style={styles.dateButton}
+                            icon="calendar"
+                            disabled={submitting}
+                          >
+                            {employmentEndDate
+                              ? format(employmentEndDate, "MMMM d, yyyy")
+                              : "Select End Date"}
+                          </Button>
+
+                          {showEndDatePicker && (
+                            <DateTimePicker
+                              value={employmentEndDate || new Date()}
+                              mode="date"
+                              display="default"
+                              onChange={handleEndDateChange}
+                              minimumDate={employmentStartDate}
+                            />
+                          )}
+                        </>
+                      )}
+                    </View>
+
+                    <Controller
+                      control={control}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <TextInput
+                          label="Education"
+                          mode="outlined"
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          style={styles.input}
+                          disabled={submitting}
+                        />
+                      )}
+                      name="education"
+                    />
+                  </View>
+                </Surface>
+              </Animated.View>
             </View>
 
-            <View style={styles.halfInput}>
-              <Controller
-                control={control}
-                rules={{ required: "State is required" }}
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <TextInput
-                    label="State/Province *"
-                    mode="outlined"
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    error={!!errors.address_state}
-                    style={styles.input}
-                    disabled={submitting}
-                  />
-                )}
-                name="address_state"
-              />
-              {errors.address_state && (
-                <HelperText type="error">
-                  {errors.address_state.message}
-                </HelperText>
-              )}
+            <View
+              style={[
+                styles.gridColumn,
+                { flex: isLargeScreen ? 0.48 : isMediumScreen ? 0.48 : 1 },
+              ]}
+            >
+              <Animated.View entering={FadeIn.delay(200)}>
+                {/* Access Level Card */}
+                <Surface style={styles.detailsCard}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="shield-account"
+                          size={20}
+                          iconColor="#64748b"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>Access Level</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardContent}>
+                    <View style={styles.adminToggleContainer}>
+                      <Text style={styles.adminToggleLabel}>
+                        Company Administrator Access
+                      </Text>
+                      <Controller
+                        control={control}
+                        render={({ field: { value } }) => (
+                          <Switch
+                            value={value}
+                            onValueChange={handleAdminToggle}
+                            disabled={submitting}
+                          />
+                        )}
+                        name="is_admin"
+                      />
+                    </View>
+
+                    <Text style={styles.helperText}>
+                      {isAdmin
+                        ? "This employee has full administrative access to manage company settings, employees, and other administrative functions."
+                        : "Toggle to grant this employee administrative access."}
+                    </Text>
+                  </View>
+                </Surface>
+
+                {/* Address Card */}
+                <Surface style={[styles.detailsCard, { marginTop: 24 }]}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="map-marker"
+                          size={20}
+                          iconColor="#64748b"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>Address</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardContent}>
+                    <View style={styles.row}>
+                      <View style={styles.halfInput}>
+                        <Controller
+                          control={control}
+                          rules={{ required: "Address line 1 is required" }}
+                          render={({ field: { onChange, onBlur, value } }) => (
+                            <TextInput
+                              label="Address Line 1 *"
+                              mode="outlined"
+                              value={value}
+                              onChangeText={onChange}
+                              onBlur={onBlur}
+                              error={!!errors.address_line1}
+                              style={styles.input}
+                              disabled={submitting}
+                            />
+                          )}
+                          name="address_line1"
+                        />
+                        {errors.address_line1 && (
+                          <HelperText type="error">
+                            {errors.address_line1.message}
+                          </HelperText>
+                        )}
+                      </View>
+
+                      <View style={styles.halfInput}>
+                        <Controller
+                          control={control}
+                          render={({ field: { onChange, onBlur, value } }) => (
+                            <TextInput
+                              label="Address Line 2"
+                              mode="outlined"
+                              value={value}
+                              onChangeText={onChange}
+                              onBlur={onBlur}
+                              style={styles.input}
+                              disabled={submitting}
+                            />
+                          )}
+                          name="address_line2"
+                        />
+                      </View>
+                    </View>
+
+                    <View style={styles.row}>
+                      <View style={styles.halfInput}>
+                        <Controller
+                          control={control}
+                          rules={{ required: "City is required" }}
+                          render={({ field: { onChange, onBlur, value } }) => (
+                            <TextInput
+                              label="City *"
+                              mode="outlined"
+                              value={value}
+                              onChangeText={onChange}
+                              onBlur={onBlur}
+                              error={!!errors.address_city}
+                              style={styles.input}
+                              disabled={submitting}
+                            />
+                          )}
+                          name="address_city"
+                        />
+                        {errors.address_city && (
+                          <HelperText type="error">
+                            {errors.address_city.message}
+                          </HelperText>
+                        )}
+                      </View>
+
+                      <View style={styles.halfInput}>
+                        <Controller
+                          control={control}
+                          rules={{ required: "State is required" }}
+                          render={({ field: { onChange, onBlur, value } }) => (
+                            <TextInput
+                              label="State/Province *"
+                              mode="outlined"
+                              value={value}
+                              onChangeText={onChange}
+                              onBlur={onBlur}
+                              error={!!errors.address_state}
+                              style={styles.input}
+                              disabled={submitting}
+                            />
+                          )}
+                          name="address_state"
+                        />
+                        {errors.address_state && (
+                          <HelperText type="error">
+                            {errors.address_state.message}
+                          </HelperText>
+                        )}
+                      </View>
+                    </View>
+
+                    <View style={styles.row}>
+                      <View style={styles.halfInput}>
+                        <Controller
+                          control={control}
+                          rules={{ required: "Postal code is required" }}
+                          render={({ field: { onChange, onBlur, value } }) => (
+                            <TextInput
+                              label="Postal Code *"
+                              mode="outlined"
+                              value={value}
+                              onChangeText={onChange}
+                              onBlur={onBlur}
+                              error={!!errors.address_postal_code}
+                              style={styles.input}
+                              disabled={submitting}
+                            />
+                          )}
+                          name="address_postal_code"
+                        />
+                        {errors.address_postal_code && (
+                          <HelperText type="error">
+                            {errors.address_postal_code.message}
+                          </HelperText>
+                        )}
+                      </View>
+
+                      <View style={styles.halfInput}>
+                        <Controller
+                          control={control}
+                          rules={{ required: "Country is required" }}
+                          render={({ field: { onChange, onBlur, value } }) => (
+                            <TextInput
+                              label="Country *"
+                              mode="outlined"
+                              value={value}
+                              onChangeText={onChange}
+                              onBlur={onBlur}
+                              error={!!errors.address_country}
+                              style={styles.input}
+                              disabled={submitting}
+                            />
+                          )}
+                          name="address_country"
+                        />
+                        {errors.address_country && (
+                          <HelperText type="error">
+                            {errors.address_country.message}
+                          </HelperText>
+                        )}
+                      </View>
+                    </View>
+                  </View>
+                </Surface>
+
+                {/* Bank Details Card */}
+                <Surface style={[styles.detailsCard, { marginTop: 24 }]}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="bank"
+                          size={20}
+                          iconColor="#64748b"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>Bank Details</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardContent}>
+                    <Controller
+                      control={control}
+                      rules={{ required: "Bank name is required" }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <TextInput
+                          label="Bank Name *"
+                          mode="outlined"
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          error={!!errors.bank_name}
+                          style={styles.input}
+                          disabled={submitting}
+                        />
+                      )}
+                      name="bank_name"
+                    />
+                    {errors.bank_name && (
+                      <HelperText type="error">
+                        {errors.bank_name.message}
+                      </HelperText>
+                    )}
+
+                    <Controller
+                      control={control}
+                      rules={{ required: "Account number is required" }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <TextInput
+                          label="Account Number *"
+                          mode="outlined"
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          error={!!errors.account_number}
+                          style={styles.input}
+                          disabled={submitting}
+                        />
+                      )}
+                      name="account_number"
+                    />
+                    {errors.account_number && (
+                      <HelperText type="error">
+                        {errors.account_number.message}
+                      </HelperText>
+                    )}
+
+                    <Controller
+                      control={control}
+                      rules={{ required: "IBAN is required" }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <TextInput
+                          label="IBAN *"
+                          mode="outlined"
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          error={!!errors.iban}
+                          style={styles.input}
+                          disabled={submitting}
+                        />
+                      )}
+                      name="iban"
+                    />
+                    {errors.iban && (
+                      <HelperText type="error">
+                        {errors.iban.message}
+                      </HelperText>
+                    )}
+
+                    <Controller
+                      control={control}
+                      rules={{ required: "SWIFT code is required" }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <TextInput
+                          label="SWIFT Code *"
+                          mode="outlined"
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          error={!!errors.swift_code}
+                          style={styles.input}
+                          disabled={submitting}
+                        />
+                      )}
+                      name="swift_code"
+                    />
+                    {errors.swift_code && (
+                      <HelperText type="error">
+                        {errors.swift_code.message}
+                      </HelperText>
+                    )}
+                  </View>
+                </Surface>
+
+                <View style={styles.bottomBarContent}>
+                  <View style={styles.actionButtons}>
+                    <Button
+                      mode="outlined"
+                      onPress={() => navigation.goBack()}
+                      style={styles.button}
+                      disabled={submitting}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      mode="contained"
+                      onPress={handleSubmit(onSubmit)}
+                      style={[
+                        styles.button,
+                        {
+                          backgroundColor: submitting
+                            ? theme.colors.disabled
+                            : theme.colors.primary,
+                        },
+                      ]}
+                      loading={submitting}
+                      disabled={submitting || networkStatus === false}
+                    >
+                      Update Employee
+                    </Button>
+                  </View>
+                </View>
+              </Animated.View>
             </View>
           </View>
-
-          <View style={styles.row}>
-            <View style={styles.halfInput}>
-              <Controller
-                control={control}
-                rules={{ required: "Postal code is required" }}
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <TextInput
-                    label="Postal Code *"
-                    mode="outlined"
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    error={!!errors.address_postal_code}
-                    style={styles.input}
-                    disabled={submitting}
-                  />
-                )}
-                name="address_postal_code"
-              />
-              {errors.address_postal_code && (
-                <HelperText type="error">
-                  {errors.address_postal_code.message}
-                </HelperText>
-              )}
-            </View>
-
-            <View style={styles.halfInput}>
-              <Controller
-                control={control}
-                rules={{ required: "Country is required" }}
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <TextInput
-                    label="Country *"
-                    mode="outlined"
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    error={!!errors.address_country}
-                    style={styles.input}
-                    disabled={submitting}
-                  />
-                )}
-                name="address_country"
-              />
-              {errors.address_country && (
-                <HelperText type="error">
-                  {errors.address_country.message}
-                </HelperText>
-              )}
-            </View>
-          </View>
-
-          <Text
-            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
-          >
-            Bank Details
-          </Text>
-
-          <Controller
-            control={control}
-            rules={{ required: "Bank name is required" }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Bank Name *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.bank_name}
-                style={styles.input}
-                disabled={submitting}
-              />
-            )}
-            name="bank_name"
-          />
-          {errors.bank_name && (
-            <HelperText type="error">{errors.bank_name.message}</HelperText>
-          )}
-
-          <Controller
-            control={control}
-            rules={{ required: "Account number is required" }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Account Number *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.account_number}
-                style={styles.input}
-                disabled={submitting}
-              />
-            )}
-            name="account_number"
-          />
-          {errors.account_number && (
-            <HelperText type="error">
-              {errors.account_number.message}
-            </HelperText>
-          )}
-
-          <Controller
-            control={control}
-            rules={{ required: "IBAN is required" }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="IBAN *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.iban}
-                style={styles.input}
-                disabled={submitting}
-              />
-            )}
-            name="iban"
-          />
-          {errors.iban && (
-            <HelperText type="error">{errors.iban.message}</HelperText>
-          )}
-
-          <Controller
-            control={control}
-            rules={{ required: "SWIFT code is required" }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="SWIFT Code *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.swift_code}
-                style={styles.input}
-                disabled={submitting}
-              />
-            )}
-            name="swift_code"
-          />
-          {errors.swift_code && (
-            <HelperText type="error">{errors.swift_code.message}</HelperText>
-          )}
-
-          <Text
-            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
-          >
-            Additional Information
-          </Text>
-
-          <Controller
-            control={control}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Comments"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                style={styles.input}
-                multiline
-                numberOfLines={4}
-                disabled={submitting}
-              />
-            )}
-            name="comments"
-          />
-
-          <Button
-            mode="contained"
-            onPress={handleSubmit(onSubmit)}
-            style={styles.submitButton}
-            loading={submitting}
-            disabled={submitting || networkStatus === false}
-          >
-            Update Employee
-          </Button>
         </ScrollView>
       </KeyboardAvoidingView>
     );
@@ -1366,7 +1485,7 @@ const EditEmployeeScreen = () => {
           navigation.navigate("Help" as never);
         }}
         showLogo={false}
-      />  
+      />
 
       {/* Show offline banner if offline */}
       {networkStatus === false && (
@@ -1420,6 +1539,7 @@ const EditEmployeeScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#F8F9FA",
   },
   keyboardAvoidingView: {
     flex: 1,
@@ -1428,35 +1548,88 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
+    paddingVertical: 32,
+    alignSelf: "center",
+    width: "100%",
+  },
+  gridContainer: {
+    flexDirection: "row",
+    gap: 24,
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
+  gridColumn: {
+    minWidth: 320,
+    gap: 24,
+  },
+  detailsCard: {
+    borderRadius: 16,
+    overflow: "hidden",
+    elevation: 1,
+    shadowColor: "rgba(0,0,0,0.1)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     padding: 16,
-    paddingBottom: 40,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginTop: 24,
-    marginBottom: 16,
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
   },
-  input: {
-    marginBottom: 8,
+  iconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "#f1f5f9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerIcon: {
+    margin: 0,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontFamily: getFontFamily("600"),
+    color: "#1e293b",
+  },
+  cardContent: {
+    padding: 24,
   },
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
+    gap: 16,
   },
   halfInput: {
-    width: "48%",
+    flex: 1,
+  },
+  input: {
+    marginBottom: 16,
+    backgroundColor: "#FFFFFF",
   },
   emailLabel: {
     fontSize: 14,
     marginBottom: 16,
-    opacity: 0.7,
+    fontFamily: getFontFamily("normal"),
+    color: "#64748b",
     fontStyle: "italic",
   },
   inputLabel: {
     fontSize: 14,
     marginBottom: 8,
-    opacity: 0.7,
+    fontFamily: getFontFamily("500"),
+    color: "#64748b",
   },
   dateButton: {
     marginBottom: 16,
@@ -1470,18 +1643,24 @@ const styles = StyleSheet.create({
   segmentedButtons: {
     marginBottom: 16,
   },
-  submitButton: {
+  bottomBarContent: {
     marginTop: 24,
-    paddingVertical: 6,
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+  },
+  actionButtons: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  button: {
+    minWidth: 120,
   },
   errorContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
-  },
-  button: {
-    marginTop: 16,
   },
   adminToggleContainer: {
     flexDirection: "row",
@@ -1492,11 +1671,18 @@ const styles = StyleSheet.create({
   },
   adminToggleLabel: {
     fontSize: 16,
+    fontFamily: getFontFamily("500"),
+    color: "#1e293b",
   },
   helperText: {
-    marginBottom: 16,
     fontSize: 14,
-    opacity: 0.7,
+    color: "#64748b",
+    marginTop: 4,
+    fontFamily: getFontFamily("normal"),
+  },
+  submitButton: {
+    marginTop: 24,
+    paddingVertical: 6,
   },
 });
 
