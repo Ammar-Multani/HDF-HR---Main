@@ -3,7 +3,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useTheme } from "react-native-paper";
-import { useNavigationContainerRef } from "@react-navigation/native";
+import { useNavigationContainerRef, useNavigation } from "@react-navigation/native";
 import {
   View,
   StyleSheet,
@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import Text from "../components/Text";
+import { SidebarLayout } from "./components/SidebarLayout";
 
 // Employee Screens
 import EmployeeDashboard from "../screens/employee/EmployeeDashboard";
@@ -74,136 +75,109 @@ const NavItem = ({ icon, label, onPress, isActive = false }: NavItemProps) => {
   );
 };
 
+// Web Layout with SidebarLayout
+const WebStackNavigator = () => {
+  const [activeScreen, setActiveScreen] = useState("Dashboard");
+  const navigation = useNavigation();
+
+  const navigationItems = [
+    { icon: "home" as const, label: "Dashboard", screen: "Dashboard" },
+    { icon: "file-document" as const, label: "Forms", screen: "Forms" },
+    { icon: "account-circle" as const, label: "Profile", screen: "Profile" },
+  ];
+
+  // Create a stack navigator for the content area
+  const ContentStack = createNativeStackNavigator();
+
+  // Content area component that includes both main screens and stack screens
+  const ContentArea = () => {
+    return (
+      <ContentStack.Navigator 
+        screenOptions={{ 
+          headerShown: false,
+          animation: 'none'
+        }}
+        initialRouteName={activeScreen}
+      >
+        {/* Main screens */}
+        <ContentStack.Screen 
+          name="Dashboard" 
+          component={EmployeeDashboard}
+          options={{ title: "Dashboard - HDF HR" }}
+        />
+        <ContentStack.Screen 
+          name="Forms" 
+          component={EmployeeFormsScreen}
+          options={{ title: "Forms - HDF HR" }}
+        />
+        <ContentStack.Screen 
+          name="Profile" 
+          component={EmployeeProfileScreen}
+          options={{ title: "Profile - HDF HR" }}
+        />
+        
+        {/* Stack screens */}
+        <ContentStack.Screen 
+          name="CreateAccidentReport" 
+          component={CreateAccidentReportScreen}
+          options={{ title: "Create Accident Report - HDF HR" }}
+        />
+        <ContentStack.Screen 
+          name="CreateIllnessReport" 
+          component={CreateIllnessReportScreen}
+          options={{ title: "Create Illness Report - HDF HR" }}
+        />
+        <ContentStack.Screen 
+          name="CreateStaffDeparture" 
+          component={CreateStaffDepartureScreen}
+          options={{ title: "Create Staff Departure - HDF HR" }}
+        />
+        <ContentStack.Screen 
+          name="FormDetails" 
+          component={EmployeeFormDetailsScreen}
+          options={{ title: "Form Details - HDF HR" }}
+        />
+        <ContentStack.Screen 
+          name="TaskDetails" 
+          component={EmployeeTaskDetailsScreen}
+          options={{ title: "Task Details - HDF HR" }}
+        />
+      </ContentStack.Navigator>
+    );
+  };
+
+  // Handle navigation
+  const handleNavigation = (screen: string) => {
+    setActiveScreen(screen);
+    // @ts-ignore - Ignore the typing error as we know these routes exist
+    navigation.navigate(screen);
+  };
+
+  return (
+    <SidebarLayout
+      activeScreen={activeScreen}
+      setActiveScreen={setActiveScreen}
+      navigationItems={navigationItems}
+      content={{
+        Dashboard: <ContentArea />,
+        Forms: <ContentArea />,
+        Profile: <ContentArea />,
+      }}
+      onNavigate={handleNavigation}
+    />
+  );
+};
+
 // Tab Navigator for Employee
 const EmployeeTabNavigator = () => {
   const theme = useTheme();
   const isWeb = Platform.OS === "web";
   const windowWidth = Dimensions.get("window").width;
   const isLargeScreen = isWeb && windowWidth > 768;
-  const nav = useNavigationContainerRef();
-  const [activeScreen, setActiveScreen] = useState("Dashboard");
 
-  const renderTabBarBackground = () => {
-    return (
-      <View
-        style={{
-          borderRadius: 25,
-          borderWidth: 1,
-          borderColor: "rgb(207, 207, 207)",
-          overflow: "hidden",
-          ...StyleSheet.absoluteFillObject,
-        }}
-      >
-        <LinearGradient
-          colors={[
-            "rgba(6,169,169,255)",
-            "rgba(38,127,161,255)",
-            "rgba(54,105,157,255)",
-            "rgba(74,78,153,255)",
-            "rgba(94,52,149,255)",
-          ]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={StyleSheet.absoluteFillObject}
-        />
-      </View>
-    );
-  };
-
-  // Use conditional rendering based on platform/screen size
+  // For web with large screen: Use SidebarLayout
   if (isLargeScreen) {
-    // Web with large screen: Use custom sidebar layout
-    return (
-      <View style={{ flexDirection: "row", height: "100%" }}>
-        {/* Sidebar Navigation */}
-        <View
-          style={{
-            width: 220,
-            height: "100%",
-            backgroundColor: "transparent",
-            paddingTop: 20,
-            paddingBottom: 20,
-            borderRightWidth: 0,
-            position: "relative",
-          }}
-        >
-          {/* Background gradient */}
-          <LinearGradient
-            colors={[
-              "rgba(6,169,169,255)",
-              "rgba(38,127,161,255)",
-              "rgba(54,105,157,255)",
-              "rgba(74,78,153,255)",
-              "rgba(94,52,149,255)",
-            ]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            style={StyleSheet.absoluteFillObject}
-          />
-
-          {/* Logo at the top */}
-          <View
-            style={{
-              paddingHorizontal: 20,
-              paddingVertical: 24,
-              marginBottom: 10,
-              alignItems: "center",
-              borderBottomWidth: 1,
-              borderBottomColor: "rgba(255, 255, 255, 0.1)",
-            }}
-          >
-            <View
-              style={{
-                width: 150,
-                height: 50,
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              {/* Logo image */}
-              <Image
-                source={require("../assets/splash-icon-mono.png")}
-                style={{
-                  width: 160,
-                  height: 120,
-                  resizeMode: "contain",
-                  alignSelf: "center",
-                }}
-              />
-            </View>
-          </View>
-
-          {/* Navigation Items */}
-          <View style={{ paddingLeft: 20, paddingRight: 20, marginTop: 20 }}>
-            <NavItem
-              icon="home"
-              label="Dashboard"
-              isActive={activeScreen === "Dashboard"}
-              onPress={() => setActiveScreen("Dashboard")}
-            />
-            <NavItem
-              icon="file-document"
-              label="Forms"
-              isActive={activeScreen === "Forms"}
-              onPress={() => setActiveScreen("Forms")}
-            />
-            <NavItem
-              icon="account-circle"
-              label="Profile"
-              isActive={activeScreen === "Profile"}
-              onPress={() => setActiveScreen("Profile")}
-            />
-          </View>
-        </View>
-
-        {/* Main Content */}
-        <View style={{ flex: 1 }}>
-          {activeScreen === "Dashboard" && <EmployeeDashboard />}
-          {activeScreen === "Forms" && <EmployeeFormsScreen />}
-          {activeScreen === "Profile" && <EmployeeProfileScreen />}
-        </View>
-      </View>
-    );
+    return <WebStackNavigator />;
   }
 
   // Mobile or small screen: Use bottom tabs
@@ -223,7 +197,6 @@ const EmployeeTabNavigator = () => {
           marginHorizontal: 13,
           marginBottom: 10,
           borderRadius: 25,
-
           shadowColor: "#000",
           shadowOffset: {
             width: 0,
@@ -232,7 +205,30 @@ const EmployeeTabNavigator = () => {
           shadowOpacity: 0.25,
           shadowRadius: 3.84,
         },
-        tabBarBackground: renderTabBarBackground,
+        tabBarBackground: () => (
+          <View
+            style={{
+              borderRadius: 25,
+              borderWidth: 1,
+              borderColor: "rgb(207, 207, 207)",
+              overflow: "hidden",
+              ...StyleSheet.absoluteFillObject,
+            }}
+          >
+            <LinearGradient
+              colors={[
+                "rgba(6,169,169,255)",
+                "rgba(38,127,161,255)",
+                "rgba(54,105,157,255)",
+                "rgba(74,78,153,255)",
+                "rgba(94,52,149,255)",
+              ]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={StyleSheet.absoluteFillObject}
+            />
+          </View>
+        ),
         tabBarLabelStyle: {
           fontSize: 10,
           fontFamily: "Poppins-Medium",
@@ -246,7 +242,7 @@ const EmployeeTabNavigator = () => {
         name="Dashboard"
         component={EmployeeDashboard}
         options={{
-          tabBarIcon: ({ color, size }) => (
+          tabBarIcon: ({ color }) => (
             <MaterialCommunityIcons name="home" color={color} size={24} />
           ),
         }}
@@ -255,7 +251,7 @@ const EmployeeTabNavigator = () => {
         name="Forms"
         component={EmployeeFormsScreen}
         options={{
-          tabBarIcon: ({ color, size }) => (
+          tabBarIcon: ({ color }) => (
             <MaterialCommunityIcons
               name="file-document"
               color={color}
@@ -268,7 +264,7 @@ const EmployeeTabNavigator = () => {
         name="Profile"
         component={EmployeeProfileScreen}
         options={{
-          tabBarIcon: ({ color, size }) => (
+          tabBarIcon: ({ color }) => (
             <MaterialCommunityIcons
               name="account-circle"
               color={color}
@@ -282,31 +278,46 @@ const EmployeeTabNavigator = () => {
 };
 
 // Employee Navigator
-export const EmployeeNavigator = () => (
-  <EmployeeStack.Navigator screenOptions={{ headerShown: false }}>
-    <EmployeeStack.Screen
-      name="EmployeeTabs"
-      component={EmployeeTabNavigator}
-    />
-    <EmployeeStack.Screen
-      name="CreateAccidentReport"
-      component={CreateAccidentReportScreen}
-    />
-    <EmployeeStack.Screen
-      name="CreateIllnessReport"
-      component={CreateIllnessReportScreen}
-    />
-    <EmployeeStack.Screen
-      name="CreateStaffDeparture"
-      component={CreateStaffDepartureScreen}
-    />
-    <EmployeeStack.Screen
-      name="FormDetails"
-      component={EmployeeFormDetailsScreen}
-    />
-    {/* <EmployeeStack.Screen
-      name="TaskDetails"
-      component={EmployeeTaskDetailsScreen}
-    /> */}
-  </EmployeeStack.Navigator>
-);
+export const EmployeeNavigator = () => {
+  const isWeb = Platform.OS === "web";
+  const windowWidth = Dimensions.get("window").width;
+  const isLargeScreen = isWeb && windowWidth > 768;
+
+  if (isLargeScreen) {
+    return <EmployeeTabNavigator />;
+  }
+
+  return (
+    <EmployeeStack.Navigator screenOptions={{ headerShown: false }}>
+      <EmployeeStack.Screen
+        name="EmployeeTabs"
+        component={EmployeeTabNavigator}
+      />
+      <EmployeeStack.Screen
+        name="CreateAccidentReport"
+        component={CreateAccidentReportScreen}
+        options={{ title: "Create Accident Report - HDF HR" }}
+      />
+      <EmployeeStack.Screen
+        name="CreateIllnessReport"
+        component={CreateIllnessReportScreen}
+        options={{ title: "Create Illness Report - HDF HR" }}
+      />
+      <EmployeeStack.Screen
+        name="CreateStaffDeparture"
+        component={CreateStaffDepartureScreen}
+        options={{ title: "Create Staff Departure - HDF HR" }}
+      />
+      <EmployeeStack.Screen
+        name="FormDetails"
+        component={EmployeeFormDetailsScreen}
+        options={{ title: "Form Details - HDF HR" }}
+      />
+      <EmployeeStack.Screen
+        name="TaskDetails"
+        component={EmployeeTaskDetailsScreen}
+        options={{ title: "Task Details - HDF HR" }}
+      />
+    </EmployeeStack.Navigator>
+  );
+};

@@ -3,6 +3,7 @@ import {
   NavigationContainer,
   useNavigationContainerRef,
   StackActions,
+  ParamListBase,
 } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "../contexts/AuthContext";
@@ -75,7 +76,7 @@ export const AppNavigator = ({ initialAuthState = null }) => {
   const navRef = useNavigationContainerRef();
   const { width } = useWindowDimensions();
   const [isReady, setIsReady] = useState(false);
-  const [initialState, setInitialState] = useState(null);
+  const [initialState, setInitialState] = useState<any>(null);
 
   // Load saved navigation state
   useEffect(() => {
@@ -114,6 +115,7 @@ export const AppNavigator = ({ initialAuthState = null }) => {
     if (navRef.current && navRef.isReady()) {
       const currentRoute = navRef.current.getCurrentRoute();
       if (currentRoute) {
+        // @ts-ignore - We know these routes exist
         navRef.current.navigate(currentRoute.name);
       }
     }

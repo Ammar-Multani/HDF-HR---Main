@@ -36,7 +36,7 @@
           "data": [
             {
               "scheme": "https",
-              "host": "*.yourdomain.com",
+              "host": "hdfhr.netlify.app",
               "pathPrefix": "/reset-password"
             },
             {
@@ -58,10 +58,22 @@
         "NSPhotoLibraryAddUsageDescription": "This app saves photos to your library when you download documents.",
         "NSMicrophoneUsageDescription": "This app uses the microphone for video recording features."
       },
-      "associatedDomains": ["applinks:*.yourdomain.com"]
+      "associatedDomains": ["applinks:hdfhr.netlify.app"]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "name": "HDF-HR",
+      "shortName": "HDF-HR",
+      "description": "HDF HR Management System",
+      "lang": "en",
+      "themeColor": "#ffffff",
+      "backgroundColor": "#ffffff",
+      "orientation": "portrait",
+      "scope": "/",
+      "startUrl": "/",
+      "display": "standalone",
+      "bundler": "metro",
+      "hostUri": "hdfhr.netlify.app"
     },
     "plugins": [
       "expo-router",

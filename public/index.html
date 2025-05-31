@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1.00001, viewport-fit=cover" />
+    <title>HDF-HR</title>
+    <style>
+      /* These styles make the body full-height */
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        overscroll-behavior-y: none;
+      }
+      /* These styles make the root element full-height */
+      #root {
+        display: flex;
+        height: 100%;
+      }
+      /* Reset scroll behavior for React Native ScrollView */
+      * {
+        -webkit-overflow-scrolling: touch;
+      }
+      /* Prevent pull-to-refresh and overscroll effects */
+      body {
+        position: fixed;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        -webkit-overflow-scrolling: touch;
+      }
+      /* Enable scrolling within ScrollView components */
+      [data-scrollview="true"] {
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html> 

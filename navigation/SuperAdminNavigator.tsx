@@ -126,16 +126,15 @@ const useWindowDimensions = () => {
 const WebStackNavigator = () => {
   const [activeScreen, setActiveScreen] = useState("Dashboard");
   const navigation = useNavigation();
-  const [currentStackScreen, setCurrentStackScreen] = useState(null);
 
   const navigationItems = [
-    { icon: "home", label: "Dashboard", screen: "Dashboard" },
-    { icon: "domain", label: "Companies", screen: "Companies" },
-    { icon: "account-group", label: "Users", screen: "Users" },
-    { icon: "file-document", label: "Forms", screen: "Forms" },
-    { icon: "receipt", label: "Receipts", screen: "Receipts" },
-    { icon: "clipboard-text", label: "Tasks", screen: "Tasks" },
-    { icon: "account-circle", label: "Profile", screen: "Profile" },
+    { icon: "home" as const, label: "Dashboard", screen: "Dashboard" },
+    { icon: "domain" as const, label: "Companies", screen: "Companies" },
+    { icon: "account-group" as const, label: "Users", screen: "Users" },
+    { icon: "file-document" as const, label: "Forms", screen: "Forms" },
+    { icon: "receipt" as const, label: "Receipts", screen: "Receipts" },
+    { icon: "clipboard-text" as const, label: "Tasks", screen: "Tasks" },
+    { icon: "account-circle" as const, label: "Profile", screen: "Profile" },
   ];
 
   // Define the main content screens
@@ -155,84 +154,150 @@ const WebStackNavigator = () => {
   // Content area component that includes both main screens and stack screens
   const ContentArea = () => {
     return (
-      <ContentStack.Navigator screenOptions={{ headerShown: false }}>
-        <ContentStack.Screen name="MainContent">
-          {() => mainContent[activeScreen]}
-        </ContentStack.Screen>
-        <ContentStack.Screen
-          name="CompanyDetails"
+      <ContentStack.Navigator 
+        screenOptions={{ 
+          headerShown: false,
+          animation: 'none'
+        }}
+        initialRouteName={activeScreen}
+      >
+        {/* Main screens */}
+        <ContentStack.Screen 
+          name="Dashboard" 
+          component={SuperAdminDashboard}
+          options={{ title: "Dashboard HDF-HR" }}
+        />
+        <ContentStack.Screen 
+          name="Companies" 
+          component={CompanyListScreen}
+          options={{ title: "Companies HDF-HR" }}
+        />
+        <ContentStack.Screen 
+          name="Users" 
+          component={SuperAdminUsersScreen}
+          options={{ title: "Users HDF-HR" }}
+        />
+        <ContentStack.Screen 
+          name="Forms" 
+          component={SuperAdminFormsScreen}
+          options={{ title: "Forms HDF-HR" }}
+        />
+        <ContentStack.Screen 
+          name="Receipts" 
+          component={ReceiptsListScreen}
+          options={{ title: "Receipts HDF-HR" }}
+        />
+        <ContentStack.Screen 
+          name="Tasks" 
+          component={SuperAdminTasksScreen}
+          options={{ title: "Tasks HDF-HR" }}
+        />
+        <ContentStack.Screen 
+          name="Profile" 
+          component={SuperAdminProfileScreen}
+          options={{ title: "Profile HDF-HR" }}
+        />
+        
+        {/* Stack screens */}
+        <ContentStack.Screen 
+          name="CompanyDetails" 
           component={CompanyDetailsScreen}
+          options={{ title: "Company Details HDF-HR" }}
         />
-        <ContentStack.Screen
-          name="CreateCompany"
+        <ContentStack.Screen 
+          name="CreateCompany" 
           component={CreateCompanyScreen}
+          options={{ title: "Create Company HDF-HR" }}
         />
-        <ContentStack.Screen name="EditCompany" component={EditCompanyScreen} />
-        <ContentStack.Screen
-          name="TaskDetails"
+        <ContentStack.Screen 
+          name="EditCompany" 
+          component={EditCompanyScreen}
+          options={{ title: "Edit Company HDF-HR" }}
+        />
+        <ContentStack.Screen 
+          name="TaskDetails" 
           component={SuperAdminTaskDetailsScreen}
+          options={{ title: "Task Details HDF-HR" }}
         />
-        <ContentStack.Screen name="CreateTask" component={CreateTaskScreen} />
-        <ContentStack.Screen
-          name="CreateSuperAdmin"
+        <ContentStack.Screen 
+          name="CreateTask" 
+          component={CreateTaskScreen}
+          options={{ title: "Create Task HDF-HR" }}
+        />
+        <ContentStack.Screen 
+          name="CreateSuperAdmin" 
           component={CreateSuperAdminScreen}
+          options={{ title: "Create Super Admin HDF-HR" }}
         />
-        <ContentStack.Screen
-          name="SuperAdminDetailsScreen"
+        <ContentStack.Screen 
+          name="SuperAdminDetailsScreen" 
           component={SuperAdminDetailsScreen}
+          options={{ title: "Super Admin Details HDF-HR" }}
         />
-        <ContentStack.Screen
-          name="EditSuperAdmin"
+        <ContentStack.Screen 
+          name="EditSuperAdmin" 
           component={EditSuperAdminScreen}
+          options={{ title: "Edit Super Admin HDF-HR" }}
         />
-        <ContentStack.Screen
-          name="CompanyAdminDetailsScreen"
+        <ContentStack.Screen 
+          name="CompanyAdminDetailsScreen" 
           component={CompanyAdminDetailsScreen}
+          options={{ title: "Company Admin Details HDF-HR" }}
         />
-        <ContentStack.Screen
-          name="EditCompanyAdmin"
+        <ContentStack.Screen 
+          name="EditCompanyAdmin" 
           component={EditCompanyAdminScreen}
+          options={{ title: "Edit Company Admin HDF-HR" }}
         />
-        <ContentStack.Screen
-          name="EmployeeDetailedScreen"
+        <ContentStack.Screen 
+          name="EmployeeDetailedScreen" 
           component={EmployeeDetailedScreen}
+          options={{ title: "Employee Details HDF-HR" }}
         />
-        <ContentStack.Screen
-          name="CreateCompanyAdmin"
+        <ContentStack.Screen 
+          name="CreateCompanyAdmin" 
           component={CreateCompanyAdminScreen}
+          options={{ title: "Create Company Admin HDF-HR" }}
         />
-        <ContentStack.Screen
-          name="CreateEmployee"
+        <ContentStack.Screen 
+          name="CreateEmployee" 
           component={CreateEmployeesScreen}
+          options={{ title: "Create Employee HDF-HR" }}
         />
-        <ContentStack.Screen
-          name="SuperAdminFormDetailsScreen"
+        <ContentStack.Screen 
+          name="SuperAdminFormDetailsScreen" 
           component={SuperAdminFormDetailsScreen}
+          options={{ title: "Form Details HDF-HR" }}
         />
-        <ContentStack.Screen
-          name="CreateReceipt"
+        <ContentStack.Screen 
+          name="CreateReceipt" 
           component={CreateReceiptScreen}
+          options={{ title: "Create Receipt HDF-HR" }}
         />
-        <ContentStack.Screen
-          name="ReceiptDetails"
+        <ContentStack.Screen 
+          name="ReceiptDetails" 
           component={ReceiptDetailsScreen}
+          options={{ title: "Receipt Details HDF-HR" }}
         />
-        <ContentStack.Screen name="EditTask" component={EditTaskScreen} />
-        <ContentStack.Screen name="EditReceipt" component={EditReceiptScreen} />
+        <ContentStack.Screen 
+          name="EditTask" 
+          component={EditTaskScreen}
+          options={{ title: "Edit Task HDF-HR" }}
+        />
+        <ContentStack.Screen 
+          name="EditReceipt" 
+          component={EditReceiptScreen}
+          options={{ title: "Edit Receipt HDF-HR" }}
+        />
       </ContentStack.Navigator>
     );
   };
 
   // Handle navigation
   const handleNavigation = (screen: string) => {
-    // Check if the screen is a main navigation item
-    if (navigationItems.some((item) => item.screen === screen)) {
-      setActiveScreen(screen);
-      navigation.navigate("MainContent");
-    } else {
-      // It's a stack screen
-      navigation.navigate(screen);
-    }
+    setActiveScreen(screen);
+    // @ts-ignore - Ignore the typing error for now as we know these routes exist
+    navigation.navigate(screen);
   };
 
   return (

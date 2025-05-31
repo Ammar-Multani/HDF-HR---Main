@@ -70,11 +70,11 @@ const WebStackNavigator = () => {
   const navigation = useNavigation();
 
   const navigationItems = [
-    { icon: "home", label: "Dashboard", screen: "Dashboard" },
-    { icon: "account-group", label: "Employees", screen: "Employees" },
-    { icon: "clipboard-text", label: "Tasks", screen: "Tasks" },
-    { icon: "file-document", label: "Forms", screen: "FormSubmissions" },
-    { icon: "account-circle", label: "Profile", screen: "Profile" },
+    { icon: "home" as const, label: "Dashboard", screen: "Dashboard" },
+    { icon: "account-group" as const, label: "Employees", screen: "Employees" },
+    { icon: "clipboard-text" as const, label: "Tasks", screen: "Tasks" },
+    { icon: "file-document" as const, label: "Forms", screen: "FormSubmissions" },
+    { icon: "account-circle" as const, label: "Profile", screen: "Profile" },
   ];
 
   // Define the main content screens
@@ -92,49 +92,85 @@ const WebStackNavigator = () => {
   // Content area component that includes both main screens and stack screens
   const ContentArea = () => {
     return (
-      <ContentStack.Navigator screenOptions={{ headerShown: false }}>
-        <ContentStack.Screen name="MainContent">
-          {() => mainContent[activeScreen]}
-        </ContentStack.Screen>
-        <ContentStack.Screen
-          name="EmployeeDetails"
+      <ContentStack.Navigator 
+        screenOptions={{ 
+          headerShown: false,
+          animation: 'none'
+        }}
+        initialRouteName={activeScreen}
+      >
+        {/* Main screens */}
+        <ContentStack.Screen 
+          name="Dashboard" 
+          component={CompanyAdminDashboard}
+          options={{ title: "Dashboard HDF-HR" }}
+        />
+        <ContentStack.Screen 
+          name="Employees" 
+          component={EmployeeListScreen}
+          options={{ title: "Employees HDF-HR" }}
+        />
+        <ContentStack.Screen 
+          name="Tasks" 
+          component={CompanyAdminTasksScreen}
+          options={{ title: "Tasks HDF-HR" }}
+        />
+        <ContentStack.Screen 
+          name="FormSubmissions" 
+          component={FormSubmissionsScreen}
+          options={{ title: "Forms HDF-HR" }}
+        />
+        <ContentStack.Screen 
+          name="Profile" 
+          component={CompanyAdminProfileScreen}
+          options={{ title: "Profile HDF-HR" }}
+        />
+        
+        {/* Stack screens */}
+        <ContentStack.Screen 
+          name="EmployeeDetails" 
           component={EmployeeDetailsScreen}
+          options={{ title: "Employee Details HDF-HR" }}
         />
-        <ContentStack.Screen
-          name="CreateEmployee"
+        <ContentStack.Screen 
+          name="CreateEmployee" 
           component={CreateEmployeeScreen}
+          options={{ title: "Create Employee HDF-HR" }}
         />
-        <ContentStack.Screen
-          name="EditEmployee"
+        <ContentStack.Screen 
+          name="EditEmployee" 
           component={EditEmployeeScreen}
+          options={{ title: "Edit Employee HDF-HR" }}
         />
-        <ContentStack.Screen
-          name="TaskDetails"
+        <ContentStack.Screen 
+          name="TaskDetails" 
           component={CompanyAdminTaskDetailsScreen}
+          options={{ title: "Task Details HDF-HR" }}
         />
-        <ContentStack.Screen
-          name="CreateTask"
+        <ContentStack.Screen 
+          name="CreateTask" 
           component={CompanyAdminCreateTaskScreen}
+          options={{ title: "Create Task HDF-HR" }}
         />
-        <ContentStack.Screen
-          name="EditTask"
+        <ContentStack.Screen 
+          name="EditTask" 
           component={CompanyAdminEditTaskScreen}
+          options={{ title: "Edit Task HDF-HR" }}
         />
-        <ContentStack.Screen name="FormDetails" component={FormDetailsScreen} />
+        <ContentStack.Screen 
+          name="FormDetails" 
+          component={FormDetailsScreen}
+          options={{ title: "Form Details HDF-HR" }}
+        />
       </ContentStack.Navigator>
     );
   };
 
   // Handle navigation
   const handleNavigation = (screen: string) => {
-    // Check if the screen is a main navigation item
-    if (navigationItems.some((item) => item.screen === screen)) {
-      setActiveScreen(screen);
-      navigation.navigate("MainContent");
-    } else {
-      // It's a stack screen
-      navigation.navigate(screen);
-    }
+    setActiveScreen(screen);
+    // @ts-ignore - Ignore the typing error as we know these routes exist
+    navigation.navigate(screen);
   };
 
   return (
