@@ -164,7 +164,7 @@ const CompanyAdminDashboard = () => {
         { count: pendingIllnessReports, error: pendingIllnessError },
         { count: pendingDepartureReports, error: pendingDepartureError },
       ] = await Promise.all([
-        // Fetch employees count
+      // Fetch employees count
         supabase
           .from("company_user")
           .select("*", { count: "exact", head: true })
@@ -172,19 +172,19 @@ const CompanyAdminDashboard = () => {
 
         // Today's employees count
         supabase
-          .from("company_user")
-          .select("*", { count: "exact", head: true })
+        .from("company_user")
+        .select("*", { count: "exact", head: true })
           .eq("company_id", currentCompanyId)
           .gte("created_at", today.toISOString()),
 
-        // Fetch active employees count
+      // Fetch active employees count
         supabase
           .from("company_user")
           .select("*", { count: "exact", head: true })
           .eq("company_id", currentCompanyId)
           .eq("active_status", "active"),
 
-        // Fetch tasks count
+      // Fetch tasks count
         supabase
           .from("tasks")
           .select("*", { count: "exact", head: true })
@@ -193,33 +193,33 @@ const CompanyAdminDashboard = () => {
         // Today's tasks count
         supabase
           .from("tasks")
-          .select("*", { count: "exact", head: true })
+        .select("*", { count: "exact", head: true })
           .eq("company_id", currentCompanyId)
           .gte("created_at", today.toISOString()),
 
-        // Fetch pending tasks count (open + in progress + awaiting response)
+      // Fetch pending tasks count (open + in progress + awaiting response)
         supabase
           .from("tasks")
-          .select("*", { count: "exact", head: true })
-          .eq("company_id", currentCompanyId)
-          .in("status", [
-            TaskStatus.OPEN,
-            TaskStatus.IN_PROGRESS,
-            TaskStatus.AWAITING_RESPONSE,
+        .select("*", { count: "exact", head: true })
+        .eq("company_id", currentCompanyId)
+        .in("status", [
+          TaskStatus.OPEN,
+          TaskStatus.IN_PROGRESS,
+          TaskStatus.AWAITING_RESPONSE,
           ]),
 
-        // Fetch completed tasks count
+      // Fetch completed tasks count
         supabase
           .from("tasks")
           .select("*", { count: "exact", head: true })
           .eq("company_id", currentCompanyId)
           .eq("status", TaskStatus.COMPLETED),
 
-        // Fetch overdue tasks count
+      // Fetch overdue tasks count
         supabase
           .from("tasks")
-          .select("*", { count: "exact", head: true })
-          .eq("company_id", currentCompanyId)
+        .select("*", { count: "exact", head: true })
+        .eq("company_id", currentCompanyId)
           .eq("status", TaskStatus.OVERDUE),
 
         // Fetch accident reports count
@@ -242,22 +242,22 @@ const CompanyAdminDashboard = () => {
 
         // Today's accident reports
         supabase
-          .from("accident_report")
-          .select("*", { count: "exact", head: true })
+        .from("accident_report")
+        .select("*", { count: "exact", head: true })
           .eq("company_id", currentCompanyId)
           .gte("created_at", today.toISOString()),
 
         // Today's illness reports
         supabase
-          .from("illness_report")
-          .select("*", { count: "exact", head: true })
+        .from("illness_report")
+        .select("*", { count: "exact", head: true })
           .eq("company_id", currentCompanyId)
           .gte("submission_date", today.toISOString()),
 
         // Today's departure reports
         supabase
-          .from("staff_departure_report")
-          .select("*", { count: "exact", head: true })
+        .from("staff_departure_report")
+        .select("*", { count: "exact", head: true })
           .eq("company_id", currentCompanyId)
           .gte("created_at", today.toISOString()),
 
@@ -514,7 +514,7 @@ const CompanyAdminDashboard = () => {
             <Text variant={"medium"} style={styles.statLabel}>
               Total Employees
             </Text>
-            <Text
+        <Text
               variant={"bold"}
               style={[
                 styles.statGrowth,
@@ -528,7 +528,7 @@ const CompanyAdminDashboard = () => {
           </View>
           <Text variant={"bold"} style={styles.statValue}>
             {stats.totalEmployees.toLocaleString()}
-          </Text>
+        </Text>
         </View>
 
         <View style={styles.chartCard}>
@@ -547,7 +547,7 @@ const CompanyAdminDashboard = () => {
             <Text variant={"medium"} style={styles.statLabel}>
               Total Tasks
             </Text>
-            <Text
+        <Text
               variant={"bold"}
               style={[
                 styles.statGrowth,
@@ -559,7 +559,7 @@ const CompanyAdminDashboard = () => {
           </View>
           <Text variant={"bold"} style={styles.statValue}>
             {stats.totalTasks.toLocaleString()}
-          </Text>
+        </Text>
         </View>
 
         <View style={styles.statCardsContainer}>
@@ -611,7 +611,7 @@ const CompanyAdminDashboard = () => {
             <Text variant={"medium"} style={styles.statLabel}>
               Total Forms
             </Text>
-            <Text
+        <Text
               variant={"bold"}
               style={[
                 styles.statGrowth,
@@ -623,7 +623,7 @@ const CompanyAdminDashboard = () => {
           </View>
           <Text variant={"bold"} style={styles.statValue}>
             {stats.totalForms.toLocaleString()}
-          </Text>
+        </Text>
         </View>
 
         <View style={styles.chartCard}>
