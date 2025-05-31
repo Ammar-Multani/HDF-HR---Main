@@ -44,6 +44,7 @@ import LoadingIndicator from "../../components/LoadingIndicator";
 import EmptyState from "../../components/EmptyState";
 import StatusBadge from "../../components/StatusBadge";
 import { Task, TaskPriority, TaskStatus } from "../../types";
+import { router } from "expo-router";
 
 // Component for skeleton loading UI
 const TaskItemSkeleton = () => {
@@ -929,12 +930,12 @@ const CompanyAdminTasksScreen = () => {
   // Enhanced renderTaskItem with better UI
   const renderTaskItem = ({ item }: { item: Task }) => (
     <TouchableOpacity
-      onPress={() =>
-        navigation.navigate(
-          "TaskDetails" as never,
-          { taskId: item.id } as never
-        )
-      }
+      onPress={() => {
+        router.push({
+          pathname: "/task/[id]",
+          params: { id: item.id }
+        });
+      }}
     >
       <View style={styles.taskCard}>
         <View

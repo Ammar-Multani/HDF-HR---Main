@@ -3,7 +3,18 @@
   "compilerOptions": {
     "strict": true,
     "jsx": "react-native",
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"],
+      "@components/*": ["./components/*"],
+      "@contexts/*": ["./contexts/*"],
+      "@utils/*": ["./utils/*"],
+      "@lib/*": ["./lib/*"],
+      "@types/*": ["./types/*"],
+      "@assets/*": ["./assets/*"],
+      "@screens/*": ["./screens/*"]
+    }
   },
   "include": ["**/*.ts", "**/*.tsx"]
 }

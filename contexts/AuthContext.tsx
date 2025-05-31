@@ -8,19 +8,44 @@ import {
   useCallback,
   useMemo,
 } from "react";
-import { supabase, cachedQuery } from "../lib/supabase";
+import { supabase, cachedQuery } from "@lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { UserRole } from "../types";
+import { UserRole } from "@types/index";
 import {
   hashPassword,
   validatePassword,
   generateResetToken,
   generateJWT,
-} from "../utils/auth";
+} from "@utils/auth";
 import * as Crypto from "expo-crypto";
-import { generatePasswordResetEmail } from "../utils/emailTemplates";
-import { sendPasswordResetEmail } from "../utils/emailService";
+import { generatePasswordResetEmail } from "@utils/emailTemplates";
+import { sendPasswordResetEmail } from "@utils/emailService";
 import NetInfo from "@react-native-community/netinfo";
+
+interface Session {
+  access_token: string;
+}
+
+interface User {
+  id: string;
+  email: string;
+  status: 'active' | 'pending_confirmation' | 'inactive';
+  role?: string;
+  last_login?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+interface AuthError {
+  message: string;
+  code?: string;
+  details?: any;
+}
+
+interface AuthResult<T = void> {
+  data: T | null;
+  error: AuthError | null;
+}
 
 // Auth token constants
 const AUTH_TOKEN_KEY = "auth_token";
@@ -30,31 +55,30 @@ const AUTH_STATE_VERSION = "auth_state_v1"; // Used to invalidate cache when aut
 const SKIP_LOADING_KEY = "skip_loading_after_login";
 
 interface AuthContextType {
-  session: any | null;
-  user: any | null;
+  session: Session | null;
+  user: User | null;
   userRole: UserRole | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: any }>;
-  signUp: (
-    email: string,
-    password: string
-  ) => Promise<{ error: any; data: any }>;
+  signIn: (email: string, password: string) => Promise<AuthResult>;
+  signUp: (email: string, password: string) => Promise<AuthResult<Omit<User, "role">>>;
   signOut: () => Promise<void>;
-  forgotPassword: (email: string) => Promise<{ error: any }>;
-  resetPassword: (
-    newPassword: string,
-    token: string
-  ) => Promise<{ error: any }>;
+  forgotPassword: (email: string) => Promise<AuthResult>;
+  resetPassword: (newPassword: string, token: string) => Promise<AuthResult>;
   navigateToDashboard: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [session, setSession] = useState<any | null>(null);
-  const [user, setUser] = useState<any | null>(null);
+interface AuthProviderProps {
+  children: ReactNode;
+  initialAuthState?: boolean | null;
+}
+
+export const AuthProvider = ({ children, initialAuthState }: AuthProviderProps) => {
+  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialAuthState);
   const [isConnected, setIsConnected] = useState(true);
 
   // Setup network status monitoring
@@ -147,6 +171,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       try {
         console.log("Checking for stored session...");
 
+        // If we have an initial auth state, use it to skip loading
+        if (initialAuthState !== undefined) {
+          console.log("Using provided initial auth state:", initialAuthState);
+          setLoading(false);
+          if (!initialAuthState) {
+            return;
+          }
+        }
+
         // Load token, user data and role in parallel for better performance
         const [storedToken, storedUserData, storedRole] = await Promise.all([
           AsyncStorage.getItem(AUTH_TOKEN_KEY),
@@ -221,7 +254,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     loadStoredSession();
-  }, [isConnected]);
+  }, [isConnected, initialAuthState]);
 
   const fetchUserRole = useCallback(
     async (userId: string) => {
@@ -348,24 +381,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   );
 
   const signIn = useCallback(
-    async (email: string, password: string) => {
+    async (email: string, password: string): Promise<AuthResult> => {
       setLoading(true);
       console.log("Sign-in attempt for:", email);
 
       try {
-        // Check if we're online
         if (!isConnected) {
           console.log("Can't sign in while offline");
           return {
             error: {
-              message:
-                "You are offline. Please check your internet connection and try again.",
+              message: "You are offline. Please check your internet connection and try again.",
+              code: "OFFLINE"
             },
+            data: null
           };
         }
-
-        // Use caching for user lookup to improve performance
-        const cacheKey = `user_email_${email.toLowerCase()}`;
 
         const fetchUserData = async () => {
           return await supabase
@@ -375,7 +405,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             .single();
         };
 
-        // Try cached version first, but always force refresh for login security
         const { data: userData, error: userError } = await fetchUserData();
 
         console.log("User lookup result:", {
@@ -385,11 +414,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         if (userError || !userData) {
           console.log("Sign-in failed: User not found");
-          setLoading(false);
-          return { error: { message: "Invalid email or password" } };
+          return {
+            error: {
+              message: "Invalid email or password",
+              code: "INVALID_CREDENTIALS"
+            },
+            data: null
+          };
         }
 
-        // Validate password directly without migration
         const isPasswordValid = await validateUserPassword(
           password,
           userData.password_hash
@@ -397,8 +430,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         if (!isPasswordValid) {
           console.log("Sign-in failed: Invalid password");
-          setLoading(false);
-          return { error: { message: "Invalid email or password" } };
+          return {
+            error: {
+              message: "Invalid email or password",
+              code: "INVALID_CREDENTIALS"
+            },
+            data: null
+          };
         }
 
         if (userData.status !== "active") {
@@ -406,55 +444,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             "Sign-in failed: Account not active, status:",
             userData.status
           );
-          setLoading(false);
-          return { error: { message: "Account is not active" } };
+          return {
+            error: {
+              message: "Account is not active",
+              code: "INACTIVE_ACCOUNT",
+              details: { status: userData.status }
+            },
+            data: null
+          };
         }
 
         console.log("Sign-in successful, updating last login");
 
-        // Update last login time using regular client since RLS is disabled
         await supabase
           .from("users")
           .update({ last_login: new Date().toISOString() })
           .eq("id", userData.id);
 
-        // Fetch user role - use cached version to improve performance
-        const roleCacheKey = `user_role_${userData.id}`;
-
-        const fetchRole = async () => {
-          // First check admin table
-          const adminPromise = supabase
-            .from("admin")
-            .select("role")
-            .eq("id", userData.id)
-            .single();
-
-          // Then check company_user table
-          const companyUserPromise = supabase
-            .from("company_user")
-            .select("role")
-            .eq("id", userData.id)
-            .single();
-
-          // Run both queries in parallel for better performance
-          const [adminResult, companyUserResult] = await Promise.all([
-            adminPromise,
-            companyUserPromise,
-          ]);
-
-          return {
-            data: {
-              adminData: adminResult.data,
-              companyUserData: companyUserResult.data,
-            },
-            error: null,
-          };
-        };
-
         const roleResult = await cachedQuery<any>(
           fetchRole,
-          roleCacheKey,
-          { forceRefresh: true } // Always get fresh role data on login
+          `user_role_${userData.id}`,
+          { forceRefresh: true }
         );
 
         let role = null;
@@ -466,9 +476,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           role = companyUserData.role;
         }
 
-        console.log("Retrieved user role:", role);
-
-        // Generate JWT token with user data for more secure approach
         const tokenData = {
           id: userData.id,
           email: userData.email,
@@ -476,25 +483,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         };
 
         const token = await generateJWT(tokenData);
-        console.log("Generated token for authentication");
-
-        // Remove password_hash from user data before storing
         const { password_hash, ...userDataWithoutPassword } = userData;
-
-        // Add role to userData for easier access
         const userDataWithRole = {
           ...userDataWithoutPassword,
           role,
         };
 
-        console.log("Calling authenticate with user data");
         await authenticate(token, userDataWithRole);
 
-        console.log("Sign-in process completed successfully");
-        return { error: null };
+        return { data: userDataWithRole, error: null };
       } catch (error: any) {
         console.error("Sign-in error:", error);
-        return { error };
+        return {
+          error: {
+            message: "An unexpected error occurred",
+            code: "UNKNOWN_ERROR",
+            details: error
+          },
+          data: null
+        };
       } finally {
         setLoading(false);
       }

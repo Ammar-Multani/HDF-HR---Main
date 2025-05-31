@@ -1,7 +1,7 @@
 {
   "name": "hdf-hr",
   "version": "1.0.0",
-  "main": "index.ts",
+  "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
@@ -9,14 +9,17 @@
     "web": "expo start --web",
     "build:web": "npx expo export:web",
     "serve:web": "npx serve dist",
-    "lint": "eslint .",
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
+    "lint:fix": "eslint . --ext .js,.jsx,.ts,.tsx --fix",
+    "type-check": "tsc --noEmit",
     "build:android": "eas build --platform android --profile production",
     "build:ios": "eas build --platform ios --profile production",
     "build:preview:android": "eas build --platform android --profile preview",
     "build:preview:ios": "eas build --platform ios --profile preview",
     "build:dev:android": "eas build --platform android --profile development",
     "build:dev:ios": "eas build --platform ios --profile development",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "clean": "expo start -c"
   },
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
@@ -86,8 +89,13 @@
     "@types/base-64": "^1.0.2",
     "@types/react": "~18.3.12",
     "@types/react-native-vector-icons": "^6.4.18",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "babel-plugin-module-resolver": "^5.0.2",
     "eslint": "~8.57.0",
     "eslint-config-prettier": "~9.1.0",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
     "patch-package": "^8.0.0",
     "postinstall-postinstall": "^2.1.0",
     "prettier": "~3.3.3",
