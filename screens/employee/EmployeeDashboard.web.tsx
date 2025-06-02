@@ -6,6 +6,8 @@ import {
   RefreshControl,
   StatusBar,
   Dimensions,
+  Platform,
+  TouchableOpacity,
 } from "react-native";
 import { Card, Button, useTheme } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -19,8 +21,79 @@ import StatusBadge from "../../components/StatusBadge";
 import { FormStatus } from "../../types";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Text from "../../components/Text";
+import { LinearGradient } from "expo-linear-gradient";
+import Animated, {
+  FadeIn,
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 
 const { width } = Dimensions.get("window");
+
+// Add Shimmer component for loading states
+interface ShimmerProps {
+  width: number | string;
+  height: number;
+  style?: any;
+}
+
+const Shimmer: React.FC<ShimmerProps> = ({ width, height, style }) => {
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        {
+          translateX: withRepeat(
+            withSequence(
+              withTiming(typeof width === "number" ? -width : -200, {
+                duration: 800,
+              }),
+              withTiming(typeof width === "number" ? width : 200, {
+                duration: 800,
+              })
+            ),
+            -1
+          ),
+        },
+      ],
+    };
+  });
+
+  return (
+    <View
+      style={[
+        {
+          width,
+          height,
+          backgroundColor: "#E8E8E8",
+          overflow: "hidden",
+          borderRadius: 4,
+        },
+        style,
+      ]}
+    >
+      <Animated.View
+        style={[
+          {
+            width: "100%",
+            height: "100%",
+            position: "absolute",
+            backgroundColor: "transparent",
+          },
+          animatedStyle,
+        ]}
+      >
+        <LinearGradient
+          colors={["transparent", "rgba(255, 255, 255, 0.4)", "transparent"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{ width: "100%", height: "100%" }}
+        />
+      </Animated.View>
+    </View>
+  );
+};
 
 const EmployeeDashboard = () => {
   const theme = useTheme();
@@ -38,6 +111,30 @@ const EmployeeDashboard = () => {
     formsGrowth: "+0%",
   });
   const [recentForms, setRecentForms] = useState<any[]>([]);
+
+  const [windowDimensions, setWindowDimensions] = useState({
+    width: Dimensions.get("window").width,
+    height: Dimensions.get("window").height,
+  });
+
+  // Add window resize listener
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      const handleResize = () => {
+        setWindowDimensions({
+          width: Dimensions.get("window").width,
+          height: Dimensions.get("window").height,
+        });
+      };
+
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }
+  }, []);
+
+  const isLargeScreen = windowDimensions.width >= 1440;
+  const isMediumScreen =
+    windowDimensions.width >= 768 && windowDimensions.width < 1440;
 
   const checkNetworkStatus = async () => {
     const isAvailable = await isNetworkAvailable();
@@ -201,12 +298,79 @@ const EmployeeDashboard = () => {
   };
 
   if (loading && !refreshing) {
-    return <LoadingIndicator />;
+    return (
+      <SafeAreaView
+        style={[
+          styles.container,
+          { backgroundColor: theme.colors.backgroundSecondary },
+        ]}
+      >
+        <StatusBar barStyle={theme.dark ? "light-content" : "dark-content"} />
+        <AppHeader
+          showProfileMenu={true}
+          userEmail={user?.email || ""}
+          isAdmin={false}
+          onSignOut={signOut}
+          showHelpButton={false}
+          showLogo={Platform.OS !== "web"}
+          title={Platform.OS === "web" ? "" : undefined}
+        />
+
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+        >
+          <View style={styles.welcomeHeader}>
+            <Shimmer width={200} height={28} style={styles.skeletonTitle} />
+            <Shimmer width={300} height={16} style={styles.skeletonSubtitle} />
+          </View>
+
+          <View style={[styles.statsGridContainer, { gap: 16 }]}>
+            {[1, 2, 3].map((_, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.statsGridItem,
+                  {
+                    width: isLargeScreen
+                      ? "32%"
+                      : isMediumScreen
+                        ? "48%"
+                        : "100%",
+                    minWidth: isMediumScreen || isLargeScreen ? 275 : "100%",
+                    marginBottom: isMediumScreen || isLargeScreen ? 0 : 16,
+                  },
+                ]}
+              >
+                <View style={[styles.statsCard, styles.skeletonStatsCard]}>
+                  <View style={styles.statRow}>
+                    <Shimmer
+                      width={140}
+                      height={16}
+                      style={{ marginBottom: 4 }}
+                    />
+                    <Shimmer
+                      width={45}
+                      height={14}
+                      style={{ marginLeft: "auto" }}
+                    />
+                  </View>
+                  <Shimmer width={90} height={36} style={{ marginTop: 20 }} />
+                </View>
+              </View>
+            ))}
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
   }
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      style={[
+        styles.container,
+        { backgroundColor: theme.colors.backgroundSecondary },
+      ]}
       edges={["top"]}
     >
       <StatusBar barStyle={theme.dark ? "light-content" : "dark-content"} />
@@ -216,142 +380,260 @@ const EmployeeDashboard = () => {
         isAdmin={false}
         onSignOut={signOut}
         showHelpButton={false}
+        showLogo={Platform.OS !== "web"}
+        title={Platform.OS === "web" ? "Employee Dashboard" : undefined}
       />
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        <View style={styles.welcomeHeader}>
-          <Text variant="bold" style={styles.welcomeTitle}>
-            Welcome, {employeeData?.first_name || "Employee"}!
-          </Text>
-          <Text style={styles.welcomeSubtitle}>
-            {companyData?.company_name || "Your Company"}
-          </Text>
-        </View>
-
-        {/* Forms Section */}
-        <Text variant="bold" style={styles.sectionTitle}>
-          Forms
-        </Text>
-        <View style={styles.statsCard}>
-          <View style={styles.statRow}>
-            <Text variant="medium" style={styles.statLabel}>
-              Total Forms
+      <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        >
+          <View style={styles.welcomeHeader}>
+            <Text variant="bold" style={styles.welcomeTitle}>
+              Welcome, {employeeData?.first_name || "Employee"}!
             </Text>
-            <Text
-              variant="bold"
-              style={[
-                styles.statGrowth,
-                stats.formsGrowth.startsWith("-") ? styles.negativeGrowth : {},
-              ]}
-            >
-              {stats.formsGrowth}
+            <Text style={styles.welcomeSubtitle}>
+              {companyData?.company_name || "Your Company"}
             </Text>
           </View>
-          <Text variant="bold" style={styles.statValue}>
-            {stats.totalForms.toLocaleString()}
-          </Text>
-        </View>
 
-        <View style={styles.statsCard}>
-          <View style={styles.statRow}>
-            <Text variant="medium" style={styles.statLabel}>
-              Pending Forms
-            </Text>
-          </View>
-          <Text variant="bold" style={styles.statValue}>
-            {stats.pendingForms.toLocaleString()}
-          </Text>
-        </View>
-
-        <Text variant="bold" style={styles.sectionTitle}>
-          Quick Actions
-        </Text>
-
-        <View style={styles.actionsContainer}>
-          <Button
-            mode="contained-tonal"
-            icon="alert-circle"
-            onPress={() => navigation.navigate("CreateAccidentReport")}
-            style={styles.actionButton}
+          {/* Forms Section */}
+          <View
+            style={[
+              styles.statsGridContainer,
+              {
+                justifyContent: isLargeScreen ? "flex-start" : "center",
+                gap: isMediumScreen || isLargeScreen ? 24 : 16,
+                marginBottom: isMediumScreen || isLargeScreen ? 32 : 24,
+              },
+            ]}
           >
-            Report Accident
-          </Button>
-
-          <Button
-            mode="contained-tonal"
-            icon="medical-bag"
-            onPress={() => navigation.navigate("CreateIllnessReport")}
-            style={styles.actionButton}
-          >
-            Report Illness
-          </Button>
-
-          <Button
-            mode="contained-tonal"
-            icon="account-arrow-right"
-            onPress={() => navigation.navigate("CreateStaffDeparture")}
-            style={styles.actionButton}
-          >
-            Staff Departure
-          </Button>
-        </View>
-
-        {recentForms.length > 0 && (
-          <>
-            <View style={styles.sectionHeader}>
-              <Text variant="bold" style={styles.sectionTitle}>
-                Recent Forms
-              </Text>
-              <Button mode="text" onPress={() => navigation.navigate("Forms")}>
-                View All
-              </Button>
-            </View>
-
-            {recentForms.map((form) => (
-              <Card
-                key={`${form.type}-${form.id}`}
-                style={styles.itemCard}
-                onPress={() =>
-                  navigation.navigate("FormDetails", {
-                    formId: form.id,
-                    formType: form.type,
-                  })
-                }
+            {[
+              {
+                label: "Total Forms",
+                value: stats.totalForms,
+                growth: stats.formsGrowth,
+                icon: "file-document-multiple",
+              },
+              {
+                label: "Pending Forms",
+                value: stats.pendingForms,
+                growth: "+0%",
+                icon: "file-clock",
+              },
+            ].map((stat, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.statsGridItem,
+                  {
+                    width: isLargeScreen
+                      ? "48%"
+                      : isMediumScreen
+                        ? "48%"
+                        : "100%",
+                    minWidth: isMediumScreen || isLargeScreen ? 275 : "100%",
+                    marginBottom: isMediumScreen || isLargeScreen ? 0 : 16,
+                  },
+                ]}
               >
-                <Card.Content>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.formTitleContainer}>
-                      <Text variant="bold" style={styles.formType}>
-                        {form.title}
-                      </Text>
-                      <StatusBadge status={form.status} size="small" />
-                    </View>
+                <View
+                  style={[
+                    styles.statsCard,
+                    {
+                      padding: isMediumScreen || isLargeScreen ? 24 : 20,
+                    },
+                  ]}
+                >
+                  <View style={styles.statRow}>
+                    <Text variant="medium" style={styles.statLabel}>
+                      {stat.label}
+                    </Text>
+                    <Text
+                      variant="bold"
+                      style={[
+                        styles.statGrowth,
+                        stat.growth.startsWith("-")
+                          ? styles.negativeGrowth
+                          : {},
+                      ]}
+                    >
+                      {stat.growth}
+                    </Text>
                   </View>
-                  <Text style={styles.cardDate}>
-                    Submitted: {format(new Date(form.date), "MMM d, yyyy")}
-                  </Text>
-                </Card.Content>
-              </Card>
+                  <View style={styles.statValueContainer}>
+                    <Text variant="bold" style={styles.statValue}>
+                      {stat.value.toLocaleString()}
+                    </Text>
+                    <MaterialCommunityIcons
+                      name={stat.icon}
+                      size={24}
+                      color={theme.colors.primary}
+                      style={styles.statIcon}
+                    />
+                  </View>
+                </View>
+              </View>
             ))}
-          </>
-        )}
-
-        {networkStatus === false && (
-          <View style={styles.offlineNotice}>
-            <MaterialCommunityIcons name="wifi-off" size={20} color="#666" />
-            <Text style={styles.offlineText}>You're currently offline</Text>
           </View>
-        )}
 
-        {/* Extra padding at the bottom for tab bar */}
-        <View style={styles.tabBarSpacer} />
-      </ScrollView>
+          <Text variant="bold" style={styles.sectionTitle}>
+            Quick Actions
+          </Text>
+
+          <View
+            style={[
+              styles.actionsContainer,
+              {
+                display: "grid",
+                gridTemplateColumns: isLargeScreen
+                  ? "repeat(3, 1fr)"
+                  : isMediumScreen
+                    ? "repeat(2, 1fr)"
+                    : "1fr",
+                gap: 16,
+              },
+            ]}
+          >
+            <TouchableOpacity
+              style={styles.actionCard}
+              onPress={() => navigation.navigate("CreateAccidentReport")}
+            >
+              <LinearGradient
+                colors={["#FF6B6B", "#EE5D5D"]}
+                style={styles.actionIconContainer}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <MaterialCommunityIcons
+                  name="alert-circle"
+                  size={24}
+                  color="#FFF"
+                />
+              </LinearGradient>
+              <View style={styles.actionContent}>
+                <Text variant="bold" style={styles.actionTitle}>
+                  Report Accident
+                </Text>
+                <Text style={styles.actionDescription}>
+                  Submit a new accident report
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionCard}
+              onPress={() => navigation.navigate("CreateIllnessReport")}
+            >
+              <LinearGradient
+                colors={["#4ECDC4", "#45B7AF"]}
+                style={styles.actionIconContainer}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <MaterialCommunityIcons
+                  name="medical-bag"
+                  size={24}
+                  color="#FFF"
+                />
+              </LinearGradient>
+              <View style={styles.actionContent}>
+                <Text variant="bold" style={styles.actionTitle}>
+                  Report Illness
+                </Text>
+                <Text style={styles.actionDescription}>
+                  Submit a new illness report
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionCard}
+              onPress={() => navigation.navigate("CreateStaffDeparture")}
+            >
+              <LinearGradient
+                colors={["#6C5CE7", "#5F51D9"]}
+                style={styles.actionIconContainer}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <MaterialCommunityIcons
+                  name="account-arrow-right"
+                  size={24}
+                  color="#FFF"
+                />
+              </LinearGradient>
+              <View style={styles.actionContent}>
+                <Text variant="bold" style={styles.actionTitle}>
+                  Staff Departure
+                </Text>
+                <Text style={styles.actionDescription}>
+                  Submit departure report
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          {recentForms.length > 0 && (
+            <>
+              <View style={styles.sectionHeader}>
+                <Text variant="bold" style={styles.sectionTitle}>
+                  Recent Forms
+                </Text>
+                <Button
+                  mode="text"
+                  onPress={() => navigation.navigate("Forms")}
+                >
+                  View All
+                </Button>
+              </View>
+
+              <View style={styles.recentFormsGrid}>
+                {recentForms.map((form) => (
+                  <Card
+                    key={`${form.type}-${form.id}`}
+                    style={styles.itemCard}
+                    onPress={() =>
+                      navigation.navigate("FormDetails", {
+                        formId: form.id,
+                        formType: form.type,
+                      })
+                    }
+                    elevation={0.5}
+                  >
+                    <Card.Content>
+                      <View style={styles.cardHeader}>
+                        <View style={styles.formTitleContainer}>
+                          <Text variant="bold" style={styles.formType}>
+                            {form.title}
+                          </Text>
+                          <StatusBadge status={form.status} size="small" />
+                        </View>
+                      </View>
+                      <Text style={styles.cardDate}>
+                        Submitted: {format(new Date(form.date), "MMM d, yyyy")}
+                      </Text>
+                    </Card.Content>
+                  </Card>
+                ))}
+              </View>
+            </>
+          )}
+
+          {networkStatus === false && (
+            <View style={styles.offlineNotice}>
+              <MaterialCommunityIcons name="wifi-off" size={20} color="#666" />
+              <Text style={styles.offlineText}>You're currently offline</Text>
+            </View>
+          )}
+
+          <View style={styles.tabBarSpacer} />
+        </ScrollView>
+      </Animated.View>
     </SafeAreaView>
   );
 };
@@ -359,72 +641,145 @@ const EmployeeDashboard = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f7fa",
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    paddingBottom: 120,
+    paddingHorizontal: Platform.OS === "web" ? (width >= 768 ? 24 : 16) : 16,
+    paddingVertical: Platform.OS === "web" ? (width >= 768 ? 24 : 16) : 16,
+    paddingBottom: 90,
+    maxWidth: Platform.OS === "web" ? 1400 : undefined,
+    alignSelf: "center",
+    width: "100%",
   },
   welcomeHeader: {
-    marginBottom: 16,
-    marginTop: 5,
+    marginBottom: Platform.OS === "web" ? 24 : 16,
+    marginTop: Platform.OS === "web" ? 8 : 5,
     marginLeft: 5,
   },
   welcomeTitle: {
-    fontSize: 22,
+    fontSize: Platform.OS === "web" ? (width >= 768 ? 28 : 22) : 22,
     color: "#333",
     paddingBottom: 3,
   },
   welcomeSubtitle: {
-    fontSize: 14,
+    fontSize: Platform.OS === "web" ? (width >= 768 ? 16 : 14) : 14,
     color: "#666",
   },
-  sectionTitle: {
-    fontSize: 18,
-    marginTop: 16,
-    marginBottom: 12,
-    color: "#333",
-    marginLeft: 5,
+  statsGridContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    width: "100%",
+    marginBottom: 24,
+    justifyContent: "space-between",
+  },
+  statsGridItem: {
+    // Base styles only, dynamic values applied inline
   },
   statsCard: {
     backgroundColor: "#fff",
     borderRadius: 16,
-    padding: 16,
-    marginBottom: 11,
     borderWidth: 1,
     borderColor: "#e0e0e0",
+    height: "100%",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  skeletonStatsCard: {
+    padding: Platform.OS === "web" ? 24 : 20,
+    minHeight: 120,
   },
   statRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 5,
+    width: "100%",
   },
   statLabel: {
-    fontSize: 16,
+    fontSize: Platform.OS === "web" ? (width >= 768 ? 14 : 13) : 13,
     color: "#333",
   },
   statGrowth: {
-    fontSize: 14,
+    fontSize: 12,
     color: "#4CAF50",
   },
   negativeGrowth: {
     color: "#F44336",
   },
+  statValueContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: Platform.OS === "web" ? 16 : 8,
+  },
   statValue: {
-    fontSize: 25,
+    fontSize: Platform.OS === "web" ? (width >= 768 ? 32 : 25) : 25,
     color: "#111",
   },
-  actionsContainer: {
-    marginBottom: 24,
+  statIcon: {
+    opacity: 0.8,
   },
-  actionButton: {
-    marginBottom: 8,
+  sectionTitle: {
+    fontSize: Platform.OS === "web" ? (width >= 768 ? 18 : 16) : 16,
+    marginTop: 16,
+    marginBottom: 12,
+    color: "#333",
+    marginLeft: 5,
+  },
+  actionsContainer: {
+    marginBottom: 32,
+    width: "100%",
+  },
+  actionCard: {
+    backgroundColor: "#FFF",
+    borderRadius: 16,
+    padding: Platform.OS === "web" ? 24 : 20,
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    cursor: "pointer",
+    transition: "all 0.3s ease",
+    ":hover": {
+      transform: [{ translateY: -2 }],
+      shadowOpacity: 0.1,
+      shadowRadius: 6,
+    },
+  },
+  actionIconContainer: {
+    width: 48,
+    height: 48,
     borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 16,
+  },
+  actionContent: {
+    flex: 1,
+  },
+  actionTitle: {
+    fontSize: Platform.OS === "web" ? (width >= 768 ? 16 : 15) : 15,
+    color: "#1F2937",
+    marginBottom: 4,
+  },
+  actionDescription: {
+    fontSize: Platform.OS === "web" ? (width >= 768 ? 14 : 13) : 13,
+    color: "#6B7280",
   },
   sectionHeader: {
     flexDirection: "row",
@@ -432,8 +787,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 8,
   },
+  recentFormsGrid: {
+    display: "grid",
+    gridTemplateColumns:
+      width >= 768 ? "repeat(auto-fill, minmax(300px, 1fr))" : "1fr",
+    gap: 16,
+    width: "100%",
+  },
   itemCard: {
-    marginBottom: 12,
+    marginBottom: 0,
     elevation: 0,
     backgroundColor: "#fff",
     borderRadius: 12,
@@ -446,23 +808,6 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     marginBottom: 4,
   },
-  cardTitle: {
-    fontSize: 16,
-    flex: 1,
-    marginRight: 8,
-    color: "#333",
-  },
-  cardDescription: {
-    opacity: 0.7,
-    marginBottom: 4,
-    fontSize: 14,
-    color: "#666",
-  },
-  cardDate: {
-    fontSize: 12,
-    opacity: 0.7,
-    color: "#666",
-  },
   formTitleContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -472,6 +817,11 @@ const styles = StyleSheet.create({
   formType: {
     fontSize: 16,
     color: "#333",
+  },
+  cardDate: {
+    fontSize: 12,
+    opacity: 0.7,
+    color: "#666",
   },
   offlineNotice: {
     flexDirection: "row",
@@ -486,14 +836,14 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     color: "#666",
   },
-  statsContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
   tabBarSpacer: {
-    height: 90, // Space for the tab bar
+    height: 90,
+  },
+  skeletonTitle: {
+    marginBottom: 8,
+  },
+  skeletonSubtitle: {
+    marginBottom: 24,
   },
 });
 

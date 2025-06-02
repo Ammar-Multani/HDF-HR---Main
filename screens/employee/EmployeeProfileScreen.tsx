@@ -136,9 +136,6 @@ const EmployeeProfileScreen = () => {
     return new Date(dateString).toLocaleDateString();
   };
 
-  if (loading) {
-    return <LoadingIndicator />;
-  }
 
   return (
     <SafeAreaView

@@ -157,9 +157,6 @@ const SuperAdminProfileScreen = () => {
     );
   };
 
-  if (loading) {
-    return <LoadingIndicator />;
-  }
 
   return (
     <SafeAreaView

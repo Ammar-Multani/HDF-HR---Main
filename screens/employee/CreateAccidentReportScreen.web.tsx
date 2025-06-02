@@ -6,6 +6,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Dimensions,
 } from "react-native";
 import {
   Text,
@@ -14,6 +15,11 @@ import {
   useTheme,
   Snackbar,
   HelperText,
+  Surface,
+  IconButton,
+  Portal,
+  Modal,
+  Divider,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -26,6 +32,31 @@ import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import { FormStatus } from "../../types";
 import { pickAndUploadDocument } from "../../utils/documentPicker";
+import Animated, { FadeIn } from "react-native-reanimated";
+
+// Add window dimensions hook
+const useWindowDimensions = () => {
+  const [dimensions, setDimensions] = useState({
+    width: Dimensions.get("window").width,
+    height: Dimensions.get("window").height,
+  });
+
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      const handleResize = () => {
+        setDimensions({
+          width: Dimensions.get("window").width,
+          height: Dimensions.get("window").height,
+        });
+      };
+
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }
+  }, []);
+
+  return dimensions;
+};
 
 interface AccidentReportFormData {
   date_of_accident: Date;
@@ -43,6 +74,11 @@ const CreateAccidentReportScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
   const { user } = useAuth();
+  const dimensions = useWindowDimensions();
+
+  // Calculate responsive breakpoints
+  const isLargeScreen = dimensions.width >= 1440;
+  const isMediumScreen = dimensions.width >= 768 && dimensions.width < 1440;
 
   const [loading, setLoading] = useState(false);
   const [companyId, setCompanyId] = useState<string | null>(null);
@@ -187,15 +223,109 @@ const CreateAccidentReportScreen = () => {
     }
   };
 
+  // Web-specific date picker component
+  const WebDatePicker = () => {
+    const [year, setYear] = useState(watch("date_of_accident").getFullYear());
+    const [month, setMonth] = useState(
+      watch("date_of_accident").getMonth() + 1
+    );
+    const [day, setDay] = useState(watch("date_of_accident").getDate());
+
+    const handleConfirm = () => {
+      const newDate = new Date(year, month - 1, day);
+      handleDateConfirm(newDate);
+    };
+
+    return (
+      <Portal>
+        <Modal
+          visible={showDatePicker}
+          onDismiss={handleDateCancel}
+          contentContainerStyle={styles.webDatePickerModal}
+        >
+          <Surface style={styles.modalSurface}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Date</Text>
+              <IconButton icon="close" onPress={handleDateCancel} />
+            </View>
+            <Divider />
+
+            <View style={styles.webDatePickerContainer}>
+              <View style={styles.webDateInputRow}>
+                <View style={styles.webDateInputContainer}>
+                  <Text style={styles.webDateInputLabel}>Day</Text>
+                  <TextInput
+                    mode="outlined"
+                    keyboardType="numeric"
+                    value={day.toString()}
+                    onChangeText={(text) => setDay(parseInt(text) || 1)}
+                    style={styles.webDateInput}
+                  />
+                </View>
+
+                <View style={styles.webDateInputContainer}>
+                  <Text style={styles.webDateInputLabel}>Month</Text>
+                  <TextInput
+                    mode="outlined"
+                    keyboardType="numeric"
+                    value={month.toString()}
+                    onChangeText={(text) => {
+                      const newMonth = parseInt(text) || 1;
+                      setMonth(Math.min(Math.max(newMonth, 1), 12));
+                    }}
+                    style={styles.webDateInput}
+                  />
+                </View>
+
+                <View style={styles.webDateInputContainer}>
+                  <Text style={styles.webDateInputLabel}>Year</Text>
+                  <TextInput
+                    mode="outlined"
+                    keyboardType="numeric"
+                    value={year.toString()}
+                    onChangeText={(text) => setYear(parseInt(text) || 2023)}
+                    style={styles.webDateInput}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.webDatePickerActions}>
+                <Button
+                  onPress={handleDateCancel}
+                  style={styles.webDatePickerButton}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  mode="contained"
+                  onPress={handleConfirm}
+                  style={styles.webDatePickerButton}
+                  buttonColor="#F44336"
+                >
+                  Confirm
+                </Button>
+              </View>
+            </View>
+          </Surface>
+        </Modal>
+      </Portal>
+    );
+  };
+
   if (!companyId) {
     return <LoadingIndicator />;
   }
 
   return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
-      <AppHeader title="Report Accident" showBackButton />
+    <SafeAreaView style={[styles.container, { backgroundColor: "#F8F9FA" }]}>
+      <AppHeader
+        title="Report Accident"
+        showBackButton={true}
+        showHelpButton={false}
+        showProfileMenu={false}
+        showLogo={false}
+        showTitle={true}
+      />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -203,217 +333,364 @@ const CreateAccidentReportScreen = () => {
       >
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              maxWidth: isLargeScreen ? 1400 : isMediumScreen ? 1100 : "100%",
+              paddingHorizontal: isLargeScreen ? 48 : isMediumScreen ? 32 : 16,
+            },
+          ]}
         >
-          <Text
-            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
-          >
-            Accident Details
-          </Text>
-
-          <Text style={styles.inputLabel}>Date of Accident *</Text>
-          <Button
-            mode="outlined"
-            onPress={() => setShowDatePicker(true)}
-            style={styles.dateButton}
-            icon="calendar"
-          >
-            {format(dateOfAccident, "MMMM d, yyyy")}
-          </Button>
-
-          <DateTimePickerModal
-            isVisible={showDatePicker}
-            mode="date"
-            onConfirm={handleDateConfirm}
-            onCancel={handleDateCancel}
-            date={dateOfAccident}
-            maximumDate={new Date()}
-          />
-
-          <Controller
-            control={control}
-            rules={{ required: "Time of accident is required" }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Time of Accident *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.time_of_accident}
-                style={styles.input}
-                disabled={loading}
-              />
-            )}
-            name="time_of_accident"
-          />
-          {errors.time_of_accident && (
-            <HelperText type="error">
-              {errors.time_of_accident.message}
-            </HelperText>
-          )}
-
-          <Controller
-            control={control}
-            rules={{ required: "Address is required" }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Accident Address *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.accident_address}
-                style={styles.input}
-                disabled={loading}
-              />
-            )}
-            name="accident_address"
-          />
-          {errors.accident_address && (
-            <HelperText type="error">
-              {errors.accident_address.message}
-            </HelperText>
-          )}
-
-          <Controller
-            control={control}
-            rules={{ required: "City is required" }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="City *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.city}
-                style={styles.input}
-                disabled={loading}
-              />
-            )}
-            name="city"
-          />
-          {errors.city && (
-            <HelperText type="error">{errors.city.message}</HelperText>
-          )}
-
-          <Controller
-            control={control}
-            rules={{ required: "Accident description is required" }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Accident Description *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.accident_description}
-                style={styles.input}
-                multiline
-                numberOfLines={4}
-                disabled={loading}
-              />
-            )}
-            name="accident_description"
-          />
-          {errors.accident_description && (
-            <HelperText type="error">
-              {errors.accident_description.message}
-            </HelperText>
-          )}
-
-          <Controller
-            control={control}
-            rules={{ required: "Objects involved is required" }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Objects Involved *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.objects_involved}
-                style={styles.input}
-                disabled={loading}
-              />
-            )}
-            name="objects_involved"
-          />
-          {errors.objects_involved && (
-            <HelperText type="error">
-              {errors.objects_involved.message}
-            </HelperText>
-          )}
-
-          <Controller
-            control={control}
-            rules={{ required: "Injuries is required" }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Injuries *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.injuries}
-                style={styles.input}
-                multiline
-                numberOfLines={2}
-                disabled={loading}
-              />
-            )}
-            name="injuries"
-          />
-          {errors.injuries && (
-            <HelperText type="error">{errors.injuries.message}</HelperText>
-          )}
-
-          <Controller
-            control={control}
-            rules={{ required: "Accident type is required" }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Accident Type *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.accident_type}
-                style={styles.input}
-                disabled={loading}
-              />
-            )}
-            name="accident_type"
-          />
-          {errors.accident_type && (
-            <HelperText type="error">{errors.accident_type.message}</HelperText>
-          )}
-
-          <Text style={styles.inputLabel}>Medical Certificate</Text>
-          <View style={styles.documentPickerContainer}>
-            <Button
-              mode="outlined"
-              onPress={handlePickDocument}
-              style={styles.documentButton}
-              icon="file-upload"
-              loading={uploadingDocument}
-              disabled={loading || uploadingDocument}
-            >
-              {documentName || "Upload Medical Certificate"}
-            </Button>
+          <View style={styles.headerSection}>
+            <Text style={styles.pageTitle}>Submit accident report details</Text>
           </View>
 
-          <Button
-            mode="contained"
-            onPress={handleSubmit(onSubmit)}
-            style={styles.submitButton}
-            loading={loading}
-            disabled={loading}
-          >
-            Submit Report
-          </Button>
+          <View style={styles.gridContainer}>
+            <View style={styles.gridColumn}>
+              <Animated.View entering={FadeIn.delay(100)}>
+                <Surface style={styles.formCard}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="calendar"
+                          size={20}
+                          iconColor="#F44336"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>Date and Time</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardContent}>
+                    <Text style={styles.inputLabel}>Date of Accident *</Text>
+                    <Button
+                      mode="outlined"
+                      onPress={() => setShowDatePicker(true)}
+                      style={styles.dateButton}
+                      icon="calendar"
+                      textColor="#F44336"
+                    >
+                      {format(watch("date_of_accident"), "MMMM d, yyyy")}
+                    </Button>
+
+                    <Controller
+                      control={control}
+                      rules={{ required: "Time of accident is required" }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <>
+                          <Text style={styles.inputLabel}>
+                            Time of Accident *
+                          </Text>
+                          <TextInput
+                            mode="outlined"
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
+                            error={!!errors.time_of_accident}
+                            style={styles.input}
+                            disabled={loading}
+                            outlineColor="#E0E0E0"
+                            activeOutlineColor="#F44336"
+                          />
+                          {errors.time_of_accident && (
+                            <HelperText type="error" style={styles.errorText}>
+                              {errors.time_of_accident.message}
+                            </HelperText>
+                          )}
+                        </>
+                      )}
+                      name="time_of_accident"
+                    />
+                  </View>
+                </Surface>
+
+                <Surface style={[styles.formCard, { marginTop: 24 }]}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="map-marker"
+                          size={20}
+                          iconColor="#F44336"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>Location Details</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardContent}>
+                    <Controller
+                      control={control}
+                      rules={{ required: "Address is required" }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <>
+                          <Text style={styles.inputLabel}>
+                            Accident Address *
+                          </Text>
+                          <TextInput
+                            mode="outlined"
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
+                            error={!!errors.accident_address}
+                            style={styles.input}
+                            disabled={loading}
+                            outlineColor="#E0E0E0"
+                            activeOutlineColor="#F44336"
+                          />
+                          {errors.accident_address && (
+                            <HelperText type="error" style={styles.errorText}>
+                              {errors.accident_address.message}
+                            </HelperText>
+                          )}
+                        </>
+                      )}
+                      name="accident_address"
+                    />
+
+                    <Controller
+                      control={control}
+                      rules={{ required: "City is required" }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <>
+                          <Text style={styles.inputLabel}>City *</Text>
+                          <TextInput
+                            mode="outlined"
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
+                            error={!!errors.city}
+                            style={styles.input}
+                            disabled={loading}
+                            outlineColor="#E0E0E0"
+                            activeOutlineColor="#F44336"
+                          />
+                          {errors.city && (
+                            <HelperText type="error" style={styles.errorText}>
+                              {errors.city.message}
+                            </HelperText>
+                          )}
+                        </>
+                      )}
+                      name="city"
+                    />
+                  </View>
+                </Surface>
+              </Animated.View>
+            </View>
+
+            <View style={styles.gridColumn}>
+              <Animated.View entering={FadeIn.delay(200)}>
+                <Surface style={styles.formCard}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="alert-circle"
+                          size={20}
+                          iconColor="#F44336"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>Accident Details</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardContent}>
+                    <Controller
+                      control={control}
+                      rules={{ required: "Accident description is required" }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <>
+                          <Text style={styles.inputLabel}>
+                            Accident Description *
+                          </Text>
+                          <TextInput
+                            mode="outlined"
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
+                            error={!!errors.accident_description}
+                            style={styles.input}
+                            multiline
+                            numberOfLines={4}
+                            disabled={loading}
+                            outlineColor="#E0E0E0"
+                            activeOutlineColor="#F44336"
+                          />
+                          {errors.accident_description && (
+                            <HelperText type="error" style={styles.errorText}>
+                              {errors.accident_description.message}
+                            </HelperText>
+                          )}
+                        </>
+                      )}
+                      name="accident_description"
+                    />
+
+                    <Controller
+                      control={control}
+                      rules={{ required: "Objects involved is required" }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <>
+                          <Text style={styles.inputLabel}>
+                            Objects Involved *
+                          </Text>
+                          <TextInput
+                            mode="outlined"
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
+                            error={!!errors.objects_involved}
+                            style={styles.input}
+                            disabled={loading}
+                            outlineColor="#E0E0E0"
+                            activeOutlineColor="#F44336"
+                          />
+                          {errors.objects_involved && (
+                            <HelperText type="error" style={styles.errorText}>
+                              {errors.objects_involved.message}
+                            </HelperText>
+                          )}
+                        </>
+                      )}
+                      name="objects_involved"
+                    />
+
+                    <Controller
+                      control={control}
+                      rules={{ required: "Injuries is required" }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <>
+                          <Text style={styles.inputLabel}>Injuries *</Text>
+                          <TextInput
+                            mode="outlined"
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
+                            error={!!errors.injuries}
+                            style={styles.input}
+                            multiline
+                            numberOfLines={2}
+                            disabled={loading}
+                            outlineColor="#E0E0E0"
+                            activeOutlineColor="#F44336"
+                          />
+                          {errors.injuries && (
+                            <HelperText type="error" style={styles.errorText}>
+                              {errors.injuries.message}
+                            </HelperText>
+                          )}
+                        </>
+                      )}
+                      name="injuries"
+                    />
+
+                    <Controller
+                      control={control}
+                      rules={{ required: "Accident type is required" }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <>
+                          <Text style={styles.inputLabel}>Accident Type *</Text>
+                          <TextInput
+                            mode="outlined"
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
+                            error={!!errors.accident_type}
+                            style={styles.input}
+                            disabled={loading}
+                            outlineColor="#E0E0E0"
+                            activeOutlineColor="#F44336"
+                          />
+                          {errors.accident_type && (
+                            <HelperText type="error" style={styles.errorText}>
+                              {errors.accident_type.message}
+                            </HelperText>
+                          )}
+                        </>
+                      )}
+                      name="accident_type"
+                    />
+                  </View>
+                </Surface>
+
+                <Surface style={[styles.formCard, { marginTop: 24 }]}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="file-document"
+                          size={20}
+                          iconColor="#F44336"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>Supporting Documents</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardContent}>
+                    <Text style={styles.inputLabel}>Medical Certificate</Text>
+                    <View style={styles.documentPickerContainer}>
+                      <Button
+                        mode="outlined"
+                        onPress={handlePickDocument}
+                        style={styles.documentButton}
+                        icon="file-upload"
+                        loading={uploadingDocument}
+                        disabled={loading || uploadingDocument}
+                        textColor="#F44336"
+                      >
+                        {documentName || "Upload Medical Certificate"}
+                      </Button>
+                    </View>
+                  </View>
+                </Surface>
+              </Animated.View>
+            </View>
+          </View>
         </ScrollView>
+
+        <Surface style={styles.bottomBar}>
+          <View style={styles.bottomBarContent}>
+            <Button
+              mode="outlined"
+              onPress={() => navigation.goBack()}
+              style={[styles.button, styles.cancelButton]}
+              disabled={loading}
+            >
+              Cancel
+            </Button>
+            <Button
+              mode="contained"
+              onPress={handleSubmit(onSubmit)}
+              style={[styles.button, styles.submitButton]}
+              loading={loading}
+              disabled={loading}
+              buttonColor={theme.colors.primary}
+            >
+              Submit Report
+            </Button>
+          </View>
+        </Surface>
       </KeyboardAvoidingView>
+
+      {Platform.OS === "web" ? (
+        <WebDatePicker />
+      ) : (
+        <DateTimePickerModal
+          isVisible={showDatePicker}
+          mode="date"
+          onConfirm={handleDateConfirm}
+          onCancel={handleDateCancel}
+          date={watch("date_of_accident")}
+          maximumDate={new Date()}
+        />
+      )}
 
       <Snackbar
         visible={snackbarVisible}
@@ -433,6 +710,7 @@ const CreateAccidentReportScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#F8F9FA",
   },
   keyboardAvoidingView: {
     flex: 1,
@@ -441,35 +719,179 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
+    paddingVertical: 32,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginTop: 8,
-    marginBottom: 16,
+  headerSection: {
+    marginBottom: 32,
+  },
+  pageTitle: {
+    fontSize: Platform.OS === "web" ? 32 : 24,
+    fontWeight: "600",
+    color: "#1e293b",
+    fontFamily: "Poppins-SemiBold",
+  },
+  gridContainer: {
+    flexDirection: "row",
+    gap: 24,
+    flexWrap: "wrap",
+  },
+  gridColumn: {
+    flex: 1,
+    minWidth: 320,
+    gap: 24,
+  },
+  formCard: {
+    borderRadius: 16,
+    overflow: "hidden",
+    elevation: 1,
+    shadowColor: "rgba(0,0,0,0.1)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  iconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "#ffebee",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerIcon: {
+    margin: 0,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1e293b",
+    fontFamily: "Poppins-SemiBold",
+  },
+  cardContent: {
+    padding: 24,
   },
   input: {
-    marginBottom: 12,
+    marginBottom: 16,
+    backgroundColor: "#FFFFFF",
   },
   inputLabel: {
     fontSize: 14,
     marginBottom: 8,
-    opacity: 0.7,
+    color: "#64748b",
+    fontFamily: "Poppins-Medium",
   },
   dateButton: {
-    marginBottom: 16,
-  },
-  submitButton: {
-    marginTop: 24,
-    paddingVertical: 6,
+    marginBottom: 24,
+    borderColor: "#E0E0E0",
+    borderRadius: 8,
   },
   documentPickerContainer: {
-    marginBottom: 16,
+    marginTop: 8,
   },
   documentButton: {
-    marginTop: 8,
+    borderColor: "#E0E0E0",
+    borderRadius: 8,
+  },
+  errorText: {
+    color: "#EF4444",
+    fontSize: 12,
+    marginTop: -8,
+    marginBottom: 12,
+  },
+  bottomBar: {
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+    padding: 16,
+  },
+  bottomBarContent: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+    maxWidth: 1400,
+    marginHorizontal: "auto",
+    width: "100%",
+  },
+  button: {
+    minWidth: 120,
+  },
+  cancelButton: {
+    borderColor: "#E0E0E0",
+  },
+  submitButton: {
+  },
+  webDatePickerModal: {
+    margin: 20,
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: "transparent",
+  },
+  modalSurface: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    overflow: "hidden",
+    elevation: 4,
+    shadowColor: "rgba(0,0,0,0.1)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    maxWidth: 500,
+    width: "100%",
+    alignSelf: "center",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 18,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontFamily: "Poppins-SemiBold",
+    color: "#424242",
+  },
+  webDatePickerContainer: {
+    padding: 24,
+  },
+  webDateInputRow: {
+    flexDirection: "row",
+    gap: 16,
+    marginBottom: 24,
+  },
+  webDateInputContainer: {
+    flex: 1,
+  },
+  webDateInputLabel: {
+    fontSize: 14,
+    marginBottom: 8,
+    color: "#64748b",
+    fontFamily: "Poppins-Medium",
+  },
+  webDateInput: {
+    backgroundColor: "#FFFFFF",
+  },
+  webDatePickerActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+  },
+  webDatePickerButton: {
+    minWidth: 100,
   },
 });
 

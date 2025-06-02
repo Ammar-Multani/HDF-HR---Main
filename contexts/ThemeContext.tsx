@@ -39,18 +39,52 @@ const lightTheme = {
   ...MD3LightTheme,
   colors: {
     ...MD3LightTheme.colors,
-    primary: "#3b5998",
-    secondary: "#0EA5E9",
-    tertiary: "#7C3AED",
+    // Main brand colors
+    primary: "rgba(38,127,161,255)", // Logo's blue-teal color
+    primaryLight: "rgba(38,127,161,0.8)", // Softer version for hover states
+    primaryDark: "rgba(28,107,141,255)", // Darker version for active states
+    secondary: "rgba(10,185,129,255)", // Logo's vibrant teal
+    secondaryLight: "rgba(10,185,129,0.8)", // Softer version
+    tertiary: "rgba(6,169,169,255)", // Logo's teal variant
+    quaternary: "rgba(54,105,157,255)", // Logo's deeper blue
+    quinary: "rgba(74,78,153,255)", // Logo's blue-purple
+    senary: "rgba(94,52,149,255)", // Logo's purple
+
+    // Background and surface colors
     background: "#FFFFFF",
-    backgroundSecondary: "#F8FAFC",
+    backgroundSecondary: "#F8F9FA",
+    backgroundTertiary: "rgb(237, 250, 255)", // Subtle background variation using primary color with low opacity
     surface: "#FFFFFF",
+    surfaceVariant: "#F8FAFC", // Subtle surface variation
+    surfaceHover: "rgba(38,127,161,0.04)", // Very subtle hover state
+    surfaceSelected: "rgba(38,127,161,0.08)", // Subtle selected state
+
+    // Status colors
+    success: "rgba(10,185,129,255)", // Using logo teal for success
     error: "#EF4444",
+    warning: "#F59E0B",
+    info: "rgba(38,127,161,255)", // Using primary for info
+
+    // Text and content colors
     onSurface: "#1F2937",
+    onSurfaceLight: "#374151", // Slightly lighter text
     onBackground: "#1F2937",
+    onBackgroundLight: "#374151", // Slightly lighter text
     onSurfaceVariant: "#64748B",
-    text: "#000000",
+    onSurfaceDisabled: "rgba(31,41,55,0.38)", // Disabled text
+    text: "#0F172A",
+    textSecondary: "#334155", // Secondary text color
+    textTertiary: "#64748B", // Tertiary text color
+
+    // Border and divider colors
+    border: "#e0e0e0",
+    divider: "#E2E8F0",
+    outline: "#e0e0e0", // Subtle outline using primary
+
+    // Navigation and system
     navigationBar: "#FFFFFF",
+    statusBar: "#FFFFFF",
+    elevation: "rgba(38,127,161,0.05)", // Very subtle shadow color
   },
   fonts: configureFonts({ config: fontConfig }),
 };

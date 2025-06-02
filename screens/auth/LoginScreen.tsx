@@ -162,246 +162,260 @@ const LoginScreen = () => {
   };
 
   const getGradientColors = () => {
-    return theme.dark
+    return theme.light
       ? (["#151729", "#2a2e43"] as const)
-      : (["#f0f8ff", "#e6f2ff"] as const);
+      : ([
+          theme.colors.background,
+          (theme.colors as any).backgroundTertiary,
+        ] as const);
   };
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      style={[
+        styles.container,
+        { backgroundColor: theme.colors.backgroundTertiary },
+      ]}
     >
       <StatusBar barStyle={theme.dark ? "light-content" : "dark-content"} />
-      <LinearGradient
-        colors={getGradientColors()}
-        style={styles.container}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      >
-        <AppHeader
-          showBackButton={false}
-          showHelpButton={true}
-          absolute={true}
-        />
 
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.keyboardAvoidView}
+      <AppHeader showBackButton={false} showHelpButton={true} absolute={true} />
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.keyboardAvoidView}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollViewContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <ScrollView
-            contentContainerStyle={styles.scrollViewContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+          <Animated.View
+            style={[
+              styles.formContainer,
+              {
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }],
+              },
+            ]}
           >
-            <Animated.View
+            <View
               style={[
-                styles.formContainer,
+                styles.glassSurface,
                 {
-                  opacity: fadeAnim,
-                  transform: [{ translateY: slideAnim }],
+                  backgroundColor: theme.colors.surfaceVariant,
+                  borderColor: theme.colors.outline,
                 },
               ]}
             >
-              <View
+              <Text
+                variant="headlineMedium"
+                style={[styles.title, { color: theme.colors.onSurface }]}
+              >
+                {t("login.welcomeBack")}
+              </Text>
+              <Text
+                variant="bodyLarge"
                 style={[
-                  styles.glassSurface,
-                  {
-                    backgroundColor: theme.colors.background,
-                    borderColor: theme.colors.outlineVariant,
-                  },
+                  styles.subtitle,
+                  { color: theme.colors.onSurfaceVariant },
                 ]}
               >
+                {t("login.signInToAccess")}
+              </Text>
+              <TextInput
+                label={t("common.email")}
+                value={email}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  if (emailError) validateEmail(text);
+                }}
+                mode="flat"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                style={[styles.input, { backgroundColor: "transparent" }]}
+                disabled={isLoggingIn}
+                error={!!emailError}
+                theme={{
+                  colors: {
+                    primary: theme.colors.primary,
+                    error: theme.colors.error,
+                    onSurfaceVariant: theme.colors.onSurfaceVariant,
+                  },
+                }}
+                underlineColor={theme.colors.outline}
+                activeUnderlineColor={theme.colors.primary}
+              />
+              {emailError ? (
+                <HelperText type="error" style={{ color: theme.colors.error }}>
+                  {emailError}
+                </HelperText>
+              ) : null}
+
+              <TextInput
+                label={t("common.password")}
+                value={password}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  if (passwordError) validatePassword(text);
+                }}
+                mode="flat"
+                secureTextEntry={!passwordVisible}
+                style={[styles.input, { backgroundColor: "transparent" }]}
+                disabled={isLoggingIn}
+                error={!!passwordError}
+                right={
+                  <TextInput.Icon
+                    icon={passwordVisible ? "eye-off-outline" : "eye-outline"}
+                    onPress={() => setPasswordVisible(!passwordVisible)}
+                    forceTextInputFocus={false}
+                    color={theme.colors.onSurfaceVariant}
+                  />
+                }
+                theme={{
+                  colors: {
+                    primary: theme.colors.primary,
+                    error: theme.colors.error,
+                    onSurfaceVariant: theme.colors.onSurfaceVariant,
+                  },
+                }}
+                underlineColor={theme.colors.outline}
+                activeUnderlineColor={theme.colors.primary}
+              />
+              {passwordError ? (
+                <HelperText type="error" style={{ color: theme.colors.error }}>
+                  {passwordError}
+                </HelperText>
+              ) : null}
+
+              <TouchableOpacity
+                onPress={navigateToForgotPassword}
+                style={styles.forgotPasswordContainer}
+                disabled={isLoggingIn}
+              >
                 <Text
-                  variant="headlineMedium"
-                  style={[styles.title, { color: theme.colors.onBackground }]}
-                >
-                  {t("login.welcomeBack")}
-                </Text>
-                <Text
-                  variant="bodyLarge"
                   style={[
-                    styles.subtitle,
-                    { color: theme.colors.onSurfaceVariant },
+                    styles.forgotPasswordText,
+                    { color: theme.colors.primary },
                   ]}
                 >
-                  {t("login.signInToAccess")}
+                  {t("common.forgotPassword")}
                 </Text>
-                <TextInput
-                  label={t("common.email")}
-                  value={email}
-                  onChangeText={(text) => {
-                    setEmail(text);
-                    if (emailError) validateEmail(text);
-                  }}
-                  mode="flat"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  style={styles.input}
-                  disabled={isLoggingIn}
-                  theme={{
-                    colors: {
-                      background: "transparent",
-                    },
-                  }}
-                  underlineColor={theme.colors.outlineVariant}
-                  activeUnderlineColor={theme.colors.primary}
-                />
-                {emailError ? (
-                  <HelperText type="error">{emailError}</HelperText>
-                ) : null}
+              </TouchableOpacity>
 
-                <TextInput
-                  label={t("common.password")}
-                  value={password}
-                  onChangeText={(text) => {
-                    setPassword(text);
-                    if (passwordError) validatePassword(text);
-                  }}
-                  mode="flat"
-                  secureTextEntry={!passwordVisible}
-                  style={styles.input}
-                  disabled={isLoggingIn}
-                  error={!!passwordError}
-                  right={
-                    <TextInput.Icon
-                      icon={passwordVisible ? "eye-off-outline" : "eye-outline"}
-                      onPress={() => setPasswordVisible(!passwordVisible)}
-                      forceTextInputFocus={false}
-                      color={theme.colors.onSurfaceVariant}
-                    />
-                  }
-                  theme={{
-                    colors: {
-                      background: "transparent",
-                    },
-                  }}
-                  underlineColor={theme.colors.outlineVariant}
-                  activeUnderlineColor={theme.colors.primary}
-                />
-                {passwordError ? (
-                  <HelperText type="error">{passwordError}</HelperText>
-                ) : null}
-
-                <TouchableOpacity
-                  onPress={navigateToForgotPassword}
-                  style={styles.forgotPasswordContainer}
-                  disabled={isLoggingIn}
+              <TouchableOpacity
+                style={[
+                  styles.button,
+                  {
+                    borderColor: theme.colors.outline,
+                    backgroundColor: theme.colors.surfaceVariant,
+                  },
+                ]}
+                onPress={handleSignIn}
+                disabled={isLoggingIn}
+              >
+                <LinearGradient
+                  colors={[
+                    theme.colors.secondary,
+                    theme.colors.tertiary,
+                    (theme.colors as any).quaternary,
+                    (theme.colors as any).quinary,
+                    (theme.colors as any).senary,
+                  ]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.gradientButton}
                 >
+                  {isLoggingIn ? (
+                    <ActivityIndicator size="small" color="#ffffff" />
+                  ) : (
+                    <Text style={styles.buttonLabel}>{t("common.signIn")}</Text>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+
+          <Animated.View
+            style={[
+              styles.socialLoginContainer,
+              {
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }],
+              },
+            ]}
+          >
+            <View style={styles.dividerContainer}>
+              <Divider
+                style={[
+                  styles.divider,
+                  { backgroundColor: theme.colors.outline },
+                ]}
+              />
+              <Text
+                style={[
+                  styles.dividerText,
+                  { color: theme.colors.onSurfaceVariant },
+                ]}
+              >
+                OR
+              </Text>
+              <Divider
+                style={[
+                  styles.divider,
+                  { backgroundColor: theme.colors.outline },
+                ]}
+              />
+            </View>
+
+            <View style={styles.contactContainer}>
+              <TouchableOpacity
+                onPress={handleContactUs}
+                disabled={isLoggingIn}
+                style={styles.contactButton}
+              >
+                <Text style={{ color: theme.colors.onSurface }}>
+                  {t("common.dontHaveAccount")}{" "}
                   <Text
                     style={[
-                      styles.forgotPasswordText,
+                      styles.contactText,
                       { color: theme.colors.primary },
                     ]}
                   >
-                    {t("common.forgotPassword")}
+                    {t("common.contactUs")}
                   </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.button,
-                    { borderColor: theme.colors.outlineVariant },
-                  ]}
-                  onPress={handleSignIn}
-                  disabled={isLoggingIn}
-                >
-                  <LinearGradient
-                    colors={
-                      [
-                        "rgba(10,185,129,255)",
-                        "rgba(6,169,169,255)",
-                        "rgba(38,127,161,255)",
-                        "rgba(54,105,157,255)",
-                        "rgba(74,78,153,255)",
-                        "rgba(94,52,149,255)",
-                      ] as [
-                        "rgba(10,185,129,255)",
-                        "rgba(6,169,169,255)",
-                        "rgba(38,127,161,255)",
-                        "rgba(54,105,157,255)",
-                        "rgba(74,78,153,255)",
-                        "rgba(94,52,149,255)",
-                      ]
-                    }
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.gradientButton}
-                  >
-                    {isLoggingIn ? (
-                      <ActivityIndicator size="small" color="#ffffff" />
-                    ) : (
-                      <Text style={styles.buttonLabel}>
-                        {t("common.signIn")}
-                      </Text>
-                    )}
-                  </LinearGradient>
-                </TouchableOpacity>
-              </View>
-            </Animated.View>
-
-            <Animated.View
-              style={[
-                styles.socialLoginContainer,
-                {
-                  opacity: fadeAnim,
-                  transform: [{ translateY: slideAnim }],
-                },
-              ]}
-            >
-              <View style={styles.dividerContainer}>
-                <Divider style={styles.divider} />
-                <Text
-                  style={[
-                    styles.dividerText,
-                    { color: theme.colors.onSurfaceVariant },
-                  ]}
-                >
-                  OR
                 </Text>
-                <Divider style={styles.divider} />
-              </View>
+              </TouchableOpacity>
+            </View>
 
-              <View style={styles.contactContainer}>
-                <TouchableOpacity
-                  onPress={handleContactUs}
-                  disabled={isLoggingIn}
-                  style={styles.contactButton}
-                >
-                  <Text style={{ color: theme.colors.text }}>
-                    {t("common.dontHaveAccount")}{" "}
-                    <Text
-                      style={[
-                        styles.contactText,
-                        { color: theme.colors.primary },
-                      ]}
-                    >
-                      {t("common.contactUs")}
-                    </Text>
-                  </Text>
-                </TouchableOpacity>
-              </View>
+            <View style={styles.languageSelectorContainer}>
+              <CustomLanguageSelector compact={Platform.OS !== "web"} />
+            </View>
+          </Animated.View>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
-              {/* Language Selector */}
-              <View style={styles.languageSelectorContainer}>
-                <CustomLanguageSelector compact={Platform.OS !== "web"} />
-              </View>
-            </Animated.View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-
-        <Snackbar
-          visible={snackbarVisible}
-          onDismiss={() => setSnackbarVisible(false)}
-          duration={3000}
-          action={{
-            label: "OK",
-            onPress: () => setSnackbarVisible(false),
-          }}
-          style={styles.snackbar}
-        >
-          {snackbarMessage}
-        </Snackbar>
-      </LinearGradient>
+      <Snackbar
+        visible={snackbarVisible}
+        onDismiss={() => setSnackbarVisible(false)}
+        duration={3000}
+        action={{
+          label: "OK",
+          onPress: () => setSnackbarVisible(false),
+        }}
+        style={[
+          styles.snackbar,
+          { backgroundColor: theme.colors.surfaceVariant },
+        ]}
+        theme={{
+          colors: {
+            surface: theme.colors.surfaceVariant,
+            onSurface: theme.colors.onSurface,
+          },
+        }}
+      >
+        {snackbarMessage}
+      </Snackbar>
     </SafeAreaView>
   );
 };
