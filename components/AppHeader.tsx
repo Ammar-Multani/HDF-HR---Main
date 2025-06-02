@@ -109,7 +109,13 @@ const AppHeader = ({
     if (onProfilePress) {
       onProfilePress();
     } else if (navigationObject) {
-      navigationObject.navigate("SuperAdminProfileScreen" as never);
+      if (isAdmin === true) {
+        navigationObject.navigate("Profile" as never);
+      } else if (isAdmin === undefined) {
+        navigationObject.navigate("Profile" as never);
+      } else {
+        navigationObject.navigate("Profile" as never);
+      }
     } else {
       console.log("Navigation not available");
     }

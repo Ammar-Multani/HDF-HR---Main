@@ -61,14 +61,23 @@ const CustomLanguageSelector = ({ compact = false }) => {
         style={[
           styles.selectorButton,
           compact ? styles.compactButton : styles.fullButton,
+          {
+            backgroundColor: theme.colors.surface,
+            borderColor: theme.colors.outline,
+          },
         ]}
       >
         <View style={styles.flagContainer}>
           <Flag code={getCurrentLanguageFlag()} size={24} />
         </View>
-        <Text style={styles.languageName}>{getCurrentLanguageName()}</Text>
-
-        <MaterialCommunityIcons name="chevron-down" size={16} color="#666" />
+        <Text style={[styles.languageName, { color: theme.colors.onSurface }]}>
+          {getCurrentLanguageName()}
+        </Text>
+        <MaterialCommunityIcons
+          name="chevron-down"
+          size={16}
+          color={theme.colors.onSurfaceVariant}
+        />
       </TouchableOpacity>
 
       {/* Language Selection Modal */}
@@ -79,16 +88,36 @@ const CustomLanguageSelector = ({ compact = false }) => {
         statusBarTranslucent={true}
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <Surface style={styles.modalContent}>
+        <View
+          style={[styles.modalOverlay, { backgroundColor: "rgba(0,0,0,0.5)" }]}
+        >
+          <Surface
+            style={[
+              styles.modalContent,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.outline,
+                borderWidth: 0.5,
+              },
+            ]}
+            elevation={2}
+          >
             <View style={styles.modalHeader}>
               <LinearGradient
-                colors={gradientColors}
+                colors={[
+                  theme.colors.secondary,
+                  theme.colors.tertiary,
+                  (theme.colors as any).quaternary,
+                  (theme.colors as any).quinary,
+                  (theme.colors as any).senary,
+                ]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.modalHeaderGradient}
               >
-                <Text style={styles.modalTitle}>{t("language.select")}</Text>
+                <Text style={[styles.modalTitle, { color: "#fff" }]}>
+                  {t("language.select")}
+                </Text>
                 <TouchableOpacity
                   onPress={() => setModalVisible(false)}
                   style={styles.closeButton}
@@ -104,7 +133,10 @@ const CustomLanguageSelector = ({ compact = false }) => {
                   key={code}
                   style={[
                     styles.languageOption,
-                    currentLanguage === code && styles.selectedLanguage,
+                    { borderBottomColor: theme.colors.outline },
+                    currentLanguage === code && {
+                      backgroundColor: (theme.colors as any).surfaceHover,
+                    },
                   ]}
                   onPress={() => handleLanguageChange(code)}
                 >
@@ -114,7 +146,11 @@ const CustomLanguageSelector = ({ compact = false }) => {
                   <Text
                     style={[
                       styles.languageOptionText,
-                      currentLanguage === code && styles.selectedLanguageText,
+                      { color: theme.colors.onSurface },
+                      currentLanguage === code && {
+                        color: theme.colors.primary,
+                        fontFamily: "Poppins-Medium",
+                      },
                     ]}
                   >
                     {languageNames[code]}
@@ -123,7 +159,7 @@ const CustomLanguageSelector = ({ compact = false }) => {
                     <MaterialCommunityIcons
                       name="check-circle"
                       size={20}
-                      color="rgba(54,105,157,255)"
+                      color={theme.colors.primary}
                       style={styles.checkIcon}
                     />
                   )}
@@ -134,8 +170,9 @@ const CustomLanguageSelector = ({ compact = false }) => {
             <Button
               mode="contained"
               onPress={() => setModalVisible(false)}
-              style={styles.cancelButton}
-              buttonColor="rgba(54,105,157,255)"
+              style={[styles.cancelButton, { marginTop: 8 }]}
+              buttonColor={theme.colors.primary}
+              labelStyle={{ fontFamily: "Poppins-Medium" }}
             >
               {t("common.cancel")}
             </Button>
@@ -151,11 +188,9 @@ const styles = StyleSheet.create({
   selectorButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f5f5f5",
     borderRadius: 20,
     paddingVertical: 6,
     borderWidth: 1,
-    borderColor: "#e0e0e0",
   },
   compactButton: {
     paddingHorizontal: 8,
@@ -171,14 +206,12 @@ const styles = StyleSheet.create({
   languageName: {
     fontSize: 14,
     fontFamily: "Poppins-Medium",
-    color: "#333",
     marginRight: 6,
   },
   modalOverlay: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.5)",
     padding: 20,
   },
   modalContent: {
@@ -198,7 +231,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   modalTitle: {
-    color: "#fff",
     fontSize: 18,
     fontFamily: "Poppins-Bold",
   },
@@ -214,19 +246,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
-  },
-  selectedLanguage: {
-    backgroundColor: "rgba(54,105,157,0.05)",
   },
   languageOptionText: {
     fontSize: 16,
     fontFamily: "Poppins-Regular",
-    color: "#333",
-  },
-  selectedLanguageText: {
-    fontFamily: "Poppins-Medium",
-    color: "rgba(54,105,157,255)",
   },
   checkIcon: {
     marginLeft: "auto",

@@ -2384,6 +2384,7 @@ const SuperAdminUsersScreen = () => {
 
         <FAB
           icon="plus"
+          label={`Create ${selectedTab === UserListType.SUPER_ADMIN ? 'HDF Users' : selectedTab === UserListType.COMPANY_ADMIN ? 'Company Admin' : 'Employee'}`}
           style={[
             styles.fab,
             {
@@ -2451,7 +2452,7 @@ const SuperAdminUsersScreen = () => {
                   },
                 ]}
               >
-                Admin Users
+                HDF Users
               </Text>
             </TouchableOpacity>
             <TouchableOpacity

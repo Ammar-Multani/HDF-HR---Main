@@ -16,6 +16,7 @@ import {
   Snackbar,
   Card,
   Portal,
+  Surface,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
@@ -549,15 +550,16 @@ const EditCompanyScreen = () => {
                             />
                           </View>
                         </View>
-
+                        <View style={styles.addStakeholderButtonContainer}>
                         <Button
                           mode="contained"
                           onPress={addStakeholder}
-                          style={[styles.addButton, { backgroundColor: theme.colors.primary }]}
+                          style={[styles.addStakeholderButton, { backgroundColor: theme.colors.secondary }]}
                           disabled={submitting}
                         >
                           Add Stakeholder
                         </Button>
+                        </View>
                       </View>
                     </View>
                   </Card.Content>
@@ -715,23 +717,33 @@ const EditCompanyScreen = () => {
                   </Card.Content>
                 </Card>
 
-                <View style={styles.submitContainer}>
-                  <Button
-                    mode="contained"
-                    onPress={handleSubmit(onSubmit)}
-                    style={styles.submitButton}
-                    loading={submitting}
-                    disabled={submitting}
-                  >
-                    Update Company
-                  </Button>
-                  </View>
+                
               </Animated.View>
             </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-
+      <Surface style={styles.bottomBar}>
+        <View style={styles.bottomBarContent}>
+        <Button
+              mode="outlined"
+              onPress={() => navigation.goBack()}
+              style={[styles.button, styles.cancelButton]}
+              disabled={loading}
+            >
+              Cancel
+            </Button>
+          <Button
+            mode="contained"
+            onPress={handleSubmit(onSubmit)}
+            style={styles.submitButton}
+            loading={submitting}
+            disabled={submitting}
+          >
+            Update Company
+          </Button>
+        </View>
+      </Surface>
       <Snackbar
         visible={snackbarVisible}
         onDismiss={() => setSnackbarVisible(false)}
@@ -875,24 +887,40 @@ const styles = StyleSheet.create({
     padding: 16,
     backgroundColor: "#f8fafc",
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
     gap: 16,
   },
   addButton: {
     marginTop: 8,
   },
-  submitContainer: {
-    marginTop: 24,
-    flex: 1,  
+  bottomBar: {
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+    padding: 16,
+  },
+  bottomBarContent: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    alignItems: "center",
+    gap: 12,
+    maxWidth: 1400,
+    marginHorizontal: "auto",
+    width: "100%",
+  },
+  cancelButton: {
+    borderColor: "#E0E0E0",
+  },
+  addStakeholderButton: {
+    backgroundColor: "#E0E0E0",
+    flex: 1,
+    alignSelf: "flex-end",
+  },
+  addStakeholderButtonContainer: {
+    marginTop: 5,
   },
   submitButton: {
-    borderRadius: 16,
-    marginTop: 12,
-    paddingVertical: 8,
-    justifyContent: "center",
-    alignItems: "center",
+    
   },
   errorContainer: {
     flex: 1,
@@ -901,7 +929,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   button: {
-    marginTop: 16,
+    minWidth: 120,
   },
 });
 

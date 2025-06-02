@@ -29,7 +29,77 @@ import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import Text from "../../components/Text";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import Animated, { FadeIn } from "react-native-reanimated";
+import { LinearGradient } from "expo-linear-gradient";
+import Animated, {
+  FadeIn,
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
+
+// Add Shimmer component for loading states
+interface ShimmerProps {
+  width: number | string;
+  height: number;
+  style?: any;
+}
+
+const Shimmer: React.FC<ShimmerProps> = ({ width, height, style }) => {
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        {
+          translateX: withRepeat(
+            withSequence(
+              withTiming(typeof width === "number" ? -width : -200, {
+                duration: 800,
+              }),
+              withTiming(typeof width === "number" ? width : 200, {
+                duration: 800,
+              })
+            ),
+            -1
+          ),
+        },
+      ],
+    };
+  });
+
+  return (
+    <View
+      style={[
+        {
+          width,
+          height,
+          backgroundColor: "#E8E8E8",
+          overflow: "hidden",
+          borderRadius: 4,
+        },
+        style,
+      ]}
+    >
+      <Animated.View
+        style={[
+          {
+            width: "100%",
+            height: "100%",
+            position: "absolute",
+            backgroundColor: "transparent",
+          },
+          animatedStyle,
+        ]}
+      >
+        <LinearGradient
+          colors={["transparent", "rgba(255, 255, 255, 0.4)", "transparent"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{ width: "100%", height: "100%" }}
+        />
+      </Animated.View>
+    </View>
+  );
+};
 
 const CompanyAdminProfileScreen = () => {
   const theme = useTheme();
@@ -234,7 +304,189 @@ const CompanyAdminProfileScreen = () => {
   };
 
   if (loading) {
-    return <LoadingIndicator />;
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
+        <AppHeader
+          title="Profile"
+          subtitle="Manage your account"
+          showBackButton={false}
+          showHelpButton={true}
+          onHelpPress={() => {
+            navigation.navigate("Help" as never);
+          }}
+          showLogo={false}
+        />
+
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.keyboardAvoidingView}
+        >
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={[
+              styles.scrollContent,
+              {
+                maxWidth: isLargeScreen ? 1400 : isMediumScreen ? 1100 : "100%",
+                paddingHorizontal: isLargeScreen
+                  ? 48
+                  : isMediumScreen
+                    ? 32
+                    : 16,
+              },
+            ]}
+          >
+            <View style={styles.gridContainer}>
+              {/* Profile Header Shimmer */}
+              <Animated.View
+                entering={FadeIn.delay(100)}
+                style={[styles.profileSection]}
+              >
+                <Surface style={styles.profileCard}>
+                  <View style={styles.profileHeader}>
+                    <Shimmer
+                      width={100}
+                      height={100}
+                      style={{ borderRadius: 50, marginBottom: 8 }}
+                    />
+                    <Shimmer
+                      width={200}
+                      height={24}
+                      style={{ marginBottom: 4 }}
+                    />
+                    <Shimmer
+                      width={180}
+                      height={16}
+                      style={{ marginBottom: 8 }}
+                    />
+                    <Shimmer
+                      width={120}
+                      height={28}
+                      style={{ borderRadius: 20 }}
+                    />
+                  </View>
+                </Surface>
+              </Animated.View>
+
+              <View style={styles.contentContainer}>
+                <View style={styles.gridColumns}>
+                  {/* Left Column */}
+                  <View
+                    style={[
+                      styles.gridColumn,
+                      {
+                        flex: isLargeScreen ? 0.48 : isMediumScreen ? 0.48 : 1,
+                      },
+                    ]}
+                  >
+                    {/* Company Information Card Shimmer */}
+                    <Animated.View entering={FadeIn.delay(200)}>
+                      <Surface style={styles.detailsCard}>
+                        <View style={styles.cardHeader}>
+                          <View style={styles.headerLeft}>
+                            <Shimmer
+                              width={32}
+                              height={32}
+                              style={{ borderRadius: 8 }}
+                            />
+                            <Shimmer
+                              width={150}
+                              height={20}
+                              style={{ marginLeft: 12 }}
+                            />
+                          </View>
+                        </View>
+
+                        <View style={styles.cardContent}>
+                          <View style={styles.infoRow}>
+                            <Shimmer
+                              width={80}
+                              height={16}
+                              style={{ marginRight: 8 }}
+                            />
+                            <Shimmer width={160} height={16} />
+                          </View>
+                          <View style={styles.infoRow}>
+                            <Shimmer
+                              width={80}
+                              height={16}
+                              style={{ marginRight: 8 }}
+                            />
+                            <Shimmer width={140} height={16} />
+                          </View>
+                          <View style={styles.infoRow}>
+                            <Shimmer
+                              width={80}
+                              height={16}
+                              style={{ marginRight: 8 }}
+                            />
+                            <Shimmer width={120} height={16} />
+                          </View>
+                        </View>
+                      </Surface>
+                    </Animated.View>
+                  </View>
+
+                  {/* Right Column */}
+                  <View
+                    style={[
+                      styles.gridColumn,
+                      {
+                        flex: isLargeScreen ? 0.48 : isMediumScreen ? 0.48 : 1,
+                      },
+                    ]}
+                  >
+                    {/* Personal Information Card Shimmer */}
+                    <Animated.View entering={FadeIn.delay(300)}>
+                      <Surface style={styles.detailsCard}>
+                        <View style={styles.cardHeader}>
+                          <View style={styles.headerLeft}>
+                            <Shimmer
+                              width={32}
+                              height={32}
+                              style={{ borderRadius: 8 }}
+                            />
+                            <Shimmer
+                              width={150}
+                              height={20}
+                              style={{ marginLeft: 12 }}
+                            />
+                          </View>
+                        </View>
+
+                        <View style={styles.cardContent}>
+                          <Shimmer
+                            width="100%"
+                            height={56}
+                            style={{ marginBottom: 16, borderRadius: 12 }}
+                          />
+                          <Shimmer
+                            width="100%"
+                            height={56}
+                            style={{ marginBottom: 16, borderRadius: 12 }}
+                          />
+                          <Shimmer
+                            width="100%"
+                            height={56}
+                            style={{ marginBottom: 16, borderRadius: 12 }}
+                          />
+                          <Shimmer
+                            width="100%"
+                            height={40}
+                            style={{ borderRadius: 12 }}
+                          />
+                        </View>
+                      </Surface>
+                    </Animated.View>
+                  </View>
+                </View>
+              </View>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -270,10 +522,7 @@ const CompanyAdminProfileScreen = () => {
             {/* Profile Header */}
             <Animated.View
               entering={FadeIn.delay(100)}
-              style={[
-                styles.profileSection,
-                
-              ]}
+              style={[styles.profileSection]}
             >
               <Surface style={styles.profileCard}>
                 <View style={styles.profileHeader}>
