@@ -67,6 +67,7 @@ const useWindowDimensions = () => {
 interface ReceiptFormData {
   receipt_number: string;
   date: Date;
+  transaction_date: Date;
   merchant_name: string;
   total_amount: string;
   tax_amount: string;
@@ -90,6 +91,14 @@ const PAYMENT_METHODS = [
   "Other",
 ];
 
+interface DateChangeEvent extends Event {
+  type?: string;
+  nativeEvent?: {
+    timestamp?: number;
+  };
+  target?: HTMLInputElement;
+}
+
 const CreateReceiptScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
@@ -103,6 +112,11 @@ const CreateReceiptScreen = () => {
   const [loading, setLoading] = useState(false);
   const [loadingCompanies, setLoadingCompanies] = useState(true);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTransactionDatePicker, setShowTransactionDatePicker] =
+    useState(false);
+  const [datePickerType, setDatePickerType] = useState<
+    "receipt" | "transaction"
+  >("receipt");
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [companies, setCompanies] = useState<any[]>([]);
@@ -131,6 +145,7 @@ const CreateReceiptScreen = () => {
     defaultValues: {
       receipt_number: "",
       date: new Date(),
+      transaction_date: new Date(),
       merchant_name: "",
       total_amount: "",
       tax_amount: "",
@@ -140,7 +155,7 @@ const CreateReceiptScreen = () => {
     },
   });
 
-  const date = watch("date");
+  const transaction_date = watch("transaction_date");
   const payment_method = watch("payment_method");
 
   const fetchCompanies = async () => {
@@ -268,10 +283,23 @@ const CreateReceiptScreen = () => {
     }
   };
 
-  const handleDateChange = (event: any, selectedDate?: Date) => {
-    setShowDatePicker(false);
-    if (selectedDate) {
-      setValue("date", selectedDate);
+  const handleDateChange = (
+    event: DateChangeEvent,
+    type: "receipt" | "transaction"
+  ) => {
+    if (Platform.OS === "web") {
+      const selectedDate = new Date((event.target as HTMLInputElement).value);
+      setValue(type === "receipt" ? "date" : "transaction_date", selectedDate);
+    } else {
+      if (event.type === "set" && event.nativeEvent?.timestamp) {
+        setValue(
+          type === "receipt" ? "date" : "transaction_date",
+          new Date(event.nativeEvent.timestamp)
+        );
+      }
+      type === "receipt"
+        ? setShowDatePicker(false)
+        : setShowTransactionDatePicker(false);
     }
   };
 
@@ -363,6 +391,7 @@ const CreateReceiptScreen = () => {
         company_id: selectedCompany.id,
         receipt_number: data.receipt_number,
         date: data.date.toISOString().split("T")[0],
+        transaction_date: data.transaction_date.toISOString().split("T")[0],
         merchant_name: data.merchant_name,
         line_items: formattedLineItems,
         total_amount: parseFloat(data.total_amount),
@@ -480,14 +509,57 @@ const CreateReceiptScreen = () => {
                       name="receipt_number"
                     />
 
-                    <Button
-                      mode="outlined"
-                      onPress={() => setShowDatePicker(true)}
-                      style={styles.dateButton}
-                      icon="calendar"
-                    >
-                      {format(date, "MMMM d, yyyy")}
-                    </Button>
+                    {Platform.OS === "web" ? (
+                      <View style={styles.dateInputWrapper}>
+                        <Text style={styles.inputLabel}>
+                          Transaction Date *
+                        </Text>
+                        <View style={styles.webDateInputContainer}>
+                          <input
+                            type="date"
+                            value={format(transaction_date, "yyyy-MM-dd")}
+                            onChange={(e) => handleDateChange(e, "transaction")}
+                            style={{
+                              width: "100%",
+                              padding: "12px",
+                              fontSize: "14px",
+                              borderRadius: "8px",
+                              border: "1px solid #e2e8f0",
+                              outline: "none",
+                              backgroundColor: "#f8fafc",
+                              transition: "all 0.2s ease",
+                              cursor: "pointer",
+                            }}
+                          />
+                        </View>
+                      </View>
+                    ) : (
+                      <>
+                        <Text style={styles.inputLabel}>
+                          Transaction Date *
+                        </Text>
+                        <Button
+                          mode="outlined"
+                          onPress={() => {
+                            setDatePickerType("transaction");
+                            setShowTransactionDatePicker(true);
+                          }}
+                          style={styles.dateButton}
+                          icon="calendar"
+                        >
+                          {format(transaction_date, "MMMM d, yyyy")}
+                        </Button>
+
+                        {showTransactionDatePicker && (
+                          <DateTimePicker
+                            value={transaction_date}
+                            mode="date"
+                            display="default"
+                            onChange={(e) => handleDateChange(e, "transaction")}
+                          />
+                        )}
+                      </>
+                    )}
 
                     <Controller
                       control={control}
@@ -822,16 +894,6 @@ const CreateReceiptScreen = () => {
         </Surface>
       </KeyboardAvoidingView>
 
-      {/* Date Picker Modal */}
-      {showDatePicker && (
-        <DateTimePicker
-          value={date}
-          mode="date"
-          display="default"
-          onChange={handleDateChange}
-        />
-      )}
-
       {/* Company Selection Modal */}
       <Portal>
         <Modal
@@ -1081,6 +1143,18 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     color: "#1e293b",
     fontFamily: "Poppins-SemiBold",
+  },
+  webDateInputContainer: {
+    width: "100%",
+    marginBottom: 10,
+  },
+  dateInputWrapper: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 12,
+    color: "#1e293b",
+    fontFamily: "Poppins-regular",
   },
 });
 

@@ -73,6 +73,7 @@ interface Receipt {
   company_id: string;
   receipt_number: string;
   date: string;
+  transaction_date: string;
   merchant_name: string;
   total_amount: number;
   tax_amount: number;
@@ -252,20 +253,18 @@ const ReceiptDetailsScreen = () => {
         }
       >
         <View style={styles.headerSection}>
-          <Text style={styles.pageTitle}>
-            #{receipt.receipt_number}
-          </Text>
-                  {/* Action Buttons */}
-        <View style={styles.actionButtons}>
-          <Button
-            mode="contained"
-            icon="pencil"
-            onPress={handleEditReceipt}
-            style={[styles.button, { marginRight: 8 }]}
-          >
-            Edit Receipt
-          </Button>
-        </View>
+          <Text style={styles.pageTitle}>#{receipt.receipt_number}</Text>
+          {/* Action Buttons */}
+          <View style={styles.actionButtons}>
+            <Button
+              mode="contained"
+              icon="pencil"
+              onPress={handleEditReceipt}
+              style={[styles.button, { marginRight: 8 }]}
+            >
+              Edit Receipt
+            </Button>
+          </View>
         </View>
 
         <View style={styles.gridContainer}>
@@ -299,6 +298,18 @@ const ReceiptDetailsScreen = () => {
                     <Text style={styles.detailLabel}>Date:</Text>
                     <Text style={styles.detailValue}>
                       {format(new Date(receipt.date), "MMMM d, yyyy")}
+                    </Text>
+                  </View>
+
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Transaction Date:</Text>
+                    <Text style={styles.detailValue}>
+                      {receipt.transaction_date
+                        ? format(
+                            new Date(receipt.transaction_date),
+                            "MMMM d, yyyy"
+                          )
+                        : "Not specified"}
                     </Text>
                   </View>
 
@@ -505,8 +516,6 @@ const ReceiptDetailsScreen = () => {
             </Animated.View>
           </View>
         </View>
-
-
       </ScrollView>
     </SafeAreaView>
   );

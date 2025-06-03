@@ -34,6 +34,7 @@ import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import { TaskPriority, UserRole, TaskStatus } from "../../types";
 import Animated, { FadeIn } from "react-native-reanimated";
+import DateTimePicker from "react-native-modal-datetime-picker";
 
 interface TaskFormData {
   title: string;
@@ -254,94 +255,16 @@ const CreateTaskScreen = () => {
     }
   };
 
-  // Date picker handlers for the web-compatible date picker
-  const handleDateConfirm = (selectedDate: Date) => {
-    setShowDatePicker(false);
-    setValue("deadline", selectedDate);
-  };
-
-  const handleDateCancel = () => {
-    setShowDatePicker(false);
-  };
-
-  // Web-specific date picker component
-  const WebDatePicker = () => {
-    const [year, setYear] = useState(deadline.getFullYear());
-    const [month, setMonth] = useState(deadline.getMonth() + 1); // JavaScript months are 0-indexed
-    const [day, setDay] = useState(deadline.getDate());
-
-    const handleConfirm = () => {
-      const newDate = new Date(year, month - 1, day);
-      handleDateConfirm(newDate);
-    };
-
-    return (
-      <Portal>
-        <Modal
-          visible={showDatePicker}
-          onDismiss={handleDateCancel}
-          contentContainerStyle={styles.webDatePickerModal}
-        >
-          <View style={styles.webDatePickerContainer}>
-            <Text style={styles.webDatePickerTitle}>Select Date</Text>
-
-            <View style={styles.webDateInputRow}>
-              <View style={styles.webDateInputContainer}>
-                <Text style={styles.webDateInputLabel}>Day</Text>
-                <TextInput
-                  mode="outlined"
-                  keyboardType="numeric"
-                  value={day.toString()}
-                  onChangeText={(text) => setDay(parseInt(text) || 1)}
-                  style={styles.webDateInput}
-                />
-              </View>
-
-              <View style={styles.webDateInputContainer}>
-                <Text style={styles.webDateInputLabel}>Month</Text>
-                <TextInput
-                  mode="outlined"
-                  keyboardType="numeric"
-                  value={month.toString()}
-                  onChangeText={(text) => {
-                    const newMonth = parseInt(text) || 1;
-                    setMonth(Math.min(Math.max(newMonth, 1), 12));
-                  }}
-                  style={styles.webDateInput}
-                />
-              </View>
-
-              <View style={styles.webDateInputContainer}>
-                <Text style={styles.webDateInputLabel}>Year</Text>
-                <TextInput
-                  mode="outlined"
-                  keyboardType="numeric"
-                  value={year.toString()}
-                  onChangeText={(text) => setYear(parseInt(text) || 2023)}
-                  style={styles.webDateInput}
-                />
-              </View>
-            </View>
-
-            <View style={styles.webDatePickerActions}>
-              <Button
-                onPress={handleDateCancel}
-                style={styles.webDatePickerButton}
-              >
-                Cancel
-              </Button>
-              <Button
-                mode="contained"
-                onPress={handleConfirm}
-                style={styles.webDatePickerButton}
-              >
-                Confirm
-              </Button>
-            </View>
-          </View>
-        </Modal>
-      </Portal>
-    );
+  const handleDateChange = (event: any) => {
+    if (Platform.OS === "web") {
+      const selectedDate = new Date(event.target.value);
+      setValue("deadline", selectedDate);
+    } else {
+      if (event.type === "set" && event.nativeEvent.timestamp) {
+        setValue("deadline", new Date(event.nativeEvent.timestamp));
+      }
+      setShowDatePicker(false);
+    }
   };
 
   if (loadingUsers || loadingCompanies) {
@@ -473,14 +396,45 @@ const CreateTaskScreen = () => {
 
                   <View style={styles.cardContent}>
                     <Text style={styles.inputLabel}>Deadline *</Text>
-                    <Button
-                      mode="outlined"
-                      onPress={() => setShowDatePicker(true)}
-                      style={styles.dateButton}
-                      icon="calendar"
-                    >
-                      {format(deadline, "MMMM d, yyyy")}
-                    </Button>
+                    {Platform.OS === "web" ? (
+                      <View style={styles.webDateInputContainer}>
+                        <input
+                          type="date"
+                          value={format(deadline, "yyyy-MM-dd")}
+                          onChange={handleDateChange}
+                          style={{
+                            width: "100%",
+                            padding: "10px",
+                            fontSize: "16px",
+                            borderRadius: "4px",
+                            border: "1px solid #e2e8f0",
+                            outline: "none",
+                          }}
+                          min={format(new Date(), "yyyy-MM-dd")}
+                        />
+                      </View>
+                    ) : (
+                      <>
+                        <Button
+                          mode="outlined"
+                          onPress={() => setShowDatePicker(true)}
+                          style={styles.dateButton}
+                          icon="calendar"
+                        >
+                          {format(deadline, "MMMM d, yyyy")}
+                        </Button>
+
+                        {showDatePicker && (
+                          <DateTimePicker
+                            value={deadline}
+                            mode="date"
+                            display="default"
+                            onChange={handleDateChange}
+                            minimumDate={new Date()}
+                          />
+                        )}
+                      </>
+                    )}
 
                     <Text style={styles.inputLabel}>Priority *</Text>
                     <Controller
@@ -608,19 +562,6 @@ const CreateTaskScreen = () => {
           </View>
         </Surface>
       </KeyboardAvoidingView>
-
-      {Platform.OS === "web" ? (
-        <WebDatePicker />
-      ) : (
-        <DateTimePickerModal
-          isVisible={showDatePicker}
-          mode="date"
-          onConfirm={handleDateConfirm}
-          onCancel={handleDateCancel}
-          date={deadline}
-          minimumDate={new Date()}
-        />
-      )}
 
       <Snackbar
         visible={snackbarVisible}
@@ -846,45 +787,6 @@ const styles = StyleSheet.create({
   },
   cancelButton: {},
   saveButton: {},
-  webDatePickerModal: {
-    backgroundColor: "white",
-    padding: 20,
-    margin: 20,
-    borderRadius: 8,
-    maxWidth: 500,
-    alignSelf: "center",
-  },
-  webDatePickerContainer: {
-    alignItems: "center",
-  },
-  webDatePickerTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 20,
-  },
-  webDateInputRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    width: "100%",
-    marginBottom: 20,
-  },
-  webDateInputContainer: {
-    width: "30%",
-  },
-  webDateInputLabel: {
-    marginBottom: 5,
-  },
-  webDateInput: {
-    height: 40,
-  },
-  webDatePickerActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    width: "100%",
-  },
-  webDatePickerButton: {
-    marginLeft: 10,
-  },
   modalContainer: {
     margin: 20,
     borderRadius: 16,
@@ -952,6 +854,9 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: "Poppins-Medium",
     color: "#334155",
+  },
+  webDateInputContainer: {
+    marginBottom: 16,
   },
 });
 

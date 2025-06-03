@@ -46,6 +46,7 @@ interface Receipt {
   company_id: string;
   receipt_number: string;
   date: string;
+  transaction_date: string;
   merchant_name: string;
   total_amount: number;
   tax_amount: number;
@@ -234,6 +235,15 @@ const ReceiptDetailsScreen = () => {
               <Text style={styles.detailLabel}>Date:</Text>
               <Text style={styles.detailValue}>
                 {format(new Date(receipt.date), "MMMM d, yyyy")}
+              </Text>
+            </View>
+
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Transaction Date:</Text>
+              <Text style={styles.detailValue}>
+                {receipt.transaction_date
+                  ? format(new Date(receipt.transaction_date), "MMMM d, yyyy")
+                  : "Not specified"}
               </Text>
             </View>
 

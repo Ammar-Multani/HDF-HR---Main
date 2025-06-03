@@ -305,6 +305,21 @@ const EditReceiptScreen = () => {
     setFormData({ ...formData, line_items: updatedLineItems });
   };
 
+  const handleDateChange = (event: any) => {
+    if (Platform.OS === "web") {
+      const selectedDate = new Date(event.target.value);
+      setFormData({ ...formData, date: selectedDate });
+    } else {
+      setShowDatePicker(false);
+      if (event.type === "set" && event.nativeEvent.timestamp) {
+        setFormData({
+          ...formData,
+          date: new Date(event.nativeEvent.timestamp),
+        });
+      }
+    }
+  };
+
   if (loading) {
     return <LoadingIndicator />;
   }
@@ -374,14 +389,57 @@ const EditReceiptScreen = () => {
                       {errors.receipt_number}
                     </HelperText>
 
-                    <Button
-                      mode="outlined"
-                      onPress={() => setShowDatePicker(true)}
-                      style={styles.dateButton}
-                      icon="calendar"
-                    >
-                      {format(formData.date, "MMMM d, yyyy")}
-                    </Button>
+                    {Platform.OS === "web" ? (
+                      <View style={styles.dateInputWrapper}>
+                        <Text style={styles.inputLabel}>Receipt Date</Text>
+                        <View style={styles.webDateInputContainer}>
+                          <input
+                            type="date"
+                            value={format(formData.date, "yyyy-MM-dd")}
+                            onChange={handleDateChange}
+                            style={{
+                              width: "100%",
+                              padding: "12px",
+                              fontSize: "14px",
+                              borderRadius: "8px",
+                              border: "1px solid #e2e8f0",
+                              outline: "none",
+                              backgroundColor: "#f8fafc",
+                              transition: "all 0.2s ease",
+                              cursor: "pointer",
+                            }}
+                          />
+                        </View>
+                      </View>
+                    ) : (
+                      <>
+                        <Button
+                          mode="outlined"
+                          onPress={() => setShowDatePicker(true)}
+                          style={styles.dateButton}
+                          icon="calendar"
+                        >
+                          {format(formData.date, "MMMM d, yyyy")}
+                        </Button>
+
+                        {showDatePicker && (
+                          <DateTimePicker
+                            value={formData.date}
+                            mode="date"
+                            display="default"
+                            onChange={(event, selectedDate) => {
+                              setShowDatePicker(false);
+                              if (selectedDate) {
+                                setFormData({
+                                  ...formData,
+                                  date: selectedDate,
+                                });
+                              }
+                            }}
+                          />
+                        )}
+                      </>
+                    )}
 
                     <TextInput
                       label="Merchant Name"
@@ -607,21 +665,6 @@ const EditReceiptScreen = () => {
         </Surface>
       </KeyboardAvoidingView>
 
-      {/* Date Picker Modal */}
-      {showDatePicker && (
-        <DateTimePicker
-          value={formData.date}
-          mode="date"
-          display="default"
-          onChange={(event, selectedDate) => {
-            setShowDatePicker(false);
-            if (selectedDate) {
-              setFormData({ ...formData, date: selectedDate });
-            }
-          }}
-        />
-      )}
-
       {/* Company Selection Modal */}
       <Portal>
         <Modal
@@ -819,10 +862,8 @@ const styles = StyleSheet.create({
   button: {
     minWidth: 120,
   },
-  cancelButton: {
-  },
-  saveButton: {
-  },
+  cancelButton: {},
+  saveButton: {},
   modal: {
     backgroundColor: "white",
     borderRadius: 16,
@@ -834,6 +875,19 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     color: "#1e293b",
     fontFamily: "Poppins-SemiBold",
+  },
+  webDateInputContainer: {
+    width: "100%",
+    marginBottom: 10,
+  },
+  dateInputWrapper: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 12,
+    color: "#1e293b",
+    fontFamily: "Poppins-Regular",
+    marginBottom: 4,
   },
 });
 

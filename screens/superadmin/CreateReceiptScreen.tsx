@@ -37,6 +37,7 @@ import { UserRole } from "../../types";
 interface ReceiptFormData {
   receipt_number: string;
   date: Date;
+  transaction_date: Date;
   merchant_name: string;
   total_amount: string;
   tax_amount: string;
@@ -61,6 +62,8 @@ const CreateReceiptScreen = () => {
   const [loading, setLoading] = useState(false);
   const [loadingCompanies, setLoadingCompanies] = useState(true);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTransactionDatePicker, setShowTransactionDatePicker] =
+    useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [companies, setCompanies] = useState<any[]>([]);
@@ -78,6 +81,9 @@ const CreateReceiptScreen = () => {
   const [imageSource, setImageSource] = useState<"camera" | "gallery" | null>(
     null
   );
+  const [datePickerType, setDatePickerType] = useState<
+    "receipt" | "transaction"
+  >("receipt");
 
   const {
     control,
@@ -90,6 +96,7 @@ const CreateReceiptScreen = () => {
     defaultValues: {
       receipt_number: "",
       date: new Date(),
+      transaction_date: new Date(),
       merchant_name: "",
       total_amount: "",
       tax_amount: "",
@@ -100,6 +107,7 @@ const CreateReceiptScreen = () => {
   });
 
   const date = watch("date");
+  const transaction_date = watch("transaction_date");
   const payment_method = watch("payment_method");
 
   const fetchCompanies = async () => {
@@ -228,9 +236,16 @@ const CreateReceiptScreen = () => {
   };
 
   const handleDateChange = (event: any, selectedDate?: Date) => {
-    setShowDatePicker(false);
-    if (selectedDate) {
-      setValue("date", selectedDate);
+    if (datePickerType === "receipt") {
+      setShowDatePicker(false);
+      if (selectedDate) {
+        setValue("date", selectedDate);
+      }
+    } else {
+      setShowTransactionDatePicker(false);
+      if (selectedDate) {
+        setValue("transaction_date", selectedDate);
+      }
     }
   };
 
@@ -322,6 +337,7 @@ const CreateReceiptScreen = () => {
         company_id: selectedCompany.id,
         receipt_number: data.receipt_number,
         date: data.date.toISOString().split("T")[0],
+        transaction_date: data.transaction_date.toISOString().split("T")[0],
         merchant_name: data.merchant_name,
         line_items: formattedLineItems,
         total_amount: parseFloat(data.total_amount),
@@ -451,12 +467,37 @@ const CreateReceiptScreen = () => {
             {format(date, "MMMM d, yyyy")}
           </Button>
 
+          <Text style={styles.inputLabel}>Transaction Date *</Text>
+          <Button
+            mode="outlined"
+            onPress={() => setShowTransactionDatePicker(true)}
+            style={styles.dateButton}
+            icon="calendar"
+          >
+            {format(transaction_date, "MMMM d, yyyy")}
+          </Button>
+
           {showDatePicker && (
             <DateTimePicker
               value={date}
               mode="date"
               display="default"
-              onChange={handleDateChange}
+              onChange={(event, date) => {
+                setDatePickerType("receipt");
+                handleDateChange(event, date);
+              }}
+            />
+          )}
+
+          {showTransactionDatePicker && (
+            <DateTimePicker
+              value={transaction_date}
+              mode="date"
+              display="default"
+              onChange={(event, date) => {
+                setDatePickerType("transaction");
+                handleDateChange(event, date);
+              }}
             />
           )}
 
