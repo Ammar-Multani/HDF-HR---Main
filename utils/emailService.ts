@@ -48,16 +48,18 @@ export const sendPasswordResetEmail = async (
       },
     });
 
-    // Call our Supabase Edge Function
+    // Call our Supabase Edge Function with explicit request configuration
     const { data, error } = await supabase.functions.invoke("send-email", {
       method: "POST",
-      body: JSON.stringify(requestBody),
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
+      body: requestBody, // Supabase client will handle JSON stringification
     });
 
-    console.log("Edge Function response:", { data, error });
+    // Log the complete response for debugging
+    console.log(
+      "Complete Edge Function response:",
+      JSON.stringify({ data, error }, null, 2)
+    );
 
     if (error) {
       console.error("Supabase Edge Function error:", {
