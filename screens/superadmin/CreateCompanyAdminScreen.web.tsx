@@ -676,30 +676,7 @@ const CreateCompanyAdminScreen = () => {
                   </View>
                 </Surface>
 
-                <View style={styles.bottomBarContent}>
-                  <View style={styles.actionButtons}>
-                    <Button
-                      mode="outlined"
-                      onPress={() => navigation.goBack()}
-                      style={styles.button}
-                      disabled={loading}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      mode="contained"
-                      onPress={handleSubmit(onSubmit)}
-                      style={[
-                        styles.button,
-                        { backgroundColor: theme.colors.primary },
-                      ]}
-                      loading={loading}
-                      disabled={loading}
-                    >
-                      Create Admin
-                    </Button>
-                  </View>
-                </View>
+                
               </Animated.View>
             </View>
           </View>
@@ -750,7 +727,36 @@ const CreateCompanyAdminScreen = () => {
           )}
         </ScrollView>
       </Menu>
-
+      <Surface style={styles.bottomBar}>
+        <View style={styles.bottomBarContent}>
+          <View style={styles.actionButtons}>
+            <Button
+              mode="outlined"
+              onPress={() => navigation.goBack()}
+              style={styles.button}
+              disabled={loading}
+            >
+              {t("common.cancel") || "Cancel"}
+            </Button>
+            <Button
+              mode="contained"
+              onPress={handleSubmit(onSubmit)}
+              style={[
+                styles.button,
+                { 
+                  backgroundColor: (loading || !selectedCompany) 
+                    ? theme.colors.surfaceDisabled 
+                    : theme.colors.primary 
+                },
+              ]}
+              loading={loading}
+              disabled={loading || !selectedCompany}
+            >
+              {t("superAdmin.companyAdmin.createAdmin") || "Create Admin"}
+            </Button>
+          </View>
+        </View>
+      </Surface>
       <Snackbar
         visible={snackbarVisible}
         onDismiss={() => setSnackbarVisible(false)}
@@ -854,11 +860,19 @@ const styles = StyleSheet.create({
     color: "#64748b",
     marginTop: 4,
   },
+  bottomBar: {
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+    padding: 16,
+  },
   bottomBarContent: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    alignItems: "center",
-    marginTop: 24,
+    gap: 12,
+    maxWidth: 1400,
+    marginHorizontal: "auto",
+    width: "100%",
   },
   actionButtons: {
     flexDirection: "row",

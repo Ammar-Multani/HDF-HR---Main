@@ -1081,7 +1081,7 @@ const SuperAdminFormsScreen = () => {
         >
           <View style={styles.searchBarContainer}>
             <Shimmer
-              width="100%"
+              width="95%"
               height={60}
               style={{
                 borderRadius: 18,

@@ -354,7 +354,14 @@ const CreateSuperAdminScreen = () => {
                   </View>
                 </Surface>
 
-                <View style={styles.bottomBarContent}>
+
+              </Animated.View>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+      <Surface style={styles.bottomBar}>
+      <View style={styles.bottomBarContent}>
                   <Button
                     mode="outlined"
                     onPress={() => navigation.goBack()}
@@ -374,12 +381,7 @@ const CreateSuperAdminScreen = () => {
                     Create Super Admin
                   </Button>
                 </View>
-              </Animated.View>
-            </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-
+                </Surface>
       <Snackbar
         visible={snackbarVisible}
         onDismiss={() => setSnackbarVisible(false)}
@@ -476,13 +478,19 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins-Regular",
     marginTop: 4,
   },
+  bottomBar: {
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+    padding: 16,
+  },
   bottomBarContent: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    alignItems: "center",
-    padding: 16,
     gap: 12,
-    marginTop: 24,
+    maxWidth: 1400,
+    marginHorizontal: "auto",
+    width: "100%",
   },
   button: {
     minWidth: 120,
