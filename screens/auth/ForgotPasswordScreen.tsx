@@ -32,6 +32,7 @@ import { BlurView } from "expo-blur";
 import AppHeader from "../../components/AppHeader";
 import CustomLanguageSelector from "../../components/CustomLanguageSelector";
 import { globalStyles, createTextStyle } from "../../utils/globalStyles";
+import { initEmailService } from "../../utils/emailService";
 
 const { width, height } = Dimensions.get("window");
 
@@ -43,6 +44,11 @@ const ForgotPasswordScreen = () => {
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [emailError, setEmailError] = useState("");
+
+  // Initialize email service
+  useEffect(() => {
+    initEmailService();
+  }, []);
 
   // Animation values
   const fadeAnim = useState(new Animated.Value(0))[0];
@@ -83,21 +89,44 @@ const ForgotPasswordScreen = () => {
       return;
     }
 
-    const { error } = await forgotPassword(email);
+    try {
+      console.log("Initiating password reset for email:", email);
+      const { error } = await forgotPassword(email);
 
-    if (error) {
-      setSnackbarMessage(
-        error.message || "Failed to send reset password email"
-      );
-      setSnackbarVisible(true);
-    } else {
-      setSnackbarMessage("Password reset instructions sent to your email");
-      setSnackbarVisible(true);
+      if (error) {
+        let errorMessage =
+          error.message || "Failed to send reset password email";
 
-      // Navigate back to login after a delay
-      setTimeout(() => {
-        navigation.navigate("Login" as never);
-      }, 3000);
+        // Handle specific error cases
+        if (error.message?.includes("sender identity")) {
+          errorMessage =
+            "Email service configuration error. Please contact support.";
+        } else if (error.message?.includes("rate limit")) {
+          errorMessage = "Too many attempts. Please try again later.";
+        } else if (error.message?.includes("network")) {
+          errorMessage =
+            "Network error. Please check your connection and try again.";
+        }
+
+        console.error("Password reset error:", error);
+        setSnackbarMessage(errorMessage);
+        setSnackbarVisible(true);
+      } else {
+        console.log("Password reset request successful");
+        setSnackbarMessage(
+          "If an account exists with this email, password reset instructions will be sent."
+        );
+        setSnackbarVisible(true);
+
+        // Navigate back to login after a delay
+        setTimeout(() => {
+          navigation.navigate("Login" as never);
+        }, 3000);
+      }
+    } catch (err) {
+      console.error("Unexpected error during password reset:", err);
+      setSnackbarMessage("An unexpected error occurred. Please try again.");
+      setSnackbarVisible(true);
     }
   };
 

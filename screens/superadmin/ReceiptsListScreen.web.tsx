@@ -57,6 +57,7 @@ interface Receipt {
   company_id: string;
   receipt_number: string;
   date: string;
+  transaction_date: string;
   merchant_name: string;
   total_amount: number;
   tax_amount: number;
@@ -637,6 +638,7 @@ const ReceiptsListScreen = () => {
           company_id,
           receipt_number,
           date,
+          transaction_date,
           merchant_name,
           total_amount,
           tax_amount,
@@ -1141,7 +1143,10 @@ const ReceiptsListScreen = () => {
         <Text style={styles.tableHeaderText}>Merchant</Text>
       </View>
       <View style={styles.tableHeaderCell}>
-        <Text style={styles.tableHeaderText}>Date</Text>
+        <Text style={styles.tableHeaderText}>Receipt Date</Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Transaction Date</Text>
       </View>
       <View style={styles.tableHeaderCell}>
         <Text style={styles.tableHeaderText}>Amount</Text>
@@ -1175,6 +1180,16 @@ const ReceiptsListScreen = () => {
         <View style={styles.tableCell}>
           <TooltipText
             text={format(new Date(item.date), "MMM d, yyyy")}
+            theme={theme}
+          />
+        </View>
+        <View style={styles.tableCell}>
+          <TooltipText
+            text={
+              item.transaction_date
+                ? format(new Date(item.transaction_date), "MMM d, yyyy")
+                : "N/A"
+            }
             theme={theme}
           />
         </View>
@@ -1234,6 +1249,9 @@ const ReceiptsListScreen = () => {
               </View>
               <View style={styles.tableCell}>
                 <Shimmer width={160} height={16} />
+              </View>
+              <View style={styles.tableCell}>
+                <Shimmer width={100} height={16} />
               </View>
               <View style={styles.tableCell}>
                 <Shimmer width={100} height={16} />
