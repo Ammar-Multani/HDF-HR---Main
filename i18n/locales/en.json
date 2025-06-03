@@ -17,7 +17,17 @@
     "error": "Error",
     "confirm": "Confirm",
     "ok": "OK",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "contactSupport": "Contact Support",
+    "dateFormat": {
+      "long": "{{date, MMMM d, yyyy}}",
+      "short": "{{date, MM/dd/yyyy}}",
+      "monthYear": "{{date, MMMM yyyy}}",
+      "dayMonth": "{{date, MMMM d}}",
+      "time": "{{date, HH:mm}}",
+      "dateTime": "{{date, MMMM d, yyyy HH:mm}}",
+      "timezone": "UTC"
+    }
   },
   "login": {
     "welcomeBack": "Welcome Back",
@@ -30,7 +40,11 @@
     "passwordRequired": "Password is required",
     "passwordLength": "Password must be at least 6 characters",
     "failedSignIn": "Failed to sign in",
-    "unexpectedError": "An unexpected error occurred"
+    "unexpectedError": "An unexpected error occurred",
+    "active": "Active",
+    "accountInactiveTitle": "Account Inactive",
+    "accountInactiveMessage": "Your account is inactive. Please contact your administrator to activate it.",
+    "userNotFound": "User not found or invalid user type."
   },
   "language": {
     "english": "English",

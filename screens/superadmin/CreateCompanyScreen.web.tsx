@@ -14,6 +14,7 @@ import {
   useTheme,
   Snackbar,
   Card,
+  Surface,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -615,18 +616,19 @@ const CreateCompanyScreen = () => {
                             />
                           </View>
                         </View>
-
-                        <Button
-                          mode="contained"
-                          onPress={addStakeholder}
-                          style={[
-                            styles.addButton,
-                            { backgroundColor: theme.colors.primary },
-                          ]}
-                          disabled={loading}
-                        >
-                          {t("superAdmin.companies.addStakeholder")}
-                        </Button>
+                        <View style={styles.addStakeholderButtonContainer}>
+                          <Button
+                            mode="contained"
+                            onPress={addStakeholder}
+                            style={[
+                              styles.addStakeholderButton,
+                              { backgroundColor: theme.colors.secondary },
+                            ]}
+                            disabled={loading}
+                          >
+                            {t("superAdmin.companies.addStakeholder")}
+                          </Button>
+                        </View>
                       </View>
                     </View>
                   </Card.Content>
@@ -869,23 +871,33 @@ const CreateCompanyScreen = () => {
                     </Text>
                   </Card.Content>
                 </Card>
-
-                <View style={styles.submitContainer}>
-                  <Button
-                    mode="contained"
-                    onPress={handleSubmit(onSubmit)}
-                    style={styles.submitButton}
-                    loading={loading}
-                    disabled={loading}
-                  >
-                    {t("superAdmin.companies.createCompany")}
-                  </Button>
-                </View>
               </Animated.View>
             </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <Surface style={styles.bottomBar}>
+        <View style={styles.bottomBarContent}>
+          <Button
+            mode="outlined"
+            onPress={() => navigation.goBack()}
+            style={[styles.button, styles.cancelButton]}
+            disabled={loading}
+          >
+            {t("common.cancel")}
+          </Button>
+          <Button
+            mode="contained"
+            onPress={handleSubmit(onSubmit)}
+            style={styles.submitButton}
+            loading={loading}
+            disabled={loading}
+          >
+            {t("superAdmin.companies.createCompany")}
+          </Button>
+        </View>
+      </Surface>
 
       <Snackbar
         visible={snackbarVisible}
@@ -1030,10 +1042,17 @@ const styles = StyleSheet.create({
     padding: 16,
     backgroundColor: "#f8fafc",
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
     gap: 16,
   },
-  addButton: {
-    marginTop: 8,
+  addStakeholderButton: {
+    backgroundColor: "#E0E0E0",
+    flex: 1,
+    alignSelf: "flex-end",
+  },
+  addStakeholderButtonContainer: {
+    marginTop: 5,
   },
   submitContainer: {
     marginTop: 24,
@@ -1043,17 +1062,32 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   submitButton: {
-    borderRadius: 16,
-    marginTop: 12,
-    paddingVertical: 8,
-    justifyContent: "center",
-    alignItems: "center",
   },
   helperText: {
     fontSize: 14,
     opacity: 0.7,
     marginTop: 4,
     marginBottom: 24,
+  },
+  bottomBar: {
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+    padding: 16,
+  },
+  bottomBarContent: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+    maxWidth: 1400,
+    marginHorizontal: "auto",
+    width: "100%",
+  },
+  cancelButton: {
+    borderColor: "#E0E0E0",
+  },
+  button: {
+    minWidth: 120,
   },
 });
 

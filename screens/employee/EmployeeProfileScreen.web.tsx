@@ -450,11 +450,23 @@ const EmployeeProfileScreen = () => {
                     <Shimmer
                       width={100}
                       height={100}
-                      style={{ borderRadius: 50, marginBottom: 8 }}
+                      style={{ borderRadius: 50, marginBottom: 16 }}
                     />
-                    <Shimmer width={200} height={24} style={{ marginBottom: 4 }} />
-                    <Shimmer width={180} height={16} style={{ marginBottom: 8 }} />
-                    <Shimmer width={120} height={28} style={{ borderRadius: 14 }} />
+                    <Shimmer
+                      width={200}
+                      height={24}
+                      style={{ marginBottom: 8 }}
+                    />
+                    <Shimmer
+                      width={180}
+                      height={16}
+                      style={{ marginBottom: 16 }}
+                    />
+                    <Shimmer
+                      width={120}
+                      height={28}
+                      style={{ borderRadius: 14 }}
+                    />
                   </View>
                 </Surface>
               </Animated.View>

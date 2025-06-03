@@ -1,5 +1,6 @@
 import * as Crypto from "expo-crypto";
 import { encode as base64Encode } from "base-64";
+import { t } from "i18next";
 
 /**
  * Hashes a password using PBKDF2 via expo-crypto
@@ -8,15 +9,15 @@ export const hashPassword = async (password: string): Promise<string> => {
   // Generate a salt (16 random bytes)
   const saltBytes = await Crypto.getRandomBytesAsync(16);
   const salt = Array.from(saltBytes)
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
-  
-  // Use PBKDF2 with SHA-256 and 200 iterations 
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
+  // Use PBKDF2 with SHA-256 and 200 iterations
   const iterations = 200;
-  
+
   // Hash with optimized PBKDF2
   const derivedKey = await pbkdf2(password, salt, iterations, 32);
-  
+
   // Format as iterations:salt:hash for storage and future validation
   return `${iterations}:${salt}:${derivedKey}`;
 };
@@ -30,21 +31,21 @@ export const validatePassword = async (
 ): Promise<boolean> => {
   try {
     // Parse stored hash components
-    const [iterationsStr, salt, originalDerivedKey] = storedHash.split(':');
-    
+    const [iterationsStr, salt, originalDerivedKey] = storedHash.split(":");
+
     if (!iterationsStr || !salt || !originalDerivedKey) {
       return false; // Invalid format
     }
-    
+
     const iterations = parseInt(iterationsStr, 10);
-    
+
     // Recompute the derived key with the same salt and iterations
     const derivedKey = await pbkdf2(password, salt, iterations, 32);
-    
+
     // Compare the derived key with the stored one
     return derivedKey === originalDerivedKey;
   } catch (error) {
-    console.error('Error validating password:', error);
+    console.error("Error validating password:", error);
     return false;
   }
 };
@@ -63,13 +64,13 @@ const pbkdf2 = async (
     Crypto.CryptoDigestAlgorithm.SHA256,
     password + salt
   );
-  
+
   // Optimize by reducing the number of digest operations
   // We'll use a batch approach to reduce overhead
   const batchSize = 10;
   const fullBatches = Math.floor(iterations / batchSize);
   const remainder = iterations % batchSize;
-  
+
   // Process full batches
   for (let batch = 0; batch < fullBatches; batch++) {
     // For each batch, concatenate the previous result multiple times
@@ -77,13 +78,13 @@ const pbkdf2 = async (
     for (let i = 1; i < batchSize; i++) {
       batchInput += derivedKey;
     }
-    
+
     derivedKey = await Crypto.digestStringAsync(
       Crypto.CryptoDigestAlgorithm.SHA256,
       batchInput
     );
   }
-  
+
   // Process remainder
   for (let i = 0; i < remainder; i++) {
     derivedKey = await Crypto.digestStringAsync(
@@ -91,7 +92,7 @@ const pbkdf2 = async (
       derivedKey
     );
   }
-  
+
   // Truncate or pad if needed to match keyLength
   return derivedKey.substring(0, keyLength * 2); // Hex representation, so *2
 };
@@ -212,4 +213,58 @@ export const generateJWT = async (userData: {
 
   // Return the complete JWT
   return `${encodedHeader}.${encodedPayload}.${formattedSignature}`;
+};
+
+// Add these interfaces at the top of the file
+export interface AdminUser {
+  id: string;
+  email: string;
+  role: string;
+  status: boolean; // boolean for superadmin
+  table: "admin";
+}
+
+export interface CompanyUser {
+  id: string;
+  email: string;
+  role: string;
+  active_status: string; // 'active' | 'inactive' for company users
+  table: "company_user";
+}
+
+export type UserStatus = {
+  isActive: boolean;
+  message: string;
+};
+
+// Add this function after the existing functions
+export const checkUserStatus = async (
+  adminData: AdminUser | null,
+  companyUserData: CompanyUser | null
+): Promise<UserStatus> => {
+  // Check admin status first
+  if (adminData && adminData.role.toLowerCase() === "superadmin") {
+    return {
+      isActive: adminData.status === true,
+      message: adminData.status
+        ? "Active"
+        : "Account is inactive. Please contact system support.",
+    };
+  }
+
+  // Check company user status
+  if (companyUserData) {
+    return {
+      isActive: companyUserData.active_status === "active",
+      message:
+        companyUserData.active_status === "active"
+          ? t("login.active")
+          : t("login.accountInactiveMessage"),
+    };
+  }
+
+  return {
+    isActive: false,
+    message: t("login.userNotFound"),
+  };
 };

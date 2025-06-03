@@ -157,7 +157,6 @@ const SuperAdminProfileScreen = () => {
     );
   };
 
-
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}

@@ -8,6 +8,7 @@ import {
   Alert,
   TouchableOpacity,
   useWindowDimensions,
+  StatusBar,
 } from "react-native";
 import {
   TextInput,
@@ -52,11 +53,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 80,
+    paddingBottom: 40,
+    maxWidth: 1200,
+    alignSelf: "center",
+    width: "100%",
   },
   gridContainer: {
     flexDirection: "column",
-    gap: 24,
+    gap: 16,
   },
   profileSection: {
     width: "100%",
@@ -75,18 +79,9 @@ const styles = StyleSheet.create({
     borderColor: "#e2e8f0",
     marginTop: 24,
   },
-  headerGradient: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 160,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-  },
   profileHeader: {
     alignItems: "center",
-    paddingVertical: 32,
+    paddingVertical: 20,
     position: "relative",
   },
   avatar: {
@@ -546,7 +541,10 @@ const SuperAdminProfileScreen = () => {
 
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.keyboardAvoidingView}
+          style={[
+            styles.keyboardAvoidingView,
+            { backgroundColor: theme.colors.background },
+          ]}
         >
           <ScrollView
             style={styles.scrollView}
@@ -566,12 +564,18 @@ const SuperAdminProfileScreen = () => {
               {/* Profile Header Shimmer */}
               <Animated.View
                 entering={FadeIn.delay(100)}
-                style={[
-                  styles.profileSection,
-                  { flex: isLargeScreen ? 1 : isMediumScreen ? 1 : 1 },
-                ]}
+                style={styles.profileSection}
               >
-                <Surface style={styles.profileCard}>
+                <Surface
+                  style={[
+                    styles.profileCard,
+                    {
+                      backgroundColor: theme.colors.surface,
+                      borderColor: theme.colors.outline,
+                    },
+                  ]}
+                  elevation={1}
+                >
                   <View style={styles.profileHeader}>
                     <Shimmer
                       width={100}
@@ -710,7 +714,10 @@ const SuperAdminProfileScreen = () => {
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
+      edges={["top"]}
     >
+      <StatusBar barStyle={theme.dark ? "light-content" : "dark-content"} />
+
       <AppHeader
         title={t("superAdmin.profile.title") || "Profile"}
         showBackButton={true}
@@ -720,7 +727,10 @@ const SuperAdminProfileScreen = () => {
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.keyboardAvoidingView}
+        style={[
+          styles.keyboardAvoidingView,
+          { backgroundColor: theme.colors.background },
+        ]}
       >
         <ScrollView
           style={styles.scrollView}
@@ -741,12 +751,24 @@ const SuperAdminProfileScreen = () => {
                 { flex: isLargeScreen ? 1 : isMediumScreen ? 1 : 1 },
               ]}
             >
-              <Surface style={styles.profileCard}>
+             <Surface
+                style={[
+                  styles.profileCard,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.outline,
+                  },
+                ]}
+                elevation={1}
+              >
                 <View style={styles.profileHeader}>
-                  <Avatar.Text
+                <Avatar.Text
                     size={100}
                     label={getInitials()}
-                    style={styles.avatar}
+                    style={[
+                      styles.avatar,
+                      { backgroundColor: theme.colors.primary },
+                    ]}
                   />
                   <Text variant="bold" style={styles.userName}>
                     {name || t("superAdmin.profile.admin") || "Admin"}

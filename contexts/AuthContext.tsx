@@ -16,6 +16,10 @@ import {
   validatePassword,
   generateResetToken,
   generateJWT,
+  checkUserStatus,
+  AdminUser,
+  CompanyUser,
+  UserStatus,
 } from "../utils/auth";
 import * as Crypto from "expo-crypto";
 import { generatePasswordResetEmail } from "../utils/emailTemplates";
@@ -34,7 +38,13 @@ interface AuthContextType {
   user: any | null;
   userRole: UserRole | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: any }>;
+  signIn: (
+    email: string,
+    password: string
+  ) => Promise<{
+    error: any;
+    status?: UserStatus;
+  }>;
   signUp: (
     email: string,
     password: string
@@ -353,7 +363,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.log("Sign-in attempt for:", email);
 
       try {
-        // Check if we're online
         if (!isConnected) {
           console.log("Can't sign in while offline");
           return {
@@ -364,24 +373,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           };
         }
 
-        // Use caching for user lookup to improve performance
-        const cacheKey = `user_email_${email.toLowerCase()}`;
-
-        const fetchUserData = async () => {
-          return await supabase
-            .from("users")
-            .select("id, email, password_hash, status")
-            .eq("email", email)
-            .single();
-        };
-
-        // Try cached version first, but always force refresh for login security
-        const { data: userData, error: userError } = await fetchUserData();
-
-        console.log("User lookup result:", {
-          found: !!userData,
-          error: userError ? userError.message : null,
-        });
+        // First check if user exists in users table
+        const { data: userData, error: userError } = await supabase
+          .from("users")
+          .select("id, email, password_hash")
+          .eq("email", email)
+          .single();
 
         if (userError || !userData) {
           console.log("Sign-in failed: User not found");
@@ -389,7 +386,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           return { error: { message: "Invalid email or password" } };
         }
 
-        // Validate password directly without migration
+        // Validate password
         const isPasswordValid = await validateUserPassword(
           password,
           userData.password_hash
@@ -401,97 +398,73 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           return { error: { message: "Invalid email or password" } };
         }
 
-        if (userData.status !== "active") {
-          console.log(
-            "Sign-in failed: Account not active, status:",
-            userData.status
-          );
-          setLoading(false);
-          return { error: { message: "Account is not active" } };
-        }
-
-        console.log("Sign-in successful, updating last login");
-
-        // Update last login time using regular client since RLS is disabled
-        await supabase
-          .from("users")
-          .update({ last_login: new Date().toISOString() })
-          .eq("id", userData.id);
-
-        // Fetch user role - use cached version to improve performance
-        const roleCacheKey = `user_role_${userData.id}`;
-
-        const fetchRole = async () => {
-          // First check admin table
-          const adminPromise = supabase
+        // Check both admin and company_user tables in parallel
+        const [adminResult, companyUserResult] = await Promise.all([
+          supabase
             .from("admin")
-            .select("role")
+            .select("id, email, role, status")
             .eq("id", userData.id)
-            .single();
-
-          // Then check company_user table
-          const companyUserPromise = supabase
+            .single(),
+          supabase
             .from("company_user")
-            .select("role")
+            .select("id, email, role, active_status")
             .eq("id", userData.id)
-            .single();
+            .single(),
+        ]);
 
-          // Run both queries in parallel for better performance
-          const [adminResult, companyUserResult] = await Promise.all([
-            adminPromise,
-            companyUserPromise,
-          ]);
+        // Process the results
+        const adminData: AdminUser | null = adminResult.data
+          ? { ...adminResult.data, table: "admin" }
+          : null;
 
+        const companyUserData: CompanyUser | null = companyUserResult.data
+          ? { ...companyUserResult.data, table: "company_user" }
+          : null;
+
+        // Check user status
+        const userStatus = await checkUserStatus(adminData, companyUserData);
+
+        if (!userStatus.isActive) {
+          console.log("Sign-in failed: Account not active");
           return {
-            data: {
-              adminData: adminResult.data,
-              companyUserData: companyUserResult.data,
-            },
-            error: null,
+            error: { message: userStatus.message },
+            status: userStatus,
           };
-        };
-
-        const roleResult = await cachedQuery<any>(
-          fetchRole,
-          roleCacheKey,
-          { forceRefresh: true } // Always get fresh role data on login
-        );
-
-        let role = null;
-        const { adminData, companyUserData } = roleResult.data;
-
-        if (adminData && adminData.role) {
-          role = adminData.role;
-        } else if (companyUserData && companyUserData.role) {
-          role = companyUserData.role;
         }
 
-        console.log("Retrieved user role:", role);
+        // Determine final user data and role
+        const finalUserData = adminData || companyUserData;
+        if (!finalUserData) {
+          return {
+            error: { message: "User account not properly configured" },
+            status: userStatus,
+          };
+        }
 
-        // Generate JWT token with user data for more secure approach
+        // Generate JWT token
         const tokenData = {
-          id: userData.id,
-          email: userData.email,
-          role,
+          id: finalUserData.id,
+          email: finalUserData.email,
+          role: finalUserData.role,
+          table: finalUserData.table,
         };
 
         const token = await generateJWT(tokenData);
-        console.log("Generated token for authentication");
 
-        // Remove password_hash from user data before storing
+        // Remove sensitive data before storing
         const { password_hash, ...userDataWithoutPassword } = userData;
 
-        // Add role to userData for easier access
+        // Add role and status to userData
         const userDataWithRole = {
           ...userDataWithoutPassword,
-          role,
+          ...finalUserData,
         };
 
         console.log("Calling authenticate with user data");
         await authenticate(token, userDataWithRole);
 
         console.log("Sign-in process completed successfully");
-        return { error: null };
+        return { error: null, status: userStatus };
       } catch (error: any) {
         console.error("Sign-in error:", error);
         return { error };

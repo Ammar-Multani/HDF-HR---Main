@@ -57,6 +57,13 @@ import Animated, {
   useSharedValue,
   interpolate,
 } from "react-native-reanimated";
+import FilterModal from "../../components/FilterModal";
+import {
+  FilterSection,
+  RadioFilterGroup,
+  FilterDivider,
+  PillFilterGroup,
+} from "../../components/FilterSections";
 
 // Define extended Task type with the properties needed for our UI
 interface ExtendedTask extends Task {
@@ -402,25 +409,22 @@ const SuperAdminTasksScreen = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredTasks, setFilteredTasks] = useState<ExtendedTask[]>([]);
   const [statusFilter, setStatusFilter] = useState<TaskStatus | "all">("all");
-  const [page, setPage] = useState(0);
-  const [hasMoreData, setHasMoreData] = useState(true);
-  const PAGE_SIZE = 10;
-
-  // Filter modal state
-  const [filterModalVisible, setFilterModalVisible] = useState(false);
-  const [sortOrder, setSortOrder] = useState<string>("desc");
   const [priorityFilter, setPriorityFilter] = useState<TaskPriority | "all">(
     "all"
   );
   const [appliedFilters, setAppliedFilters] = useState<{
     status: TaskStatus | "all";
     priority: TaskPriority | "all";
-    sortOrder: string;
   }>({
     status: "all",
     priority: "all",
-    sortOrder: "desc",
   });
+  const [page, setPage] = useState(0);
+  const [hasMoreData, setHasMoreData] = useState(true);
+  const PAGE_SIZE = 10;
+
+  // Filter modal state
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
 
   // Add window dimensions state at the top of the component
   const [windowDimensions, setWindowDimensions] = useState({
@@ -528,12 +532,8 @@ const SuperAdminTasksScreen = () => {
         { count: "exact" }
       );
 
-      // Apply sorting based on the applied sort order
-      query = query
-        .order("created_at", {
-          ascending: appliedFilters.sortOrder === "asc",
-        })
-        .range(from, to);
+      // Update the query to always sort by newest first
+      query = query.order("created_at", { ascending: false }).range(from, to);
 
       const { data, error, count } = await query;
 
@@ -716,50 +716,32 @@ const SuperAdminTasksScreen = () => {
     }
   };
 
-  // Apply filters and refresh tasks list
+  // Update the applyFilters function
   const applyFilters = () => {
-    // Close modal first
     setFilterModalVisible(false);
-
-    // Apply new filters
     const newFilters = {
       status: statusFilter,
       priority: priorityFilter,
-      sortOrder: sortOrder,
     };
-
-    // Set applied filters
     setAppliedFilters(newFilters);
-
-    // Fetch tasks with new filters
     fetchTasks(true);
   };
 
-  // Clear all filters
+  // Update the clearFilters function
   const clearFilters = () => {
     setStatusFilter("all");
     setPriorityFilter("all");
-    setSortOrder("desc");
     setFilterModalVisible(false);
-
-    // Clear applied filters
     setAppliedFilters({
       status: "all",
       priority: "all",
-      sortOrder: "desc",
     });
-
-    // Call the regular fetch after resetting everything
     fetchTasks(true);
   };
 
-  // Check if we have any active filters
+  // Update hasActiveFilters function
   const hasActiveFilters = () => {
-    return (
-      appliedFilters.status !== "all" ||
-      appliedFilters.priority !== "all" ||
-      appliedFilters.sortOrder !== "desc"
-    );
+    return appliedFilters.status !== "all" || appliedFilters.priority !== "all";
   };
 
   const getPriorityColor = (priority: TaskPriority) => {
@@ -789,7 +771,60 @@ const SuperAdminTasksScreen = () => {
     }
   };
 
-  // Render active filter indicator
+  // Update renderFilterModal to use new components
+  const renderFilterModal = () => {
+    const statusOptions = [
+      { label: t("superAdmin.tasks.all"), value: "all" },
+      ...Object.values(TaskStatus).map((status) => ({
+        label: t(`superAdmin.tasks.${status}`),
+        value: status,
+      })),
+    ];
+
+    const priorityOptions = [
+      { label: t("superAdmin.tasks.all"), value: "all" },
+      ...Object.values(TaskPriority).map((priority) => ({
+        label: getTranslatedPriority(priority),
+        value: priority,
+      })),
+    ];
+
+    return (
+      <FilterModal
+        visible={filterModalVisible}
+        onDismiss={() => setFilterModalVisible(false)}
+        title={t("superAdmin.tasks.filterOptions")}
+        onClear={clearFilters}
+        onApply={applyFilters}
+        isLargeScreen={isLargeScreen}
+        isMediumScreen={isMediumScreen}
+      >
+        <FilterSection title={t("superAdmin.tasks.status")}>
+          <PillFilterGroup
+            options={statusOptions}
+            value={statusFilter}
+            onValueChange={(value) =>
+              setStatusFilter(value as TaskStatus | "all")
+            }
+          />
+        </FilterSection>
+
+        <FilterDivider />
+
+        <FilterSection title={t("superAdmin.tasks.priority")}>
+          <PillFilterGroup
+            options={priorityOptions}
+            value={priorityFilter}
+            onValueChange={(value) =>
+              setPriorityFilter(value as TaskPriority | "all")
+            }
+          />
+        </FilterSection>
+      </FilterModal>
+    );
+  };
+
+  // Update renderActiveFilterIndicator
   const renderActiveFilterIndicator = () => {
     if (!hasActiveFilters()) return null;
 
@@ -817,7 +852,7 @@ const SuperAdminTasksScreen = () => {
               style={[
                 styles.activeFilterChip,
                 {
-                  backgroundColor: "#1a73e815",
+                  backgroundColor: "rgba(26, 115, 232, 0.1)",
                   borderColor: "#1a73e8",
                 },
               ]}
@@ -841,7 +876,7 @@ const SuperAdminTasksScreen = () => {
               style={[
                 styles.activeFilterChip,
                 {
-                  backgroundColor: "#1a73e815",
+                  backgroundColor: "rgba(26, 115, 232, 0.1)",
                   borderColor: "#1a73e8",
                 },
               ]}
@@ -851,256 +886,8 @@ const SuperAdminTasksScreen = () => {
               {getTranslatedPriority(appliedFilters.priority as TaskPriority)}
             </Chip>
           )}
-          {appliedFilters.sortOrder !== "desc" && (
-            <Chip
-              mode="outlined"
-              onClose={() => {
-                setAppliedFilters({
-                  ...appliedFilters,
-                  sortOrder: "desc",
-                });
-                setSortOrder("desc");
-                fetchTasks(true);
-              }}
-              style={[
-                styles.activeFilterChip,
-                {
-                  backgroundColor: "#1a73e815",
-                  borderColor: "#1a73e8",
-                },
-              ]}
-              textStyle={{ color: "#1a73e8" }}
-            >
-              {t("superAdmin.tasks.date")}: {t("superAdmin.tasks.oldestFirst")}
-            </Chip>
-          )}
         </ScrollView>
       </View>
-    );
-  };
-
-  // Render the filter modal
-  const renderFilterModal = () => {
-    const modalWidth =
-      Platform.OS === "web"
-        ? isLargeScreen
-          ? 600
-          : isMediumScreen
-            ? 500
-            : "90%"
-        : "90%";
-
-    const modalPadding =
-      Platform.OS === "web"
-        ? isLargeScreen
-          ? 32
-          : isMediumScreen
-            ? 24
-            : 16
-        : 16;
-
-    return (
-      <Portal>
-        <Modal
-          visible={filterModalVisible}
-          onDismiss={() => setFilterModalVisible(false)}
-          contentContainerStyle={[
-            styles.modalContainer,
-            {
-              width: modalWidth,
-              maxWidth: Platform.OS === "web" ? 600 : "100%",
-              alignSelf: "center",
-            },
-          ]}
-        >
-          <View
-            style={[styles.modalHeaderContainer, { padding: modalPadding }]}
-          >
-            <View style={styles.modalHeader}>
-              <Text
-                style={[
-                  styles.modalTitle,
-                  { fontSize: isLargeScreen ? 24 : isMediumScreen ? 22 : 20 },
-                ]}
-              >
-                {t("superAdmin.tasks.filterOptions")}
-              </Text>
-              <IconButton
-                icon="close"
-                size={isLargeScreen ? 28 : 24}
-                onPress={() => setFilterModalVisible(false)}
-              />
-            </View>
-            <Divider style={styles.modalDivider} />
-          </View>
-
-          <ScrollView style={[styles.modalContent, { padding: modalPadding }]}>
-            <View style={styles.modalSection}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>
-                  {t("superAdmin.tasks.status")}
-                </Text>
-              </View>
-              <RadioButton.Group
-                onValueChange={(value) =>
-                  setStatusFilter(value as TaskStatus | "all")
-                }
-                value={statusFilter}
-              >
-                <View style={styles.radioItem}>
-                  <RadioButton.Android
-                    value="all"
-                    color={theme.colors.primary}
-                  />
-                  <Text style={styles.radioLabel}>
-                    {t("superAdmin.tasks.all")}
-                  </Text>
-                </View>
-                {Object.values(TaskStatus).map((status) => (
-                  <View key={status} style={styles.radioItem}>
-                    <RadioButton.Android
-                      value={status}
-                      color={theme.colors.primary}
-                    />
-                    <Text style={styles.radioLabel}>
-                      {t(`superAdmin.tasks.${status}`)}
-                    </Text>
-                  </View>
-                ))}
-              </RadioButton.Group>
-            </View>
-
-            <Divider style={styles.modalDivider} />
-
-            <View style={styles.modalSection}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>
-                  {t("superAdmin.tasks.priority")}
-                </Text>
-              </View>
-              <RadioButton.Group
-                onValueChange={(value) =>
-                  setPriorityFilter(value as TaskPriority | "all")
-                }
-                value={priorityFilter}
-              >
-                <View style={styles.radioItem}>
-                  <RadioButton.Android
-                    value="all"
-                    color={theme.colors.primary}
-                  />
-                  <Text style={styles.radioLabel}>
-                    {t("superAdmin.tasks.all")}
-                  </Text>
-                </View>
-                {Object.values(TaskPriority).map((priority) => (
-                  <View key={priority} style={styles.radioItem}>
-                    <RadioButton.Android
-                      value={priority}
-                      color={theme.colors.primary}
-                    />
-                    <Text style={styles.radioLabel}>
-                      {getTranslatedPriority(priority)}
-                    </Text>
-                  </View>
-                ))}
-              </RadioButton.Group>
-            </View>
-
-            <Divider style={styles.modalDivider} />
-
-            <View style={styles.modalSection}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>
-                  {t("superAdmin.tasks.sortByDate")}
-                </Text>
-              </View>
-              <RadioButton.Group
-                onValueChange={(value) => setSortOrder(value)}
-                value={sortOrder}
-              >
-                <View style={styles.radioItem}>
-                  <RadioButton.Android
-                    value="desc"
-                    color={theme.colors.primary}
-                  />
-                  <Text style={styles.radioLabel}>
-                    {t("superAdmin.tasks.newestFirst")}
-                  </Text>
-                </View>
-                <View style={styles.radioItem}>
-                  <RadioButton.Android
-                    value="asc"
-                    color={theme.colors.primary}
-                  />
-                  <Text style={styles.radioLabel}>
-                    {t("superAdmin.tasks.oldestFirst")}
-                  </Text>
-                </View>
-              </RadioButton.Group>
-            </View>
-          </ScrollView>
-
-          <View style={[styles.modalFooter, { padding: modalPadding }]}>
-            <TouchableOpacity
-              style={[
-                styles.footerButton,
-                {
-                  paddingVertical: isLargeScreen
-                    ? 14
-                    : isMediumScreen
-                      ? 12
-                      : 10,
-                  paddingHorizontal: isLargeScreen
-                    ? 28
-                    : isMediumScreen
-                      ? 24
-                      : 20,
-                },
-              ]}
-              onPress={clearFilters}
-            >
-              <Text
-                style={[
-                  styles.clearButtonText,
-                  { fontSize: isLargeScreen ? 16 : 14 },
-                ]}
-              >
-                {t("superAdmin.tasks.clearFilters")}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.footerButton,
-                styles.applyButton,
-                {
-                  paddingVertical: isLargeScreen
-                    ? 14
-                    : isMediumScreen
-                      ? 12
-                      : 10,
-                  paddingHorizontal: isLargeScreen
-                    ? 28
-                    : isMediumScreen
-                      ? 24
-                      : 20,
-                  backgroundColor: theme.colors.primary,
-                },
-              ]}
-              onPress={applyFilters}
-            >
-              <Text
-                style={[
-                  styles.applyButtonText,
-                  { fontSize: isLargeScreen ? 16 : 14 },
-                ]}
-              >
-                {t("superAdmin.tasks.apply")}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </Modal>
-      </Portal>
     );
   };
 
@@ -1519,7 +1306,7 @@ const SuperAdminTasksScreen = () => {
         >
           <View style={styles.searchBarContainer}>
             <Shimmer
-              width={windowDimensions.width - 100}
+              width="85%"
               height={60}
               style={{
                 borderRadius: 18,
@@ -1528,6 +1315,14 @@ const SuperAdminTasksScreen = () => {
             />
             <Shimmer
               width={48}
+              height={48}
+              style={{
+                borderRadius: 8,
+                marginRight: 15,
+              }}
+            />
+            <Shimmer
+              width={98}
               height={48}
               style={{
                 borderRadius: 8,
@@ -1634,7 +1429,6 @@ const SuperAdminTasksScreen = () => {
         />
       </View>
 
-      {renderActiveFilterIndicator()}
       {renderFilterModal()}
 
       <View
@@ -1648,6 +1442,7 @@ const SuperAdminTasksScreen = () => {
           },
         ]}
       >
+        {renderActiveFilterIndicator()}
         {renderContent()}
       </View>
     </SafeAreaView>

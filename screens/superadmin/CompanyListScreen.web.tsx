@@ -55,6 +55,14 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
+import { formatDate } from "../../utils/dateUtils";
+import FilterModal from "../../components/FilterModal";
+import {
+  FilterSection,
+  RadioFilterGroup,
+  FilterDivider,
+  PillFilterGroup,
+} from "../../components/FilterSections";
 
 // Add TooltipText component after imports and before other components
 const TooltipText = ({
@@ -592,87 +600,93 @@ const CompanyListScreen = () => {
     }, 100);
   };
 
-  const renderCompanyItem = ({ item }: { item: Company }) => (
-    <TouchableOpacity
-      onPress={() => {
-        // Use an approach that's type-safe
-        // @ts-ignore - Navigation typing is complex but this works
-        navigation.navigate("CompanyDetails", { companyId: item.id });
-      }}
-    >
-      <Card
-        style={[
-          styles.card,
-          {
-            backgroundColor: "#FFFFFF",
-            shadowColor: "transparent",
-          },
-        ]}
-        elevation={0}
+  const renderCompanyItem = ({ item }: { item: Company }) => {
+    const { i18n, t } = useTranslation();
+
+    return (
+      <TouchableOpacity
+        onPress={() => {
+          navigation.navigate("CompanyDetails", { companyId: item.id });
+        }}
       >
-        <Card.Content>
-          <View style={styles.cardHeader}>
-            <Text variant="medium" style={styles.detailLabel}>
-              {t("superAdmin.companies.company")}
-            </Text>
-            <Text>:</Text>
-            <Text
-              variant="regular"
-              style={styles.companyName}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              {item.company_name}
-            </Text>
-            <StatusBadge
-              status={item.active ? UserStatus.ACTIVE : UserStatus.INACTIVE}
-            />
-          </View>
-
-          <View style={styles.cardDetails}>
-            <View style={styles.detailItem}>
+        <Card
+          style={[
+            styles.card,
+            {
+              backgroundColor: "#FFFFFF",
+              shadowColor: "transparent",
+            },
+          ]}
+          elevation={0}
+        >
+          <Card.Content>
+            <View style={styles.cardHeader}>
               <Text variant="medium" style={styles.detailLabel}>
-                {t("superAdmin.companies.registration")}
+                {t("superAdmin.companies.company")}
               </Text>
-              <Text style={styles.detailValue}>
-                : {item.registration_number || "-"}
+              <Text>:</Text>
+              <Text
+                variant="regular"
+                style={styles.companyName}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {item.company_name}
               </Text>
+              <StatusBadge
+                status={item.active ? UserStatus.ACTIVE : UserStatus.INACTIVE}
+              />
             </View>
 
-            <View style={styles.detailItem}>
-              <Text variant="medium" style={styles.detailLabel}>
-                {t("superAdmin.companies.industry")}
-              </Text>
-              <Text style={styles.detailValue}>
-                : {item.industry_type || "-"}
-              </Text>
-            </View>
+            <View style={styles.cardDetails}>
+              <View style={styles.detailItem}>
+                <Text variant="medium" style={styles.detailLabel}>
+                  {t("superAdmin.companies.registration")}
+                </Text>
+                <Text style={styles.detailValue}>
+                  : {item.registration_number || "-"}
+                </Text>
+              </View>
 
-            <View style={styles.detailItem}>
-              <Text variant="medium" style={styles.detailLabel}>
-                {t("superAdmin.companies.onboardingDate")}
-              </Text>
-              <Text style={styles.detailValue}>
-                :{" "}
-                {item.created_at
-                  ? new Date(item.created_at).toLocaleDateString()
-                  : "-"}
-              </Text>
-            </View>
+              <View style={styles.detailItem}>
+                <Text variant="medium" style={styles.detailLabel}>
+                  {t("superAdmin.companies.industry")}
+                </Text>
+                <Text style={styles.detailValue}>
+                  : {item.industry_type || "-"}
+                </Text>
+              </View>
 
-            <View style={styles.detailItem}>
-              <Text variant="medium" style={styles.detailLabel}>
-                {t("superAdmin.companies.contactEmail")}
-              </Text>
-              <Text style={styles.detailValue}>
-                : {item.contact_email || "-"}
-              </Text>
+              <View style={styles.detailItem}>
+                <Text variant="medium" style={styles.detailLabel}>
+                  {t("superAdmin.companies.onboardingDate")}
+                </Text>
+                <Text style={styles.detailValue}>
+                  :{" "}
+                  {item.created_at
+                    ? formatDate(item.created_at, {
+                        type: "long",
+                        locale: i18n.language,
+                        t,
+                      })
+                    : "-"}
+                </Text>
+              </View>
+
+              <View style={styles.detailItem}>
+                <Text variant="medium" style={styles.detailLabel}>
+                  {t("superAdmin.companies.contactEmail")}
+                </Text>
+                <Text style={styles.detailValue}>
+                  : {item.contact_email || "-"}
+                </Text>
+              </View>
             </View>
-          </View>
-        </Card.Content>
-      </Card>
-    </TouchableOpacity>
-  );
+          </Card.Content>
+        </Card>
+      </TouchableOpacity>
+    );
+  };
 
   // Add table header component
   const TableHeader = () => (
@@ -711,61 +725,69 @@ const CompanyListScreen = () => {
   );
 
   // Update the TableRow component to use TooltipText
-  const TableRow = ({ item }: { item: Company }) => (
-    <Pressable
-      onPress={() => {
-        navigation.navigate("CompanyDetails", { companyId: item.id });
-      }}
-      style={({ pressed }: PressableStateCallbackType) => [
-        styles.tableRow,
-        pressed && { backgroundColor: "#f8fafc" },
-      ]}
-    >
-      <View style={styles.tableCell}>
-        <TooltipText text={item.company_name} />
-      </View>
-      <View style={styles.tableCell}>
-        <TooltipText text={item.registration_number || "-"} />
-      </View>
-      <View style={styles.tableCell}>
-        <TooltipText text={item.industry_type || "-"} />
-      </View>
-      <View style={styles.tableCell}>
-        <TooltipText
-          text={
-            item.created_at
-              ? new Date(item.created_at).toLocaleDateString()
-              : "-"
-          }
-        />
-      </View>
-      <View style={styles.tableCell}>
-        <StatusBadge
-          status={item.active ? UserStatus.ACTIVE : UserStatus.INACTIVE}
-        />
-      </View>
-      <View style={styles.actionCell}>
-        <IconButton
-          icon="pencil"
-          size={20}
-          onPress={(e) => {
-            e.stopPropagation();
-            navigation.navigate("EditCompany", { companyId: item.id });
-          }}
-          style={styles.actionIcon}
-        />
-        <IconButton
-          icon="eye"
-          size={20}
-          onPress={(e) => {
-            e.stopPropagation();
-            navigation.navigate("CompanyDetails", { companyId: item.id });
-          }}
-          style={styles.actionIcon}
-        />
-      </View>
-    </Pressable>
-  );
+  const TableRow = ({ item }: { item: Company }) => {
+    const { i18n, t } = useTranslation();
+
+    return (
+      <Pressable
+        onPress={() => {
+          navigation.navigate("CompanyDetails", { companyId: item.id });
+        }}
+        style={({ pressed }: PressableStateCallbackType) => [
+          styles.tableRow,
+          pressed && { backgroundColor: "#f8fafc" },
+        ]}
+      >
+        <View style={styles.tableCell}>
+          <TooltipText text={item.company_name} />
+        </View>
+        <View style={styles.tableCell}>
+          <TooltipText text={item.registration_number || "-"} />
+        </View>
+        <View style={styles.tableCell}>
+          <TooltipText text={item.industry_type || "-"} />
+        </View>
+        <View style={styles.tableCell}>
+          <TooltipText
+            text={
+              item.created_at
+                ? formatDate(item.created_at, {
+                    type: "long",
+                    locale: i18n.language,
+                    t,
+                  })
+                : "-"
+            }
+          />
+        </View>
+        <View style={styles.tableCell}>
+          <StatusBadge
+            status={item.active ? UserStatus.ACTIVE : UserStatus.INACTIVE}
+          />
+        </View>
+        <View style={styles.actionCell}>
+          <IconButton
+            icon="pencil"
+            size={20}
+            onPress={(e) => {
+              e.stopPropagation();
+              navigation.navigate("EditCompany", { companyId: item.id });
+            }}
+            style={styles.actionIcon}
+          />
+          <IconButton
+            icon="eye"
+            size={20}
+            onPress={(e) => {
+              e.stopPropagation();
+              navigation.navigate("CompanyDetails", { companyId: item.id });
+            }}
+            style={styles.actionIcon}
+          />
+        </View>
+      </Pressable>
+    );
+  };
 
   const renderContent = () => {
     // Show empty state when no results and not loading
@@ -1035,8 +1057,8 @@ const CompanyListScreen = () => {
 
   // Clear all filters
   const clearFilters = () => {
+    setFilterModalVisible(false);
     setActiveFilter(null);
-    setSortOrder("desc");
 
     // Force a complete reset and refresh
     setCompanies([]);
@@ -1049,7 +1071,7 @@ const CompanyListScreen = () => {
     // Clear applied filters
     setAppliedFilters({
       status: null,
-      sortOrder: "desc",
+      sortOrder: "desc", // Keep desc as default
     });
 
     // Call the regular fetch after resetting everything
@@ -1058,9 +1080,7 @@ const CompanyListScreen = () => {
 
   // Check if we have any active filters
   const hasActiveFilters = () => {
-    return (
-      appliedFilters.status !== null || appliedFilters.sortOrder !== "desc"
-    );
+    return appliedFilters.status !== null;
   };
 
   // Render active filter indicator
@@ -1090,7 +1110,7 @@ const CompanyListScreen = () => {
               style={[
                 styles.activeFilterChip,
                 {
-                  backgroundColor: theme.colors.primary + "15",
+                  backgroundColor: "rgba(26, 115, 232, 0.1)", // Light blue with 10% opacity
                   borderColor: theme.colors.primary,
                 },
               ]}
@@ -1101,30 +1121,6 @@ const CompanyListScreen = () => {
                 appliedFilters.status.slice(1)}
             </Chip>
           )}
-          {appliedFilters.sortOrder !== "desc" && (
-            <Chip
-              mode="outlined"
-              onClose={() => {
-                setAppliedFilters({
-                  ...appliedFilters,
-                  sortOrder: "desc",
-                });
-                setSortOrder("desc");
-                setPage(0);
-                fetchCompanies(true);
-              }}
-              style={[
-                styles.activeFilterChip,
-                {
-                  backgroundColor: theme.colors.primary + "15",
-                  borderColor: theme.colors.primary,
-                },
-              ]}
-              textStyle={{ color: theme.colors.primary }}
-            >
-              Date: Oldest first
-            </Chip>
-          )}
         </ScrollView>
       </View>
     );
@@ -1132,177 +1128,30 @@ const CompanyListScreen = () => {
 
   // Render the filter modal
   const renderFilterModal = () => {
-    const modalWidth =
-      Platform.OS === "web"
-        ? isLargeScreen
-          ? 600
-          : isMediumScreen
-            ? 500
-            : "90%"
-        : "90%";
-
-    const modalPadding =
-      Platform.OS === "web"
-        ? isLargeScreen
-          ? 32
-          : isMediumScreen
-            ? 24
-            : 16
-        : 16;
+    const statusOptions = [
+      { label: "All Status", value: "" },
+      { label: "Active", value: "active" },
+      { label: "Inactive", value: "inactive" },
+    ];
 
     return (
-      <Portal>
-        <Modal
-          visible={filterModalVisible}
-          onDismiss={() => setFilterModalVisible(false)}
-          contentContainerStyle={[
-            styles.modalContainer,
-            {
-              width: modalWidth,
-              maxWidth: Platform.OS === "web" ? 600 : "100%",
-              alignSelf: "center",
-            },
-          ]}
-        >
-          <View
-            style={[styles.modalHeaderContainer, { padding: modalPadding }]}
-          >
-            <View style={styles.modalHeader}>
-              <Text
-                style={[
-                  styles.modalTitle,
-                  { fontSize: isLargeScreen ? 24 : isMediumScreen ? 22 : 20 },
-                ]}
-              >
-                Filter Options
-              </Text>
-              <IconButton
-                icon="close"
-                size={isLargeScreen ? 28 : 24}
-                onPress={() => setFilterModalVisible(false)}
-              />
-            </View>
-            <Divider style={styles.modalDivider} />
-          </View>
-
-          <ScrollView style={[styles.modalContent, { padding: modalPadding }]}>
-            <View style={styles.modalSection}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Status</Text>
-              </View>
-              <RadioButton.Group
-                onValueChange={(value) => setActiveFilter(value)}
-                value={activeFilter || ""}
-              >
-                <View style={styles.radioItem}>
-                  <RadioButton.Android value="" color={theme.colors.primary} />
-                  <Text style={styles.radioLabel}>All</Text>
-                </View>
-                <View style={styles.radioItem}>
-                  <RadioButton.Android
-                    value="active"
-                    color={theme.colors.primary}
-                  />
-                  <Text style={styles.radioLabel}>Active</Text>
-                </View>
-                <View style={styles.radioItem}>
-                  <RadioButton.Android
-                    value="inactive"
-                    color={theme.colors.primary}
-                  />
-                  <Text style={styles.radioLabel}>Inactive</Text>
-                </View>
-              </RadioButton.Group>
-            </View>
-
-            <Divider style={styles.modalDivider} />
-
-            <View style={styles.modalSection}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Sort by creation date</Text>
-              </View>
-              <RadioButton.Group
-                onValueChange={(value) => setSortOrder(value)}
-                value={sortOrder}
-              >
-                <View style={styles.radioItem}>
-                  <RadioButton.Android
-                    value="desc"
-                    color={theme.colors.primary}
-                  />
-                  <Text style={styles.radioLabel}>Newest first</Text>
-                </View>
-                <View style={styles.radioItem}>
-                  <RadioButton.Android
-                    value="asc"
-                    color={theme.colors.primary}
-                  />
-                  <Text style={styles.radioLabel}>Oldest first</Text>
-                </View>
-              </RadioButton.Group>
-            </View>
-          </ScrollView>
-
-          <View style={[styles.modalFooter, { padding: modalPadding }]}>
-            <TouchableOpacity
-              style={[
-                styles.footerButton,
-                {
-                  paddingVertical: isLargeScreen
-                    ? 14
-                    : isMediumScreen
-                      ? 12
-                      : 10,
-                  paddingHorizontal: isLargeScreen
-                    ? 28
-                    : isMediumScreen
-                      ? 24
-                      : 20,
-                },
-              ]}
-              onPress={clearFilters}
-            >
-              <Text
-                style={[
-                  styles.clearButtonText,
-                  { fontSize: isLargeScreen ? 16 : 14 },
-                ]}
-              >
-                Clear Filters
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.footerButton,
-                styles.applyButton,
-                {
-                  paddingVertical: isLargeScreen
-                    ? 14
-                    : isMediumScreen
-                      ? 12
-                      : 10,
-                  paddingHorizontal: isLargeScreen
-                    ? 28
-                    : isMediumScreen
-                      ? 24
-                      : 20,
-                  backgroundColor: theme.colors.primary,
-                },
-              ]}
-              onPress={applyFilters}
-            >
-              <Text
-                style={[
-                  styles.applyButtonText,
-                  { fontSize: isLargeScreen ? 16 : 14 },
-                ]}
-              >
-                Apply
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </Modal>
-      </Portal>
+      <FilterModal
+        visible={filterModalVisible}
+        onDismiss={() => setFilterModalVisible(false)}
+        title="Filter Options"
+        onClear={clearFilters}
+        onApply={applyFilters}
+        isLargeScreen={isLargeScreen}
+        isMediumScreen={isMediumScreen}
+      >
+        <FilterSection title="Status">
+          <PillFilterGroup
+            options={statusOptions}
+            value={activeFilter || ""}
+            onValueChange={(value: string) => setActiveFilter(value)}
+          />
+        </FilterSection>
+      </FilterModal>
     );
   };
 
@@ -1648,81 +1497,6 @@ const styles = StyleSheet.create({
   },
   activeFilterChip: {
     margin: 4,
-  },
-  // Modal styles
-  modalContainer: {
-    backgroundColor: "white",
-    borderRadius: 16,
-    margin: 16,
-    overflow: "hidden",
-    maxHeight: "80%",
-    elevation: 5,
-  },
-  modalHeaderContainer: {
-    backgroundColor: "white",
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    zIndex: 1,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  modalTitle: {
-    fontFamily: "Poppins-SemiBold",
-    color: "#212121",
-  },
-  modalContent: {
-    maxHeight: 400,
-  },
-  modalDivider: {
-    height: 1,
-    backgroundColor: "#E0E0E0",
-    marginTop: 16,
-  },
-  modalSection: {
-    marginBottom: 24,
-  },
-  sectionHeader: {
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontFamily: "Poppins-SemiBold",
-    color: "#212121",
-  },
-  radioItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: 8,
-  },
-  radioLabel: {
-    fontSize: 16,
-    marginLeft: 12,
-    fontFamily: "Poppins-Regular",
-    color: "#424242",
-  },
-  modalFooter: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    borderTopWidth: 1,
-    borderTopColor: "#E0E0E0",
-  },
-  footerButton: {
-    borderRadius: 8,
-    marginLeft: 16,
-  },
-  applyButton: {
-    elevation: 2,
-  },
-  clearButtonText: {
-    fontFamily: "Poppins-Medium",
-    color: "#616161",
-  },
-  applyButtonText: {
-    fontFamily: "Poppins-Medium",
-    color: "#FFFFFF",
   },
   searchTips: {
     paddingHorizontal: 16,

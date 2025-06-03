@@ -27,6 +27,9 @@ import {
   Avatar,
   Appbar,
   Tooltip,
+  Portal,
+  Dialog,
+  MD3Colors,
 } from "react-native-paper";
 import { useAuth } from "../../contexts/AuthContext";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -38,6 +41,7 @@ import AppHeader from "../../components/AppHeader";
 import { useTranslation } from "react-i18next";
 import CustomLanguageSelector from "../../components/CustomLanguageSelector";
 import { globalStyles, createTextStyle } from "../../utils/globalStyles";
+import { UserStatus } from "../utils/auth";
 
 // Key to prevent showing loading screen right after login
 const SKIP_LOADING_KEY = "skip_loading_after_login";
@@ -56,6 +60,10 @@ const LoginScreen = () => {
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isDialogVisible, setIsDialogVisible] = useState(false);
+  const [dialogMessage, setDialogMessage] = useState("");
+  const [dialogTitle, setDialogTitle] = useState("");
+  const [dialogActionText, setDialogActionText] = useState("");
 
   // Animation values
   const fadeAnim = useState(new Animated.Value(0))[0];
@@ -101,6 +109,18 @@ const LoginScreen = () => {
     return true;
   };
 
+  const showInactiveDialog = (status: UserStatus) => {
+    setDialogTitle(t("login.accountInactiveTitle") || "Account Inactive");
+    setDialogMessage(status.message);
+    setDialogActionText(t("common.contactSupport") || "Contact Support");
+    setIsDialogVisible(true);
+  };
+
+  const handleDialogAction = () => {
+    setIsDialogVisible(false);
+    handleContactUs();
+  };
+
   const handleSignIn = async () => {
     const isEmailValid = validateEmail(email);
     const isPasswordValid = validatePassword(password);
@@ -113,11 +133,13 @@ const LoginScreen = () => {
       setIsLoggingIn(true);
       await AsyncStorage.setItem(SKIP_LOADING_KEY, "true");
 
-      const { error } = await signIn(email, password);
+      const { error, status } = await signIn(email, password);
 
       if (error) {
-        // Handle specific error types
-        if (
+        if (status) {
+          // Show inactive account dialog with specific message
+          showInactiveDialog(status);
+        } else if (
           error.code === "auth/invalid-password" ||
           error.code === "auth/wrong-password" ||
           error.message?.toLowerCase().includes("password") ||
@@ -145,6 +167,7 @@ const LoginScreen = () => {
         await AsyncStorage.removeItem(SKIP_LOADING_KEY);
       }
     } catch (err) {
+      console.error("Login error:", err);
       setSnackbarMessage(t("login.unexpectedError"));
       setSnackbarVisible(true);
       await AsyncStorage.removeItem(SKIP_LOADING_KEY);
@@ -395,6 +418,50 @@ const LoginScreen = () => {
         </ScrollView>
       </KeyboardAvoidingView>
 
+      <Portal >
+        <Dialog
+          visible={isDialogVisible}
+          onDismiss={() => setIsDialogVisible(false)}
+          style={[
+            styles.dialog,
+            { backgroundColor: theme.colors.surfaceVariant },
+          ]}
+        >
+          <Dialog.Title
+            style={[styles.dialogTitle, { color: theme.colors.onSurface }]}
+          >
+            {dialogTitle}
+          </Dialog.Title>
+          <Dialog.Content>
+            <Text
+              variant="bodyMedium"
+              style={[
+                styles.dialogContent,
+                { color: theme.colors.onSurfaceVariant },
+              ]}
+            >
+              {dialogMessage}
+            </Text>
+          </Dialog.Content>
+          <Dialog.Actions style={styles.dialogActions}>
+            <Button
+              mode="text"
+              onPress={() => setIsDialogVisible(false)}
+              textColor={theme.colors.onSurfaceVariant}
+            >
+              {t("common.cancel") || "Cancel"}
+            </Button>
+            <Button
+              mode="contained"
+              onPress={handleDialogAction}
+              style={styles.dialogActionButton}
+            >
+              {dialogActionText}
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
+
       <Snackbar
         visible={snackbarVisible}
         onDismiss={() => setSnackbarVisible(false)}
@@ -405,7 +472,13 @@ const LoginScreen = () => {
         }}
         style={[
           styles.snackbar,
-          { backgroundColor: theme.colors.surfaceVariant },
+          {
+            backgroundColor: theme.colors.surfaceVariant,
+            maxWidth: Platform.OS === "web" ? 600 : undefined,
+            alignSelf: "center",
+            position: Platform.OS === "web" ? "absolute" : undefined,
+            bottom: Platform.OS === "web" ? 24 : undefined,
+          },
         ]}
         theme={{
           colors: {
@@ -414,7 +487,7 @@ const LoginScreen = () => {
           },
         }}
       >
-        {snackbarMessage}
+        <Text style={{ color: theme.colors.onSurface }}>{snackbarMessage}</Text>
       </Snackbar>
     </SafeAreaView>
   );
@@ -580,9 +653,45 @@ const styles = StyleSheet.create({
     maxWidth: Platform.OS === "web" ? 320 : undefined,
     alignSelf: "center",
   },
+  dialog: {
+    borderRadius: 16,
+    marginHorizontal: Platform.OS === "web" ? "40%" : 24,
+    elevation: 24,
+  },
+  dialogTitle: {
+    ...createTextStyle({
+      fontWeight: "600",
+      fontSize: 20,
+    }),
+  },
+  dialogContent: {
+    ...createTextStyle({
+      fontWeight: "400",
+      fontSize: 16,
+      lineHeight: 24,
+    }),
+  },
+  dialogActions: {
+    marginTop: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  dialogActionButton: {
+    marginLeft: 8,
+    padding: 5,
+    borderRadius: 25,
+  },
   snackbar: {
     marginBottom: 16,
     borderRadius: 8,
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.27,
+    shadowRadius: 4.65,
   },
 });
 

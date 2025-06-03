@@ -48,6 +48,12 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
+import FilterModal from "../../components/FilterModal";
+import {
+  FilterSection,
+  RadioFilterGroup,
+  FilterDivider,
+} from "../../components/FilterSections";
 
 interface FormSubmission {
   id: string;
@@ -567,118 +573,63 @@ const EmployeeFormsScreen = () => {
     [navigation]
   );
 
-  const renderFilterModal = () => (
-    <Portal>
-      <Modal
+  const renderFilterModal = () => {
+    const formTypeOptions = [
+      { label: "All Types", value: "all" },
+      { label: "Accident Report", value: "accident" },
+      { label: "Illness Report", value: "illness" },
+      { label: "Staff Departure", value: "departure" },
+    ];
+
+    const statusOptions = [
+      { label: "All Status", value: "all" },
+      ...Object.values(FormStatus).map((status) => ({
+        label: status
+          .split("_")
+          .map(
+            (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+          )
+          .join(" "),
+        value: status,
+      })),
+    ];
+
+    return (
+      <FilterModal
         visible={filterModalVisible}
         onDismiss={() => setFilterModalVisible(false)}
-        contentContainerStyle={styles.modalContainer}
+        title="Filter Options"
+        onClear={clearFilters}
+        onApply={applyFilters}
+        isLargeScreen={isLargeScreen}
+        isMediumScreen={isMediumScreen}
       >
-        <View style={styles.modalHeaderContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Filter Options</Text>
-            <IconButton
-              icon="close"
-              size={24}
-              onPress={() => setFilterModalVisible(false)}
-            />
-          </View>
-          <Divider style={styles.modalDivider} />
-        </View>
+        <FilterSection title="Form Type">
+          <RadioFilterGroup
+            options={formTypeOptions}
+            value={typeFilter}
+            onValueChange={(value) =>
+              setTypeFilter(
+                value as "all" | "accident" | "illness" | "departure"
+              )
+            }
+          />
+        </FilterSection>
 
-        <ScrollView style={styles.modalContent}>
-          <View style={styles.modalSection}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Form Type</Text>
-            </View>
-            <RadioButton.Group
-              onValueChange={(value) =>
-                setTypeFilter(
-                  value as "all" | "accident" | "illness" | "departure"
-                )
-              }
-              value={typeFilter}
-            >
-              <View style={styles.radioItem}>
-                <RadioButton.Android value="all" color="#1a73e8" />
-                <Text style={styles.radioLabel}>All Types</Text>
-              </View>
-              <View style={styles.radioItem}>
-                <RadioButton.Android value="accident" color="#1a73e8" />
-                <Text style={styles.radioLabel}>Accident Report</Text>
-              </View>
-              <View style={styles.radioItem}>
-                <RadioButton.Android value="illness" color="#1a73e8" />
-                <Text style={styles.radioLabel}>Illness Report</Text>
-              </View>
-              <View style={styles.radioItem}>
-                <RadioButton.Android value="departure" color="#1a73e8" />
-                <Text style={styles.radioLabel}>Staff Departure Report</Text>
-              </View>
-            </RadioButton.Group>
-          </View>
+        <FilterDivider />
 
-          <Divider style={styles.modalDivider} />
-
-          <View style={styles.modalSection}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Status</Text>
-            </View>
-            <RadioButton.Group
-              onValueChange={(value) =>
-                setStatusFilter(value as FormStatus | "all")
-              }
-              value={statusFilter}
-            >
-              <View style={styles.radioItem}>
-                <RadioButton.Android value="all" color="#1a73e8" />
-                <Text style={styles.radioLabel}>All Statuses</Text>
-              </View>
-              {Object.values(FormStatus).map((status) => (
-                <View key={status} style={styles.radioItem}>
-                  <RadioButton.Android value={status} color="#1a73e8" />
-                  <Text style={styles.radioLabel}>{status}</Text>
-                </View>
-              ))}
-            </RadioButton.Group>
-          </View>
-
-          <Divider style={styles.modalDivider} />
-
-          <View style={styles.modalSection}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Sort by date</Text>
-            </View>
-            <RadioButton.Group
-              onValueChange={(value) => setSortOrder(value)}
-              value={sortOrder}
-            >
-              <View style={styles.radioItem}>
-                <RadioButton.Android value="desc" color="#1a73e8" />
-                <Text style={styles.radioLabel}>Newest first</Text>
-              </View>
-              <View style={styles.radioItem}>
-                <RadioButton.Android value="asc" color="#1a73e8" />
-                <Text style={styles.radioLabel}>Oldest first</Text>
-              </View>
-            </RadioButton.Group>
-          </View>
-        </ScrollView>
-
-        <View style={styles.modalFooter}>
-          <TouchableOpacity style={styles.footerButton} onPress={clearFilters}>
-            <Text style={styles.clearButtonText}>Clear Filters</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.footerButton, styles.applyButton]}
-            onPress={applyFilters}
-          >
-            <Text style={styles.applyButtonText}>Apply</Text>
-          </TouchableOpacity>
-        </View>
-      </Modal>
-    </Portal>
-  );
+        <FilterSection title="Status">
+          <RadioFilterGroup
+            options={statusOptions}
+            value={statusFilter}
+            onValueChange={(value) =>
+              setStatusFilter(value as FormStatus | "all")
+            }
+          />
+        </FilterSection>
+      </FilterModal>
+    );
+  };
 
   const renderFabMenu = () => (
     <View style={{ position: "relative" }}>
@@ -807,10 +758,7 @@ const EmployeeFormsScreen = () => {
 
     return (
       <SafeAreaView
-        style={[
-          styles.container,
-          { backgroundColor: theme.colors.backgroundSecondary },
-        ]}
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
         <AppHeader
           title="My Forms"
@@ -878,10 +826,7 @@ const EmployeeFormsScreen = () => {
   // Update the main return statement
   return (
     <SafeAreaView
-      style={[
-        styles.container,
-        { backgroundColor: theme.colors.backgroundSecondary },
-      ]}
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
       <AppHeader
         title="My Forms"
@@ -1090,7 +1035,10 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   formTypeContainer: {
-    marginBottom: 8,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 8,
   },
   formTypeChip: {
     alignSelf: "flex-start",
@@ -1143,6 +1091,8 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     maxHeight: "80%",
     elevation: 5,
+    width: 400,
+    alignSelf: "center",
   },
   modalHeaderContainer: {
     backgroundColor: "white",
@@ -1357,6 +1307,27 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins-Regular",
     color: "#666",
     lineHeight: 18,
+  },
+  statusContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 8,
+  },
+  statusOption: {
+    borderRadius: 25,
+  },
+  statusPill: {
+    borderRadius: 25,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    minWidth: 80,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  statusPillText: {
+    fontSize: 11,
+    fontFamily: "Poppins-Medium",
   },
 } as const);
 

@@ -17,7 +17,16 @@
     "error": "Fehler",
     "confirm": "Bestätigen",
     "ok": "OK",
-    "cancel": "Abbrechen"
+    "cancel": "Abbrechen",
+    "dateFormat": {
+      "long": "{{date, d. MMMM yyyy}}",
+      "short": "{{date, dd.MM.yyyy}}",
+      "monthYear": "{{date, MMMM yyyy}}",
+      "dayMonth": "{{date, d. MMMM}}",
+      "time": "{{date, HH:mm}}",
+      "dateTime": "{{date, d. MMMM yyyy HH:mm}}",
+      "timezone": "UTC"
+    }
   },
   "login": {
     "welcomeBack": "Willkommen zurück",

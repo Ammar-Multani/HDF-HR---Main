@@ -54,6 +54,13 @@ import {
   withTiming,
 } from "react-native-reanimated";
 import Animated from "react-native-reanimated";
+import {
+  FilterSection,
+  RadioFilterGroup,
+  FilterDivider,
+  PillFilterGroup,
+} from "../../components/FilterSections";
+import FilterModal from "../../components/FilterModal";
 
 // Define form interface with the properties needed for our UI
 interface FormItem {
@@ -361,23 +368,20 @@ const SuperAdminFormsScreen = () => {
   const [forms, setForms] = useState<FormItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredForms, setFilteredForms] = useState<FormItem[]>([]);
-  const [statusFilter, setStatusFilter] = useState<FormStatus | "all">("all");
-  const [formTypeFilter, setFormTypeFilter] = useState<string>("all");
   const [page, setPage] = useState(0);
   const [hasMoreData, setHasMoreData] = useState(true);
   const PAGE_SIZE = 10;
 
-  // Filter modal state
+  // Filter states
   const [filterModalVisible, setFilterModalVisible] = useState(false);
-  const [sortOrder, setSortOrder] = useState<string>("desc");
+  const [statusFilter, setStatusFilter] = useState<FormStatus | "all">("all");
+  const [formTypeFilter, setFormTypeFilter] = useState<string>("all");
   const [appliedFilters, setAppliedFilters] = useState<{
     status: FormStatus | "all";
     formType: string;
-    sortOrder: string;
   }>({
     status: "all",
     formType: "all",
-    sortOrder: "desc",
   });
 
   // Add window dimensions state
@@ -439,10 +443,14 @@ const SuperAdminFormsScreen = () => {
         );
       }
 
-      return filtered;
+      // Always sort by newest first
+      return filtered.sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
     } catch (error) {
       console.error("Error filtering forms:", error);
-      return forms; // Return unfiltered forms on error
+      return forms;
     }
   }, [forms, appliedFilters.status, appliedFilters.formType, searchQuery]);
 
@@ -466,7 +474,7 @@ const SuperAdminFormsScreen = () => {
       const to = from + PAGE_SIZE - 1;
 
       // Fetch accident reports
-      const { data: accidentData, error: accidentError } = await supabase
+      let accidentQuery = supabase
         .from("accident_report")
         .select(
           `
@@ -487,13 +495,18 @@ const SuperAdminFormsScreen = () => {
         `
         )
         .neq("status", FormStatus.DRAFT)
-        .order("created_at", {
-          ascending: appliedFilters.sortOrder === "asc",
-        })
-        .range(from, to);
+        .order("created_at", { ascending: false });
+
+      // Apply status filter if set
+      if (appliedFilters.status !== "all") {
+        accidentQuery = accidentQuery.eq("status", appliedFilters.status);
+      }
+
+      const { data: accidentData, error: accidentError } =
+        await accidentQuery.range(from, to);
 
       // Fetch illness reports
-      const { data: illnessData, error: illnessError } = await supabase
+      let illnessQuery = supabase
         .from("illness_report")
         .select(
           `
@@ -514,13 +527,18 @@ const SuperAdminFormsScreen = () => {
         `
         )
         .neq("status", FormStatus.DRAFT)
-        .order("submission_date", {
-          ascending: appliedFilters.sortOrder === "asc",
-        })
-        .range(from, to);
+        .order("submission_date", { ascending: false });
+
+      // Apply status filter if set
+      if (appliedFilters.status !== "all") {
+        illnessQuery = illnessQuery.eq("status", appliedFilters.status);
+      }
+
+      const { data: illnessData, error: illnessError } =
+        await illnessQuery.range(from, to);
 
       // Fetch staff departure reports
-      const { data: departureData, error: departureError } = await supabase
+      let departureQuery = supabase
         .from("staff_departure_report")
         .select(
           `
@@ -541,10 +559,15 @@ const SuperAdminFormsScreen = () => {
         `
         )
         .neq("status", FormStatus.DRAFT)
-        .order("created_at", {
-          ascending: appliedFilters.sortOrder === "asc",
-        })
-        .range(from, to);
+        .order("created_at", { ascending: false });
+
+      // Apply status filter if set
+      if (appliedFilters.status !== "all") {
+        departureQuery = departureQuery.eq("status", appliedFilters.status);
+      }
+
+      const { data: departureData, error: departureError } =
+        await departureQuery.range(from, to);
 
       if (accidentError || illnessError || departureError) {
         console.error("Error fetching forms:", {
@@ -555,145 +578,86 @@ const SuperAdminFormsScreen = () => {
         throw new Error("Failed to fetch forms");
       }
 
-      // Get all unique modifier IDs
-      const allModifierIds = [
-        ...(accidentData || []).map((form) => form.modified_by),
-        ...(illnessData || []).map((form) => form.modified_by),
-        ...(departureData || []).map((form) => form.modified_by),
-      ].filter(Boolean);
+      // Format and combine all forms
+      const formattedAccidents = (accidentData || []).map((report: any) => ({
+        id: report.id,
+        type: "accident",
+        title: t("superAdmin.forms.accidentReport"),
+        status: report.status as FormStatus,
+        created_at: report.created_at,
+        updated_at: report.updated_at,
+        modified_by: report.modified_by,
+        modified_at: report.updated_at,
+        submitted_by: "",
+        company_name:
+          report.employee?.company?.company_name || "Unknown Company",
+        employee_name: report.employee
+          ? `${report.employee.first_name} ${report.employee.last_name}`
+          : "Unknown Employee",
+      }));
 
-      // Fetch modifiers info
-      let modifiersInfo: Record<string, string> = {};
-      if (allModifierIds.length > 0) {
-        const uniqueModifierIds = Array.from(new Set(allModifierIds));
+      const formattedIllness = (illnessData || []).map((report: any) => ({
+        id: report.id,
+        type: "illness",
+        title: t("superAdmin.forms.illnessReport"),
+        status: report.status as FormStatus,
+        created_at: report.submission_date,
+        updated_at: report.updated_at,
+        modified_by: report.modified_by,
+        modified_at: report.updated_at,
+        submitted_by: "",
+        company_name:
+          report.employee?.company?.company_name || "Unknown Company",
+        employee_name: report.employee
+          ? `${report.employee.first_name} ${report.employee.last_name}`
+          : "Unknown Employee",
+      }));
 
-        // Fetch admin modifiers
-        const { data: adminModifiers } = await supabase
-          .from("admin")
-          .select("id, name")
-          .in("id", uniqueModifierIds);
+      const formattedDeparture = (departureData || []).map((report: any) => ({
+        id: report.id,
+        type: "departure",
+        title: t("superAdmin.forms.departureReport"),
+        status: report.status as FormStatus,
+        created_at: report.created_at,
+        updated_at: report.updated_at,
+        modified_by: report.modified_by,
+        modified_at: report.updated_at,
+        submitted_by: "",
+        company_name:
+          report.employee?.company?.company_name || "Unknown Company",
+        employee_name: report.employee
+          ? `${report.employee.first_name} ${report.employee.last_name}`
+          : "Unknown Employee",
+      }));
 
-        // Fetch company_user modifiers
-        const { data: companyUserModifiers } = await supabase
-          .from("company_user")
-          .select("id, first_name, last_name")
-          .in("id", uniqueModifierIds);
+      // Filter by form type if needed
+      let combinedForms = [
+        ...formattedAccidents,
+        ...formattedIllness,
+        ...formattedDeparture,
+      ];
 
-        // Create a lookup map for modifier names
-        modifiersInfo = {
-          ...(adminModifiers || []).reduce(
-            (acc: Record<string, string>, admin: any) => {
-              acc[admin.id] = admin.name;
-              return acc;
-            },
-            {}
-          ),
-          ...(companyUserModifiers || []).reduce(
-            (acc: Record<string, string>, user: any) => {
-              acc[user.id] = `${user.first_name} ${user.last_name}`;
-              return acc;
-            },
-            {}
-          ),
-        };
+      if (appliedFilters.formType !== "all") {
+        combinedForms = combinedForms.filter(
+          (form) => form.type === appliedFilters.formType
+        );
       }
 
-      // Format and combine all forms
-      const formattedAccidentForms = (accidentData || []).map((form) => {
-        // Ensure we handle the nested structure correctly
-        const employee = form.employee as any;
-        return {
-          id: form.id,
-          type: "accident",
-          title: "Accident Report",
-          status: form.status as FormStatus,
-          created_at: form.created_at,
-          updated_at: form.updated_at,
-          modified_by: form.modified_by,
-          modified_at: form.updated_at,
-          modifier_name: form.modified_by
-            ? modifiersInfo[form.modified_by]
-            : undefined,
-          submitted_by: "",
-          company_name: employee?.company?.company_name || "Unknown Company",
-          employee_name: employee
-            ? `${employee.first_name} ${employee.last_name}`
-            : "Unknown Employee",
-        };
-      });
-
-      const formattedIllnessForms = (illnessData || []).map((form) => {
-        // Ensure we handle the nested structure correctly
-        const employee = form.employee as any;
-        return {
-          id: form.id,
-          type: "illness",
-          title: "Illness Report",
-          status: form.status as FormStatus,
-          created_at: form.submission_date,
-          updated_at: form.updated_at,
-          modified_by: form.modified_by,
-          modified_at: form.updated_at,
-          modifier_name: form.modified_by
-            ? modifiersInfo[form.modified_by]
-            : undefined,
-          submitted_by: "",
-          company_name: employee?.company?.company_name || "Unknown Company",
-          employee_name: employee
-            ? `${employee.first_name} ${employee.last_name}`
-            : "Unknown Employee",
-        };
-      });
-
-      const formattedDepartureForms = (departureData || []).map((form) => {
-        // Ensure we handle the nested structure correctly
-        const employee = form.employee as any;
-        return {
-          id: form.id,
-          type: "departure",
-          title: "Staff Departure Report",
-          status: form.status as FormStatus,
-          created_at: form.created_at,
-          updated_at: form.updated_at,
-          modified_by: form.modified_by,
-          modified_at: form.updated_at,
-          modifier_name: form.modified_by
-            ? modifiersInfo[form.modified_by]
-            : undefined,
-          submitted_by: "",
-          company_name: employee?.company?.company_name || "Unknown Company",
-          employee_name: employee
-            ? `${employee.first_name} ${employee.last_name}`
-            : "Unknown Employee",
-        };
-      });
-
-      // Combine all forms and sort by created date
-      const allForms = [
-        ...formattedAccidentForms,
-        ...formattedIllnessForms,
-        ...formattedDepartureForms,
-      ].sort((a, b) => {
-        if (appliedFilters.sortOrder === "asc") {
-          return (
-            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-          );
-        } else {
-          return (
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-          );
-        }
-      });
+      // Sort by newest first
+      combinedForms.sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
 
       // Update forms state
       if (refresh) {
-        setForms(allForms);
+        setForms(combinedForms);
       } else {
-        setForms((prevForms) => [...prevForms, ...allForms]);
+        setForms((prevForms) => [...prevForms, ...combinedForms]);
       }
 
       // Check if we have more data
-      setHasMoreData(allForms.length >= PAGE_SIZE);
+      setHasMoreData(combinedForms.length >= PAGE_SIZE);
     } catch (error) {
       console.error("Error fetching forms:", error);
     } finally {
@@ -721,17 +685,11 @@ const SuperAdminFormsScreen = () => {
 
   // Apply filters and refresh forms list
   const applyFilters = () => {
-    // Close modal first
     setFilterModalVisible(false);
-
-    // Apply new filters
     const newFilters = {
       status: statusFilter,
       formType: formTypeFilter,
-      sortOrder: sortOrder,
     };
-
-    // Set applied filters
     setAppliedFilters(newFilters);
   };
 
@@ -739,23 +697,15 @@ const SuperAdminFormsScreen = () => {
   const clearFilters = () => {
     setStatusFilter("all");
     setFormTypeFilter("all");
-    setSortOrder("desc");
-
-    // Clear applied filters
     setAppliedFilters({
       status: "all",
       formType: "all",
-      sortOrder: "desc",
     });
   };
 
   // Check if we have any active filters
   const hasActiveFilters = () => {
-    return (
-      appliedFilters.status !== "all" ||
-      appliedFilters.formType !== "all" ||
-      appliedFilters.sortOrder !== "desc"
-    );
+    return appliedFilters.status !== "all" || appliedFilters.formType !== "all";
   };
 
   // Get appropriate color for form type
@@ -816,7 +766,7 @@ const SuperAdminFormsScreen = () => {
               style={[
                 styles.activeFilterChip,
                 {
-                  backgroundColor: "#1a73e815",
+                  backgroundColor: "rgba(26, 115, 232, 0.1)",
                   borderColor: "#1a73e8",
                 },
               ]}
@@ -839,7 +789,7 @@ const SuperAdminFormsScreen = () => {
               style={[
                 styles.activeFilterChip,
                 {
-                  backgroundColor: "#1a73e815",
+                  backgroundColor: "rgba(26, 115, 232, 0.1)",
                   borderColor: "#1a73e8",
                 },
               ]}
@@ -849,29 +799,6 @@ const SuperAdminFormsScreen = () => {
               {getFormTypeName(appliedFilters.formType)}
             </Chip>
           )}
-          {appliedFilters.sortOrder !== "desc" && (
-            <Chip
-              mode="outlined"
-              onClose={() => {
-                setAppliedFilters({
-                  ...appliedFilters,
-                  sortOrder: "desc",
-                });
-                setSortOrder("desc");
-                fetchForms(true);
-              }}
-              style={[
-                styles.activeFilterChip,
-                {
-                  backgroundColor: "#1a73e815",
-                  borderColor: "#1a73e8",
-                },
-              ]}
-              textStyle={{ color: "#1a73e8" }}
-            >
-              {t("superAdmin.forms.date")}: {t("superAdmin.forms.oldestFirst")}
-            </Chip>
-          )}
         </ScrollView>
       </View>
     );
@@ -879,238 +806,68 @@ const SuperAdminFormsScreen = () => {
 
   // Render the filter modal
   const renderFilterModal = () => {
-    const modalWidth =
-      Platform.OS === "web"
-        ? isLargeScreen
-          ? 600
-          : isMediumScreen
-            ? 500
-            : "90%"
-        : "90%";
+    const statusOptions = [
+      { label: "All Status", value: "all" },
+      ...Object.values(FormStatus)
+        .filter((status) => status !== FormStatus.DRAFT)
+        .map((status) => ({
+          label: status
+            .split("_")
+            .map(
+              (word) =>
+                word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+            )
+            .join(" "),
+          value: status,
+        })),
+    ];
 
-    const modalPadding =
-      Platform.OS === "web"
-        ? isLargeScreen
-          ? 32
-          : isMediumScreen
-            ? 24
-            : 16
-        : 16;
+    const formTypeOptions = [
+      { label: t("superAdmin.forms.all"), value: "all" },
+      {
+        label: t("superAdmin.forms.accidentReport"),
+        value: "accident",
+      },
+      {
+        label: t("superAdmin.forms.illnessReport"),
+        value: "illness",
+      },
+      {
+        label: t("superAdmin.forms.departureReport"),
+        value: "departure",
+      },
+    ];
 
     return (
-      <Portal>
-        <Modal
-          visible={filterModalVisible}
-          onDismiss={() => setFilterModalVisible(false)}
-          contentContainerStyle={[
-            styles.modalContainer,
-            {
-              width: modalWidth,
-              maxWidth: Platform.OS === "web" ? 600 : "100%",
-              alignSelf: "center",
-            },
-          ]}
-        >
-          <View
-            style={[styles.modalHeaderContainer, { padding: modalPadding }]}
-          >
-            <View style={styles.modalHeader}>
-              <Text
-                style={[
-                  styles.modalTitle,
-                  { fontSize: isLargeScreen ? 24 : isMediumScreen ? 22 : 20 },
-                ]}
-              >
-                {t("superAdmin.forms.filterOptions")}
-              </Text>
-              <IconButton
-                icon="close"
-                size={isLargeScreen ? 28 : 24}
-                onPress={() => setFilterModalVisible(false)}
-              />
-            </View>
-            <Divider style={styles.modalDivider} />
-          </View>
+      <FilterModal
+        visible={filterModalVisible}
+        onDismiss={() => setFilterModalVisible(false)}
+        title={t("superAdmin.forms.filterOptions")}
+        onClear={clearFilters}
+        onApply={applyFilters}
+        isLargeScreen={isLargeScreen}
+        isMediumScreen={isMediumScreen}
+      >
+        <FilterSection title={t("superAdmin.forms.status")}>
+          <PillFilterGroup
+            options={statusOptions}
+            value={statusFilter}
+            onValueChange={(value) =>
+              setStatusFilter(value as FormStatus | "all")
+            }
+          />
+        </FilterSection>
 
-          <ScrollView style={[styles.modalContent, { padding: modalPadding }]}>
-            <View style={styles.modalSection}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>
-                  {t("superAdmin.forms.status")}
-                </Text>
-              </View>
-              <RadioButton.Group
-                onValueChange={(value) =>
-                  setStatusFilter(value as FormStatus | "all")
-                }
-                value={statusFilter}
-              >
-                <View style={styles.radioItem}>
-                  <RadioButton.Android
-                    value="all"
-                    color={theme.colors.primary}
-                  />
-                  <Text style={styles.radioLabel}>
-                    {t("superAdmin.forms.all")}
-                  </Text>
-                </View>
-                {Object.values(FormStatus).map((status) => (
-                  <View key={status} style={styles.radioItem}>
-                    <RadioButton.Android
-                      value={status}
-                      color={theme.colors.primary}
-                    />
-                    <Text style={styles.radioLabel}>{status}</Text>
-                  </View>
-                ))}
-              </RadioButton.Group>
-            </View>
+        <FilterDivider />
 
-            <Divider style={styles.modalDivider} />
-
-            <View style={styles.modalSection}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>
-                  {t("superAdmin.forms.formType")}
-                </Text>
-              </View>
-              <RadioButton.Group
-                onValueChange={(value) => setFormTypeFilter(value)}
-                value={formTypeFilter}
-              >
-                <View style={styles.radioItem}>
-                  <RadioButton.Android
-                    value="all"
-                    color={theme.colors.primary}
-                  />
-                  <Text style={styles.radioLabel}>
-                    {t("superAdmin.forms.all")}
-                  </Text>
-                </View>
-                <View style={styles.radioItem}>
-                  <RadioButton.Android
-                    value="accident"
-                    color={theme.colors.primary}
-                  />
-                  <Text style={styles.radioLabel}>
-                    {t("superAdmin.forms.accidentReport")}
-                  </Text>
-                </View>
-                <View style={styles.radioItem}>
-                  <RadioButton.Android
-                    value="illness"
-                    color={theme.colors.primary}
-                  />
-                  <Text style={styles.radioLabel}>
-                    {t("superAdmin.forms.illnessReport")}
-                  </Text>
-                </View>
-                <View style={styles.radioItem}>
-                  <RadioButton.Android
-                    value="departure"
-                    color={theme.colors.primary}
-                  />
-                  <Text style={styles.radioLabel}>
-                    {t("superAdmin.forms.departureReport")}
-                  </Text>
-                </View>
-              </RadioButton.Group>
-            </View>
-
-            <Divider style={styles.modalDivider} />
-
-            <View style={styles.modalSection}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>
-                  {t("superAdmin.forms.sortByDate")}
-                </Text>
-              </View>
-              <RadioButton.Group
-                onValueChange={(value) => setSortOrder(value)}
-                value={sortOrder}
-              >
-                <View style={styles.radioItem}>
-                  <RadioButton.Android
-                    value="desc"
-                    color={theme.colors.primary}
-                  />
-                  <Text style={styles.radioLabel}>
-                    {t("superAdmin.forms.newestFirst")}
-                  </Text>
-                </View>
-                <View style={styles.radioItem}>
-                  <RadioButton.Android
-                    value="asc"
-                    color={theme.colors.primary}
-                  />
-                  <Text style={styles.radioLabel}>
-                    {t("superAdmin.forms.oldestFirst")}
-                  </Text>
-                </View>
-              </RadioButton.Group>
-            </View>
-          </ScrollView>
-
-          <View style={[styles.modalFooter, { padding: modalPadding }]}>
-            <TouchableOpacity
-              style={[
-                styles.footerButton,
-                {
-                  paddingVertical: isLargeScreen
-                    ? 14
-                    : isMediumScreen
-                      ? 12
-                      : 10,
-                  paddingHorizontal: isLargeScreen
-                    ? 28
-                    : isMediumScreen
-                      ? 24
-                      : 20,
-                },
-              ]}
-              onPress={clearFilters}
-            >
-              <Text
-                style={[
-                  styles.clearButtonText,
-                  { fontSize: isLargeScreen ? 16 : 14 },
-                ]}
-              >
-                {t("superAdmin.forms.clearFilters")}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.footerButton,
-                styles.applyButton,
-                {
-                  paddingVertical: isLargeScreen
-                    ? 14
-                    : isMediumScreen
-                      ? 12
-                      : 10,
-                  paddingHorizontal: isLargeScreen
-                    ? 28
-                    : isMediumScreen
-                      ? 24
-                      : 20,
-                  backgroundColor: theme.colors.primary,
-                },
-              ]}
-              onPress={applyFilters}
-            >
-              <Text
-                style={[
-                  styles.applyButtonText,
-                  { fontSize: isLargeScreen ? 16 : 14 },
-                ]}
-              >
-                {t("superAdmin.forms.apply")}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </Modal>
-      </Portal>
+        <FilterSection title={t("superAdmin.forms.formType")}>
+          <PillFilterGroup
+            options={formTypeOptions}
+            value={formTypeFilter}
+            onValueChange={setFormTypeFilter}
+          />
+        </FilterSection>
+      </FilterModal>
     );
   };
 
@@ -1423,7 +1180,6 @@ const SuperAdminFormsScreen = () => {
         </View>
       </View>
 
-      {renderActiveFilterIndicator()}
       {renderFilterModal()}
 
       <View
@@ -1437,6 +1193,7 @@ const SuperAdminFormsScreen = () => {
           },
         ]}
       >
+        {renderActiveFilterIndicator()}
         {filteredForms.length === 0 ? (
           <EmptyState
             icon="file-document"

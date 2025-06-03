@@ -22,6 +22,7 @@ import { FormStatus } from "../../types";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Text from "../../components/Text";
 import { LinearGradient } from "expo-linear-gradient";
+import DynamicChart from "../../components/DynamicChart";
 import Animated, {
   FadeIn,
   useAnimatedStyle,
@@ -109,6 +110,8 @@ const EmployeeDashboard = () => {
     totalForms: 0,
     pendingForms: 0,
     formsGrowth: "+0%",
+    monthlyForms: [] as number[],
+    monthLabels: [] as string[],
   });
   const [recentForms, setRecentForms] = useState<any[]>([]);
 
@@ -155,6 +158,112 @@ const EmployeeDashboard = () => {
 
       if (!user) return;
 
+      // Get today's date and reset hours to start of day
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Get current month and year
+      const currentMonth = today.getMonth();
+      const currentYear = today.getFullYear();
+
+      // Calculate the starting month index to show 5 months of data
+      const startMonthIndex =
+        currentMonth >= 4 ? currentMonth - 4 : 12 + (currentMonth - 4);
+
+      // Create array of the 5 most recent months to display
+      const recentMonths: number[] = [];
+      for (let i = 0; i < 5; i++) {
+        // Calculate month index (handling year wraparound)
+        const monthIndex = (startMonthIndex + i) % 12;
+        recentMonths.push(monthIndex);
+      }
+
+      const monthNames = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+      ];
+
+      // Prepare monthly data fetch operations for forms
+      const allMonthsFormData = new Array(12).fill(0);
+
+      // Create arrays of promises for each month's data
+      const monthlyAccidentFormPromises = [];
+      const monthlyIllnessFormPromises = [];
+      const monthlyDepartureFormPromises = [];
+
+      for (let month = 0; month < 12; month++) {
+        // Calculate the proper date range - handle year wraparound
+        const dateYear = currentMonth >= month ? currentYear : currentYear - 1;
+        const monthStart = new Date(dateYear, month, 1);
+        const monthEnd = new Date(dateYear, month + 1, 0);
+
+        // Form data promises
+        monthlyAccidentFormPromises.push(
+          supabase
+            .from("accident_report")
+            .select("*", { count: "exact", head: true })
+            .eq("employee_id", user.id)
+            .gte("created_at", monthStart.toISOString())
+            .lte("created_at", monthEnd.toISOString())
+        );
+
+        monthlyIllnessFormPromises.push(
+          supabase
+            .from("illness_report")
+            .select("*", { count: "exact", head: true })
+            .eq("employee_id", user.id)
+            .gte("submission_date", monthStart.toISOString())
+            .lte("submission_date", monthEnd.toISOString())
+        );
+
+        monthlyDepartureFormPromises.push(
+          supabase
+            .from("staff_departure_report")
+            .select("*", { count: "exact", head: true })
+            .eq("employee_id", user.id)
+            .gte("created_at", monthStart.toISOString())
+            .lte("created_at", monthEnd.toISOString())
+        );
+      }
+
+      // Execute all monthly data promises in parallel
+      const [
+        monthlyAccidentResults,
+        monthlyIllnessResults,
+        monthlyDepartureResults,
+      ] = await Promise.all([
+        Promise.all(monthlyAccidentFormPromises),
+        Promise.all(monthlyIllnessFormPromises),
+        Promise.all(monthlyDepartureFormPromises),
+      ]);
+
+      // Process monthly results
+      for (let month = 0; month < 12; month++) {
+        // Process form data
+        const monthAccidentCount = monthlyAccidentResults[month].count || 0;
+        const monthIllnessCount = monthlyIllnessResults[month].count || 0;
+        const monthDepartureCount = monthlyDepartureResults[month].count || 0;
+
+        allMonthsFormData[month] =
+          monthAccidentCount + monthIllnessCount + monthDepartureCount;
+      }
+
+      // Extract data for recent months only
+      const recentMonthsFormData = recentMonths.map(
+        (index) => allMonthsFormData[index]
+      );
+      const recentMonthsLabels = recentMonths.map((index) => monthNames[index]);
+
       // Fetch employee data
       const { data: userData, error: userError } = await supabase
         .from("company_user")
@@ -169,10 +278,6 @@ const EmployeeDashboard = () => {
 
       setEmployeeData(userData);
       setCompanyData(userData.company);
-
-      // Calculate last month date for growth calculations
-      const lastMonthDate = new Date();
-      lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
 
       // Fetch forms submitted by employee
       const { data: accidentData, error: accidentError } = await supabase
@@ -192,25 +297,6 @@ const EmployeeDashboard = () => {
         .select("*")
         .eq("employee_id", user.id)
         .order("created_at", { ascending: false });
-
-      // Fetch last month's forms
-      const { data: lastMonthAccidentData } = await supabase
-        .from("accident_report")
-        .select("*")
-        .eq("employee_id", user.id)
-        .lt("created_at", lastMonthDate.toISOString());
-
-      const { data: lastMonthIllnessData } = await supabase
-        .from("illness_report")
-        .select("*")
-        .eq("employee_id", user.id)
-        .lt("submission_date", lastMonthDate.toISOString());
-
-      const { data: lastMonthDepartureData } = await supabase
-        .from("staff_departure_report")
-        .select("*")
-        .eq("employee_id", user.id)
-        .lt("created_at", lastMonthDate.toISOString());
 
       if (!accidentError && !illnessError && !departureError) {
         const accidentForms = (accidentData || []).map((form) => ({
@@ -248,27 +334,12 @@ const EmployeeDashboard = () => {
             form.status !== FormStatus.DECLINED
         );
 
-        // Calculate forms growth
-        const lastMonthForms = [
-          ...(lastMonthAccidentData || []),
-          ...(lastMonthIllnessData || []),
-          ...(lastMonthDepartureData || []),
-        ];
-
-        let formsGrowth = "+0%";
-        if (lastMonthForms.length > 0) {
-          const growthRate =
-            ((allForms.length - lastMonthForms.length) /
-              lastMonthForms.length) *
-            100;
-          formsGrowth =
-            (growthRate >= 0 ? "+" : "") + growthRate.toFixed(1) + "%";
-        }
-
         setStats({
           totalForms: allForms.length,
           pendingForms: pendingForms.length,
-          formsGrowth: formsGrowth,
+          formsGrowth: "+0%",
+          monthlyForms: recentMonthsFormData,
+          monthLabels: recentMonthsLabels,
         });
 
         setRecentForms(allForms.slice(0, 5));
@@ -300,10 +371,7 @@ const EmployeeDashboard = () => {
   if (loading && !refreshing) {
     return (
       <SafeAreaView
-        style={[
-          styles.container,
-          { backgroundColor: theme.colors.backgroundSecondary },
-        ]}
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
         <StatusBar barStyle={theme.dark ? "light-content" : "dark-content"} />
         <AppHeader
@@ -367,10 +435,7 @@ const EmployeeDashboard = () => {
 
   return (
     <SafeAreaView
-      style={[
-        styles.container,
-        { backgroundColor: theme.colors.backgroundSecondary },
-      ]}
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
       edges={["top"]}
     >
       <StatusBar barStyle={theme.dark ? "light-content" : "dark-content"} />
@@ -414,7 +479,7 @@ const EmployeeDashboard = () => {
           >
             {[
               {
-                label: "Total Forms",
+                label: "Total Forms Filled",
                 value: stats.totalForms,
                 growth: stats.formsGrowth,
                 icon: "file-document-multiple",
@@ -470,7 +535,7 @@ const EmployeeDashboard = () => {
                       {stat.value.toLocaleString()}
                     </Text>
                     <MaterialCommunityIcons
-                      name={stat.icon}
+                      name={"file-document-multiple-outline"}
                       size={24}
                       color={theme.colors.primary}
                       style={styles.statIcon}
@@ -481,21 +546,15 @@ const EmployeeDashboard = () => {
             ))}
           </View>
 
-          <Text variant="bold" style={styles.sectionTitle}>
-            Quick Actions
-          </Text>
-
+          {/* Quick Actions Section */}
           <View
             style={[
               styles.actionsContainer,
               {
-                display: "grid",
-                gridTemplateColumns: isLargeScreen
-                  ? "repeat(3, 1fr)"
-                  : isMediumScreen
-                    ? "repeat(2, 1fr)"
-                    : "1fr",
+                flexDirection: "row",
+                flexWrap: "wrap",
                 gap: 16,
+                marginBottom: 24,
               },
             ]}
           >
@@ -578,51 +637,102 @@ const EmployeeDashboard = () => {
             </TouchableOpacity>
           </View>
 
-          {recentForms.length > 0 && (
-            <>
-              <View style={styles.sectionHeader}>
+          {/* Charts and Recent Forms Container */}
+          <View
+            style={[
+              styles.gridContainer,
+              { flexDirection: isLargeScreen ? "row" : "column" },
+            ]}
+          >
+            {/* Monthly Forms Chart */}
+            <View
+              style={[
+                styles.gridItem,
+                {
+                  flex: isLargeScreen ? 1 : undefined,
+                  width: "100%",
+                  maxWidth: isLargeScreen ? "50%" : 1000,
+                  marginBottom: isLargeScreen ? 0 : 24,
+                },
+              ]}
+            >
+              <View style={styles.chartCard}>
                 <Text variant="bold" style={styles.sectionTitle}>
-                  Recent Forms
+                  Monthly Forms Submitted
                 </Text>
-                <Button
-                  mode="text"
-                  onPress={() => navigation.navigate("Forms")}
-                >
-                  View All
-                </Button>
+                <DynamicChart
+                  monthlyData={stats.monthlyForms}
+                  monthLabels={stats.monthLabels}
+                  width={
+                    Platform.OS === "web"
+                      ? isLargeScreen
+                        ? Math.min((windowDimensions.width - 72) / 2, 600)
+                        : isMediumScreen
+                          ? Math.min(windowDimensions.width - 48, 850)
+                          : Math.min(windowDimensions.width - 48, 1000)
+                      : windowDimensions.width - 32
+                  }
+                />
               </View>
+            </View>
 
-              <View style={styles.recentFormsGrid}>
-                {recentForms.map((form) => (
-                  <Card
-                    key={`${form.type}-${form.id}`}
-                    style={styles.itemCard}
-                    onPress={() =>
-                      navigation.navigate("FormDetails", {
-                        formId: form.id,
-                        formType: form.type,
-                      })
-                    }
-                    elevation={0.5}
-                  >
-                    <Card.Content>
-                      <View style={styles.cardHeader}>
-                        <View style={styles.formTitleContainer}>
-                          <Text variant="bold" style={styles.formType}>
-                            {form.title}
-                          </Text>
-                          <StatusBadge status={form.status} size="small" />
-                        </View>
+            {/* Recent Forms Section */}
+            {recentForms.length > 0 && (
+              <View
+                style={[
+                  styles.gridItem,
+                  {
+                    flex: isLargeScreen ? 1 : undefined,
+                    width: "100%",
+                    maxWidth: isLargeScreen ? "50%" : 1000,
+                  },
+                ]}
+              >
+                <View style={styles.listCard}>
+                  <View style={styles.sectionHeader}>
+                    <Text variant="bold" style={styles.sectionTitle}>
+                      Recent Forms
+                    </Text>
+                    <Button
+                      mode="text"
+                      onPress={() => navigation.navigate("Forms")}
+                    >
+                      View All
+                    </Button>
+                  </View>
+
+                  {recentForms.map((form, index) => (
+                    <TouchableOpacity
+                      key={`${form.type}-${form.id}`}
+                      style={[
+                        styles.formCard,
+                        index === recentForms.length - 1 && {
+                          borderBottomWidth: 0,
+                          marginBottom: 0,
+                        },
+                      ]}
+                      onPress={() =>
+                        navigation.navigate("FormDetails", {
+                          formId: form.id,
+                          formType: form.type,
+                        })
+                      }
+                    >
+                      <View style={styles.formInfo}>
+                        <Text variant="bold" style={styles.formTitle}>
+                          {form.title}
+                        </Text>
+                        <Text style={styles.formDate}>
+                          {format(new Date(form.date), "MMM d, yyyy")}
+                        </Text>
                       </View>
-                      <Text style={styles.cardDate}>
-                        Submitted: {format(new Date(form.date), "MMM d, yyyy")}
-                      </Text>
-                    </Card.Content>
-                  </Card>
-                ))}
+                      <StatusBadge status={form.status} size="small" />
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
-            </>
-          )}
+            )}
+          </View>
 
           {networkStatus === false && (
             <View style={styles.offlineNotice}>
@@ -734,11 +844,10 @@ const styles = StyleSheet.create({
     marginLeft: 5,
   },
   actionsContainer: {
-    marginBottom: 32,
     width: "100%",
   },
   actionCard: {
-    backgroundColor: "#FFF",
+    backgroundColor: "#fff",
     borderRadius: 16,
     padding: Platform.OS === "web" ? 24 : 20,
     flexDirection: "row",
@@ -753,13 +862,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
-    cursor: "pointer",
-    transition: "all 0.3s ease",
-    ":hover": {
-      transform: [{ translateY: -2 }],
-      shadowOpacity: 0.1,
-      shadowRadius: 6,
-    },
   },
   actionIconContainer: {
     width: 48,
@@ -781,46 +883,61 @@ const styles = StyleSheet.create({
     fontSize: Platform.OS === "web" ? (width >= 768 ? 14 : 13) : 13,
     color: "#6B7280",
   },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  recentFormsGrid: {
-    display: "grid",
-    gridTemplateColumns:
-      width >= 768 ? "repeat(auto-fill, minmax(300px, 1fr))" : "1fr",
-    gap: 16,
-    width: "100%",
-  },
-  itemCard: {
-    marginBottom: 0,
-    elevation: 0,
+  chartCard: {
     backgroundColor: "#fff",
-    borderRadius: 12,
+    borderRadius: 16,
+    padding: 0,
+    marginBottom: Platform.OS === "web" ? 0 : 24,
+    minHeight: width >= 768 ? 290 : 290,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    overflow: "hidden",
+  },
+  listCard: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: Platform.OS === "web" ? (width >= 768 ? 24 : 16) : 16,
+    marginBottom: 20,
     borderWidth: 1,
     borderColor: "#e0e0e0",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+    height: "100%",
   },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 4,
-  },
-  formTitleContainer: {
+  formCard: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    width: "100%",
+    backgroundColor: "#fff",
+    padding: Platform.OS === "web" ? (width >= 768 ? 20 : 16) : 16,
+    marginBottom: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
   },
-  formType: {
-    fontSize: 16,
+  formInfo: {
+    flex: 1,
+  },
+  formTitle: {
+    fontSize: Platform.OS === "web" ? (width >= 768 ? 16 : 14) : 14,
     color: "#333",
+    marginBottom: 4,
   },
-  cardDate: {
+  formDate: {
     fontSize: 12,
-    opacity: 0.7,
     color: "#666",
   },
   offlineNotice: {
@@ -844,6 +961,20 @@ const styles = StyleSheet.create({
   },
   skeletonSubtitle: {
     marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  gridContainer: {
+    gap: 24,
+    width: "100%",
+    marginBottom: 24,
+  },
+  gridItem: {
+    flex: 1,
   },
 });
 
