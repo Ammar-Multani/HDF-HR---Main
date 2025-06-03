@@ -30,15 +30,17 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { useForm, Controller } from "react-hook-form";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system";
+import * as DocumentPicker from "expo-document-picker";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import { UserRole } from "../../types";
 import Animated, { FadeIn } from "react-native-reanimated";
+import Constants from "expo-constants";
 
 // Add window dimensions hook
 const useWindowDimensions = () => {
@@ -99,6 +101,49 @@ interface DateChangeEvent extends Event {
   target?: HTMLInputElement;
 }
 
+interface TaggunResponse {
+  totalAmount?: {
+    data: number;
+    confidenceLevel: number;
+  };
+  taxAmount?: {
+    data: number;
+    confidenceLevel: number;
+  };
+  date?: {
+    data: string;
+    confidenceLevel: number;
+  };
+  merchantName?: {
+    data: string;
+    confidenceLevel: number;
+  };
+  merchantAddress?: {
+    data: string;
+    confidenceLevel: number;
+  };
+  merchantCity?: {
+    data: string;
+    confidenceLevel: number;
+  };
+  merchantState?: {
+    data: string;
+    confidenceLevel: number;
+  };
+  merchantCountryCode?: {
+    data: string;
+    confidenceLevel: number;
+  };
+  merchantPostalCode?: {
+    data: string;
+    confidenceLevel: number;
+  };
+}
+
+// Replace the environment variable access with Expo's format
+const TAGGUN_API_KEY = Constants.expoConfig?.extra?.EXPO_PUBLIC_TAGGUN_API_KEY;
+const TAGGUN_API_URL = "https://api.taggun.io/api/receipt/v1/simple/file";
+
 const CreateReceiptScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
@@ -133,6 +178,8 @@ const CreateReceiptScreen = () => {
   const [imageSource, setImageSource] = useState<"camera" | "gallery" | null>(
     null
   );
+  const [isProcessingOCR, setIsProcessingOCR] = useState(false);
+  const [fileType, setFileType] = useState<"image" | "pdf" | null>(null);
 
   const {
     control,
@@ -183,6 +230,120 @@ const CreateReceiptScreen = () => {
     fetchCompanies();
   }, []);
 
+  const processReceiptWithOCR = async (imageUri: string) => {
+    try {
+      if (!TAGGUN_API_KEY) {
+        throw new Error("Taggun API key is not configured");
+      }
+
+      setIsProcessingOCR(true);
+      setSnackbarMessage("Processing receipt...");
+      setSnackbarVisible(true);
+
+      // Convert image URI to blob
+      const response = await fetch(imageUri);
+      const blob = await response.blob();
+
+      // Create form data
+      const formData = new FormData();
+      formData.append(
+        "file",
+        blob,
+        fileType === "pdf" ? "receipt.pdf" : "receipt.jpg"
+      );
+      formData.append("extractTime", "false");
+      formData.append("refresh", "false");
+      formData.append("incognito", "false");
+
+      // Call Taggun API
+      const ocrResponse = await fetch(TAGGUN_API_URL, {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          apikey: TAGGUN_API_KEY,
+        },
+        body: formData,
+      });
+
+      if (!ocrResponse.ok) {
+        const errorData = await ocrResponse.json().catch(() => null);
+        console.error("OCR API Error Response:", {
+          status: ocrResponse.status,
+          statusText: ocrResponse.statusText,
+          errorData,
+        });
+
+        if (ocrResponse.status === 401) {
+          throw new Error(
+            "Invalid API key. Please check your Taggun API key configuration."
+          );
+        } else if (ocrResponse.status === 413) {
+          throw new Error("File size too large. Please upload a smaller file.");
+        } else if (ocrResponse.status === 415) {
+          throw new Error(
+            "Unsupported file type. Please upload a valid image or PDF file."
+          );
+        } else {
+          throw new Error(`OCR processing failed: ${ocrResponse.statusText}`);
+        }
+      }
+
+      const ocrData: TaggunResponse = await ocrResponse.json();
+
+      if (!ocrData) {
+        throw new Error("No data received from OCR service");
+      }
+
+      // Update form fields with OCR data
+      if (ocrData.totalAmount?.data) {
+        setValue("total_amount", ocrData.totalAmount.data.toString());
+      }
+      if (ocrData.taxAmount?.data) {
+        setValue("tax_amount", ocrData.taxAmount.data.toString());
+      }
+      if (ocrData.merchantName?.data) {
+        setValue("merchant_name", ocrData.merchantName.data);
+      }
+      if (ocrData.merchantAddress?.data) {
+        setValue("merchant_address", ocrData.merchantAddress.data);
+      }
+      if (ocrData.date?.data) {
+        const parsedDate = parseISO(ocrData.date.data);
+        setValue("date", parsedDate);
+        setValue("transaction_date", parsedDate);
+      }
+
+      setSnackbarMessage("Receipt details extracted successfully!");
+      setSnackbarVisible(true);
+    } catch (error: any) {
+      console.error("OCR processing error:", error);
+      let errorMessage =
+        "Failed to process receipt. Please fill in details manually.";
+
+      if (error.message.includes("API key")) {
+        errorMessage = "API key error. Please contact support.";
+      } else if (error.message.includes("file size")) {
+        errorMessage = "File is too large. Please try a smaller file.";
+      } else if (error.message.includes("file type")) {
+        errorMessage = "Invalid file type. Please upload a valid image or PDF.";
+      }
+
+      setSnackbarMessage(errorMessage);
+      setSnackbarVisible(true);
+    } finally {
+      setIsProcessingOCR(false);
+    }
+  };
+
+  const handleImageSelection = async (
+    uri: string,
+    source: "camera" | "gallery"
+  ) => {
+    setReceiptImage(uri);
+    setImageSource(source);
+    await processReceiptWithOCR(uri);
+  };
+
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
@@ -201,8 +362,7 @@ const CreateReceiptScreen = () => {
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      setReceiptImage(result.assets[0].uri);
-      setImageSource("gallery");
+      await handleImageSelection(result.assets[0].uri, "gallery");
     }
   };
 
@@ -224,8 +384,58 @@ const CreateReceiptScreen = () => {
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      setReceiptImage(result.assets[0].uri);
-      setImageSource("camera");
+      await handleImageSelection(result.assets[0].uri, "camera");
+    }
+  };
+
+  const pickDocument = async () => {
+    try {
+      if (!TAGGUN_API_KEY) {
+        setSnackbarMessage(
+          "OCR service is not configured. Please contact support."
+        );
+        setSnackbarVisible(true);
+        return;
+      }
+
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["image/*", "application/pdf"],
+        multiple: false,
+        copyToCacheDirectory: true, // This ensures we have a local URI to work with
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const file = result.assets[0];
+
+        // Check file size (limit to 10MB)
+        if (file.size && file.size > 10 * 1024 * 1024) {
+          setSnackbarMessage("File size must be less than 10MB");
+          setSnackbarVisible(true);
+          return;
+        }
+
+        // Validate file type
+        const validTypes = [
+          "image/jpeg",
+          "image/png",
+          "image/heic",
+          "application/pdf",
+        ];
+        if (file.mimeType && !validTypes.includes(file.mimeType)) {
+          setSnackbarMessage(
+            "Please upload a valid image (JPEG, PNG, HEIC) or PDF file"
+          );
+          setSnackbarVisible(true);
+          return;
+        }
+
+        setFileType(file.mimeType?.includes("pdf") ? "pdf" : "image");
+        await handleImageSelection(file.uri, "gallery");
+      }
+    } catch (error) {
+      console.error("Error picking document:", error);
+      setSnackbarMessage("Failed to pick document");
+      setSnackbarVisible(true);
     }
   };
 
@@ -427,6 +637,101 @@ const CreateReceiptScreen = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const renderUploadSection = () => {
+    const isWebPlatform = Platform.OS === "web";
+    const isMobileWeb = isWebPlatform && dimensions.width < 768;
+
+    return (
+      <Surface style={[styles.formCard, { marginTop: 24 }]}>
+        <View style={styles.cardHeader}>
+          <View style={styles.headerLeft}>
+            <View style={styles.iconContainer}>
+              <IconButton
+                icon="file-upload"
+                size={20}
+                iconColor="#64748b"
+                style={styles.headerIcon}
+              />
+            </View>
+            <Text style={styles.cardTitle}>Upload Receipt</Text>
+          </View>
+        </View>
+
+        <View style={styles.cardContent}>
+          <View style={styles.imageButtonsContainer}>
+            {!isWebPlatform || isMobileWeb ? (
+              <>
+                <Button
+                  mode="outlined"
+                  icon="camera"
+                  onPress={takePhoto}
+                  style={[styles.imageButton, { marginRight: 8 }]}
+                  disabled={isProcessingOCR}
+                >
+                  Take Photo
+                </Button>
+                <Button
+                  mode="outlined"
+                  icon="image"
+                  onPress={pickImage}
+                  style={styles.imageButton}
+                  disabled={isProcessingOCR}
+                >
+                  Gallery
+                </Button>
+              </>
+            ) : (
+              <Button
+                mode="outlined"
+                icon="file-upload"
+                onPress={pickDocument}
+                style={styles.uploadButton}
+                disabled={isProcessingOCR}
+              >
+                Upload Image/PDF
+              </Button>
+            )}
+          </View>
+
+          {(receiptImage || fileType === "pdf") && (
+            <View style={styles.imagePreviewContainer}>
+              {fileType === "pdf" ? (
+                <View style={styles.pdfPreview}>
+                  <IconButton icon="file-pdf" size={48} />
+                  <Text style={styles.pdfText}>PDF Document</Text>
+                </View>
+              ) : (
+                <Image
+                  source={receiptImage ? { uri: receiptImage } : undefined}
+                  style={styles.imagePreview}
+                  resizeMode="contain"
+                />
+              )}
+              <IconButton
+                icon="delete"
+                size={24}
+                style={styles.deleteImageButton}
+                onPress={() => {
+                  setReceiptImage(null);
+                  setFileType(null);
+                }}
+                disabled={isProcessingOCR}
+              />
+              {isProcessingOCR && (
+                <View style={styles.ocrLoadingOverlay}>
+                  <ActivityIndicator size="large" />
+                  <Text style={styles.ocrLoadingText}>
+                    Processing Receipt...
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+        </View>
+      </Surface>
+    );
   };
 
   if (loadingCompanies) {
@@ -809,59 +1114,7 @@ const CreateReceiptScreen = () => {
                   </View>
                 </Surface>
 
-                {/* Receipt Image */}
-                <Surface style={[styles.formCard, { marginTop: 24 }]}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.headerLeft}>
-                      <View style={styles.iconContainer}>
-                        <IconButton
-                          icon="image"
-                          size={20}
-                          iconColor="#64748b"
-                          style={styles.headerIcon}
-                        />
-                      </View>
-                      <Text style={styles.cardTitle}>Receipt Image</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.cardContent}>
-                    <View style={styles.imageButtonsContainer}>
-                      <Button
-                        mode="outlined"
-                        icon="camera"
-                        onPress={takePhoto}
-                        style={[styles.imageButton, { marginRight: 8 }]}
-                      >
-                        Take Photo
-                      </Button>
-                      <Button
-                        mode="outlined"
-                        icon="image"
-                        onPress={pickImage}
-                        style={styles.imageButton}
-                      >
-                        Gallery
-                      </Button>
-                    </View>
-
-                    {receiptImage && (
-                      <View style={styles.imagePreviewContainer}>
-                        <Image
-                          source={{ uri: receiptImage }}
-                          style={styles.imagePreview}
-                          resizeMode="contain"
-                        />
-                        <IconButton
-                          icon="delete"
-                          size={24}
-                          style={styles.deleteImageButton}
-                          onPress={() => setReceiptImage(null)}
-                        />
-                      </View>
-                    )}
-                  </View>
-                </Surface>
+                {renderUploadSection()}
               </Animated.View>
             </View>
           </View>
@@ -1145,7 +1398,8 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins-SemiBold",
   },
   webDateInputContainer: {
-    width: "100%",
+    marginTop: 10,
+    width: "20%",
     marginBottom: 10,
   },
   dateInputWrapper: {
@@ -1156,6 +1410,38 @@ const styles = StyleSheet.create({
     color: "#1e293b",
     fontFamily: "Poppins-regular",
   },
+  ocrLoadingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(255, 255, 255, 0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  ocrLoadingText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: "#1e293b",
+  },
+  uploadButton: {
+    flex: 1,
+    height: 48,
+  } as const,
+  pdfPreview: {
+    width: "100%",
+    height: 200,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#f8fafc",
+    borderRadius: 8,
+  } as const,
+  pdfText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: "#64748b",
+  } as const,
 });
 
 export default CreateReceiptScreen;
