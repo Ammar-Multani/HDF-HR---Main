@@ -60,6 +60,7 @@ import {
   FilterDivider,
   PillFilterGroup,
 } from "../../components/FilterSections";
+import { formatDate } from "../../utils/dateUtils";
 
 // User list types
 enum UserListType {
@@ -1260,9 +1261,7 @@ const SuperAdminUsersScreen = () => {
       </View>
       <View style={styles.tableCell}>
         <Text style={styles.tableCellText}>
-          {item.created_at
-            ? new Date(item.created_at).toLocaleDateString()
-            : "-"}
+          {formatDate(item.created_at || "", { type: "long" })}
         </Text>
       </View>
       <View style={styles.tableCell}>
@@ -1332,9 +1331,7 @@ const SuperAdminUsersScreen = () => {
       </View>
       <View style={styles.tableCell}>
         <Text style={styles.tableCellText}>
-          {item.created_at
-            ? new Date(item.created_at).toLocaleDateString()
-            : "-"}
+          {formatDate(item.created_at || "", { type: "long" })}
         </Text>
       </View>
       <View style={styles.tableCell}>
