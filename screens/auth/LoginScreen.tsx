@@ -40,7 +40,7 @@ import AppHeader from "../../components/AppHeader";
 import { useTranslation } from "react-i18next";
 import CustomLanguageSelector from "../../components/CustomLanguageSelector";
 import { globalStyles, createTextStyle } from "../../utils/globalStyles";
-import { UserStatus } from "../utils/auth";
+import { UserStatus } from "../../utils/auth";
 import CustomSnackbar from "../../components/CustomSnackbar";
 
 // Key to prevent showing loading screen right after login
@@ -193,14 +193,14 @@ const LoginScreen = () => {
     Linking.openURL("mailto:support@yourdomain.com?subject=Support%20Request");
   };
 
-  const getGradientColors = () => {
-    return theme.light
-      ? (["#151729", "#2a2e43"] as const)
-      : ([
-          theme.colors.background,
-          (theme.colors as any).backgroundTertiary,
-        ] as const);
-  };
+  // const getGradientColors = () => {
+  //   return theme.light
+  //     ? (["#151729", "#2a2e43"] as const)
+  //     : ([
+  //         theme.colors.background,
+  //         (theme.colors as any).backgroundTertiary,
+  //       ] as const);
+  // };
 
   return (
     <SafeAreaView

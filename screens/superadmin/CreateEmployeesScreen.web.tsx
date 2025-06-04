@@ -47,6 +47,7 @@ import { sendCompanyAdminInviteEmail } from "../../utils/emailService";
 import { generateWelcomeEmail } from "../../utils/emailTemplates";
 import Constants from "expo-constants";
 import CustomSnackbar from "../../components/CustomSnackbar";
+import { t } from "i18next";
 
 interface EmployeeFormData {
   first_name: string;
@@ -222,23 +223,21 @@ const CreateEmployeeScreen = () => {
   // Confirm admin role change handler
   const handleAdminToggle = (newValue: boolean) => {
     if (newValue) {
-      // If turning on admin privileges, confirm with the user
       Alert.alert(
-        "Confirm Admin Privileges",
-        "This will grant full administrative access to this employee. They will be able to manage company settings, employees, and other admin functions. Are you sure?",
+        t("superAdmin.employees.confirmAdminTitle"),
+        t("superAdmin.employees.confirmAdminMessage"),
         [
           {
-            text: "Cancel",
+            text: t("common.cancel"),
             style: "cancel",
           },
           {
-            text: "Confirm",
+            text: t("common.confirm"),
             onPress: () => setValue("is_admin", true),
           },
         ]
       );
     } else {
-      // If turning off, no confirmation needed
       setValue("is_admin", false);
     }
   };
@@ -247,7 +246,7 @@ const CreateEmployeeScreen = () => {
     try {
       // Check for selected company
       if (!selectedCompany) {
-        setSnackbarMessage("Please select a company");
+        setSnackbarMessage(t("superAdmin.employees.selectCompanyRequired"));
         setSnackbarVisible(true);
         return;
       }
@@ -255,15 +254,13 @@ const CreateEmployeeScreen = () => {
       // Check network connectivity first
       const networkAvailable = await isNetworkAvailable();
       if (!networkAvailable) {
-        setErrorBannerMessage(
-          "Cannot create employee while offline. Please check your internet connection and try again."
-        );
+        setErrorBannerMessage(t("superAdmin.employees.offlineCreateError"));
         setErrorBannerVisible(true);
         return;
       }
 
       if (!user) {
-        setSnackbarMessage("User information not available");
+        setSnackbarMessage(t("common.error"));
         setSnackbarVisible(true);
         return;
       }
@@ -279,7 +276,7 @@ const CreateEmployeeScreen = () => {
         workloadPercentage <= 0 ||
         workloadPercentage > 100
       ) {
-        setSnackbarMessage("Workload percentage must be between 1 and 100");
+        setSnackbarMessage(t("superAdmin.employees.workloadInvalid"));
         setSnackbarVisible(true);
         setLoading(false);
         return;
@@ -287,16 +284,11 @@ const CreateEmployeeScreen = () => {
 
       // Validate password strength
       if (data.password.length < 8) {
-        setSnackbarMessage("Password must be at least 8 characters long");
+        setSnackbarMessage(t("superAdmin.employees.passwordLength"));
         setSnackbarVisible(true);
         setLoading(false);
         return;
       }
-
-      // Convert employment_type to boolean (true for full-time/part-time, false for contract/temporary)
-      const isEmployeeType =
-        data.employment_type === EmploymentType.FULL_TIME ||
-        data.employment_type === EmploymentType.PART_TIME;
 
       // Validate email domain more thoroughly
       const emailParts = data.email.split("@");
@@ -305,9 +297,7 @@ const CreateEmployeeScreen = () => {
         !emailParts[1].includes(".") ||
         emailParts[1].length < 3
       ) {
-        setSnackbarMessage(
-          "Please enter a valid email address with a proper domain"
-        );
+        setSnackbarMessage(t("superAdmin.employees.invalidEmail"));
         setSnackbarVisible(true);
         setLoading(false);
         return;
@@ -354,7 +344,9 @@ const CreateEmployeeScreen = () => {
         marital_status: data.marital_status,
         gender: data.gender,
         employment_start_date: data.employment_start_date.toISOString(),
-        employment_type: isEmployeeType,
+        employment_type:
+          data.employment_type === EmploymentType.FULL_TIME ||
+          data.employment_type === EmploymentType.PART_TIME,
         workload_percentage: workloadPercentage,
         job_title: data.job_title,
         education: data.education,
@@ -477,8 +469,8 @@ const CreateEmployeeScreen = () => {
 
       setSnackbarMessage(
         emailResult.success
-          ? `${data.is_admin ? "Company admin" : "Employee"} created successfully!`
-          : `${data.is_admin ? "Company admin" : "Employee"} created but welcome email could not be sent.`
+          ? t("superAdmin.employees.createSuccess")
+          : t("superAdmin.employees.createSuccessNoEmail")
       );
       setSnackbarVisible(true);
 
@@ -491,7 +483,7 @@ const CreateEmployeeScreen = () => {
 
       // Detailed error message
       const errorMessage =
-        error.message || "Failed to create employee. Please try again.";
+        error.message || t("superAdmin.employees.createError");
 
       // For network-related errors, show in banner
       if (
@@ -499,7 +491,7 @@ const CreateEmployeeScreen = () => {
         errorMessage.includes("connection") ||
         errorMessage.includes("offline")
       ) {
-        setErrorBannerMessage(errorMessage);
+        setErrorBannerMessage(t("superAdmin.employees.offlineCreateError"));
         setErrorBannerVisible(true);
       } else {
         setSnackbarMessage(errorMessage);
@@ -526,7 +518,7 @@ const CreateEmployeeScreen = () => {
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
       <AppHeader
-        title="Create Employee"
+        title={t("superAdmin.employees.createEmployee")}
         showBackButton={true}
         showHelpButton={true}
         onHelpPress={() => {
@@ -541,7 +533,7 @@ const CreateEmployeeScreen = () => {
         icon="wifi-off"
         actions={[
           {
-            label: "Retry",
+            label: t("common.retry"),
             onPress: async () => {
               const networkAvailable = await isNetworkAvailable();
               setIsOnline(networkAvailable);
@@ -549,8 +541,7 @@ const CreateEmployeeScreen = () => {
           },
         ]}
       >
-        You are currently offline. Please check your connection to create a new
-        employee.
+        {t("common.offline")}
       </Banner>
 
       {/* Error banner for important errors */}
@@ -559,7 +550,7 @@ const CreateEmployeeScreen = () => {
         icon="alert"
         actions={[
           {
-            label: "Dismiss",
+            label: t("common.dismiss"),
             onPress: () => setErrorBannerVisible(false),
           },
         ]}
@@ -601,7 +592,9 @@ const CreateEmployeeScreen = () => {
                           style={styles.headerIcon}
                         />
                       </View>
-                      <Text style={styles.cardTitle}>Company Selection</Text>
+                      <Text style={styles.cardTitle}>
+                        {t("superAdmin.employees.companySelection")}
+                      </Text>
                     </View>
                   </View>
 
@@ -635,7 +628,7 @@ const CreateEmployeeScreen = () => {
                         >
                           {selectedCompany
                             ? selectedCompany.company_name
-                            : "Select Company"}
+                            : t("superAdmin.employees.selectCompany")}
                         </Text>
                       </View>
                       <IconButton
@@ -664,7 +657,9 @@ const CreateEmployeeScreen = () => {
                           style={styles.headerIcon}
                         />
                       </View>
-                      <Text style={styles.cardTitle}>Personal Information</Text>
+                      <Text style={styles.cardTitle}>
+                        {t("superAdmin.employees.personalInformation")}
+                      </Text>
                     </View>
                   </View>
 
@@ -673,10 +668,14 @@ const CreateEmployeeScreen = () => {
                       <View style={styles.halfInput}>
                         <Controller
                           control={control}
-                          rules={{ required: "First name is required" }}
+                          rules={{
+                            required: t(
+                              "superAdmin.employees.firstNameRequired"
+                            ),
+                          }}
                           render={({ field: { onChange, onBlur, value } }) => (
                             <TextInput
-                              label="First Name *"
+                              label={`${t("superAdmin.employees.firstName")} *`}
                               mode="outlined"
                               value={value}
                               onChangeText={onChange}
@@ -698,10 +697,14 @@ const CreateEmployeeScreen = () => {
                       <View style={styles.halfInput}>
                         <Controller
                           control={control}
-                          rules={{ required: "Last name is required" }}
+                          rules={{
+                            required: t(
+                              "superAdmin.employees.lastNameRequired"
+                            ),
+                          }}
                           render={({ field: { onChange, onBlur, value } }) => (
                             <TextInput
-                              label="Last Name *"
+                              label={`${t("superAdmin.employees.lastName")} *`}
                               mode="outlined"
                               value={value}
                               onChangeText={onChange}
@@ -723,10 +726,12 @@ const CreateEmployeeScreen = () => {
 
                     <Controller
                       control={control}
-                      rules={{ required: "Phone number is required" }}
+                      rules={{
+                        required: t("superAdmin.employees.phoneNumberRequired"),
+                      }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="Phone Number *"
+                          label={`${t("superAdmin.employees.phoneNumber")} *`}
                           mode="outlined"
                           value={value}
                           onChangeText={onChange}
@@ -745,7 +750,9 @@ const CreateEmployeeScreen = () => {
                       </HelperText>
                     )}
 
-                    <Text style={styles.inputLabel}>Date of Birth *</Text>
+                    <Text style={styles.inputLabel}>
+                      {t("superAdmin.employees.dateOfBirth")} *
+                    </Text>
                     <Button
                       mode="outlined"
                       onPress={() => setShowDobPicker(true)}
@@ -765,7 +772,9 @@ const CreateEmployeeScreen = () => {
                       />
                     )}
 
-                    <Text style={styles.inputLabel}>Gender *</Text>
+                    <Text style={styles.inputLabel}>
+                      {t("superAdmin.employees.gender")} *
+                    </Text>
                     <Controller
                       control={control}
                       render={({ field: { onChange, value } }) => (
@@ -773,9 +782,18 @@ const CreateEmployeeScreen = () => {
                           value={value}
                           onValueChange={onChange}
                           buttons={[
-                            { value: Gender.MALE, label: "Male" },
-                            { value: Gender.FEMALE, label: "Female" },
-                            { value: Gender.OTHER, label: "Other" },
+                            {
+                              value: Gender.MALE,
+                              label: t("superAdmin.employees.male"),
+                            },
+                            {
+                              value: Gender.FEMALE,
+                              label: t("superAdmin.employees.female"),
+                            },
+                            {
+                              value: Gender.OTHER,
+                              label: t("superAdmin.employees.other"),
+                            },
                           ]}
                           style={styles.segmentedButtons}
                         />
@@ -785,10 +803,12 @@ const CreateEmployeeScreen = () => {
 
                     <Controller
                       control={control}
-                      rules={{ required: "Nationality is required" }}
+                      rules={{
+                        required: t("superAdmin.employees.nationalityRequired"),
+                      }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="Nationality *"
+                          label={`${t("superAdmin.employees.nationality")} *`}
                           mode="outlined"
                           value={value}
                           onChangeText={onChange}
@@ -806,7 +826,9 @@ const CreateEmployeeScreen = () => {
                       </HelperText>
                     )}
 
-                    <Text style={styles.inputLabel}>Marital Status *</Text>
+                    <Text style={styles.inputLabel}>
+                      {t("superAdmin.employees.maritalStatus")} *
+                    </Text>
                     <Controller
                       control={control}
                       render={({ field: { onChange, value } }) => (
@@ -814,13 +836,22 @@ const CreateEmployeeScreen = () => {
                           value={value}
                           onValueChange={onChange}
                           buttons={[
-                            { value: MaritalStatus.SINGLE, label: "Single" },
-                            { value: MaritalStatus.MARRIED, label: "Married" },
+                            {
+                              value: MaritalStatus.SINGLE,
+                              label: t("superAdmin.employees.single"),
+                            },
+                            {
+                              value: MaritalStatus.MARRIED,
+                              label: t("superAdmin.employees.married"),
+                            },
                             {
                               value: MaritalStatus.DIVORCED,
-                              label: "Divorced",
+                              label: t("superAdmin.employees.divorced"),
                             },
-                            { value: MaritalStatus.WIDOWED, label: "Widowed" },
+                            {
+                              value: MaritalStatus.WIDOWED,
+                              label: t("superAdmin.employees.widowed"),
+                            },
                           ]}
                           style={styles.segmentedButtons}
                         />
@@ -844,7 +875,9 @@ const CreateEmployeeScreen = () => {
                           style={styles.headerIcon}
                         />
                       </View>
-                      <Text style={styles.cardTitle}>Employment Details</Text>
+                      <Text style={styles.cardTitle}>
+                        {t("superAdmin.employees.employmentDetails")}
+                      </Text>
                     </View>
                   </View>
 
@@ -979,7 +1012,9 @@ const CreateEmployeeScreen = () => {
                           style={styles.headerIcon}
                         />
                       </View>
-                      <Text style={styles.cardTitle}>Bank Details</Text>
+                      <Text style={styles.cardTitle}>
+                        {t("superAdmin.employees.bankDetails")}
+                      </Text>
                     </View>
                   </View>
 
@@ -1085,13 +1120,15 @@ const CreateEmployeeScreen = () => {
                     <View style={styles.headerLeft}>
                       <View style={styles.iconContainer}>
                         <IconButton
-                          icon="bank"
+                          icon="account-key"
                           size={20}
                           iconColor="#64748b"
                           style={styles.headerIcon}
                         />
                       </View>
-                      <Text style={styles.cardTitle}>Account Details</Text>
+                      <Text style={styles.cardTitle}>
+                        {t("superAdmin.employees.accountDetails")}
+                      </Text>
                     </View>
                   </View>
 
@@ -1099,15 +1136,15 @@ const CreateEmployeeScreen = () => {
                     <Controller
                       control={control}
                       rules={{
-                        required: "Email is required",
+                        required: t("superAdmin.employees.emailRequired"),
                         pattern: {
                           value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                          message: "Invalid email address",
+                          message: t("superAdmin.employees.invalidEmail"),
                         },
                       }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="Email *"
+                          label={`${t("superAdmin.employees.email")} *`}
                           mode="outlined"
                           value={value}
                           onChangeText={onChange}
@@ -1130,15 +1167,15 @@ const CreateEmployeeScreen = () => {
                     <Controller
                       control={control}
                       rules={{
-                        required: "Password is required",
+                        required: t("superAdmin.employees.passwordRequired"),
                         minLength: {
                           value: 8,
-                          message: "Password must be at least 8 characters",
+                          message: t("superAdmin.employees.passwordLength"),
                         },
                       }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="Password *"
+                          label={`${t("superAdmin.employees.password")} *`}
                           mode="outlined"
                           value={value}
                           onChangeText={onChange}
@@ -1158,13 +1195,12 @@ const CreateEmployeeScreen = () => {
                     )}
 
                     <Text style={[styles.helperText, { marginBottom: 16 }]}>
-                      An invitation email will be sent to the employee with
-                      their login credentials.
+                      {t("superAdmin.employees.inviteEmailHelper")}
                     </Text>
 
                     <View style={styles.adminToggleContainer}>
                       <Text style={styles.adminToggleLabel}>
-                        Grant Admin Privileges
+                        {t("superAdmin.employees.grantAdminPrivileges")}
                       </Text>
                       <Switch
                         value={isAdmin}
@@ -1188,7 +1224,9 @@ const CreateEmployeeScreen = () => {
         contentStyle={menuContainerStyle}
       >
         <View style={styles.menuHeader}>
-          <Text style={styles.menuTitle}>Select Company</Text>
+          <Text style={styles.menuTitle}>
+            {t("superAdmin.employees.selectCompany")}
+          </Text>
         </View>
         <Divider />
         <ScrollView style={{ maxHeight: 400 }}>
@@ -1213,7 +1251,7 @@ const CreateEmployeeScreen = () => {
           ))}
           {companies.length === 0 && (
             <Menu.Item
-              title="No companies found"
+              title={t("superAdmin.employees.noCompaniesFound")}
               disabled={true}
               style={styles.menuItemStyle}
             />
@@ -1229,7 +1267,7 @@ const CreateEmployeeScreen = () => {
               style={styles.button}
               disabled={loading}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               mode="contained"
@@ -1246,7 +1284,7 @@ const CreateEmployeeScreen = () => {
               loading={loading}
               disabled={loading || !selectedCompany}
             >
-              Create Employee
+              {t("superAdmin.employees.createEmployee")}
             </Button>
           </View>
         </View>

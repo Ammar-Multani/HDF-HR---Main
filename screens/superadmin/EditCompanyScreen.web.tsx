@@ -28,6 +28,7 @@ import { Company } from "../../types";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Animated, { FadeIn } from "react-native-reanimated";
 import CustomSnackbar from "../../components/CustomSnackbar";
+import { t } from "i18next";
 
 type EditCompanyRouteParams = {
   companyId: string;
@@ -172,14 +173,16 @@ const EditCompanyScreen = () => {
 
   const addStakeholder = () => {
     if (!stakeholderName || !stakeholderPercentage) {
-      setSnackbarMessage("Please enter both stakeholder name and percentage");
+      setSnackbarMessage(
+        t("superAdmin.companies.stakeholderNameAndPercentRequired")
+      );
       setSnackbarVisible(true);
       return;
     }
 
     const percentage = parseFloat(stakeholderPercentage);
     if (isNaN(percentage) || percentage <= 0 || percentage > 100) {
-      setSnackbarMessage("Percentage must be between 0 and 100");
+      setSnackbarMessage(t("superAdmin.companies.percentageBetween"));
       setSnackbarVisible(true);
       return;
     }
@@ -200,7 +203,7 @@ const EditCompanyScreen = () => {
       setSubmitting(true);
 
       if (stakeholders.length === 0) {
-        setSnackbarMessage("Please add at least one stakeholder");
+        setSnackbarMessage(t("superAdmin.companies.noStakeholdersAdded"));
         setSnackbarVisible(true);
         setSubmitting(false);
         return;
@@ -232,7 +235,7 @@ const EditCompanyScreen = () => {
         throw error;
       }
 
-      setSnackbarMessage("Company updated successfully");
+      setSnackbarMessage(t("superAdmin.companies.updateSuccess"));
       setSnackbarVisible(true);
 
       // Navigate back after a short delay
@@ -241,7 +244,9 @@ const EditCompanyScreen = () => {
       }, 1500);
     } catch (error: any) {
       console.error("Error updating company:", error);
-      setSnackbarMessage(error.message || "Failed to update company");
+      setSnackbarMessage(
+        error.message || t("superAdmin.companies.updateError")
+      );
       setSnackbarVisible(true);
     } finally {
       setSubmitting(false);
@@ -249,7 +254,20 @@ const EditCompanyScreen = () => {
   };
 
   if (loading) {
-    return <LoadingIndicator />;
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
+        <AppHeader
+          title={t("superAdmin.companies.editCompany")}
+          showBackButton={true}
+          showLogo={false}
+          showHelpButton={true}
+          absolute={false}
+        />
+        <LoadingIndicator />
+      </SafeAreaView>
+    );
   }
 
   if (!company) {
@@ -258,27 +276,32 @@ const EditCompanyScreen = () => {
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
         <AppHeader
-          title="Edit Company"
+          title={t("superAdmin.companies.editCompany")}
           showBackButton={true}
           showLogo={false}
           showHelpButton={true}
           absolute={false}
         />
         <View style={styles.errorContainer}>
-          <Text style={{ color: theme.colors.error }}>Company not found</Text>
+          <Text style={{ color: theme.colors.error }}>
+            {t("superAdmin.companies.companyNotFound")}
+          </Text>
           <Button
             mode="contained"
             onPress={() => navigation.goBack()}
             style={styles.button}
           >
-            Go Back
+            {t("common.goBack")}
           </Button>
         </View>
       </SafeAreaView>
     );
   }
 
-  const renderSectionHeader = (title: string, icon: string) => (
+  const renderSectionHeader = (
+    title: string,
+    icon: "office-building" | "map-marker" | "account-group"
+  ) => (
     <View style={styles.sectionHeader}>
       <View style={styles.headerLeft}>
         <View style={styles.iconContainer}>
@@ -294,7 +317,7 @@ const EditCompanyScreen = () => {
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
       <AppHeader
-        title="Edit Company"
+        title={t("superAdmin.companies.editCompany")}
         showBackButton={true}
         showLogo={false}
         showHelpButton={true}
@@ -316,7 +339,9 @@ const EditCompanyScreen = () => {
           ]}
         >
           <View style={styles.headerSection}>
-            <Text style={styles.pageTitle}>Edit {company.company_name}</Text>
+            <Text style={styles.pageTitle}>
+              {t("superAdmin.companies.editCompany")}: {company.company_name}
+            </Text>
           </View>
 
           <View style={styles.gridContainer}>
@@ -324,7 +349,7 @@ const EditCompanyScreen = () => {
               <Animated.View entering={FadeIn.delay(100)}>
                 <Card style={styles.formCard}>
                   {renderSectionHeader(
-                    "Company Information",
+                    t("superAdmin.companies.companyInformation"),
                     "office-building"
                   )}
                   <Card.Content style={styles.cardContent}>
@@ -478,7 +503,10 @@ const EditCompanyScreen = () => {
                 </Card>
 
                 <Card style={[styles.formCard, { marginTop: 24 }]}>
-                  {renderSectionHeader("Stakeholders", "account-group")}
+                  {renderSectionHeader(
+                    t("superAdmin.companies.stakeholders"),
+                    "account-group"
+                  )}
                   <Card.Content style={styles.cardContent}>
                     <View style={styles.stakeholdersContainer}>
                       {stakeholders.map((stakeholder, index) => (
@@ -574,7 +602,10 @@ const EditCompanyScreen = () => {
             <View style={styles.gridColumn}>
               <Animated.View entering={FadeIn.delay(200)}>
                 <Card style={styles.formCard}>
-                  {renderSectionHeader("Company Address", "map-marker")}
+                  {renderSectionHeader(
+                    t("superAdmin.companies.address"),
+                    "map-marker"
+                  )}
                   <Card.Content style={styles.cardContent}>
                     <Controller
                       control={control}
@@ -733,7 +764,7 @@ const EditCompanyScreen = () => {
             style={[styles.button, styles.cancelButton]}
             disabled={loading}
           >
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             mode="contained"
@@ -742,7 +773,7 @@ const EditCompanyScreen = () => {
             loading={submitting}
             disabled={submitting}
           >
-            Update Company
+            {t("superAdmin.companies.editCompany")}
           </Button>
         </View>
       </Surface>

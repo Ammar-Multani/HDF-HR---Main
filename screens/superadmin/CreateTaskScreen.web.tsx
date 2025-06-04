@@ -36,6 +36,7 @@ import { TaskPriority, UserRole, TaskStatus } from "../../types";
 import Animated, { FadeIn } from "react-native-reanimated";
 import DateTimePicker from "react-native-modal-datetime-picker";
 import CustomSnackbar from "../../components/CustomSnackbar";
+import { t } from "i18next";
 
 interface TaskFormData {
   title: string;
@@ -275,8 +276,8 @@ const CreateTaskScreen = () => {
   return (
     <SafeAreaView style={styles.container}>
       <AppHeader
-        title="Create Task"
-        subtitle="Add new task information"
+        title={t("superAdmin.tasks.createTask")}
+        subtitle={t("superAdmin.tasks.updateTaskDetails")}
         showBackButton
         showLogo={false}
       />
@@ -290,7 +291,9 @@ const CreateTaskScreen = () => {
           contentContainerStyle={styles.scrollContent}
         >
           <View style={styles.headerSection}>
-            <Text style={styles.pageTitle}>Create New Task</Text>
+            <Text style={styles.pageTitle}>
+              {t("superAdmin.tasks.createTask")}
+            </Text>
           </View>
 
           <View style={styles.gridContainer}>
@@ -308,12 +311,16 @@ const CreateTaskScreen = () => {
                           style={styles.headerIcon}
                         />
                       </View>
-                      <Text style={styles.cardTitle}>Basic Information</Text>
+                      <Text style={styles.cardTitle}>
+                        {t("superAdmin.tasks.details")}
+                      </Text>
                     </View>
                   </View>
 
                   <View style={styles.cardContent}>
-                    <Text style={styles.inputLabel}>Select Company *</Text>
+                    <Text style={styles.inputLabel}>
+                      {t("superAdmin.tasks.selectCompany")} *
+                    </Text>
                     <Button
                       mode="outlined"
                       onPress={() => setMenuVisible(true)}
@@ -322,16 +329,16 @@ const CreateTaskScreen = () => {
                     >
                       {selectedCompany
                         ? selectedCompany.company_name
-                        : "Select Company"}
+                        : t("superAdmin.tasks.selectCompany")}
                     </Button>
 
                     <Controller
                       control={control}
-                      rules={{ required: "Title is required" }}
+                      rules={{ required: t("superAdmin.tasks.titleRequired") }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <>
                           <TextInput
-                            label="Title *"
+                            label={`${t("superAdmin.tasks.taskTitle")} *`}
                             mode="outlined"
                             value={value}
                             onChangeText={onChange}
@@ -352,11 +359,13 @@ const CreateTaskScreen = () => {
 
                     <Controller
                       control={control}
-                      rules={{ required: "Description is required" }}
+                      rules={{
+                        required: t("superAdmin.tasks.descriptionRequired"),
+                      }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <>
                           <TextInput
-                            label="Description *"
+                            label={`${t("superAdmin.tasks.description")} *`}
                             mode="outlined"
                             value={value}
                             onChangeText={onChange}
@@ -391,12 +400,16 @@ const CreateTaskScreen = () => {
                           style={styles.headerIcon}
                         />
                       </View>
-                      <Text style={styles.cardTitle}>Task Settings</Text>
+                      <Text style={styles.cardTitle}>
+                        {t("superAdmin.tasks.taskDetails")}
+                      </Text>
                     </View>
                   </View>
 
                   <View style={styles.cardContent}>
-                    <Text style={styles.inputLabel}>Deadline *</Text>
+                    <Text style={styles.inputLabel}>
+                      {t("superAdmin.tasks.deadline")} *
+                    </Text>
                     {Platform.OS === "web" ? (
                       <View style={styles.webDateInputContainer}>
                         <input
@@ -426,18 +439,23 @@ const CreateTaskScreen = () => {
                         </Button>
 
                         {showDatePicker && (
-                          <DateTimePicker
-                            value={deadline}
+                          <DateTimePickerModal
+                            isVisible={showDatePicker}
                             mode="date"
-                            display="default"
-                            onChange={handleDateChange}
+                            onConfirm={(date) => {
+                              setValue("deadline", date);
+                              setShowDatePicker(false);
+                            }}
+                            onCancel={() => setShowDatePicker(false)}
                             minimumDate={new Date()}
                           />
                         )}
                       </>
                     )}
 
-                    <Text style={styles.inputLabel}>Priority *</Text>
+                    <Text style={styles.inputLabel}>
+                      {t("superAdmin.tasks.priority")} *
+                    </Text>
                     <Controller
                       control={control}
                       render={({ field: { onChange, value } }) => (
@@ -445,9 +463,18 @@ const CreateTaskScreen = () => {
                           value={value}
                           onValueChange={onChange}
                           buttons={[
-                            { value: TaskPriority.LOW, label: "Low" },
-                            { value: TaskPriority.MEDIUM, label: "Medium" },
-                            { value: TaskPriority.HIGH, label: "High" },
+                            {
+                              value: TaskPriority.LOW,
+                              label: t("superAdmin.tasks.low"),
+                            },
+                            {
+                              value: TaskPriority.MEDIUM,
+                              label: t("superAdmin.tasks.medium"),
+                            },
+                            {
+                              value: TaskPriority.HIGH,
+                              label: t("superAdmin.tasks.high"),
+                            },
                           ]}
                           style={styles.segmentedButtons}
                         />
@@ -458,18 +485,18 @@ const CreateTaskScreen = () => {
                     <Controller
                       control={control}
                       rules={{
-                        required: "Reminder days is required",
+                        required: t("superAdmin.tasks.reminderDaysRequired"),
                         validate: (value) =>
                           !isNaN(parseInt(value)) &&
                           parseInt(value) >= 0 &&
                           parseInt(value) <= 365
                             ? true
-                            : "Please enter a value between 0 and 365 days",
+                            : t("superAdmin.tasks.reminderDaysRange"),
                       }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <>
                           <TextInput
-                            label="Reminder (days before deadline) *"
+                            label={`${t("superAdmin.tasks.reminderDays")} *`}
                             mode="outlined"
                             value={value}
                             onChangeText={onChange}
@@ -507,13 +534,15 @@ const CreateTaskScreen = () => {
                           style={styles.headerIcon}
                         />
                       </View>
-                      <Text style={styles.cardTitle}>Assign Users</Text>
+                      <Text style={styles.cardTitle}>
+                        {t("superAdmin.tasks.assignUsers")}
+                      </Text>
                     </View>
                   </View>
 
                   <View style={styles.cardContent}>
                     <Text style={styles.helperText}>
-                      Select one admin to assign this task to (required)
+                      {t("superAdmin.tasks.selectAdminsToAssign")}
                     </Text>
 
                     <View style={styles.usersContainer}>
@@ -528,8 +557,8 @@ const CreateTaskScreen = () => {
                         >
                           {user.name} (
                           {user.role === UserRole.SUPER_ADMIN
-                            ? "Super Admin"
-                            : "Company Admin"}
+                            ? t("superAdmin.tasks.superAdmin")
+                            : t("superAdmin.tasks.companyAdmin")}
                           )
                         </Chip>
                       ))}
@@ -549,7 +578,7 @@ const CreateTaskScreen = () => {
               style={[styles.button, styles.cancelButton]}
               disabled={loading}
             >
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button
               mode="contained"
@@ -558,7 +587,7 @@ const CreateTaskScreen = () => {
               loading={loading}
               disabled={loading}
             >
-              Create Task
+              {t("superAdmin.tasks.createTask")}
             </Button>
           </View>
         </Surface>
@@ -573,7 +602,9 @@ const CreateTaskScreen = () => {
         >
           <Surface style={styles.modalSurface}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Company</Text>
+              <Text style={styles.modalTitle}>
+                {t("superAdmin.tasks.selectCompany")}
+              </Text>
               <IconButton icon="close" onPress={() => setMenuVisible(false)} />
             </View>
             <Divider />

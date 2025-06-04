@@ -97,6 +97,7 @@ const darkTheme = {
     secondary: "#38BDF8",
     tertiary: "#8B5CF6",
     background: "rgb(30, 30, 50)",
+    backgroundTertiary: "rgb(237, 250, 255)",
     surface: "#1E293B",
     error: "#F87171",
     onSurface: "#F1F5F9",

@@ -29,6 +29,7 @@ import { hashPassword } from "../../utils/auth";
 import { sendSuperAdminWelcomeEmail } from "../../utils/emailService";
 import Animated, { FadeIn } from "react-native-reanimated";
 import CustomSnackbar from "../../components/CustomSnackbar";
+import { t } from "i18next";
 
 interface AdminFormData {
   name: string;
@@ -100,7 +101,7 @@ const CreateSuperAdminScreen = () => {
         !emailParts[1].includes(".") ||
         emailParts[1].length < 3
       ) {
-        setSnackbarMessage("Invalid email domain");
+        setSnackbarMessage(t("superAdmin.companies.invalidEmailDomain"));
         setSnackbarVisible(true);
         setLoading(false);
         return;
@@ -108,7 +109,7 @@ const CreateSuperAdminScreen = () => {
 
       // Validate password strength
       if (data.password.length < 8) {
-        setSnackbarMessage("Password must be at least 8 characters");
+        setSnackbarMessage(t("superAdmin.companies.passwordLength"));
         setSnackbarVisible(true);
         setLoading(false);
         return;
@@ -126,7 +127,7 @@ const CreateSuperAdminScreen = () => {
       }
 
       if (existingUser) {
-        setSnackbarMessage("Email already exists");
+        setSnackbarMessage(t("superAdmin.companies.emailAlreadyExists"));
         setSnackbarVisible(true);
         setLoading(false);
         return;
@@ -194,8 +195,8 @@ const CreateSuperAdminScreen = () => {
 
       setSnackbarMessage(
         emailSent
-          ? "Super Admin created successfully!"
-          : "Super Admin created but welcome email could not be sent."
+          ? t("superAdmin.superAdmin.createSuccess")
+          : t("superAdmin.superAdmin.createSuccessNoEmail")
       );
       setSnackbarVisible(true);
 
@@ -208,7 +209,9 @@ const CreateSuperAdminScreen = () => {
       }, 2000);
     } catch (error: any) {
       console.error("Error creating super admin:", error);
-      setSnackbarMessage(error.message || "Failed to create super admin");
+      setSnackbarMessage(
+        error.message || t("superAdmin.superAdmin.createError")
+      );
       setSnackbarVisible(true);
     } finally {
       setLoading(false);
@@ -220,7 +223,7 @@ const CreateSuperAdminScreen = () => {
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
       <AppHeader
-        title="Create Super Admin"
+        title={t("superAdmin.superAdmin.createAdmin")}
         showBackButton={true}
         showHelpButton={false}
         showProfileMenu={false}
@@ -256,17 +259,21 @@ const CreateSuperAdminScreen = () => {
                           style={styles.headerIcon}
                         />
                       </View>
-                      <Text style={styles.cardTitle}>Admin Information</Text>
+                      <Text style={styles.cardTitle}>
+                        {t("superAdmin.superAdmin.adminInformation")}
+                      </Text>
                     </View>
                   </View>
 
                   <View style={styles.cardContent}>
                     <Controller
                       control={control}
-                      rules={{ required: "Name is required" }}
+                      rules={{
+                        required: t("superAdmin.superAdmin.nameRequired"),
+                      }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="Name *"
+                          label={`${t("superAdmin.superAdmin.name")} *`}
                           mode="outlined"
                           value={value}
                           onChangeText={onChange}
@@ -287,15 +294,15 @@ const CreateSuperAdminScreen = () => {
                     <Controller
                       control={control}
                       rules={{
-                        required: "Email is required",
+                        required: t("superAdmin.superAdmin.emailRequired"),
                         pattern: {
                           value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                          message: "Invalid email address",
+                          message: t("superAdmin.superAdmin.invalidEmail"),
                         },
                       }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="Email *"
+                          label={`${t("superAdmin.superAdmin.email")} *`}
                           mode="outlined"
                           value={value}
                           onChangeText={onChange}
@@ -318,15 +325,15 @@ const CreateSuperAdminScreen = () => {
                     <Controller
                       control={control}
                       rules={{
-                        required: "Password is required",
+                        required: t("superAdmin.superAdmin.passwordRequired"),
                         minLength: {
                           value: 8,
-                          message: "Password must be at least 8 characters",
+                          message: t("superAdmin.superAdmin.passwordLength"),
                         },
                       }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="Password *"
+                          label={`${t("superAdmin.superAdmin.password")} *`}
                           mode="outlined"
                           value={value}
                           onChangeText={onChange}
@@ -349,7 +356,7 @@ const CreateSuperAdminScreen = () => {
                       control={control}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="Phone Number (Optional)"
+                          label={t("superAdmin.superAdmin.phoneNumberOptional")}
                           mode="outlined"
                           value={value}
                           onChangeText={onChange}
@@ -363,8 +370,7 @@ const CreateSuperAdminScreen = () => {
                     />
 
                     <Text style={styles.helperText}>
-                      A super admin account will be created and they can log in
-                      using the provided email and password.
+                      {t("superAdmin.superAdmin.helperText")}
                     </Text>
                   </View>
                 </Surface>
@@ -381,7 +387,7 @@ const CreateSuperAdminScreen = () => {
             style={styles.button}
             disabled={loading}
           >
-            Cancel
+            {t("common.cancel")}
           </Button>
           <Button
             mode="contained"
@@ -391,7 +397,7 @@ const CreateSuperAdminScreen = () => {
             disabled={loading}
             buttonColor={theme.colors.primary}
           >
-            Create Super Admin
+            {t("superAdmin.superAdmin.createAdmin")}
           </Button>
         </View>
       </Surface>

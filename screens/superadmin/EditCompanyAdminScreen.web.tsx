@@ -38,6 +38,7 @@ import LoadingIndicator from "../../components/LoadingIndicator";
 import { UserStatus } from "../../types";
 import Animated, { FadeIn } from "react-native-reanimated";
 import CustomSnackbar from "../../components/CustomSnackbar";
+import { t } from "i18next";
 
 type EditCompanyAdminRouteParams = {
   adminId: string;
@@ -92,15 +93,15 @@ interface AlertConfig {
   onCancel: () => void;
 }
 
-// Add CustomAlert component
+// Update CustomAlert component with translations
 const CustomAlert: React.FC<CustomAlertProps> = ({
   visible,
   title,
   message,
   onConfirm,
   onCancel,
-  confirmText = "Confirm",
-  cancelText = "Cancel",
+  confirmText = t("common.confirm"),
+  cancelText = t("common.cancel"),
   isDestructive = false,
 }) => {
   if (!visible) return null;
@@ -303,29 +304,39 @@ const EditCompanyAdminScreen = () => {
   const handleStatusToggle = (newValue: string) => {
     if (Platform.OS === "web") {
       setAlertConfig({
-        title: `${newValue === "active" ? "Activate" : "Deactivate"} Company Admin`,
-        message: `Are you sure you want to ${newValue === "active" ? "activate" : "deactivate"} this company admin?`,
+        title:
+          newValue === "active"
+            ? t("superAdmin.companyAdmin.activateTitle")
+            : t("superAdmin.companyAdmin.deactivateTitle"),
+        message:
+          newValue === "active"
+            ? t("superAdmin.companyAdmin.activateMessage")
+            : t("superAdmin.companyAdmin.deactivateMessage"),
         onConfirm: () => {
           setValue("active_status", newValue);
           setShowAlert(false);
         },
         onCancel: () => setShowAlert(false),
-        confirmText: "Confirm",
-        cancelText: "Cancel",
+        confirmText: t("common.confirm"),
+        cancelText: t("common.cancel"),
         isDestructive: newValue !== "active",
       });
       setShowAlert(true);
     } else {
       Alert.alert(
-        `${newValue === "active" ? "Activate" : "Deactivate"} Company Admin`,
-        `Are you sure you want to ${newValue === "active" ? "activate" : "deactivate"} this company admin?`,
+        newValue === "active"
+          ? t("superAdmin.companyAdmin.activateTitle")
+          : t("superAdmin.companyAdmin.deactivateTitle"),
+        newValue === "active"
+          ? t("superAdmin.companyAdmin.activateMessage")
+          : t("superAdmin.companyAdmin.deactivateMessage"),
         [
           {
-            text: "Cancel",
+            text: t("common.cancel"),
             style: "cancel",
           },
           {
-            text: "Confirm",
+            text: t("common.confirm"),
             onPress: () => setValue("active_status", newValue),
           },
         ]
@@ -343,21 +354,20 @@ const EditCompanyAdminScreen = () => {
       if (!isAvailable) {
         if (Platform.OS === "web") {
           setAlertConfig({
-            title: "Network Unavailable",
-            message:
-              "Cannot update company admin while offline. Please try again when you have an internet connection.",
+            title: t("common.error"),
+            message: t("superAdmin.companyAdmin.offlineUpdateError"),
             onConfirm: () => setShowAlert(false),
             onCancel: () => setShowAlert(false),
-            confirmText: "OK",
-            cancelText: "Cancel",
+            confirmText: t("common.ok"),
+            cancelText: t("common.cancel"),
             isDestructive: false,
           });
           setShowAlert(true);
         } else {
           Alert.alert(
-            "Network Unavailable",
-            "Cannot update company admin while offline. Please try again when you have an internet connection.",
-            [{ text: "OK" }]
+            t("common.error"),
+            t("superAdmin.companyAdmin.offlineUpdateError"),
+            [{ text: t("common.ok") }]
           );
         }
         return;
@@ -373,9 +383,8 @@ const EditCompanyAdminScreen = () => {
         const confirmed = await new Promise<boolean>((resolve) => {
           if (Platform.OS === "web") {
             setAlertConfig({
-              title: "Change Email Address",
-              message:
-                "Changing the email address will require the company admin to verify their new email. Continue?",
+              title: t("superAdmin.companyAdmin.changeEmailTitle"),
+              message: t("superAdmin.companyAdmin.changeEmailMessage"),
               onConfirm: () => {
                 setShowAlert(false);
                 resolve(true);
@@ -384,23 +393,23 @@ const EditCompanyAdminScreen = () => {
                 setShowAlert(false);
                 resolve(false);
               },
-              confirmText: "Continue",
-              cancelText: "Cancel",
+              confirmText: t("common.continue"),
+              cancelText: t("common.cancel"),
               isDestructive: false,
             });
             setShowAlert(true);
           } else {
             Alert.alert(
-              "Change Email Address",
-              "Changing the email address will require the company admin to verify their new email. Continue?",
+              t("superAdmin.companyAdmin.changeEmailTitle"),
+              t("superAdmin.companyAdmin.changeEmailMessage"),
               [
                 {
-                  text: "Cancel",
+                  text: t("common.cancel"),
                   onPress: () => resolve(false),
                   style: "cancel",
                 },
                 {
-                  text: "Continue",
+                  text: t("common.continue"),
                   onPress: () => resolve(true),
                 },
               ]
@@ -474,7 +483,7 @@ const EditCompanyAdminScreen = () => {
       await clearCache(`company_admin_details_${adminId}`);
       await clearCache(`company_admins_*`); // Clear admin list caches
 
-      setSnackbarMessage("Company admin updated successfully");
+      setSnackbarMessage(t("superAdmin.companyAdmin.updateSuccess"));
       setSnackbarVisible(true);
 
       // Navigate back after a short delay
@@ -485,17 +494,19 @@ const EditCompanyAdminScreen = () => {
       console.error("Error updating company admin:", error);
       if (Platform.OS === "web") {
         setAlertConfig({
-          title: "Error",
-          message: error.message || "Failed to update company admin",
+          title: t("common.error"),
+          message: error.message || t("superAdmin.companyAdmin.updateError"),
           onConfirm: () => setShowAlert(false),
           onCancel: () => setShowAlert(false),
-          confirmText: "OK",
-          cancelText: "Cancel",
+          confirmText: t("common.ok"),
+          cancelText: t("common.cancel"),
           isDestructive: false,
         });
         setShowAlert(true);
       } else {
-        setSnackbarMessage(error.message || "Failed to update company admin");
+        setSnackbarMessage(
+          error.message || t("superAdmin.companyAdmin.updateError")
+        );
         setSnackbarVisible(true);
       }
     } finally {
@@ -510,7 +521,7 @@ const EditCompanyAdminScreen = () => {
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
         <AppHeader
-          title="Edit Company Admin"
+          title={t("superAdmin.companyAdmin.editAdmin")}
           showBackButton={true}
           showLogo={false}
         />
@@ -526,7 +537,7 @@ const EditCompanyAdminScreen = () => {
         style={[styles.container, { backgroundColor: theme.colors.background }]}
       >
         <AppHeader
-          title="Edit Company Admin"
+          title={t("superAdmin.companyAdmin.editAdmin")}
           showBackButton={true}
           showLogo={false}
         />
@@ -537,14 +548,14 @@ const EditCompanyAdminScreen = () => {
             onPress={fetchAdminDetails}
             style={styles.button}
           >
-            Retry
+            {t("common.retry")}
           </Button>
           <Button
             mode="outlined"
             onPress={() => navigation.goBack()}
             style={[styles.button, { marginTop: 8 }]}
           >
-            Go Back
+            {t("common.goBack")}
           </Button>
         </View>
       </SafeAreaView>
@@ -566,14 +577,14 @@ const EditCompanyAdminScreen = () => {
         isDestructive={alertConfig.isDestructive}
       />
       <AppHeader
-        title="Edit Company Admin"
+        title={t("superAdmin.companyAdmin.editAdmin")}
         showBackButton={true}
         showLogo={false}
       />
 
       {networkStatus === false && (
         <View style={styles.offlineBanner}>
-          <Text style={styles.offlineText}>You are currently offline</Text>
+          <Text style={styles.offlineText}>{t("common.offline")}</Text>
         </View>
       )}
 
@@ -605,14 +616,18 @@ const EditCompanyAdminScreen = () => {
                           style={styles.headerIcon}
                         />
                       </View>
-                      <Text style={styles.cardTitle}>Basic Information</Text>
+                      <Text style={styles.cardTitle}>
+                        {t("superAdmin.companyAdmin.basicInformation")}
+                      </Text>
                     </View>
                   </View>
 
                   <View style={styles.cardContent}>
                     {admin?.company && (
                       <View style={styles.companyContainer}>
-                        <Text style={styles.companyLabel}>Company:</Text>
+                        <Text style={styles.companyLabel}>
+                          {t("superAdmin.companies.company")}:
+                        </Text>
                         <Text style={styles.companyName}>
                           {admin.company.company_name}
                         </Text>
@@ -621,10 +636,14 @@ const EditCompanyAdminScreen = () => {
 
                     <Controller
                       control={control}
-                      rules={{ required: "First name is required" }}
+                      rules={{
+                        required: t(
+                          "superAdmin.companyAdmin.firstNameRequired"
+                        ),
+                      }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="First Name *"
+                          label={`${t("superAdmin.companyAdmin.firstName")} *`}
                           mode="outlined"
                           value={value}
                           onChangeText={onChange}
@@ -644,10 +663,12 @@ const EditCompanyAdminScreen = () => {
 
                     <Controller
                       control={control}
-                      rules={{ required: "Last name is required" }}
+                      rules={{
+                        required: t("superAdmin.companyAdmin.lastNameRequired"),
+                      }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="Last Name *"
+                          label={`${t("superAdmin.companyAdmin.lastName")} *`}
                           mode="outlined"
                           value={value}
                           onChangeText={onChange}
@@ -668,15 +689,15 @@ const EditCompanyAdminScreen = () => {
                     <Controller
                       control={control}
                       rules={{
-                        required: "Email is required",
+                        required: t("superAdmin.companyAdmin.emailRequired"),
                         pattern: {
                           value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                          message: "Invalid email address",
+                          message: t("superAdmin.companyAdmin.validEmail"),
                         },
                       }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="Email *"
+                          label={`${t("superAdmin.companyAdmin.email")} *`}
                           mode="outlined"
                           value={value}
                           onChangeText={onChange}
@@ -713,7 +734,9 @@ const EditCompanyAdminScreen = () => {
                           style={styles.headerIcon}
                         />
                       </View>
-                      <Text style={styles.cardTitle}>Additional Details</Text>
+                      <Text style={styles.cardTitle}>
+                        {t("superAdmin.companyAdmin.additionalDetails")}
+                      </Text>
                     </View>
                   </View>
 
@@ -722,7 +745,7 @@ const EditCompanyAdminScreen = () => {
                       control={control}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="Phone Number"
+                          label={t("superAdmin.companyAdmin.phoneNumber")}
                           mode="outlined"
                           value={value}
                           onChangeText={onChange}
@@ -739,7 +762,7 @@ const EditCompanyAdminScreen = () => {
                       control={control}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="Job Title"
+                          label={t("superAdmin.companyAdmin.jobTitle")}
                           mode="outlined"
                           value={value}
                           onChangeText={onChange}
@@ -752,11 +775,17 @@ const EditCompanyAdminScreen = () => {
                     />
 
                     <View style={styles.statusSection}>
-                      <Text style={styles.sectionTitle}>Admin Status</Text>
+                      <Text style={styles.sectionTitle}>
+                        {t("superAdmin.companyAdmin.status")}
+                      </Text>
                       <View style={styles.statusToggleContainer}>
                         <Text style={styles.statusToggleLabel}>
-                          Admin is{" "}
-                          {statusValue === "active" ? "Active" : "Inactive"}
+                          {t("superAdmin.companyAdmin.adminStatus", {
+                            status:
+                              statusValue === "active"
+                                ? t("common.active")
+                                : t("common.inactive"),
+                          })}
                         </Text>
                         <Controller
                           control={control}
@@ -776,8 +805,8 @@ const EditCompanyAdminScreen = () => {
                       </View>
                       <Text style={styles.helperText}>
                         {statusValue === "active"
-                          ? "Admin is currently active and can access the system."
-                          : "Admin is currently inactive and cannot access the system."}
+                          ? t("superAdmin.companyAdmin.activeHelperText")
+                          : t("superAdmin.companyAdmin.inactiveHelperText")}
                       </Text>
                     </View>
                   </View>
@@ -791,7 +820,7 @@ const EditCompanyAdminScreen = () => {
                       style={styles.button}
                       disabled={submitting}
                     >
-                      Cancel
+                      {t("common.cancel")}
                     </Button>
                     <Button
                       mode="contained"
@@ -803,7 +832,7 @@ const EditCompanyAdminScreen = () => {
                       loading={submitting}
                       disabled={submitting || !networkStatus}
                     >
-                      Update Admin
+                      {t("superAdmin.companyAdmin.updateAdmin")}
                     </Button>
                   </View>
                 </View>
