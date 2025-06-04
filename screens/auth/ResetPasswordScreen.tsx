@@ -159,7 +159,10 @@ const ResetPasswordScreen = () => {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      style={[
+        styles.container,
+        { backgroundColor: theme.colors.backgroundTertiary },
+      ]}
     >
       <StatusBar barStyle={theme.dark ? "light-content" : "dark-content"} />
 
