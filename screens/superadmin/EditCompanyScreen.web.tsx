@@ -27,6 +27,7 @@ import LoadingIndicator from "../../components/LoadingIndicator";
 import { Company } from "../../types";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Animated, { FadeIn } from "react-native-reanimated";
+import CustomSnackbar from "../../components/CustomSnackbar";
 
 type EditCompanyRouteParams = {
   companyId: string;
@@ -551,14 +552,17 @@ const EditCompanyScreen = () => {
                           </View>
                         </View>
                         <View style={styles.addStakeholderButtonContainer}>
-                        <Button
-                          mode="contained"
-                          onPress={addStakeholder}
-                          style={[styles.addStakeholderButton, { backgroundColor: theme.colors.secondary }]}
-                          disabled={submitting}
-                        >
-                          Add Stakeholder
-                        </Button>
+                          <Button
+                            mode="contained"
+                            onPress={addStakeholder}
+                            style={[
+                              styles.addStakeholderButton,
+                              { backgroundColor: theme.colors.secondary },
+                            ]}
+                            disabled={submitting}
+                          >
+                            Add Stakeholder
+                          </Button>
                         </View>
                       </View>
                     </View>
@@ -716,8 +720,6 @@ const EditCompanyScreen = () => {
                     </View>
                   </Card.Content>
                 </Card>
-
-                
               </Animated.View>
             </View>
           </View>
@@ -725,14 +727,14 @@ const EditCompanyScreen = () => {
       </KeyboardAvoidingView>
       <Surface style={styles.bottomBar}>
         <View style={styles.bottomBarContent}>
-        <Button
-              mode="outlined"
-              onPress={() => navigation.goBack()}
-              style={[styles.button, styles.cancelButton]}
-              disabled={loading}
-            >
-              Cancel
-            </Button>
+          <Button
+            mode="outlined"
+            onPress={() => navigation.goBack()}
+            style={[styles.button, styles.cancelButton]}
+            disabled={loading}
+          >
+            Cancel
+          </Button>
           <Button
             mode="contained"
             onPress={handleSubmit(onSubmit)}
@@ -744,17 +746,34 @@ const EditCompanyScreen = () => {
           </Button>
         </View>
       </Surface>
-      <Snackbar
+      <CustomSnackbar
         visible={snackbarVisible}
+        message={snackbarMessage}
         onDismiss={() => setSnackbarVisible(false)}
-        duration={3000}
+        type={
+          snackbarMessage?.includes("successful") ||
+          snackbarMessage?.includes("instructions will be sent")
+            ? "success"
+            : snackbarMessage?.includes("rate limit") ||
+                snackbarMessage?.includes("network")
+              ? "warning"
+              : "error"
+        }
+        duration={6000}
         action={{
-          label: "OK",
+          label: t("common.ok"),
           onPress: () => setSnackbarVisible(false),
         }}
-      >
-        {snackbarMessage}
-      </Snackbar>
+        style={[
+          styles.snackbar,
+          {
+            width: Platform.OS === "web" ? 700 : undefined,
+            alignSelf: "center",
+            position: Platform.OS === "web" ? "absolute" : undefined,
+            bottom: Platform.OS === "web" ? 24 : undefined,
+          },
+        ]}
+      />
     </SafeAreaView>
   );
 };
@@ -919,9 +938,7 @@ const styles = StyleSheet.create({
   addStakeholderButtonContainer: {
     marginTop: 5,
   },
-  submitButton: {
-    
-  },
+  submitButton: {},
   errorContainer: {
     flex: 1,
     justifyContent: "center",
@@ -930,6 +947,17 @@ const styles = StyleSheet.create({
   },
   button: {
     minWidth: 120,
+  },
+  snackbar: {
+    marginBottom: 16,
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.27,
+    shadowRadius: 4.65,
   },
 });
 

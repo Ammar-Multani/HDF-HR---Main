@@ -37,6 +37,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
+import CustomSnackbar from "../../components/CustomSnackbar";
 
 // Add Shimmer component for loading states
 interface ShimmerProps {
@@ -426,7 +427,11 @@ const EmployeeProfileScreen = () => {
               styles.scrollContent,
               {
                 maxWidth: isLargeScreen ? 1400 : isMediumScreen ? 1100 : "100%",
-                paddingHorizontal: isLargeScreen ? 48 : isMediumScreen ? 32 : 16,
+                paddingHorizontal: isLargeScreen
+                  ? 48
+                  : isMediumScreen
+                    ? 32
+                    : 16,
               },
             ]}
           >
@@ -477,7 +482,9 @@ const EmployeeProfileScreen = () => {
                   <View
                     style={[
                       styles.gridColumn,
-                      { flex: isLargeScreen ? 0.48 : isMediumScreen ? 0.48 : 1 },
+                      {
+                        flex: isLargeScreen ? 0.48 : isMediumScreen ? 0.48 : 1,
+                      },
                     ]}
                   >
                     {/* Company Information Card Shimmer */}
@@ -499,15 +506,27 @@ const EmployeeProfileScreen = () => {
                           ]}
                         >
                           <View style={styles.headerLeft}>
-                            <Shimmer width={32} height={32} style={{ borderRadius: 8 }} />
-                            <Shimmer width={150} height={20} style={{ marginLeft: 12 }} />
+                            <Shimmer
+                              width={32}
+                              height={32}
+                              style={{ borderRadius: 8 }}
+                            />
+                            <Shimmer
+                              width={150}
+                              height={20}
+                              style={{ marginLeft: 12 }}
+                            />
                           </View>
                         </View>
 
                         <View style={styles.cardContent}>
                           {[1, 2, 3, 4].map((_, index) => (
                             <View key={index} style={styles.infoRow}>
-                              <Shimmer width={100} height={16} style={{ marginRight: 16 }} />
+                              <Shimmer
+                                width={100}
+                                height={16}
+                                style={{ marginRight: 16 }}
+                              />
                               <Shimmer width={150} height={16} />
                             </View>
                           ))}
@@ -535,15 +554,27 @@ const EmployeeProfileScreen = () => {
                           ]}
                         >
                           <View style={styles.headerLeft}>
-                            <Shimmer width={32} height={32} style={{ borderRadius: 8 }} />
-                            <Shimmer width={150} height={20} style={{ marginLeft: 12 }} />
+                            <Shimmer
+                              width={32}
+                              height={32}
+                              style={{ borderRadius: 8 }}
+                            />
+                            <Shimmer
+                              width={150}
+                              height={20}
+                              style={{ marginLeft: 12 }}
+                            />
                           </View>
                         </View>
 
                         <View style={styles.cardContent}>
                           {[1, 2, 3, 4, 5, 6].map((_, index) => (
                             <View key={index} style={styles.infoRow}>
-                              <Shimmer width={100} height={16} style={{ marginRight: 16 }} />
+                              <Shimmer
+                                width={100}
+                                height={16}
+                                style={{ marginRight: 16 }}
+                              />
                               <Shimmer width={150} height={16} />
                             </View>
                           ))}
@@ -556,7 +587,9 @@ const EmployeeProfileScreen = () => {
                   <View
                     style={[
                       styles.gridColumn,
-                      { flex: isLargeScreen ? 0.48 : isMediumScreen ? 0.48 : 1 },
+                      {
+                        flex: isLargeScreen ? 0.48 : isMediumScreen ? 0.48 : 1,
+                      },
                     ]}
                   >
                     {/* Address Card Shimmer */}
@@ -578,15 +611,27 @@ const EmployeeProfileScreen = () => {
                           ]}
                         >
                           <View style={styles.headerLeft}>
-                            <Shimmer width={32} height={32} style={{ borderRadius: 8 }} />
-                            <Shimmer width={150} height={20} style={{ marginLeft: 12 }} />
+                            <Shimmer
+                              width={32}
+                              height={32}
+                              style={{ borderRadius: 8 }}
+                            />
+                            <Shimmer
+                              width={150}
+                              height={20}
+                              style={{ marginLeft: 12 }}
+                            />
                           </View>
                         </View>
 
                         <View style={styles.cardContent}>
                           {[1, 2, 3, 4, 5].map((_, index) => (
                             <View key={index} style={styles.infoRow}>
-                              <Shimmer width={100} height={16} style={{ marginRight: 16 }} />
+                              <Shimmer
+                                width={100}
+                                height={16}
+                                style={{ marginRight: 16 }}
+                              />
                               <Shimmer width={150} height={16} />
                             </View>
                           ))}
@@ -614,16 +659,30 @@ const EmployeeProfileScreen = () => {
                           ]}
                         >
                           <View style={styles.headerLeft}>
-                            <Shimmer width={32} height={32} style={{ borderRadius: 8 }} />
-                            <Shimmer width={150} height={20} style={{ marginLeft: 12 }} />
+                            <Shimmer
+                              width={32}
+                              height={32}
+                              style={{ borderRadius: 8 }}
+                            />
+                            <Shimmer
+                              width={150}
+                              height={20}
+                              style={{ marginLeft: 12 }}
+                            />
                           </View>
                         </View>
 
                         <View style={styles.cardContent}>
                           <View style={styles.settingItem}>
-                            <Shimmer width={200} height={24} style={{ marginBottom: 16 }} />
+                            <Shimmer
+                              width={200}
+                              height={24}
+                              style={{ marginBottom: 16 }}
+                            />
                           </View>
-                          <Divider style={{ backgroundColor: theme.colors.outline }} />
+                          <Divider
+                            style={{ backgroundColor: theme.colors.outline }}
+                          />
                           <View style={styles.settingItem}>
                             <Shimmer width={200} height={24} />
                           </View>
@@ -1857,368 +1916,387 @@ const EmployeeProfileScreen = () => {
                 </View>
               </View>
             </View>
-            </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
-        {/* Bottom Action Bar */}
-        {isEditMode && (
-          <Surface
-            style={[
-              styles.bottomBar,
-              {
-                backgroundColor: theme.colors.surfaceVariant,
-                borderTopColor: theme.colors.outline,
-              },
-            ]}
-            elevation={1}
-          >
-            <View style={styles.bottomBarContent}>
-              <Button
-                mode="outlined"
-                onPress={handleCancelEditing}
-                style={[styles.button, styles.cancelButton]}
-                disabled={updating}
-                labelStyle={{ fontFamily: "Poppins-Medium" }}
-                textColor={theme.colors.onSurface}
-              >
-                Cancel
-              </Button>
-              <Button
-                mode="contained"
-                onPress={handleUpdateProfile}
-                style={[styles.button, styles.submitButton]}
-                loading={updating}
-                disabled={updating}
-                buttonColor={theme.colors.primary}
-                labelStyle={{ fontFamily: "Poppins-Medium" }}
-              >
-                Save Changes
-              </Button>
-            </View>
-          </Surface>
-        )}
-
-        {renderSignOutModal()}
-        <Snackbar
-          visible={snackbarVisible}
-          onDismiss={() => setSnackbarVisible(false)}
-          duration={3000}
-          style={{ backgroundColor: theme.colors.surfaceVariant }}
-          theme={{
-            colors: {
-              surface: theme.colors.surfaceVariant,
-              onSurface: theme.colors.onSurface,
+      {/* Bottom Action Bar */}
+      {isEditMode && (
+        <Surface
+          style={[
+            styles.bottomBar,
+            {
+              backgroundColor: theme.colors.surfaceVariant,
+              borderTopColor: theme.colors.outline,
             },
-          }}
-          action={{
-            label: "OK",
-            onPress: () => setSnackbarVisible(false),
-          }}
+          ]}
+          elevation={1}
         >
-          {snackbarMessage}
-        </Snackbar>
-      </SafeAreaView>
-    );
-  };
+          <View style={styles.bottomBarContent}>
+            <Button
+              mode="outlined"
+              onPress={handleCancelEditing}
+              style={[styles.button, styles.cancelButton]}
+              disabled={updating}
+              labelStyle={{ fontFamily: "Poppins-Medium" }}
+              textColor={theme.colors.onSurface}
+            >
+              Cancel
+            </Button>
+            <Button
+              mode="contained"
+              onPress={handleUpdateProfile}
+              style={[styles.button, styles.submitButton]}
+              loading={updating}
+              disabled={updating}
+              buttonColor={theme.colors.primary}
+              labelStyle={{ fontFamily: "Poppins-Medium" }}
+            >
+              Save Changes
+            </Button>
+          </View>
+        </Surface>
+      )}
 
-  const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-    },
-    keyboardAvoidingView: {
-      flex: 1,
-    },
-    scrollView: {
-      flex: 1,
-    },
-    scrollContent: {
-      paddingBottom: 40,
-      maxWidth: 1200,
-      alignSelf: "center",
-      width: "100%",
-    },
-    gridContainer: {
-      flexDirection: "column",
-      gap: 16,
-    },
-    profileSection: {
-      width: "100%",
-      marginBottom: 16,
-    },
-    profileCard: {
-      borderRadius: 12,
-      overflow: "hidden",
-      elevation: 1,
-      shadowColor: "rgba(0,0,0,0.1)",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.08,
-      shadowRadius: 8,
-      backgroundColor: "#FFFFFF",
-      borderWidth: 1,
-      borderColor: "#e2e8f0",
-      marginTop: 16,
-    },
-    profileHeader: {
-      alignItems: "center",
-      paddingVertical: 20,
-      position: "relative",
-    },
-    avatar: {
-      borderWidth: 4,
-      borderColor: "#fff",
-      backgroundColor: "rgba(54,105,157,255)",
-      marginBottom: 8,
-    },
-    userName: {
-      fontSize: 20,
-      color: "#1e293b",
-      marginBottom: 4,
-    },
-    userEmail: {
-      fontSize: 14,
-      color: "#64748b",
-      marginBottom: 8,
-    },
-    roleBadge: {
-      backgroundColor: "#ffffff",
-      paddingVertical: 4,
-      paddingHorizontal: 12,
-      borderRadius: 16,
-      borderWidth: 1,
-      borderColor: "rgba(54,105,157,255)",
-      elevation: 2,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.2,
-      shadowRadius: 2,
-    },
-    roleText: {
-      fontSize: 13,
-      color: "rgba(54,105,157,255)",
-    },
-    contentContainer: {
-      flex: 1,
-    },
-    gridColumns: {
-      flexDirection: "row",
-      gap: 16,
-      flexWrap: "wrap",
-    },
-    gridColumn: {
-      minWidth: 320,
-      flex: 1,
-    },
-    detailsCard: {
-      borderRadius: 12,
-      overflow: "hidden",
-      elevation: 1,
-      shadowColor: "rgba(0,0,0,0.1)",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.08,
-      shadowRadius: 8,
-      backgroundColor: "#FFFFFF",
-      borderWidth: 1,
-      borderColor: "#e2e8f0",
-    },
-    cardHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      padding: 16,
-      borderBottomWidth: 1,
-      borderBottomColor: "#e2e8f0",
-    },
-    headerLeft: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 12,
-    },
-    iconContainer: {
-      width: 32,
-      height: 32,
-      borderRadius: 8,
-      backgroundColor: "#f1f5f9",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    headerIcon: {
-      margin: 0,
-    },
-    cardTitle: {
-      fontSize: 15,
-      fontWeight: "600",
-      color: "#1e293b",
-      fontFamily: "Poppins-SemiBold",
-    },
-    cardContent: {
-      padding: 20,
-    },
-    infoRow: {
-      flexDirection: "row",
-      marginBottom: 12,
-    },
-    infoLabel: {
-      fontFamily: "Poppins-Medium",
-      width: 120,
-      color: "#64748b",
-      fontSize: 13,
-    },
-    infoValue: {
-      flex: 1,
-      fontFamily: "Poppins-Regular",
-      color: "#1e293b",
-      fontSize: 13,
-    },
-    input: {
-      marginBottom: 16,
-      backgroundColor: "#fff",
-      height: 40,
-    },
-    updateButton: {
-      marginTop: 8,
-      borderRadius: 8,
-    },
-    settingItem: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      paddingVertical: 12,
-    },
-    settingItemContent: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 16,
-    },
-    settingText: {
-      fontSize: 14,
-      color: "#1e293b",
-    },
-    divider: {
-      height: 1,
-      backgroundColor: "#e2e8f0",
-    },
-    signOutModal: {
-      backgroundColor: "white",
-      borderRadius: 16,
-      elevation: 5,
-      overflow: "hidden",
-    },
-    signOutModalContent: {
-      alignItems: "center",
-    },
-    signOutModalHeader: {
-      alignItems: "center",
-      marginBottom: 16,
-    },
-    signOutModalTitle: {
-      fontSize: 20,
-      fontFamily: "Poppins-SemiBold",
-      color: "#1e293b",
-      marginTop: 16,
-      textAlign: "center",
-    },
-    signOutModalMessage: {
-      fontSize: 16,
-      fontFamily: "Poppins-Regular",
-      color: "#64748b",
-      textAlign: "center",
-      marginBottom: 24,
-    },
-    signOutModalActions: {
-      flexDirection: "row",
-      justifyContent: "center",
-      gap: 12,
-      marginTop: 8,
-    },
-    signOutModalButton: {
-      borderRadius: 8,
-      minWidth: 100,
-    },
-    signOutModalButtonText: {
-      fontFamily: "Poppins-Medium",
-    },
-    cancelButton: {
-      borderColor: "#e2e8f0",
-    },
-    confirmButton: {
-      borderWidth: 0,
-    },
-    selectContainer: {
-      marginBottom: 16,
-    },
-    selectLabel: {
-      fontSize: 14,
-      color: "#64748b",
-      marginBottom: 8,
-      fontFamily: "Poppins-Medium",
-    },
-    selectOptions: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 8,
-    },
-    selectOption: {
-      paddingHorizontal: 16,
-      paddingVertical: 8,
-      borderRadius: 20,
-      borderWidth: 1,
-      borderColor: "#e2e8f0",
-      backgroundColor: "#fff",
-    },
-    selectedOption: {
-      backgroundColor: "rgba(54,105,157,0.1)",
-      borderColor: "rgba(54,105,157,255)",
-    },
-    selectOptionText: {
-      color: "#64748b",
-      fontSize: 14,
-      fontFamily: "Poppins-Regular",
-    },
-    selectedOptionText: {
-      color: "rgba(54,105,157,255)",
-      fontFamily: "Poppins-Medium",
-    },
-    addressRow: {
-      flexDirection: "row",
-      gap: 16,
-      marginBottom: 16,
-    },
-    cityInput: {
-      flex: 3,
-    },
-    stateInput: {
-      flex: 2,
-    },
-    postalInput: {
-      flex: 2,
-    },
-    countryInput: {
-      flex: 3,
-    },
-    bottomBar: {
-      bottom: 0,
-      left: 0,
-      right: 0,
-      backgroundColor: "#FFFFFF",
-      borderTopWidth: 1,
-      borderTopColor: "#e2e8f0",
-      padding: 16,
-    },
-    bottomBarContent: {
-      flexDirection: "row",
-      justifyContent: "flex-end",
-      gap: 12,
-      maxWidth: 1400,
-      marginHorizontal: "auto",
-      width: "100%",
-    },
-    button: {
-      minWidth: 120,
-    },
-    submitButton: {},
-  });
+      {renderSignOutModal()}
+      <CustomSnackbar
+        visible={snackbarVisible}
+        message={snackbarMessage}
+        onDismiss={() => setSnackbarVisible(false)}
+        type={
+          snackbarMessage?.includes("successful") ||
+          snackbarMessage?.includes("instructions will be sent")
+            ? "success"
+            : snackbarMessage?.includes("rate limit") ||
+                snackbarMessage?.includes("network")
+              ? "warning"
+              : "error"
+        }
+        duration={6000}
+        action={{
+          label: t("common.ok"),
+          onPress: () => setSnackbarVisible(false),
+        }}
+        style={[
+          styles.snackbar,
+          {
+            width: Platform.OS === "web" ? 700 : undefined,
+            alignSelf: "center",
+            position: Platform.OS === "web" ? "absolute" : undefined,
+            bottom: Platform.OS === "web" ? 24 : undefined,
+          },
+        ]}
+      />
+    </SafeAreaView>
+  );
+};
 
-
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 40,
+    maxWidth: 1200,
+    alignSelf: "center",
+    width: "100%",
+  },
+  gridContainer: {
+    flexDirection: "column",
+    gap: 16,
+  },
+  profileSection: {
+    width: "100%",
+    marginBottom: 16,
+  },
+  profileCard: {
+    borderRadius: 12,
+    overflow: "hidden",
+    elevation: 1,
+    shadowColor: "rgba(0,0,0,0.1)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    marginTop: 16,
+  },
+  profileHeader: {
+    alignItems: "center",
+    paddingVertical: 20,
+    position: "relative",
+  },
+  avatar: {
+    borderWidth: 4,
+    borderColor: "#fff",
+    backgroundColor: "rgba(54,105,157,255)",
+    marginBottom: 8,
+  },
+  userName: {
+    fontSize: 20,
+    color: "#1e293b",
+    marginBottom: 4,
+  },
+  userEmail: {
+    fontSize: 14,
+    color: "#64748b",
+    marginBottom: 8,
+  },
+  roleBadge: {
+    backgroundColor: "#ffffff",
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(54,105,157,255)",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  roleText: {
+    fontSize: 13,
+    color: "rgba(54,105,157,255)",
+  },
+  contentContainer: {
+    flex: 1,
+  },
+  gridColumns: {
+    flexDirection: "row",
+    gap: 16,
+    flexWrap: "wrap",
+  },
+  gridColumn: {
+    minWidth: 320,
+    flex: 1,
+  },
+  detailsCard: {
+    borderRadius: 12,
+    overflow: "hidden",
+    elevation: 1,
+    shadowColor: "rgba(0,0,0,0.1)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  iconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "#f1f5f9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerIcon: {
+    margin: 0,
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#1e293b",
+    fontFamily: "Poppins-SemiBold",
+  },
+  cardContent: {
+    padding: 20,
+  },
+  infoRow: {
+    flexDirection: "row",
+    marginBottom: 12,
+  },
+  infoLabel: {
+    fontFamily: "Poppins-Medium",
+    width: 120,
+    color: "#64748b",
+    fontSize: 13,
+  },
+  infoValue: {
+    flex: 1,
+    fontFamily: "Poppins-Regular",
+    color: "#1e293b",
+    fontSize: 13,
+  },
+  input: {
+    marginBottom: 16,
+    backgroundColor: "#fff",
+    height: 40,
+  },
+  updateButton: {
+    marginTop: 8,
+    borderRadius: 8,
+  },
+  settingItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+  },
+  settingItemContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+  },
+  settingText: {
+    fontSize: 14,
+    color: "#1e293b",
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "#e2e8f0",
+  },
+  signOutModal: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    elevation: 5,
+    overflow: "hidden",
+  },
+  signOutModalContent: {
+    alignItems: "center",
+  },
+  signOutModalHeader: {
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  signOutModalTitle: {
+    fontSize: 20,
+    fontFamily: "Poppins-SemiBold",
+    color: "#1e293b",
+    marginTop: 16,
+    textAlign: "center",
+  },
+  signOutModalMessage: {
+    fontSize: 16,
+    fontFamily: "Poppins-Regular",
+    color: "#64748b",
+    textAlign: "center",
+    marginBottom: 24,
+  },
+  signOutModalActions: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 12,
+    marginTop: 8,
+  },
+  signOutModalButton: {
+    borderRadius: 8,
+    minWidth: 100,
+  },
+  signOutModalButtonText: {
+    fontFamily: "Poppins-Medium",
+  },
+  cancelButton: {
+    borderColor: "#e2e8f0",
+  },
+  confirmButton: {
+    borderWidth: 0,
+  },
+  selectContainer: {
+    marginBottom: 16,
+  },
+  selectLabel: {
+    fontSize: 14,
+    color: "#64748b",
+    marginBottom: 8,
+    fontFamily: "Poppins-Medium",
+  },
+  selectOptions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  selectOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    backgroundColor: "#fff",
+  },
+  selectedOption: {
+    backgroundColor: "rgba(54,105,157,0.1)",
+    borderColor: "rgba(54,105,157,255)",
+  },
+  selectOptionText: {
+    color: "#64748b",
+    fontSize: 14,
+    fontFamily: "Poppins-Regular",
+  },
+  selectedOptionText: {
+    color: "rgba(54,105,157,255)",
+    fontFamily: "Poppins-Medium",
+  },
+  addressRow: {
+    flexDirection: "row",
+    gap: 16,
+    marginBottom: 16,
+  },
+  cityInput: {
+    flex: 3,
+  },
+  stateInput: {
+    flex: 2,
+  },
+  postalInput: {
+    flex: 2,
+  },
+  countryInput: {
+    flex: 3,
+  },
+  bottomBar: {
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+    padding: 16,
+  },
+  bottomBarContent: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+    maxWidth: 1400,
+    marginHorizontal: "auto",
+    width: "100%",
+  },
+  button: {
+    minWidth: 120,
+  },
+  submitButton: {},
+  snackbar: {
+    marginBottom: 16,
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.27,
+    shadowRadius: 4.65,
+  },
+});
 
 export default EmployeeProfileScreen;

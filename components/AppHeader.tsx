@@ -141,7 +141,7 @@ const AppHeader = ({
         {showBackButton && (
           <IconButton
             icon="arrow-left"
-            iconColor={theme.colors.primary}
+            iconColor={theme.colors.textSecondary}
             size={24}
             onPress={handleBackPress}
             style={styles.backButton}

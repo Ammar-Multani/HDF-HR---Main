@@ -39,6 +39,7 @@ import {
   CompanyUser,
   UserRole,
 } from "../../types";
+import CustomSnackbar from "../../components/CustomSnackbar";
 
 type EditEmployeeRouteParams = {
   employeeId: string;
@@ -1366,7 +1367,7 @@ const EditEmployeeScreen = () => {
           navigation.navigate("Help" as never);
         }}
         showLogo={false}
-      />  
+      />
 
       {/* Show offline banner if offline */}
       {networkStatus === false && (
@@ -1402,17 +1403,34 @@ const EditEmployeeScreen = () => {
 
       {renderContent()}
 
-      <Snackbar
+      <CustomSnackbar
         visible={snackbarVisible}
+        message={snackbarMessage}
         onDismiss={() => setSnackbarVisible(false)}
-        duration={3000}
+        type={
+          snackbarMessage?.includes("successful") ||
+          snackbarMessage?.includes("instructions will be sent")
+            ? "success"
+            : snackbarMessage?.includes("rate limit") ||
+                snackbarMessage?.includes("network")
+              ? "warning"
+              : "error"
+        }
+        duration={6000}
         action={{
-          label: "OK",
+          label: t("common.ok"),
           onPress: () => setSnackbarVisible(false),
         }}
-      >
-        {snackbarMessage}
-      </Snackbar>
+        style={[
+          styles.snackbar,
+          {
+            width: Platform.OS === "web" ? 700 : undefined,
+            alignSelf: "center",
+            position: Platform.OS === "web" ? "absolute" : undefined,
+            bottom: Platform.OS === "web" ? 24 : undefined,
+          },
+        ]}
+      />
     </SafeAreaView>
   );
 };
@@ -1497,6 +1515,17 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     fontSize: 14,
     opacity: 0.7,
+  },
+  snackbar: {
+    marginBottom: 16,
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.27,
+    shadowRadius: 4.65,
   },
 });
 

@@ -18,7 +18,6 @@ import {
   TextInput,
   Button,
   useTheme,
-  Snackbar,
   HelperText,
   Surface,
   Divider,
@@ -42,6 +41,7 @@ import { useTranslation } from "react-i18next";
 import CustomLanguageSelector from "../../components/CustomLanguageSelector";
 import { globalStyles, createTextStyle } from "../../utils/globalStyles";
 import { UserStatus } from "../utils/auth";
+import CustomSnackbar from "../../components/CustomSnackbar";
 
 // Key to prevent showing loading screen right after login
 const SKIP_LOADING_KEY = "skip_loading_after_login";
@@ -149,6 +149,10 @@ const LoginScreen = () => {
             t("login.invalidPassword") || "Invalid password. Please try again."
           );
           setPassword("");
+          setSnackbarMessage(
+            t("login.invalidPassword") || "Invalid password. Please try again."
+          );
+          setSnackbarVisible(true);
         } else if (
           error.code === "auth/user-not-found" ||
           error.message?.toLowerCase().includes("user") ||
@@ -158,6 +162,11 @@ const LoginScreen = () => {
             t("login.userNotFound") ||
               "User not found. Please check your email."
           );
+          setSnackbarMessage(
+            t("login.userNotFound") ||
+              "User not found. Please check your email."
+          );
+          setSnackbarVisible(true);
         } else {
           // General error handling
           setSnackbarMessage(error.message || t("login.failedSignIn"));
@@ -418,7 +427,7 @@ const LoginScreen = () => {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <Portal >
+      <Portal>
         <Dialog
           visible={isDialogVisible}
           onDismiss={() => setIsDialogVisible(false)}
@@ -462,33 +471,35 @@ const LoginScreen = () => {
         </Dialog>
       </Portal>
 
-      <Snackbar
+      <CustomSnackbar
         visible={snackbarVisible}
+        message={snackbarMessage}
         onDismiss={() => setSnackbarVisible(false)}
-        duration={3000}
+        type={
+          snackbarMessage?.toLowerCase().includes("invalid") ||
+          snackbarMessage?.toLowerCase().includes("not found") ||
+          snackbarMessage?.toLowerCase().includes("error")
+            ? "error"
+            : snackbarMessage?.toLowerCase().includes("success")
+              ? "success"
+              : "info"
+        }
+        duration={4000}
         action={{
-          label: "OK",
+          label: t("common.ok"),
           onPress: () => setSnackbarVisible(false),
         }}
         style={[
           styles.snackbar,
           {
-            backgroundColor: theme.colors.surfaceVariant,
             maxWidth: Platform.OS === "web" ? 600 : undefined,
             alignSelf: "center",
             position: Platform.OS === "web" ? "absolute" : undefined,
             bottom: Platform.OS === "web" ? 24 : undefined,
+            borderRadius: 25,
           },
         ]}
-        theme={{
-          colors: {
-            surface: theme.colors.surfaceVariant,
-            onSurface: theme.colors.onSurface,
-          },
-        }}
-      >
-        <Text style={{ color: theme.colors.onSurface }}>{snackbarMessage}</Text>
-      </Snackbar>
+      />
     </SafeAreaView>
   );
 };

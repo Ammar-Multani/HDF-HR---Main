@@ -498,7 +498,7 @@ const CreateTaskScreen = () => {
         onDismiss={() => setSnackbarVisible(false)}
         duration={3000}
         action={{
-          label: "OK",
+          label: t("common.ok"),
           onPress: () => setSnackbarVisible(false),
         }}
       >

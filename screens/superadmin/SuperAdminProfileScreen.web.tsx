@@ -41,217 +41,8 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
+import CustomSnackbar from "../../components/CustomSnackbar";
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  keyboardAvoidingView: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 40,
-    maxWidth: 1200,
-    alignSelf: "center",
-    width: "100%",
-  },
-  gridContainer: {
-    flexDirection: "column",
-    gap: 16,
-  },
-  profileSection: {
-    width: "100%",
-    marginBottom: 24,
-  },
-  profileCard: {
-    borderRadius: 16,
-    overflow: "hidden",
-    elevation: 1,
-    shadowColor: "rgba(0,0,0,0.1)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    marginTop: 24,
-  },
-  profileHeader: {
-    alignItems: "center",
-    paddingVertical: 20,
-    position: "relative",
-  },
-  avatar: {
-    borderWidth: 4,
-    borderColor: "#fff",
-    backgroundColor: "rgba(54,105,157,255)",
-    marginBottom: 16,
-  },
-  userName: {
-    fontSize: 24,
-    color: "#1e293b",
-    marginBottom: 8,
-  },
-  userEmail: {
-    fontSize: 16,
-    color: "#64748b",
-    marginBottom: 16,
-  },
-  roleBadge: {
-    backgroundColor: "#ffffff",
-    paddingVertical: 6,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(54,105,157,255)",
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-  },
-  roleText: {
-    fontSize: 14,
-    color: "rgba(54,105,157,255)",
-  },
-  contentContainer: {
-    flex: 1,
-  },
-  gridColumns: {
-    flexDirection: "row",
-    gap: 24,
-    flexWrap: "wrap",
-  },
-  gridColumn: {
-    minWidth: 320,
-    flex: 1,
-  },
-  detailsCard: {
-    borderRadius: 16,
-    overflow: "hidden",
-    elevation: 1,
-    shadowColor: "rgba(0,0,0,0.1)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
-  },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  iconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: "#f1f5f9",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerIcon: {
-    margin: 0,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1e293b",
-    fontFamily: "Poppins-SemiBold",
-  },
-  cardContent: {
-    padding: 24,
-  },
-  input: {
-    marginBottom: 16,
-    backgroundColor: "#fff",
-  },
-  updateButton: {
-    marginTop: 8,
-    borderRadius: 12,
-    paddingVertical: 4,
-  },
-  settingItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 12,
-  },
-  settingItemContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-  },
-  settingText: {
-    fontSize: 16,
-    color: "#1e293b",
-  },
-  divider: {
-    height: 1,
-    backgroundColor: "#e2e8f0",
-  },
-  languageSelectorContainer: {
-    marginLeft: "auto",
-  },
-  signOutModal: {
-    backgroundColor: "white",
-    borderRadius: 16,
-    elevation: 5,
-    overflow: "hidden",
-  },
-  signOutModalContent: {
-    alignItems: "center",
-  },
-  signOutModalHeader: {
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  signOutModalTitle: {
-    fontSize: 20,
-    fontFamily: "Poppins-SemiBold",
-    color: "#1e293b",
-    marginTop: 16,
-    textAlign: "center",
-  },
-  signOutModalMessage: {
-    fontSize: 16,
-    fontFamily: "Poppins-Regular",
-    color: "#64748b",
-    textAlign: "center",
-    marginBottom: 24,
-  },
-  signOutModalActions: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 12,
-    marginTop: 8,
-  },
-  signOutModalButton: {
-    borderRadius: 8,
-    minWidth: 100,
-  },
-  signOutModalButtonText: {
-    fontFamily: "Poppins-Medium",
-  },
-  cancelButton: {
-    borderColor: "#e2e8f0",
-  },
-  confirmButton: {
-    borderWidth: 0,
-  },
-});
 
 // Add Shimmer component for loading states
 interface ShimmerProps {
@@ -973,19 +764,260 @@ const SuperAdminProfileScreen = () => {
       </KeyboardAvoidingView>
 
       {renderSignOutModal()}
-      <Snackbar
+      <CustomSnackbar 
         visible={snackbarVisible}
+        message={snackbarMessage}
         onDismiss={() => setSnackbarVisible(false)}
-        duration={3000}
+        type={
+          snackbarMessage?.includes("successful") ||
+          snackbarMessage?.includes("instructions will be sent")
+            ? "success"
+            : snackbarMessage?.includes("rate limit") ||
+                snackbarMessage?.includes("network")
+              ? "warning"
+              : "error"
+        }
+        duration={6000}
         action={{
-          label: "OK",
+          label: t("common.ok"),
           onPress: () => setSnackbarVisible(false),
         }}
-      >
-        {snackbarMessage}
-      </Snackbar>
+        style={[
+          styles.snackbar,
+          {
+            width: Platform.OS === "web" ? 700 : undefined,
+            alignSelf: "center",
+            position: Platform.OS === "web" ? "absolute" : undefined,
+            bottom: Platform.OS === "web" ? 24 : undefined,
+          },
+        ]}
+      />
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 40,
+    maxWidth: 1200,
+    alignSelf: "center",
+    width: "100%",
+  },
+  gridContainer: {
+    flexDirection: "column",
+    gap: 16,
+  },
+  profileSection: {
+    width: "100%",
+    marginBottom: 24,
+  },
+  profileCard: {
+    borderRadius: 16,
+    overflow: "hidden",
+    elevation: 1,
+    shadowColor: "rgba(0,0,0,0.1)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    marginTop: 24,
+  },
+  profileHeader: {
+    alignItems: "center",
+    paddingVertical: 20,
+    position: "relative",
+  },
+  avatar: {
+    borderWidth: 4,
+    borderColor: "#fff",
+    backgroundColor: "rgba(54,105,157,255)",
+    marginBottom: 16,
+  },
+  userName: {
+    fontSize: 24,
+    color: "#1e293b",
+    marginBottom: 8,
+  },
+  userEmail: {
+    fontSize: 16,
+    color: "#64748b",
+    marginBottom: 16,
+  },
+  roleBadge: {
+    backgroundColor: "#ffffff",
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(54,105,157,255)",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  roleText: {
+    fontSize: 14,
+    color: "rgba(54,105,157,255)",
+  },
+  contentContainer: {
+    flex: 1,
+  },
+  gridColumns: {
+    flexDirection: "row",
+    gap: 24,
+    flexWrap: "wrap",
+  },
+  gridColumn: {
+    minWidth: 320,
+    flex: 1,
+  },
+  detailsCard: {
+    borderRadius: 16,
+    overflow: "hidden",
+    elevation: 1,
+    shadowColor: "rgba(0,0,0,0.1)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  iconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "#f1f5f9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerIcon: {
+    margin: 0,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1e293b",
+    fontFamily: "Poppins-SemiBold",
+  },
+  cardContent: {
+    padding: 24,
+  },
+  input: {
+    marginBottom: 16,
+    backgroundColor: "#fff",
+  },
+  updateButton: {
+    marginTop: 8,
+    borderRadius: 12,
+    paddingVertical: 4,
+  },
+  settingItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+  },
+  settingItemContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+  },
+  settingText: {
+    fontSize: 16,
+    color: "#1e293b",
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "#e2e8f0",
+  },
+  languageSelectorContainer: {
+    marginLeft: "auto",
+  },
+  signOutModal: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    elevation: 5,
+    overflow: "hidden",
+  },
+  signOutModalContent: {
+    alignItems: "center",
+  },
+  signOutModalHeader: {
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  signOutModalTitle: {
+    fontSize: 20,
+    fontFamily: "Poppins-SemiBold",
+    color: "#1e293b",
+    marginTop: 16,
+    textAlign: "center",
+  },
+  signOutModalMessage: {
+    fontSize: 16,
+    fontFamily: "Poppins-Regular",
+    color: "#64748b",
+    textAlign: "center",
+    marginBottom: 24,
+  },
+  signOutModalActions: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 12,
+    marginTop: 8,
+  },
+  signOutModalButton: {
+    borderRadius: 8,
+    minWidth: 100,
+  },
+  signOutModalButtonText: {
+    fontFamily: "Poppins-Medium",
+  },
+  cancelButton: {
+    borderColor: "#e2e8f0",
+  },
+  confirmButton: {
+    borderWidth: 0,
+  },
+  snackbar: {
+    marginBottom: 16,
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.27,
+    shadowRadius: 4.65,
+  },
+  
+});
+
 
 export default SuperAdminProfileScreen;

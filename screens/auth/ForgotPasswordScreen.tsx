@@ -17,7 +17,6 @@ import {
   TextInput,
   Button,
   useTheme,
-  Snackbar,
   HelperText,
   Surface,
   Divider,
@@ -33,6 +32,8 @@ import AppHeader from "../../components/AppHeader";
 import CustomLanguageSelector from "../../components/CustomLanguageSelector";
 import { globalStyles, createTextStyle } from "../../utils/globalStyles";
 import { initEmailService } from "../../utils/emailService";
+import CustomSnackbar from "../../components/CustomSnackbar";
+import { t } from "i18next";
 
 const { width, height } = Dimensions.get("window");
 
@@ -96,6 +97,7 @@ const ForgotPasswordScreen = () => {
       if (error) {
         let errorMessage =
           error.message || "Failed to send reset password email";
+        let messageType = "error";
 
         // Handle specific error cases
         if (error.message?.includes("sender identity")) {
@@ -103,9 +105,11 @@ const ForgotPasswordScreen = () => {
             "Email service configuration error. Please contact support.";
         } else if (error.message?.includes("rate limit")) {
           errorMessage = "Too many attempts. Please try again later.";
+          messageType = "warning";
         } else if (error.message?.includes("network")) {
           errorMessage =
             "Network error. Please check your connection and try again.";
+          messageType = "warning";
         }
 
         console.error("Password reset error:", error);
@@ -174,16 +178,12 @@ const ForgotPasswordScreen = () => {
                 },
               ]}
             >
-              <BlurView
-                intensity={50}
-                tint={theme.dark ? "dark" : "light"}
+              <View
                 style={[
                   styles.glassSurface,
                   {
-                    backgroundColor: theme.dark
-                      ? "rgba(30, 30, 50, 0.75)"
-                      : "rgba(255, 255, 255, 0.75)",
-                    borderColor: theme.colors.outlineVariant,
+                    backgroundColor: theme.colors.surfaceVariant,
+                    borderColor: theme.colors.outline,
                   },
                 ]}
               >
@@ -192,7 +192,7 @@ const ForgotPasswordScreen = () => {
                   style={[
                     styles.title,
                     {
-                      color: theme.colors.primary,
+                      color: theme.colors.text,
                     },
                   ]}
                 >
@@ -279,18 +279,16 @@ const ForgotPasswordScreen = () => {
                     {loading ? (
                       <ActivityIndicator size="small" color="#ffffff" />
                     ) : (
-                      <Text style={styles.buttonLabel}>
-                        Send Reset Instructions
-                      </Text>
+                      <Text style={styles.buttonLabel}>Send Reset Mail</Text>
                     )}
                   </LinearGradient>
                 </TouchableOpacity>
-              </BlurView>
+              </View>
             </Animated.View>
 
             <Animated.View
               style={[
-                styles.loginContainer,
+                styles.socialLoginContainer,
                 {
                   opacity: fadeAnim,
                   transform: [{ translateY: slideAnim }],
@@ -298,7 +296,12 @@ const ForgotPasswordScreen = () => {
               ]}
             >
               <View style={styles.dividerContainer}>
-                <Divider style={styles.divider} />
+                <Divider
+                  style={[
+                    styles.divider,
+                    { backgroundColor: theme.colors.outline },
+                  ]}
+                />
                 <Text
                   style={[
                     styles.dividerText,
@@ -307,23 +310,34 @@ const ForgotPasswordScreen = () => {
                 >
                   OR
                 </Text>
-                <Divider style={styles.divider} />
+                <Divider
+                  style={[
+                    styles.divider,
+                    { backgroundColor: theme.colors.outline },
+                  ]}
+                />
               </View>
 
-              <View style={styles.rememberPasswordContainer}>
-                <Text style={{ color: theme.colors.onSurfaceVariant }}>
-                  Remember your password?
-                </Text>
-                <TouchableOpacity onPress={navigateToLogin}>
-                  <Text
-                    style={[styles.loginText, { color: theme.colors.primary }]}
-                  >
-                    {" Sign In"}
+              <View style={styles.contactContainer}>
+                <TouchableOpacity
+                  onPress={navigateToLogin}
+                  disabled={loading}
+                  style={styles.contactButton}
+                >
+                  <Text style={{ color: theme.colors.onSurface }}>
+                    {t("common.rememberPassword")}{" "}
+                    <Text
+                      style={[
+                        styles.contactText,
+                        { color: theme.colors.primary },
+                      ]}
+                    >
+                      {t("common.signIn")}
+                    </Text>
                   </Text>
                 </TouchableOpacity>
               </View>
 
-              {/* Language Selector */}
               <View style={styles.languageSelectorContainer}>
                 <CustomLanguageSelector compact={Platform.OS !== "web"} />
               </View>
@@ -331,18 +345,34 @@ const ForgotPasswordScreen = () => {
           </ScrollView>
         </KeyboardAvoidingView>
 
-        <Snackbar
+        <CustomSnackbar
           visible={snackbarVisible}
+          message={snackbarMessage}
           onDismiss={() => setSnackbarVisible(false)}
-          duration={3000}
+          type={
+            snackbarMessage?.includes("successful") ||
+            snackbarMessage?.includes("instructions will be sent")
+              ? "success"
+              : snackbarMessage?.includes("rate limit") ||
+                  snackbarMessage?.includes("network")
+                ? "warning"
+                : "error"
+          }
+          duration={20000}
           action={{
-            label: "OK",
+            label: t("common.ok"),
             onPress: () => setSnackbarVisible(false),
           }}
-          style={styles.snackbar}
-        >
-          {snackbarMessage}
-        </Snackbar>
+          style={[
+            styles.snackbar,
+            {
+              width: Platform.OS === "web" ? 700 : undefined,
+              alignSelf: "center",
+              position: Platform.OS === "web" ? "absolute" : undefined,
+              bottom: Platform.OS === "web" ? 24 : undefined,
+            },
+          ]}
+        />
       </LinearGradient>
     </SafeAreaView>
   );
@@ -368,6 +398,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     maxWidth: Platform.OS === "web" ? 480 : undefined,
     alignSelf: "center",
+    marginVertical: 20,
   },
   glassSurface: {
     padding: Platform.OS === "web" ? 32 : 20,
@@ -458,6 +489,28 @@ const styles = StyleSheet.create({
       fontSize: 16,
     }),
   },
+  contactContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: 4,
+    marginBottom: Platform.OS === "web" ? 32 : 24,
+  },
+  contactButton: {
+    paddingHorizontal: 16,
+  },
+  contactText: {
+    ...createTextStyle({
+      fontWeight: "600",
+      fontSize: 16,
+    }),
+  },
+  socialLoginContainer: {
+    marginTop: 8,
+    maxWidth: Platform.OS === "web" ? 480 : undefined,
+    alignSelf: "center",
+    width: "100%",
+  },
+
   languageSelectorContainer: {
     marginTop: Platform.OS === "web" ? 0 : 20,
     alignItems: "center",
@@ -467,7 +520,14 @@ const styles = StyleSheet.create({
   },
   snackbar: {
     marginBottom: 16,
-    borderRadius: 8,
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.27,
+    shadowRadius: 4.65,
   },
 });
 

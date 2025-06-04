@@ -35,6 +35,7 @@ import LoadingIndicator from "../../components/LoadingIndicator";
 import { TaskPriority, UserRole, TaskStatus } from "../../types";
 import Animated, { FadeIn } from "react-native-reanimated";
 import DateTimePicker from "react-native-modal-datetime-picker";
+import CustomSnackbar from "../../components/CustomSnackbar";
 
 interface TaskFormData {
   title: string;
@@ -563,18 +564,6 @@ const CreateTaskScreen = () => {
         </Surface>
       </KeyboardAvoidingView>
 
-      <Snackbar
-        visible={snackbarVisible}
-        onDismiss={() => setSnackbarVisible(false)}
-        duration={3000}
-        action={{
-          label: "OK",
-          onPress: () => setSnackbarVisible(false),
-        }}
-      >
-        {snackbarMessage}
-      </Snackbar>
-
       {/* Company Selection Modal */}
       <Portal>
         <Modal
@@ -643,6 +632,34 @@ const CreateTaskScreen = () => {
           </Surface>
         </Modal>
       </Portal>
+      <CustomSnackbar
+        visible={snackbarVisible}
+        message={snackbarMessage}
+        onDismiss={() => setSnackbarVisible(false)}
+        type={
+          snackbarMessage?.includes("successful") ||
+          snackbarMessage?.includes("instructions will be sent")
+            ? "success"
+            : snackbarMessage?.includes("rate limit") ||
+                snackbarMessage?.includes("network")
+              ? "warning"
+              : "error"
+        }
+        duration={6000}
+        action={{
+          label: t("common.ok"),
+          onPress: () => setSnackbarVisible(false),
+        }}
+        style={[
+          styles.snackbar,
+          {
+            width: Platform.OS === "web" ? 700 : undefined,
+            alignSelf: "center",
+            position: Platform.OS === "web" ? "absolute" : undefined,
+            bottom: Platform.OS === "web" ? 24 : undefined,
+          },
+        ]}
+      />
     </SafeAreaView>
   );
 };
@@ -857,6 +874,17 @@ const styles = StyleSheet.create({
   },
   webDateInputContainer: {
     marginBottom: 16,
+  },
+  snackbar: {
+    marginBottom: 16,
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.27,
+    shadowRadius: 4.65,
   },
 });
 
