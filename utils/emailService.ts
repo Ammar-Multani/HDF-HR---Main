@@ -5,11 +5,59 @@ import {
 } from "./emailTemplates";
 import { supabase } from "../lib/supabase";
 
+// Rate limiting configuration
+const RATE_LIMIT_WINDOW = 3600000; // 1 hour in milliseconds
+const MAX_ATTEMPTS = 4; // Maximum password reset attempts per hour
+
+// Store for rate limiting
+const resetAttempts = new Map<string, { count: number; timestamp: number }>();
+
 /**
  * Initialize email service
  */
 export const initEmailService = () => {
   console.log("Email service initialized");
+  // Clear rate limiting data periodically
+  setInterval(() => {
+    const now = Date.now();
+    for (const [email, data] of resetAttempts.entries()) {
+      if (now - data.timestamp > RATE_LIMIT_WINDOW) {
+        resetAttempts.delete(email);
+      }
+    }
+  }, RATE_LIMIT_WINDOW);
+};
+
+/**
+ * Check if an email has exceeded rate limits for password reset
+ * @param email The email address to check
+ * @returns boolean indicating if rate limit is exceeded
+ */
+const checkRateLimit = (email: string): boolean => {
+  const now = Date.now();
+  const attempts = resetAttempts.get(email);
+
+  if (!attempts) {
+    resetAttempts.set(email, { count: 1, timestamp: now });
+    return false;
+  }
+
+  if (now - attempts.timestamp > RATE_LIMIT_WINDOW) {
+    // Reset if window has passed
+    resetAttempts.set(email, { count: 1, timestamp: now });
+    return false;
+  }
+
+  if (attempts.count >= MAX_ATTEMPTS) {
+    return true;
+  }
+
+  // Increment attempt count
+  resetAttempts.set(email, {
+    count: attempts.count + 1,
+    timestamp: attempts.timestamp,
+  });
+  return false;
 };
 
 /**
@@ -26,8 +74,17 @@ export const sendPasswordResetEmail = async (
   try {
     console.log("Starting password reset email process for:", email);
 
+    // Check rate limiting
+    if (checkRateLimit(email)) {
+      console.log("Rate limit exceeded for:", email);
+      return {
+        success: false,
+        error: new Error("Too many reset attempts. Please try again later."),
+      };
+    }
+
     // Create reset link with token using the Netlify domain
-    const resetLink = `https://hdfhr.netlify.app/reset-password?token=${resetToken}`;
+    const resetLink = `${process.env.EXPO_PUBLIC_APP_URL || "https://hdfhr.netlify.app"}/reset-password?token=${resetToken}`;
     console.log("Reset link generated:", resetLink);
 
     // Generate HTML content
@@ -44,21 +101,19 @@ export const sendPasswordResetEmail = async (
       text: textContent,
     };
 
-    // Get the function URL from Supabase project
-    const functionUrl =
-      "https://rvbcezyxmlwpqpugslvg.supabase.co/functions/v1/send-email";
+    // Get the function URL from environment variable
+    const functionUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/send-email`;
 
     console.log("Preparing request to:", functionUrl);
     console.log("Request body:", JSON.stringify(body, null, 2));
 
-    // Make the request directly using fetch
+    // Make the request directly using fetch with environment variables
     const response = await fetch(functionUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization:
-          "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ2YmNlenl4bWx3cHFwdWdzbHZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcyMDAxNzksImV4cCI6MjA2Mjc3NjE3OX0.XK1SFE0QcDpkZxWV4GvQmGF2IrZKd9XOOEY1EMgrWfw",
-        Origin: "https://hdfhr.netlify.app",
+        Authorization: `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
+        Origin: process.env.EXPO_PUBLIC_APP_URL || "https://hdfhr.netlify.app",
       },
       body: JSON.stringify(body),
     });
@@ -133,10 +188,10 @@ export const sendCompanyAdminInviteEmail = async (
       `Your admin account has been created with the following credentials:\n\n` +
       `Email: ${email}\n` +
       `Temporary Password: ${password}\n\n` +
-      `Please log in at: https://hdfhr.netlify.app/login\n\n` +
+      `Please log in at: ${process.env.EXPO_PUBLIC_APP_URL || "https://hdfhr.netlify.app"}/login\n\n` +
       `IMPORTANT: Change your password immediately after logging in. ` +
       `This temporary password will expire in 7 days.\n\n` +
-      `Need help? Contact us at info@hdf.ch`;
+      `Need help? Contact us at ${process.env.EXPO_PUBLIC_SENDGRID_FROM_EMAIL || "info@hdf.ch"}`;
 
     // Create the request body
     const body = {
@@ -146,9 +201,8 @@ export const sendCompanyAdminInviteEmail = async (
       text: textContent,
     };
 
-    // Get the function URL from Supabase project
-    const functionUrl =
-      "https://rvbcezyxmlwpqpugslvg.supabase.co/functions/v1/send-email";
+    // Get the function URL from environment variable
+    const functionUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/send-email`;
 
     console.log("Preparing request to:", functionUrl);
     console.log("Request body length:", {
@@ -156,14 +210,13 @@ export const sendCompanyAdminInviteEmail = async (
       text: textContent.length,
     });
 
-    // Make the request directly using fetch
+    // Make the request directly using fetch with environment variables
     const response = await fetch(functionUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization:
-          "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ2YmNlenl4bWx3cHFwdWdzbHZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcyMDAxNzksImV4cCI6MjA2Mjc3NjE3OX0.XK1SFE0QcDpkZxWV4GvQmGF2IrZKd9XOOEY1EMgrWfw",
-        Origin: "https://hdfhr.netlify.app",
+        Authorization: `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
+        Origin: process.env.EXPO_PUBLIC_APP_URL || "https://hdfhr.netlify.app",
       },
       body: JSON.stringify(body),
     });
@@ -243,10 +296,10 @@ export const sendSuperAdminWelcomeEmail = async (
       `You've been granted Super Admin access to the HDF HR platform. Here are your login credentials:\n\n` +
       `Email: ${email}\n` +
       `Initial Password: ${password}\n\n` +
-      `Please log in at: https://hdfhr.netlify.app/login\n\n` +
+      `Please log in at: ${process.env.EXPO_PUBLIC_APP_URL || "https://hdfhr.netlify.app"}/login\n\n` +
       `IMPORTANT: Change your password immediately after logging in. ` +
       `Your initial password will expire in 7 days.\n\n` +
-      `Need help? Contact us at info@hdf.ch`;
+      `Need help? Contact us at ${process.env.EXPO_PUBLIC_SENDGRID_FROM_EMAIL || "info@hdf.ch"}`;
 
     // Create the request body
     const body = {
@@ -256,9 +309,8 @@ export const sendSuperAdminWelcomeEmail = async (
       text: textContent,
     };
 
-    // Get the function URL from Supabase project
-    const functionUrl =
-      "https://rvbcezyxmlwpqpugslvg.supabase.co/functions/v1/send-email";
+    // Get the function URL from environment variable
+    const functionUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/send-email`;
 
     console.log("Preparing request to:", functionUrl);
     console.log("Request body length:", {
@@ -266,14 +318,13 @@ export const sendSuperAdminWelcomeEmail = async (
       text: textContent.length,
     });
 
-    // Make the request directly using fetch
+    // Make the request directly using fetch with environment variables
     const response = await fetch(functionUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization:
-          "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ2YmNlenl4bWx3cHFwdWdzbHZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcyMDAxNzksImV4cCI6MjA2Mjc3NjE3OX0.XK1SFE0QcDpkZxWV4GvQmGF2IrZKd9XOOEY1EMgrWfw",
-        Origin: "https://hdfhr.netlify.app",
+        Authorization: `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
+        Origin: process.env.EXPO_PUBLIC_APP_URL || "https://hdfhr.netlify.app",
       },
       body: JSON.stringify(body),
     });

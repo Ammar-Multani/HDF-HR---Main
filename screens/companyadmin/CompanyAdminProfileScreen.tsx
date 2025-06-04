@@ -22,6 +22,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import CustomSnackbar from "../../components/CustomSnackbar";
+import { t } from "i18next";
 
 const CompanyAdminProfileScreen = () => {
   const theme = useTheme();
