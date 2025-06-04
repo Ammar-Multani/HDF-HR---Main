@@ -11,13 +11,13 @@ import {
   Dimensions,
   TouchableOpacity,
   ActivityIndicator,
+  Linking,
 } from "react-native";
 import {
   Text,
   TextInput,
   Button,
   useTheme,
-  Snackbar,
   HelperText,
   Surface,
   Divider,
@@ -26,19 +26,29 @@ import {
 } from "react-native-paper";
 import { useAuth } from "../../contexts/AuthContext";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import AppHeader from "../../components/AppHeader";
 import { createTextStyle } from "../../utils/globalStyles";
+import { useTranslation } from "react-i18next";
+import CustomLanguageSelector from "../../components/CustomLanguageSelector";
+import CustomSnackbar from "../../components/CustomSnackbar";
 
 const { width, height } = Dimensions.get("window");
+
+// Add type definition for route params
+type ResetPasswordParams = {
+  token: string;
+};
 
 const ResetPasswordScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
-  const route = useRoute();
+  const route =
+    useRoute<RouteProp<{ params: ResetPasswordParams }, "params">>();
   const { resetPassword, loading } = useAuth();
+  const { t } = useTranslation();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -76,10 +86,10 @@ const ResetPasswordScreen = () => {
 
   const validatePassword = (password: string) => {
     if (!password) {
-      setPasswordError("Password is required");
+      setPasswordError(t("resetPassword.passwordRequired"));
       return false;
     } else if (password.length < 6) {
-      setPasswordError("Password must be at least 6 characters");
+      setPasswordError(t("resetPassword.passwordLength"));
       return false;
     }
     setPasswordError("");
@@ -88,14 +98,18 @@ const ResetPasswordScreen = () => {
 
   const validateConfirmPassword = (confirmPassword: string) => {
     if (!confirmPassword) {
-      setConfirmPasswordError("Please confirm your password");
+      setConfirmPasswordError(t("resetPassword.confirmPasswordRequired"));
       return false;
     } else if (confirmPassword !== password) {
-      setConfirmPasswordError("Passwords do not match");
+      setConfirmPasswordError(t("resetPassword.passwordsDoNotMatch"));
       return false;
     }
     setConfirmPasswordError("");
     return true;
+  };
+
+  const handleContactUs = () => {
+    Linking.openURL("mailto:support@yourdomain.com?subject=Support%20Request");
   };
 
   const handleResetPassword = async () => {
@@ -107,7 +121,7 @@ const ResetPasswordScreen = () => {
     }
 
     if (!token) {
-      setSnackbarMessage("Invalid or missing reset token");
+      setSnackbarMessage(t("resetPassword.invalidToken"));
       setSnackbarVisible(true);
       return;
     }
@@ -117,12 +131,10 @@ const ResetPasswordScreen = () => {
       const { error } = await resetPassword(password, token);
 
       if (error) {
-        setSnackbarMessage(error.message || "Failed to reset password");
+        setSnackbarMessage(error.message || t("resetPassword.failedReset"));
         setSnackbarVisible(true);
       } else {
-        setSnackbarMessage(
-          "Password reset successful! You can now sign in with your new password."
-        );
+        setSnackbarMessage(t("resetPassword.successMessage"));
         setSnackbarVisible(true);
 
         // Navigate to login after a delay
@@ -132,7 +144,7 @@ const ResetPasswordScreen = () => {
       }
     } catch (err) {
       console.error("Reset password error:", err);
-      setSnackbarMessage("An unexpected error occurred");
+      setSnackbarMessage(t("common.unexpectedError"));
       setSnackbarVisible(true);
     } finally {
       setIsResetting(false);
@@ -151,7 +163,12 @@ const ResetPasswordScreen = () => {
     >
       <StatusBar barStyle={theme.dark ? "light-content" : "dark-content"} />
 
-      <AppHeader title="Reset Password" showHelpButton={true} absolute={true} />
+      <AppHeader
+        showLogo
+        showTitle={false}
+        showHelpButton={false}
+        absolute={true}
+      />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -184,7 +201,7 @@ const ResetPasswordScreen = () => {
                 variant="headlineMedium"
                 style={[styles.title, { color: theme.colors.onSurface }]}
               >
-                Set New Password
+                {t("resetPassword.title")}
               </Text>
               <Text
                 variant="bodyLarge"
@@ -193,11 +210,11 @@ const ResetPasswordScreen = () => {
                   { color: theme.colors.onSurfaceVariant },
                 ]}
               >
-                Create a new password for your account
+                {t("resetPassword.subtitle")}
               </Text>
 
               <TextInput
-                label="New Password"
+                label={t("resetPassword.newPassword")}
                 value={password}
                 onChangeText={(text) => {
                   setPassword(text);
@@ -235,7 +252,7 @@ const ResetPasswordScreen = () => {
               ) : null}
 
               <TextInput
-                label="Confirm New Password"
+                label={t("resetPassword.confirmPassword")}
                 value={confirmPassword}
                 onChangeText={(text) => {
                   setConfirmPassword(text);
@@ -300,48 +317,89 @@ const ResetPasswordScreen = () => {
                   {isResetting ? (
                     <ActivityIndicator size="small" color="#ffffff" />
                   ) : (
-                    <Text style={styles.buttonLabel}>Reset Password</Text>
+                    <Text style={styles.buttonLabel}>
+                      {t("resetPassword.resetButton")}
+                    </Text>
                   )}
                 </LinearGradient>
               </TouchableOpacity>
 
               {!token && (
                 <HelperText type="error" style={styles.tokenError}>
-                  Invalid reset link. Please request a new password reset email.
+                  {t("resetPassword.invalidLinkMessage")}
                 </HelperText>
               )}
+            </View>
+          </Animated.View>
+
+          <Animated.View
+            style={[
+              styles.socialLoginContainer,
+              {
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }],
+              },
+            ]}
+          >
+            <View style={styles.dividerContainer}>
+              <Divider
+                style={[
+                  styles.divider,
+                  { backgroundColor: theme.colors.outline },
+                ]}
+              />
+              <Text
+                style={[
+                  styles.dividerText,
+                  { color: theme.colors.onSurfaceVariant },
+                ]}
+              >
+                {t("common.or")}
+              </Text>
+              <Divider
+                style={[
+                  styles.divider,
+                  { backgroundColor: theme.colors.outline },
+                ]}
+              />
+            </View>
+
+            <View style={styles.contactContainer}>
+              <TouchableOpacity
+                onPress={handleContactUs}
+                disabled={isResetting}
+                style={styles.contactButton}
+              >
+                <Text style={{ color: theme.colors.onSurface }}>
+                  {t("common.needHelp")}{" "}
+                  <Text
+                    style={[
+                      styles.contactText,
+                      { color: theme.colors.primary },
+                    ]}
+                  >
+                    {t("common.contactUs")}
+                  </Text>
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.languageSelectorContainer}>
+              <CustomLanguageSelector compact={Platform.OS !== "web"} />
             </View>
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <Snackbar
+      <CustomSnackbar
         visible={snackbarVisible}
+        message={snackbarMessage}
         onDismiss={() => setSnackbarVisible(false)}
-        duration={3000}
         action={{
-          label: "OK",
+          label: t("common.ok"),
           onPress: () => setSnackbarVisible(false),
         }}
-        style={[
-          styles.snackbar,
-          {
-            backgroundColor: theme.colors.surfaceVariant,
-            maxWidth: Platform.OS === "web" ? 600 : undefined,
-            alignSelf: "center",
-            position: Platform.OS === "web" ? "absolute" : undefined,
-            bottom: Platform.OS === "web" ? 24 : undefined,
-          },
-        ]}
-        theme={{
-          colors: {
-            surface: theme.colors.surfaceVariant,
-            onSurface: theme.colors.onSurface,
-          },
-        }}
-      >
-        <Text style={{ color: theme.colors.onSurface }}>{snackbarMessage}</Text>
-      </Snackbar>
+      />
     </SafeAreaView>
   );
 };
@@ -430,17 +488,49 @@ const styles = StyleSheet.create({
     fontSize: 14,
     letterSpacing: 0.25,
   },
-  snackbar: {
-    marginBottom: 16,
-    borderRadius: 8,
-    elevation: 6,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    shadowOpacity: 0.27,
-    shadowRadius: 4.65,
+  dividerContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 10,
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    ...createTextStyle({
+      fontWeight: "600",
+      fontSize: 14,
+    }),
+  },
+  socialLoginContainer: {
+    marginTop: 8,
+    maxWidth: Platform.OS === "web" ? 480 : undefined,
+    alignSelf: "center",
+    width: "100%",
+  },
+  contactContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: 4,
+    marginBottom: Platform.OS === "web" ? 32 : 24,
+  },
+  contactButton: {
+    paddingHorizontal: 16,
+  },
+  contactText: {
+    ...createTextStyle({
+      fontWeight: "600",
+      fontSize: 16,
+    }),
+  },
+  languageSelectorContainer: {
+    marginTop: Platform.OS === "web" ? 0 : -15,
+    alignItems: "center",
+    width: "100%",
+    maxWidth: Platform.OS === "web" ? 320 : undefined,
+    alignSelf: "center",
   },
 });
 
