@@ -8,6 +8,8 @@
     "signIn": "Sign in",
     "loading": "Loading...",
     "notFound": "not found",
+    "needHelp": "Need help?",
+    "or": "Or",
     "retry": "Retry",
     "dismiss": "Dismiss",
     "offline": "You are offline. Some features may be limited.",
@@ -45,6 +47,21 @@
     "accountInactiveTitle": "Account Inactive",
     "accountInactiveMessage": "Your account is inactive. Please contact your administrator to activate it.",
     "userNotFound": "User not found or invalid user type."
+  },
+  "resetPassword": {
+    "title": "Set New Password",
+    "subtitle": "Create a new password for your account",
+    "newPassword": "New Password",
+    "confirmPassword": "Confirm New Password",
+    "resetButton": "Reset Password",
+    "successMessage": "Password reset successful! You can now sign in with your new password.",
+    "failedReset": "Failed to reset password",
+    "invalidToken": "Invalid or missing reset token",
+    "passwordsDoNotMatch": "Passwords do not match",
+    "passwordLength": "Password must be at least 6 characters",
+    "passwordRequired": "Password is required",
+    "confirmPasswordRequired": "Confirm password is required",
+    "contactSupport": "Contact Support"
   },
   "language": {
     "english": "English",
