@@ -538,6 +538,18 @@
     "forgotPassword": "Forgot Password",
     "resetPassword": "Reset Password"
   },
+  "forgotPassword": {
+    "title": "Forgot Password",
+    "subtitle": "Enter your email address to receive instructions for resetting your password",
+    "emailRequired": "Email is required",
+    "validEmail": "Please enter a valid email address",
+    "sendResetMail": "Send Reset Email",
+    "failedReset": "Failed to send reset email",
+    "emailServiceError": "Email configuration error. Please contact support.",
+    "tooManyAttempts": "Too many attempts. Please try again later.",
+    "networkError": "Network error. Please check your connection and try again.",
+    "resetInstructions": "If an account exists with this email address, password reset instructions will be sent."
+  },
   "navigation": {
     "dashboard": "Dashboard",
     "companies": "Companies",

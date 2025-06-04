@@ -34,6 +34,7 @@ import { globalStyles, createTextStyle } from "../../utils/globalStyles";
 import { initEmailService } from "../../utils/emailService";
 import CustomSnackbar from "../../components/CustomSnackbar";
 import { t } from "i18next";
+import { useTranslation } from "react-i18next";
 
 const { width, height } = Dimensions.get("window");
 
@@ -45,11 +46,26 @@ const ForgotPasswordScreen = () => {
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [emailError, setEmailError] = useState("");
+  const { i18n } = useTranslation();
 
   // Initialize email service
   useEffect(() => {
     initEmailService();
   }, []);
+
+  // Wait for translations to be initialized
+  if (!i18n.isInitialized) {
+    return (
+      <View
+        style={[
+          styles.container,
+          { justifyContent: "center", alignItems: "center" },
+        ]}
+      >
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+      </View>
+    );
+  }
 
   // Animation values
   const fadeAnim = useState(new Animated.Value(0))[0];
@@ -73,10 +89,10 @@ const ForgotPasswordScreen = () => {
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email) {
-      setEmailError("Email is required");
+      setEmailError(t("forgotPassword.emailRequired"));
       return false;
     } else if (!emailRegex.test(email)) {
-      setEmailError("Please enter a valid email address");
+      setEmailError(t("forgotPassword.validEmail"));
       return false;
     }
     setEmailError("");
@@ -95,20 +111,17 @@ const ForgotPasswordScreen = () => {
       const { error } = await forgotPassword(email);
 
       if (error) {
-        let errorMessage =
-          error.message || "Failed to send reset password email";
+        let errorMessage = error.message || t("forgotPassword.failedReset");
         let messageType = "error";
 
         // Handle specific error cases
         if (error.message?.includes("sender identity")) {
-          errorMessage =
-            "Email service configuration error. Please contact support.";
+          errorMessage = t("forgotPassword.emailServiceError");
         } else if (error.message?.includes("rate limit")) {
-          errorMessage = "Too many attempts. Please try again later.";
+          errorMessage = t("forgotPassword.tooManyAttempts");
           messageType = "warning";
         } else if (error.message?.includes("network")) {
-          errorMessage =
-            "Network error. Please check your connection and try again.";
+          errorMessage = t("forgotPassword.networkError");
           messageType = "warning";
         }
 
@@ -117,9 +130,7 @@ const ForgotPasswordScreen = () => {
         setSnackbarVisible(true);
       } else {
         console.log("Password reset request successful");
-        setSnackbarMessage(
-          "If an account exists with this email, password reset instructions will be sent."
-        );
+        setSnackbarMessage(t("forgotPassword.resetInstructions"));
         setSnackbarVisible(true);
 
         // Navigate back to login after a delay
@@ -129,7 +140,7 @@ const ForgotPasswordScreen = () => {
       }
     } catch (err) {
       console.error("Unexpected error during password reset:", err);
-      setSnackbarMessage("An unexpected error occurred. Please try again.");
+      setSnackbarMessage(t("common.unexpectedError"));
       setSnackbarVisible(true);
     }
   };
@@ -192,11 +203,11 @@ const ForgotPasswordScreen = () => {
                   style={[
                     styles.title,
                     {
-                      color: theme.colors.text,
+                      color: theme.colors.onSurface,
                     },
                   ]}
                 >
-                  Reset Password
+                  {t("forgotPassword.title")}
                 </Text>
                 <Text
                   variant="bodyLarge"
@@ -207,11 +218,11 @@ const ForgotPasswordScreen = () => {
                     },
                   ]}
                 >
-                  Enter your email to receive password reset instructions
+                  {t("forgotPassword.subtitle")}
                 </Text>
 
                 <TextInput
-                  label="Email"
+                  label={t("common.email")}
                   value={email}
                   onChangeText={(text) => {
                     setEmail(text);
@@ -255,23 +266,13 @@ const ForgotPasswordScreen = () => {
                   disabled={loading}
                 >
                   <LinearGradient
-                    colors={
-                      [
-                        "rgba(10,185,129,255)",
-                        "rgba(6,169,169,255)",
-                        "rgba(38,127,161,255)",
-                        "rgba(54,105,157,255)",
-                        "rgba(74,78,153,255)",
-                        "rgba(94,52,149,255)",
-                      ] as [
-                        "rgba(10,185,129,255)",
-                        "rgba(6,169,169,255)",
-                        "rgba(38,127,161,255)",
-                        "rgba(54,105,157,255)",
-                        "rgba(74,78,153,255)",
-                        "rgba(94,52,149,255)",
-                      ]
-                    }
+                    colors={[
+                      theme.colors.secondary,
+                      theme.colors.tertiary,
+                      theme.colors.quaternary,
+                      theme.colors.quinary,
+                      theme.colors.senary,
+                    ]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={styles.gradientButton}
@@ -279,7 +280,9 @@ const ForgotPasswordScreen = () => {
                     {loading ? (
                       <ActivityIndicator size="small" color="#ffffff" />
                     ) : (
-                      <Text style={styles.buttonLabel}>Send Reset Mail</Text>
+                      <Text style={styles.buttonLabel}>
+                        {t("forgotPassword.sendResetMail")}
+                      </Text>
                     )}
                   </LinearGradient>
                 </TouchableOpacity>
@@ -308,7 +311,7 @@ const ForgotPasswordScreen = () => {
                     { color: theme.colors.onSurfaceVariant },
                   ]}
                 >
-                  OR
+                  {t("common.or")}
                 </Text>
                 <Divider
                   style={[
@@ -499,10 +502,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   contactText: {
-    ...createTextStyle({
-      fontWeight: "600",
-      fontSize: 16,
-    }),
+    fontWeight: "600",
+    fontSize: 16,
+    alignSelf: "center",
+    justifyContent: "center",
+    alignItems: "center",
   },
   socialLoginContainer: {
     marginTop: 8,

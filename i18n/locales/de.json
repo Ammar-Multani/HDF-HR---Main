@@ -17,6 +17,7 @@
     "error": "Fehler",
     "confirm": "Bestätigen",
     "ok": "OK",
+    "rememberPassword": "Passwort merken?",
     "cancel": "Abbrechen",
     "dateFormat": {
       "long": "{{date, d. MMMM yyyy}}",
@@ -26,7 +27,10 @@
       "time": "{{date, HH:mm}}",
       "dateTime": "{{date, d. MMMM yyyy HH:mm}}",
       "timezone": "UTC"
-    }
+    },
+    "needHelp": "Brauchen Sie Hilfe?",
+    "or": "Oder",
+    "unexpectedError": "Ein unerwarteter Fehler ist aufgetreten"
   },
   "login": {
     "welcomeBack": "Willkommen zurück",
@@ -56,6 +60,33 @@
     "register": "Registrieren",
     "forgotPassword": "Passwort vergessen",
     "resetPassword": "Passwort zurücksetzen"
+  },
+  "forgotPassword": {
+    "title": "Passwort vergessen",
+    "subtitle": "Geben Sie Ihre E-Mail-Adresse ein, um Anweisungen zum Zurücksetzen des Passworts zu erhalten",
+    "emailRequired": "E-Mail ist erforderlich",
+    "validEmail": "Bitte geben Sie eine gültige E-Mail-Adresse ein",
+    "sendResetMail": "Reset-Mail senden",
+    "failedReset": "Fehler beim Senden der Reset-E-Mail",
+    "emailServiceError": "Fehler bei der E-Mail-Konfiguration. Bitte kontaktieren Sie den Support.",
+    "tooManyAttempts": "Zu viele Versuche. Bitte versuchen Sie es später erneut.",
+    "networkError": "Netzwerkfehler. Bitte überprüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+    "resetInstructions": "Wenn ein Konto mit dieser E-Mail-Adresse existiert, werden Anweisungen zum Zurücksetzen des Passworts gesendet."
+  },
+  "resetPassword": {
+    "title": "Neues Passwort festlegen",
+    "subtitle": "Erstellen Sie ein neues Passwort für Ihr Konto",
+    "newPassword": "Neues Passwort",
+    "confirmPassword": "Passwort bestätigen",
+    "resetButton": "Passwort zurücksetzen",
+    "successMessage": "Passwort erfolgreich zurückgesetzt! Sie können sich jetzt mit Ihrem neuen Passwort anmelden.",
+    "failedReset": "Fehler beim Zurücksetzen des Passworts",
+    "invalidToken": "Ungültiger oder fehlender Reset-Token",
+    "invalidLinkMessage": "Der Passwort-Reset-Link ist ungültig oder abgelaufen. Bitte fordern Sie einen neuen Link an.",
+    "passwordsDoNotMatch": "Passwörter stimmen nicht überein",
+    "passwordLength": "Das Passwort muss mindestens 6 Zeichen lang sein",
+    "passwordRequired": "Passwort ist erforderlich",
+    "confirmPasswordRequired": "Passwortbestätigung ist erforderlich"
   },
   "navigation": {
     "dashboard": "Armaturenbrett",
@@ -309,7 +340,6 @@
       "apply": "Anwenden",
       "updateTaskDetails": "Aufgabendetails aktualisieren",
       "selectCompany": "Unternehmen auswählen",
-      "title": "Titel",
       "titleRequired": "Titel ist erforderlich",
       "descriptionRequired": "Beschreibung ist erforderlich",
       "reminderDays": "Erinnerung (Tage vor Fälligkeit)",

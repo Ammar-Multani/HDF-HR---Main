@@ -151,18 +151,9 @@ const ResetPasswordScreen = () => {
     }
   };
 
-  const getGradientColors = () => {
-    return !theme.dark
-      ? (["#151729", "#2a2e43"] as const)
-      : ([theme.colors.background, theme.colors.surface] as const);
-  };
-
   return (
     <SafeAreaView
-      style={[
-        styles.container,
-        { backgroundColor: theme.colors.backgroundTertiary },
-      ]}
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
       <StatusBar barStyle={theme.dark ? "light-content" : "dark-content"} />
 
@@ -309,9 +300,9 @@ const ResetPasswordScreen = () => {
                   colors={[
                     theme.colors.secondary,
                     theme.colors.tertiary,
-                    (theme.colors as any).quaternary,
-                    (theme.colors as any).quinary,
-                    (theme.colors as any).senary,
+                    theme.colors.primary,
+                    theme.colors.secondary,
+                    theme.colors.tertiary,
                   ]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
@@ -395,14 +386,33 @@ const ResetPasswordScreen = () => {
       </KeyboardAvoidingView>
 
       <CustomSnackbar
-        visible={snackbarVisible}
-        message={snackbarMessage}
-        onDismiss={() => setSnackbarVisible(false)}
-        action={{
-          label: t("common.ok"),
-          onPress: () => setSnackbarVisible(false),
-        }}
-      />
+          visible={snackbarVisible}
+          message={snackbarMessage}
+          onDismiss={() => setSnackbarVisible(false)}
+          type={
+            snackbarMessage?.includes("successful") ||
+            snackbarMessage?.includes("instructions will be sent")
+              ? "success"
+              : snackbarMessage?.includes("rate limit") ||
+                  snackbarMessage?.includes("network")
+                ? "warning"
+                : "error"
+          }
+          duration={20000}
+          action={{
+            label: t("common.ok"),
+            onPress: () => setSnackbarVisible(false),
+          }}
+          style={[
+            styles.snackbar,
+            {
+              width: Platform.OS === "web" ? 700 : undefined,
+              alignSelf: "center",
+              position: Platform.OS === "web" ? "absolute" : undefined,
+              bottom: Platform.OS === "web" ? 24 : undefined,
+            },
+          ]}
+        />
     </SafeAreaView>
   );
 };
@@ -534,6 +544,17 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: Platform.OS === "web" ? 320 : undefined,
     alignSelf: "center",
+  },
+  snackbar: {
+    marginBottom: 16,
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.27,
+    shadowRadius: 4.65,
   },
 });
 
