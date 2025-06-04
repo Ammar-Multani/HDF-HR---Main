@@ -29,6 +29,7 @@ import AppHeader from "../../components/AppHeader";
 import { hashPassword } from "../../utils/auth";
 import { useTranslation } from "react-i18next";
 import Animated, { FadeIn } from "react-native-reanimated";
+import { sendCompanyAdminInviteEmail } from "../../utils/emailService";
 
 interface CompanyAdminFormData {
   first_name: string;
@@ -305,9 +306,25 @@ const CreateCompanyAdminScreen = () => {
         throw new Error(companyUserError.message);
       }
 
+      // Send invitation email to the company admin
+      const { success: emailSent, error: emailError } =
+        await sendCompanyAdminInviteEmail(
+          data.email,
+          data.password,
+          selectedCompany.company_name
+        );
+
+      if (!emailSent) {
+        console.error("Error sending invitation email:", emailError);
+        // Don't throw here, as the admin account is already created successfully
+      }
+
       setSnackbarMessage(
-        t("superAdmin.companyAdmin.adminCreatedSuccess") ||
-          "Company admin created successfully"
+        emailSent
+          ? t("superAdmin.companyAdmin.adminCreatedSuccess") ||
+              "Company admin created successfully!"
+          : t("superAdmin.companyAdmin.adminCreatedNoEmail") ||
+              "Company admin created but invitation email could not be sent."
       );
       setSnackbarVisible(true);
 
@@ -602,7 +619,7 @@ const CreateCompanyAdminScreen = () => {
                         {errors.password.message}
                       </HelperText>
                     )}
-                  <Text style={styles.helperText}>
+                    <Text style={styles.helperText}>
                       {t("superAdmin.companyAdmin.adminInviteHelper") ||
                         "An invitation email will be sent to the admin with login instructions."}
                     </Text>
@@ -658,9 +675,7 @@ const CreateCompanyAdminScreen = () => {
                       control={control}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label={
-                            t("superAdmin.companyAdmin.jobTitle") || "Job Title"
-                          }
+                          label="Job Title"
                           mode="outlined"
                           value={value}
                           onChangeText={onChange}
@@ -672,11 +687,12 @@ const CreateCompanyAdminScreen = () => {
                       name="job_title"
                     />
 
-                    
+                    <Text style={styles.helperText}>
+                      {t("superAdmin.companyAdmin.adminInviteHelper") ||
+                        "An invitation email will be sent to the admin with login instructions."}
+                    </Text>
                   </View>
                 </Surface>
-
-                
               </Animated.View>
             </View>
           </View>
@@ -743,10 +759,11 @@ const CreateCompanyAdminScreen = () => {
               onPress={handleSubmit(onSubmit)}
               style={[
                 styles.button,
-                { 
-                  backgroundColor: (loading || !selectedCompany) 
-                    ? theme.colors.surfaceDisabled 
-                    : theme.colors.primary 
+                {
+                  backgroundColor:
+                    loading || !selectedCompany
+                      ? theme.colors.surfaceDisabled
+                      : theme.colors.primary,
                 },
               ]}
               loading={loading}

@@ -26,6 +26,7 @@ import { hashPassword } from "../../utils/auth";
 import { useTranslation } from "react-i18next";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Animated, { FadeIn } from "react-native-reanimated";
+import { sendCompanyAdminInviteEmail } from "../../utils/emailService";
 
 interface CompanyFormData {
   company_name: string;
@@ -294,9 +295,26 @@ const CreateCompanyScreen = () => {
         throw companyUserError;
       }
 
+      // Send invitation email to the admin
+      const { success: emailSent, error: emailError } =
+        await sendCompanyAdminInviteEmail(
+          data.admin_email,
+          data.admin_password,
+          data.company_name
+        );
+
+      if (!emailSent) {
+        console.error("Error sending invitation email:", emailError);
+        // Don't throw here, as the company and user are already created successfully
+      }
+
       console.log(`Company admin created with email: ${data.admin_email}`);
 
-      setSnackbarMessage(t("superAdmin.companies.companyCreatedSuccess"));
+      setSnackbarMessage(
+        emailSent
+          ? t("superAdmin.companies.companyCreatedSuccess")
+          : t("superAdmin.companies.companyCreatedButEmailFailed")
+      );
       setSnackbarVisible(true);
 
       // Navigate back to companies list after a short delay
@@ -1061,8 +1079,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     alignItems: "center",
   },
-  submitButton: {
-  },
+  submitButton: {},
   helperText: {
     fontSize: 14,
     opacity: 0.7,

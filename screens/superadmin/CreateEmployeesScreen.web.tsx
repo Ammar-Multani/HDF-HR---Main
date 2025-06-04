@@ -43,6 +43,9 @@ import {
   UserStatus,
 } from "../../types";
 import { hashPassword, generateResetToken } from "../../utils/auth";
+import { sendCompanyAdminInviteEmail } from "../../utils/emailService";
+import { generateWelcomeEmail } from "../../utils/emailTemplates";
+import Constants from "expo-constants";
 
 interface EmployeeFormData {
   first_name: string;
@@ -405,7 +408,7 @@ const CreateEmployeeScreen = () => {
         .from("company_user")
         .insert([
           {
-            id: newUser.id, // Use the ID from our custom users table
+            id: newUser.id,
             ...employeeData,
           },
         ]);
@@ -422,17 +425,66 @@ const CreateEmployeeScreen = () => {
         );
       }
 
+      // Send welcome email based on role
+      console.log("Sending employee welcome email...");
+      let emailResult;
+
+      if (data.is_admin) {
+        console.log("Sending company admin invitation email...");
+        emailResult = await sendCompanyAdminInviteEmail(
+          data.email,
+          data.password,
+          selectedCompany.company_name
+        );
+      } else {
+        // Send regular employee welcome email
+        const functionUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/send-email`;
+        console.log("Sending email using function URL:", functionUrl);
+
+        const { success: emailSent, error: emailError } = await fetch(
+          functionUrl,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
+              Origin: "https://hdfhr.netlify.app",
+            },
+            body: JSON.stringify({
+              to: data.email,
+              subject: `Welcome to ${selectedCompany.company_name} on HDF HR`,
+              html: generateWelcomeEmail(
+                `${data.first_name} ${data.last_name}`,
+                data.email,
+                data.password,
+                selectedCompany.company_name
+              ),
+              text: `Welcome to ${selectedCompany.company_name} on HDF HR!\n\nHello ${data.first_name} ${data.last_name},\n\nYour account has been created with the following credentials:\n\nEmail: ${data.email}\nPassword: ${data.password}\n\nPlease log in at: https://hdfhr.netlify.app/login\n\nIMPORTANT: Change your password immediately after logging in.\n\nNeed help? Contact us at info@hdf.ch`,
+            }),
+          }
+        ).then((res) => res.json());
+
+        if (!emailSent) {
+          console.error("Error sending welcome email:", emailError);
+        } else {
+          console.log("Welcome email sent successfully");
+        }
+        emailResult = { success: emailSent };
+      }
+
       console.log(`Employee created with email: ${data.email}`);
 
       setSnackbarMessage(
-        `${data.is_admin ? "Company admin" : "Employee"} created successfully!`
+        emailResult.success
+          ? `${data.is_admin ? "Company admin" : "Employee"} created successfully!`
+          : `${data.is_admin ? "Company admin" : "Employee"} created but welcome email could not be sent.`
       );
       setSnackbarVisible(true);
 
       // Navigate back after a short delay
       setTimeout(() => {
         navigation.goBack();
-      }, 5000); // Give them time to see the password
+      }, 2000);
     } catch (error: any) {
       console.error("Error creating employee:", error);
 
@@ -670,37 +722,6 @@ const CreateEmployeeScreen = () => {
 
                     <Controller
                       control={control}
-                      rules={{
-                        required: "Email is required",
-                        pattern: {
-                          value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                          message: "Invalid email address",
-                        },
-                      }}
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <TextInput
-                          label="Email *"
-                          mode="outlined"
-                          value={value}
-                          onChangeText={onChange}
-                          onBlur={onBlur}
-                          error={!!errors.email}
-                          style={styles.input}
-                          keyboardType="email-address"
-                          autoCapitalize="none"
-                          disabled={loading}
-                        />
-                      )}
-                      name="email"
-                    />
-                    {errors.email && (
-                      <HelperText type="error">
-                        {errors.email.message}
-                      </HelperText>
-                    )}
-
-                    <Controller
-                      control={control}
                       rules={{ required: "Phone number is required" }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
@@ -808,14 +829,7 @@ const CreateEmployeeScreen = () => {
                   </View>
                 </Surface>
               </Animated.View>
-            </View>
 
-            <View
-              style={[
-                styles.gridColumn,
-                { flex: isLargeScreen ? 0.48 : isMediumScreen ? 0.48 : 1 },
-              ]}
-            >
               {/* Employment Details Card */}
               <Animated.View entering={FadeIn.delay(300)}>
                 <Surface style={styles.detailsCard}>
@@ -943,7 +957,14 @@ const CreateEmployeeScreen = () => {
                   </View>
                 </Surface>
               </Animated.View>
+            </View>
 
+            <View
+              style={[
+                styles.gridColumn,
+                { flex: isLargeScreen ? 0.48 : isMediumScreen ? 0.48 : 1 },
+              ]}
+            >
               {/* Bank Details Card */}
               <Animated.View entering={FadeIn.delay(400)}>
                 <Surface style={styles.detailsCard}>
@@ -1055,8 +1076,103 @@ const CreateEmployeeScreen = () => {
                     )}
                   </View>
                 </Surface>
+              </Animated.View>
+              {/* Account Details Card */}
+              <Animated.View entering={FadeIn.delay(400)}>
+                <Surface style={styles.detailsCard}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="bank"
+                          size={20}
+                          iconColor="#64748b"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>Account Details</Text>
+                    </View>
+                  </View>
 
-                
+                  <View style={styles.cardContent}>
+                    <Controller
+                      control={control}
+                      rules={{
+                        required: "Email is required",
+                        pattern: {
+                          value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                          message: "Invalid email address",
+                        },
+                      }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <TextInput
+                          label="Email *"
+                          mode="outlined"
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          error={!!errors.email}
+                          style={styles.input}
+                          keyboardType="email-address"
+                          autoCapitalize="none"
+                          disabled={loading}
+                        />
+                      )}
+                      name="email"
+                    />
+                    {errors.email && (
+                      <HelperText type="error">
+                        {errors.email.message}
+                      </HelperText>
+                    )}
+
+                    <Controller
+                      control={control}
+                      rules={{
+                        required: "Password is required",
+                        minLength: {
+                          value: 8,
+                          message: "Password must be at least 8 characters",
+                        },
+                      }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <TextInput
+                          label="Password *"
+                          mode="outlined"
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          error={!!errors.password}
+                          style={styles.input}
+                          secureTextEntry
+                          disabled={loading}
+                        />
+                      )}
+                      name="password"
+                    />
+                    {errors.password && (
+                      <HelperText type="error">
+                        {errors.password.message}
+                      </HelperText>
+                    )}
+
+                    <Text style={[styles.helperText, { marginBottom: 16 }]}>
+                      An invitation email will be sent to the employee with
+                      their login credentials.
+                    </Text>
+
+                    <View style={styles.adminToggleContainer}>
+                      <Text style={styles.adminToggleLabel}>
+                        Grant Admin Privileges
+                      </Text>
+                      <Switch
+                        value={isAdmin}
+                        onValueChange={handleAdminToggle}
+                        disabled={loading}
+                      />
+                    </View>
+                  </View>
+                </Surface>
               </Animated.View>
             </View>
           </View>
@@ -1107,29 +1223,30 @@ const CreateEmployeeScreen = () => {
         <View style={styles.bottomBarContent}>
           <View style={styles.actionButtons}>
             <Button
-                      mode="outlined"
-                      onPress={() => navigation.goBack()}
-                      style={styles.button}
-                      disabled={loading}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      mode="contained"
-                      onPress={handleSubmit(onSubmit)}
-                      style={[
-                        styles.button,
-                        { 
-                          backgroundColor: (loading || !selectedCompany) 
-                            ? theme.colors.disabled 
-                            : theme.colors.primary 
-                        },
-                      ]}
-                      loading={loading}
-                      disabled={loading || !selectedCompany}
-                    >
-                      Create Employee
-                    </Button>
+              mode="outlined"
+              onPress={() => navigation.goBack()}
+              style={styles.button}
+              disabled={loading}
+            >
+              Cancel
+            </Button>
+            <Button
+              mode="contained"
+              onPress={handleSubmit(onSubmit)}
+              style={[
+                styles.button,
+                {
+                  backgroundColor:
+                    loading || !selectedCompany
+                      ? theme.colors.surfaceDisabled
+                      : theme.colors.primary,
+                },
+              ]}
+              loading={loading}
+              disabled={loading || !selectedCompany}
+            >
+              Create Employee
+            </Button>
           </View>
         </View>
       </Surface>

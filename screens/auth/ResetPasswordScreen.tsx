@@ -9,6 +9,8 @@ import {
   Animated,
   StatusBar,
   Dimensions,
+  TouchableOpacity,
+  ActivityIndicator,
 } from "react-native";
 import {
   Text,
@@ -28,6 +30,7 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import AppHeader from "../../components/AppHeader";
+import { createTextStyle } from "../../utils/globalStyles";
 
 const { width, height } = Dimensions.get("window");
 
@@ -45,6 +48,7 @@ const ResetPasswordScreen = () => {
   const [passwordError, setPasswordError] = useState("");
   const [confirmPasswordError, setConfirmPasswordError] = useState("");
   const [token, setToken] = useState("");
+  const [isResetting, setIsResetting] = useState(false);
 
   // Animation values
   const fadeAnim = useState(new Animated.Value(0))[0];
@@ -108,70 +112,77 @@ const ResetPasswordScreen = () => {
       return;
     }
 
-    const { error } = await resetPassword(password, token);
+    try {
+      setIsResetting(true);
+      const { error } = await resetPassword(password, token);
 
-    if (error) {
-      setSnackbarMessage(error.message || "Failed to reset password");
-      setSnackbarVisible(true);
-    } else {
-      setSnackbarMessage(
-        "Password reset successful! You can now sign in with your new password."
-      );
-      setSnackbarVisible(true);
+      if (error) {
+        setSnackbarMessage(error.message || "Failed to reset password");
+        setSnackbarVisible(true);
+      } else {
+        setSnackbarMessage(
+          "Password reset successful! You can now sign in with your new password."
+        );
+        setSnackbarVisible(true);
 
-      // Navigate to login after a delay
-      setTimeout(() => {
-        navigation.navigate("Login" as never);
-      }, 3000);
+        // Navigate to login after a delay
+        setTimeout(() => {
+          navigation.navigate("Login" as never);
+        }, 3000);
+      }
+    } catch (err) {
+      console.error("Reset password error:", err);
+      setSnackbarMessage("An unexpected error occurred");
+      setSnackbarVisible(true);
+    } finally {
+      setIsResetting(false);
     }
   };
 
   const getGradientColors = () => {
-    return theme.dark ? ["#151729", "#2a2e43"] : ["#f0f8ff", "#e6f2ff"];
+    return !theme.dark
+      ? (["#151729", "#2a2e43"] as const)
+      : ([theme.colors.background, theme.colors.surface] as const);
   };
 
   return (
-    <>
+    <SafeAreaView
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
       <StatusBar barStyle={theme.dark ? "light-content" : "dark-content"} />
-      <LinearGradient
-        colors={getGradientColors()}
-        style={styles.container}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.keyboardAvoidingView}
-        >
-          <ScrollView
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            <Animated.View
-              style={[
-                styles.logoContainer,
-                {
-                  opacity: fadeAnim,
-                  transform: [{ translateY: slideAnim }],
-                },
-              ]}
-            >
-              <AppHeader showBackButton={true} title="Reset Password" />
-            </Animated.View>
 
-            <Animated.View
+      <AppHeader title="Reset Password" showHelpButton={true} absolute={true} />
+
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.keyboardAvoidingView}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <Animated.View
+            style={[
+              styles.formContainer,
+              {
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }],
+              },
+            ]}
+          >
+            <View
               style={[
-                styles.formContainer,
+                styles.glassSurface,
                 {
-                  opacity: fadeAnim,
-                  transform: [{ translateY: slideAnim }],
+                  backgroundColor: theme.colors.surfaceVariant,
+                  borderColor: theme.colors.outline,
                 },
               ]}
             >
               <Text
                 variant="headlineMedium"
-                style={[styles.title, { color: theme.colors.primary }]}
+                style={[styles.title, { color: theme.colors.onSurface }]}
               >
                 Set New Password
               </Text>
@@ -185,133 +196,153 @@ const ResetPasswordScreen = () => {
                 Create a new password for your account
               </Text>
 
-              <BlurView
-                intensity={50}
-                tint={theme.dark ? "dark" : "light"}
+              <TextInput
+                label="New Password"
+                value={password}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  if (passwordError) validatePassword(text);
+                  if (confirmPassword && confirmPasswordError)
+                    validateConfirmPassword(confirmPassword);
+                }}
+                mode="flat"
+                secureTextEntry={!passwordVisible}
+                style={[styles.input, { backgroundColor: "transparent" }]}
+                disabled={isResetting}
+                error={!!passwordError}
+                right={
+                  <TextInput.Icon
+                    icon={passwordVisible ? "eye-off-outline" : "eye-outline"}
+                    onPress={() => setPasswordVisible(!passwordVisible)}
+                    forceTextInputFocus={false}
+                    color={theme.colors.onSurfaceVariant}
+                  />
+                }
+                theme={{
+                  colors: {
+                    primary: theme.colors.primary,
+                    error: theme.colors.error,
+                    onSurfaceVariant: theme.colors.onSurfaceVariant,
+                  },
+                }}
+                underlineColor={theme.colors.outline}
+                activeUnderlineColor={theme.colors.primary}
+              />
+              {passwordError ? (
+                <HelperText type="error" style={{ color: theme.colors.error }}>
+                  {passwordError}
+                </HelperText>
+              ) : null}
+
+              <TextInput
+                label="Confirm New Password"
+                value={confirmPassword}
+                onChangeText={(text) => {
+                  setConfirmPassword(text);
+                  if (confirmPasswordError) validateConfirmPassword(text);
+                }}
+                mode="flat"
+                secureTextEntry={!confirmPasswordVisible}
+                style={[styles.input, { backgroundColor: "transparent" }]}
+                disabled={isResetting}
+                error={!!confirmPasswordError}
+                right={
+                  <TextInput.Icon
+                    icon={
+                      confirmPasswordVisible ? "eye-off-outline" : "eye-outline"
+                    }
+                    onPress={() =>
+                      setConfirmPasswordVisible(!confirmPasswordVisible)
+                    }
+                    forceTextInputFocus={false}
+                    color={theme.colors.onSurfaceVariant}
+                  />
+                }
+                theme={{
+                  colors: {
+                    primary: theme.colors.primary,
+                    error: theme.colors.error,
+                    onSurfaceVariant: theme.colors.onSurfaceVariant,
+                  },
+                }}
+                underlineColor={theme.colors.outline}
+                activeUnderlineColor={theme.colors.primary}
+              />
+              {confirmPasswordError ? (
+                <HelperText type="error" style={{ color: theme.colors.error }}>
+                  {confirmPasswordError}
+                </HelperText>
+              ) : null}
+
+              <TouchableOpacity
                 style={[
-                  styles.glassSurface,
+                  styles.button,
                   {
-                    backgroundColor: theme.dark
-                      ? "rgba(30, 30, 50, 0.75)"
-                      : "rgba(255, 255, 255, 0.75)",
+                    borderColor: theme.colors.outline,
+                    backgroundColor: theme.colors.surfaceVariant,
                   },
                 ]}
+                onPress={handleResetPassword}
+                disabled={isResetting || !token}
               >
-                <TextInput
-                  label="New Password"
-                  value={password}
-                  onChangeText={(text) => {
-                    setPassword(text);
-                    if (passwordError) validatePassword(text);
-                    if (confirmPassword && confirmPasswordError)
-                      validateConfirmPassword(confirmPassword);
-                  }}
-                  mode="flat"
-                  secureTextEntry={!passwordVisible}
-                  style={styles.input}
-                  disabled={loading}
-                  error={!!passwordError}
-                  left={
-                    <TextInput.Icon icon="lock" color={theme.colors.primary} />
-                  }
-                  right={
-                    <TextInput.Icon
-                      icon={passwordVisible ? "eye-off" : "eye"}
-                      onPress={() => setPasswordVisible(!passwordVisible)}
-                      forceTextInputFocus={false}
-                      color={theme.colors.onSurfaceVariant}
-                    />
-                  }
-                  theme={{
-                    colors: {
-                      background: "transparent",
-                    },
-                  }}
-                  underlineColor="transparent"
-                  activeUnderlineColor={theme.colors.primary}
-                />
-                {passwordError ? (
-                  <HelperText type="error">{passwordError}</HelperText>
-                ) : null}
-
-                <TextInput
-                  label="Confirm New Password"
-                  value={confirmPassword}
-                  onChangeText={(text) => {
-                    setConfirmPassword(text);
-                    if (confirmPasswordError) validateConfirmPassword(text);
-                  }}
-                  mode="flat"
-                  secureTextEntry={!confirmPasswordVisible}
-                  style={styles.input}
-                  disabled={loading}
-                  error={!!confirmPasswordError}
-                  left={
-                    <TextInput.Icon
-                      icon="lock-check"
-                      color={theme.colors.primary}
-                    />
-                  }
-                  right={
-                    <TextInput.Icon
-                      icon={confirmPasswordVisible ? "eye-off" : "eye"}
-                      onPress={() =>
-                        setConfirmPasswordVisible(!confirmPasswordVisible)
-                      }
-                      forceTextInputFocus={false}
-                      color={theme.colors.onSurfaceVariant}
-                    />
-                  }
-                  theme={{
-                    colors: {
-                      background: "transparent",
-                    },
-                  }}
-                  underlineColor="transparent"
-                  activeUnderlineColor={theme.colors.primary}
-                />
-                {confirmPasswordError ? (
-                  <HelperText type="error">{confirmPasswordError}</HelperText>
-                ) : null}
-
-                <Button
-                  mode="contained"
-                  onPress={handleResetPassword}
-                  style={styles.button}
-                  contentStyle={styles.buttonContent}
-                  loading={loading}
-                  disabled={loading || !token}
-                  buttonColor={theme.colors.primary}
-                  labelStyle={styles.buttonLabel}
+                <LinearGradient
+                  colors={[
+                    theme.colors.secondary,
+                    theme.colors.tertiary,
+                    (theme.colors as any).quaternary,
+                    (theme.colors as any).quinary,
+                    (theme.colors as any).senary,
+                  ]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.gradientButton}
                 >
-                  Reset Password
-                </Button>
+                  {isResetting ? (
+                    <ActivityIndicator size="small" color="#ffffff" />
+                  ) : (
+                    <Text style={styles.buttonLabel}>Reset Password</Text>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
 
-                {!token && (
-                  <HelperText type="error" style={styles.tokenError}>
-                    Invalid reset link. Please request a new password reset
-                    email.
-                  </HelperText>
-                )}
-              </BlurView>
-            </Animated.View>
-          </ScrollView>
-        </KeyboardAvoidingView>
+              {!token && (
+                <HelperText type="error" style={styles.tokenError}>
+                  Invalid reset link. Please request a new password reset email.
+                </HelperText>
+              )}
+            </View>
+          </Animated.View>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
-        <Snackbar
-          visible={snackbarVisible}
-          onDismiss={() => setSnackbarVisible(false)}
-          duration={3000}
-          action={{
-            label: "OK",
-            onPress: () => setSnackbarVisible(false),
-          }}
-          style={styles.snackbar}
-        >
-          {snackbarMessage}
-        </Snackbar>
-      </LinearGradient>
-    </>
+      <Snackbar
+        visible={snackbarVisible}
+        onDismiss={() => setSnackbarVisible(false)}
+        duration={3000}
+        action={{
+          label: "OK",
+          onPress: () => setSnackbarVisible(false),
+        }}
+        style={[
+          styles.snackbar,
+          {
+            backgroundColor: theme.colors.surfaceVariant,
+            maxWidth: Platform.OS === "web" ? 600 : undefined,
+            alignSelf: "center",
+            position: Platform.OS === "web" ? "absolute" : undefined,
+            bottom: Platform.OS === "web" ? 24 : undefined,
+          },
+        ]}
+        theme={{
+          colors: {
+            surface: theme.colors.surfaceVariant,
+            onSurface: theme.colors.onSurface,
+          },
+        }}
+      >
+        <Text style={{ color: theme.colors.onSurface }}>{snackbarMessage}</Text>
+      </Snackbar>
+    </SafeAreaView>
   );
 };
 
@@ -326,80 +357,72 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: "center",
     padding: 24,
-  },
-  logoContainer: {
+    paddingTop: Platform.OS === "web" ? 70 : 0,
+    maxWidth: Platform.OS === "web" ? 1000 : undefined,
+    alignSelf: "center",
     width: "100%",
-    marginBottom: 12,
-  },
-  headerContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    width: "100%",
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-  },
-  logoWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  logo: {
-    width: 40,
-    height: 40,
-    marginRight: 8,
-  },
-  logoText: {
-    fontWeight: "bold",
-  },
-  helpButton: {
-    margin: 0,
   },
   title: {
-    fontWeight: "bold",
-    marginBottom: 8,
+    ...createTextStyle({
+      fontWeight: "600",
+      fontSize: 24,
+      marginBottom: 8,
+      textAlign: Platform.OS === "web" ? "center" : "left",
+    }),
   },
   subtitle: {
-    marginBottom: 24,
+    ...createTextStyle({
+      fontWeight: "400",
+      fontSize: 16,
+      marginBottom: 24,
+      textAlign: Platform.OS === "web" ? "center" : "left",
+    }),
   },
   formContainer: {
     width: "100%",
-    marginBottom: 20,
+    marginBottom: 10,
+    marginTop: Platform.OS === "web" ? 60 : 100,
+    maxWidth: Platform.OS === "web" ? 460 : undefined,
+    maxHeight: Platform.OS === "web" ? height - 100 : undefined,
+    alignSelf: "center",
   },
   glassSurface: {
-    padding: 20,
+    padding: Platform.OS === "web" ? 32 : 20,
     borderRadius: 16,
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.2)",
-    elevation: 0,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    backdropFilter: "blur(10px)",
+    borderWidth: 0.3,
+    overflow: "hidden",
   },
   input: {
     marginBottom: 16,
     backgroundColor: "transparent",
     height: 60,
+    ...createTextStyle({
+      fontWeight: "400",
+    }),
   },
   button: {
     marginTop: 24,
     borderRadius: 30,
-    elevation: 0,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+    overflow: "hidden",
+    borderWidth: 0.3,
+    maxWidth: Platform.OS === "web" ? 320 : undefined,
+    alignSelf: "center",
+    width: "100%",
   },
-  buttonContent: {
-    paddingVertical: 10,
+  gradientButton: {
+    width: "100%",
     height: 56,
+    borderRadius: 30,
+    justifyContent: "center",
+    alignItems: "center",
   },
   buttonLabel: {
-    fontSize: 16,
-    letterSpacing: 1,
-    fontWeight: "600",
+    ...createTextStyle({
+      fontWeight: "600",
+      fontSize: 16,
+      letterSpacing: 1,
+      color: "#ffffff",
+    }),
   },
   tokenError: {
     textAlign: "center",
@@ -410,6 +433,14 @@ const styles = StyleSheet.create({
   snackbar: {
     marginBottom: 16,
     borderRadius: 8,
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.27,
+    shadowRadius: 4.65,
   },
 });
 

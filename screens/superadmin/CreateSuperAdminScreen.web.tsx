@@ -26,6 +26,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
 import { UserRole, UserStatus } from "../../types";
 import { hashPassword } from "../../utils/auth";
+import { sendSuperAdminWelcomeEmail } from "../../utils/emailService";
 import Animated, { FadeIn } from "react-native-reanimated";
 
 interface AdminFormData {
@@ -181,7 +182,20 @@ const CreateSuperAdminScreen = () => {
         throw adminRecordError;
       }
 
-      setSnackbarMessage("Super Admin created successfully!");
+      // Send welcome email to the super admin
+      const { success: emailSent, error: emailError } =
+        await sendSuperAdminWelcomeEmail(data.name, data.email, data.password);
+
+      if (!emailSent) {
+        console.error("Error sending welcome email:", emailError);
+        // Don't throw here, as the admin account is already created successfully
+      }
+
+      setSnackbarMessage(
+        emailSent
+          ? "Super Admin created successfully!"
+          : "Super Admin created but welcome email could not be sent."
+      );
       setSnackbarVisible(true);
 
       // Reset form
@@ -353,35 +367,33 @@ const CreateSuperAdminScreen = () => {
                     </Text>
                   </View>
                 </Surface>
-
-
               </Animated.View>
             </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
       <Surface style={styles.bottomBar}>
-      <View style={styles.bottomBarContent}>
-                  <Button
-                    mode="outlined"
-                    onPress={() => navigation.goBack()}
-                    style={styles.button}
-                    disabled={loading}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    mode="contained"
-                    onPress={handleSubmit(onSubmit)}
-                    style={styles.button}
-                    loading={loading}
-                    disabled={loading}
-                    buttonColor={theme.colors.primary}
-                  >
-                    Create Super Admin
-                  </Button>
-                </View>
-                </Surface>
+        <View style={styles.bottomBarContent}>
+          <Button
+            mode="outlined"
+            onPress={() => navigation.goBack()}
+            style={styles.button}
+            disabled={loading}
+          >
+            Cancel
+          </Button>
+          <Button
+            mode="contained"
+            onPress={handleSubmit(onSubmit)}
+            style={styles.button}
+            loading={loading}
+            disabled={loading}
+            buttonColor={theme.colors.primary}
+          >
+            Create Super Admin
+          </Button>
+        </View>
+      </Surface>
       <Snackbar
         visible={snackbarVisible}
         onDismiss={() => setSnackbarVisible(false)}
