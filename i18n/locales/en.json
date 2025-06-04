@@ -469,6 +469,7 @@
       "helperText": "A super admin account will be created and they can log in using the provided email and password."
     },
     "employees": {
+      "title": "Employees",
       "createEmployee": "Create Employee",
       "companySelection": "Company Selection",
       "selectCompany": "Select Company",
@@ -530,5 +531,43 @@
       "selectCompanyRequired": "Please select a company",
       "offlineCreateError": "Cannot create employee while offline. Please check your internet connection and try again."
     }
+  },
+  "auth": {
+    "login": "Login",
+    "register": "Register",
+    "forgotPassword": "Forgot Password",
+    "resetPassword": "Reset Password"
+  },
+  "navigation": {
+    "dashboard": "Dashboard",
+    "companies": "Companies",
+    "users": "Users",
+    "forms": "Forms",
+    "receipts": "Receipts",
+    "tasks": "Tasks",
+    "profile": "Profile",
+    "employees": "Employees",
+    "companyDetails": "Company Details",
+    "createCompany": "Create Company",
+    "editCompany": "Edit Company",
+    "taskDetails": "Task Details",
+    "createTask": "Create Task",
+    "editTask": "Edit Task",
+    "createSuperAdmin": "Create Super Admin",
+    "superAdminDetails": "Super Admin Details",
+    "editSuperAdmin": "Edit Super Admin",
+    "companyAdminDetails": "Company Admin Details",
+    "editCompanyAdmin": "Edit Company Admin",
+    "employeeDetails": "Employee Details",
+    "createCompanyAdmin": "Create Company Admin",
+    "createEmployee": "Create Employee",
+    "editEmployee": "Edit Employee",
+    "formDetails": "Form Details",
+    "createReceipt": "Create Receipt",
+    "receiptDetails": "Receipt Details",
+    "editReceipt": "Edit Receipt",
+    "createAccidentReport": "Create Accident Report",
+    "createIllnessReport": "Create Illness Report",
+    "createStaffDeparture": "Create Staff Departure"
   }
 }

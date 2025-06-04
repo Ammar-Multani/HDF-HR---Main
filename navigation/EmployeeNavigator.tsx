@@ -3,7 +3,10 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useTheme } from "react-native-paper";
-import { useNavigationContainerRef, useNavigation } from "@react-navigation/native";
+import {
+  useNavigationContainerRef,
+  useNavigation,
+} from "@react-navigation/native";
 import {
   View,
   StyleSheet,
@@ -15,6 +18,7 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import Text from "../components/Text";
 import { SidebarLayout } from "./components/SidebarLayout";
+import { t } from "i18next";
 
 // Employee Screens
 import EmployeeDashboard from "../screens/employee/EmployeeDashboard";
@@ -81,9 +85,21 @@ const WebStackNavigator = () => {
   const navigation = useNavigation();
 
   const navigationItems = [
-    { icon: "home" as const, label: "Dashboard", screen: "Dashboard" },
-    { icon: "file-document" as const, label: "Forms", screen: "Forms" },
-    { icon: "account-circle" as const, label: "Profile", screen: "Profile" },
+    {
+      icon: "home" as const,
+      label: t("navigation.dashboard"),
+      screen: "Dashboard",
+    },
+    {
+      icon: "file-document" as const,
+      label: t("navigation.forms"),
+      screen: "Forms",
+    },
+    {
+      icon: "account-circle" as const,
+      label: t("navigation.profile"),
+      screen: "Profile",
+    },
   ];
 
   // Create a stack navigator for the content area
@@ -92,55 +108,55 @@ const WebStackNavigator = () => {
   // Content area component that includes both main screens and stack screens
   const ContentArea = () => {
     return (
-      <ContentStack.Navigator 
-        screenOptions={{ 
+      <ContentStack.Navigator
+        screenOptions={{
           headerShown: false,
-          animation: 'none'
+          animation: "none",
         }}
         initialRouteName={activeScreen}
       >
         {/* Main screens */}
-        <ContentStack.Screen 
-          name="Dashboard" 
+        <ContentStack.Screen
+          name="Dashboard"
           component={EmployeeDashboard}
-          options={{ title: "Dashboard - HDF HR" }}
+          options={{ title: t("navigation.dashboard") }}
         />
-        <ContentStack.Screen 
-          name="Forms" 
+        <ContentStack.Screen
+          name="Forms"
           component={EmployeeFormsScreen}
-          options={{ title: "Forms - HDF HR" }}
+          options={{ title: t("navigation.forms") }}
         />
-        <ContentStack.Screen 
-          name="Profile" 
+        <ContentStack.Screen
+          name="Profile"
           component={EmployeeProfileScreen}
-          options={{ title: "Profile - HDF HR" }}
+          options={{ title: t("navigation.profile") }}
         />
-        
+
         {/* Stack screens */}
-        <ContentStack.Screen 
-          name="CreateAccidentReport" 
+        <ContentStack.Screen
+          name="CreateAccidentReport"
           component={CreateAccidentReportScreen}
-          options={{ title: "Create Accident Report - HDF HR" }}
+          options={{ title: t("navigation.createAccidentReport") }}
         />
-        <ContentStack.Screen 
-          name="CreateIllnessReport" 
+        <ContentStack.Screen
+          name="CreateIllnessReport"
           component={CreateIllnessReportScreen}
-          options={{ title: "Create Illness Report - HDF HR" }}
+          options={{ title: t("navigation.createIllnessReport") }}
         />
-        <ContentStack.Screen 
-          name="CreateStaffDeparture" 
+        <ContentStack.Screen
+          name="CreateStaffDeparture"
           component={CreateStaffDepartureScreen}
-          options={{ title: "Create Staff Departure - HDF HR" }}
+          options={{ title: t("navigation.createStaffDeparture") }}
         />
-        <ContentStack.Screen 
-          name="FormDetails" 
+        <ContentStack.Screen
+          name="FormDetails"
           component={EmployeeFormDetailsScreen}
-          options={{ title: "Form Details - HDF HR" }}
+          options={{ title: t("navigation.formDetails") }}
         />
-        <ContentStack.Screen 
-          name="TaskDetails" 
+        <ContentStack.Screen
+          name="TaskDetails"
           component={EmployeeTaskDetailsScreen}
-          options={{ title: "Task Details - HDF HR" }}
+          options={{ title: t("navigation.taskDetails") }}
         />
       </ContentStack.Navigator>
     );

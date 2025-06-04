@@ -25,6 +25,7 @@ export const NavItem = ({
         alignItems: "center",
         paddingVertical: 10,
         paddingHorizontal: 15,
+        marginHorizontal: -7,
         borderRadius: 10,
         marginBottom: 10,
         backgroundColor: isActive ? "rgba(255, 255, 255, 0.15)" : "transparent",
@@ -44,7 +45,7 @@ export const NavItem = ({
           justifyContent: "center",
         }}
       >
-        <Text variant={"semibold"} style={{ fontSize: 16, color: "#fff" }}>
+        <Text variant={"semibold"} style={{ fontSize: 14, color: "#fff" }}>
           {label}
         </Text>
       </View>

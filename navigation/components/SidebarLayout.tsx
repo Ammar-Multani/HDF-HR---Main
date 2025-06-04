@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
     height: "100%",
   },
   sidebar: {
-    width: 220,
+    width: 210,
     height: "100%",
     backgroundColor: "transparent",
     paddingTop: 20,
