@@ -70,6 +70,19 @@ async function sendWithSendGrid(
   html: string,
   text: string
 ) {
+  if (!SENDGRID_API_KEY) {
+    console.error("SendGrid API key is missing");
+    throw new Error("SendGrid API key is not configured");
+  }
+
+  if (!FROM_EMAIL || !FROM_NAME) {
+    console.error("SendGrid sender details missing:", {
+      FROM_EMAIL,
+      FROM_NAME,
+    });
+    throw new Error("SendGrid sender details are not configured");
+  }
+
   const data = {
     personalizations: [
       {
@@ -93,21 +106,42 @@ async function sendWithSendGrid(
     ],
   };
 
-  const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${SENDGRID_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(data),
+  console.log("Sending with SendGrid:", {
+    to,
+    from: FROM_EMAIL,
+    fromName: FROM_NAME,
+    subject,
+    apiKeyLength: SENDGRID_API_KEY.length,
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`SendGrid API error: ${errorText}`);
-  }
+  try {
+    const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${SENDGRID_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    });
 
-  return response;
+    console.log("SendGrid API response status:", response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("SendGrid API error response:", {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+        body: errorText,
+      });
+      throw new Error(`SendGrid API error: ${errorText}`);
+    }
+
+    return response;
+  } catch (error) {
+    console.error("SendGrid request failed:", error);
+    throw error;
+  }
 }
 
 serve(async (req) => {
@@ -127,22 +161,6 @@ serve(async (req) => {
     if (req.method !== "POST") {
       throw new Error("Method not allowed");
     }
-
-    // Verify email service configuration based on environment
-    if (NODE_ENV === "development") {
-      if (!MAILTRAP_HOST || !MAILTRAP_USER || !MAILTRAP_PASS) {
-        console.error("Mailtrap configuration missing");
-        throw new Error("Email service not properly configured");
-      }
-    } else {
-      if (!SENDGRID_API_KEY || !FROM_EMAIL || !FROM_NAME) {
-        console.error("SendGrid configuration missing");
-        throw new Error("Email service not properly configured");
-      }
-    }
-
-    // Log request headers for debugging
-    console.log("Request headers:", Object.fromEntries(req.headers.entries()));
 
     // Get and validate request body
     let body;
@@ -176,14 +194,25 @@ serve(async (req) => {
     // Send email based on environment
     let response;
     if (NODE_ENV === "development") {
+      // Verify Mailtrap configuration
+      if (!MAILTRAP_HOST || !MAILTRAP_USER || !MAILTRAP_PASS) {
+        console.error("Mailtrap configuration missing");
+        throw new Error("Mailtrap is not properly configured");
+      }
       response = await sendWithMailtrap(to, subject, html, text);
     } else {
+      // Verify SendGrid configuration
+      if (!SENDGRID_API_KEY || !FROM_EMAIL || !FROM_NAME) {
+        console.error("SendGrid configuration missing");
+        throw new Error("SendGrid is not properly configured");
+      }
       response = await sendWithSendGrid(to, subject, html, text);
     }
 
     return new Response(
       JSON.stringify({
         success: true,
+        environment: NODE_ENV,
       }),
       {
         headers: {
@@ -199,6 +228,7 @@ serve(async (req) => {
         success: false,
         error: error.message,
         details: error.stack,
+        environment: NODE_ENV,
       }),
       {
         status: 400,
