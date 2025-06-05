@@ -185,12 +185,22 @@ const CreateSuperAdminScreen = () => {
       }
 
       // Send welcome email to the super admin
+      console.log(
+        "Attempting to send super admin welcome email to:",
+        data.email
+      );
       const { success: emailSent, error: emailError } =
         await sendSuperAdminWelcomeEmail(data.name, data.email, data.password);
 
       if (!emailSent) {
-        console.error("Error sending welcome email:", emailError);
+        console.error("Error sending welcome email:", {
+          error: emailError,
+          message: emailError?.message,
+          stack: emailError?.stack,
+        });
         // Don't throw here, as the admin account is already created successfully
+      } else {
+        console.log("Welcome email sent successfully to:", data.email);
       }
 
       setSnackbarMessage(

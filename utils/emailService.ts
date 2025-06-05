@@ -3,7 +3,7 @@ import {
   generateAdminInviteEmail,
   generateSuperAdminWelcomeEmail,
 } from "./emailTemplates";
-import { supabase } from "../lib/supabase";
+import { emailConfig } from "./emailConfig";
 
 // Rate limiting configuration
 const RATE_LIMIT_WINDOW = 3600000; // 1 hour in milliseconds
@@ -61,7 +61,51 @@ const checkRateLimit = (email: string): boolean => {
 };
 
 /**
- * Send a password reset email using Supabase Edge Function
+ * Send an email using the configured transport
+ * @param options Email options
+ * @returns Promise with the send result
+ */
+async function sendEmail(options: {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+}) {
+  try {
+    console.log("📧 Starting email send process:", {
+      to: options.to,
+      subject: options.subject,
+      environment: process.env.NODE_ENV,
+    });
+
+    const mailOptions = {
+      from: emailConfig.from,
+      ...options,
+    };
+
+    console.log("📧 Using email configuration:", {
+      from: emailConfig.from,
+      mailtrapHost: process.env.EXPO_PUBLIC_MAILTRAP_HOST,
+      mailtrapPort: process.env.EXPO_PUBLIC_MAILTRAP_PORT,
+      mailtrapUser: process.env.EXPO_PUBLIC_MAILTRAP_USER ? "Set" : "Not Set",
+      isDevelopment: process.env.NODE_ENV === "development",
+    });
+
+    const result = await emailConfig.transport.sendMail(mailOptions);
+    console.log("📧 Email send result:", result);
+    return { success: true, result };
+  } catch (error) {
+    console.error("❌ Error sending email:", {
+      error,
+      message: error instanceof Error ? error.message : "Unknown error",
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    throw error;
+  }
+}
+
+/**
+ * Send a password reset email
  *
  * @param email The recipient's email address
  * @param resetToken The password reset token
@@ -83,7 +127,6 @@ export const sendPasswordResetEmail = async (
       };
     }
 
-    // Create reset link with token using the Netlify domain
     const resetLink = `${process.env.EXPO_PUBLIC_APP_URL || "https://hdfhr.netlify.app"}/reset-password?token=${resetToken}`;
     console.log("Reset link generated:", resetLink);
 
@@ -93,60 +136,12 @@ export const sendPasswordResetEmail = async (
     // Plain text version
     const textContent = `Reset your password by clicking this link: ${resetLink}. This link will expire in 1 hour.`;
 
-    // Create the request body
-    const body = {
+    await sendEmail({
       to: email,
       subject: "Reset Your Password - HDF HR",
       html: htmlContent,
       text: textContent,
-    };
-
-    // Get the function URL from environment variable
-    const functionUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/send-email`;
-
-    console.log("Preparing request to:", functionUrl);
-    console.log("Request body:", JSON.stringify(body, null, 2));
-
-    // Make the request directly using fetch with environment variables
-    const response = await fetch(functionUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
-        Origin: process.env.EXPO_PUBLIC_APP_URL || "https://hdfhr.netlify.app",
-      },
-      body: JSON.stringify(body),
     });
-
-    console.log("Response status:", response.status);
-    console.log(
-      "Response headers:",
-      Object.fromEntries(response.headers.entries())
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Error response:", {
-        status: response.status,
-        statusText: response.statusText,
-        body: errorText,
-      });
-
-      return {
-        success: false,
-        error: new Error(`Failed to send email: ${response.statusText}`),
-      };
-    }
-
-    const result = await response.json();
-    console.log("Success response:", result);
-
-    if (!result.success) {
-      return {
-        success: false,
-        error: new Error(result.error || "Failed to send email"),
-      };
-    }
 
     console.log("Password reset email sent successfully to:", email);
     return { success: true };
@@ -193,65 +188,12 @@ export const sendCompanyAdminInviteEmail = async (
       `This temporary password will expire in 7 days.\n\n` +
       `Need help? Contact us at ${process.env.EXPO_PUBLIC_SENDGRID_FROM_EMAIL || "info@hdf.ch"}`;
 
-    // Create the request body
-    const body = {
+    await sendEmail({
       to: email,
       subject: `Welcome to ${companyName} on HDF HR - Your Admin Account`,
       html: htmlContent,
       text: textContent,
-    };
-
-    // Get the function URL from environment variable
-    const functionUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/send-email`;
-
-    console.log("Preparing request to:", functionUrl);
-    console.log("Request body length:", {
-      html: htmlContent.length,
-      text: textContent.length,
     });
-
-    // Make the request directly using fetch with environment variables
-    const response = await fetch(functionUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
-        Origin: process.env.EXPO_PUBLIC_APP_URL || "https://hdfhr.netlify.app",
-      },
-      body: JSON.stringify(body),
-    });
-
-    console.log("Response status:", response.status);
-    console.log(
-      "Response headers:",
-      Object.fromEntries(response.headers.entries())
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Error response:", {
-        status: response.status,
-        statusText: response.statusText,
-        body: errorText,
-      });
-
-      return {
-        success: false,
-        error: new Error(
-          `Failed to send invitation email: ${response.statusText}`
-        ),
-      };
-    }
-
-    const result = await response.json();
-    console.log("Success response:", result);
-
-    if (!result.success) {
-      return {
-        success: false,
-        error: new Error(result.error || "Failed to send invitation email"),
-      };
-    }
 
     console.log("Company admin invitation email sent successfully to:", email);
     return { success: true };
@@ -284,10 +226,11 @@ export const sendSuperAdminWelcomeEmail = async (
   password: string
 ) => {
   try {
-    console.log("Starting super admin welcome email process for:", email);
+    console.log("🚀 Starting super admin welcome email process for:", email);
 
     // Generate HTML content
     const htmlContent = generateSuperAdminWelcomeEmail(name, email, password);
+    console.log("📝 Generated HTML content for email");
 
     // Plain text version
     const textContent =
@@ -301,73 +244,20 @@ export const sendSuperAdminWelcomeEmail = async (
       `Your initial password will expire in 7 days.\n\n` +
       `Need help? Contact us at ${process.env.EXPO_PUBLIC_SENDGRID_FROM_EMAIL || "info@hdf.ch"}`;
 
-    // Create the request body
-    const body = {
+    await sendEmail({
       to: email,
       subject: "Welcome to HDF HR - Your Super Admin Account",
       html: htmlContent,
       text: textContent,
-    };
-
-    // Get the function URL from environment variable
-    const functionUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/send-email`;
-
-    console.log("Preparing request to:", functionUrl);
-    console.log("Request body length:", {
-      html: htmlContent.length,
-      text: textContent.length,
     });
 
-    // Make the request directly using fetch with environment variables
-    const response = await fetch(functionUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
-        Origin: process.env.EXPO_PUBLIC_APP_URL || "https://hdfhr.netlify.app",
-      },
-      body: JSON.stringify(body),
-    });
-
-    console.log("Response status:", response.status);
-    console.log(
-      "Response headers:",
-      Object.fromEntries(response.headers.entries())
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Error response:", {
-        status: response.status,
-        statusText: response.statusText,
-        body: errorText,
-      });
-
-      return {
-        success: false,
-        error: new Error(
-          `Failed to send welcome email: ${response.statusText}`
-        ),
-      };
-    }
-
-    const result = await response.json();
-    console.log("Success response:", result);
-
-    if (!result.success) {
-      return {
-        success: false,
-        error: new Error(result.error || "Failed to send welcome email"),
-      };
-    }
-
-    console.log("Super admin welcome email sent successfully to:", email);
+    console.log("✅ Super admin welcome email sent successfully to:", email);
     return { success: true };
   } catch (err) {
     const error = err as Error;
-    console.error("Error in sendSuperAdminWelcomeEmail:", {
+    console.error("❌ Error in sendSuperAdminWelcomeEmail:", {
       message: error.message,
-      error,
+      stack: error.stack,
     });
     return {
       success: false,
