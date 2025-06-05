@@ -1,8 +1,16 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 
+// Environment variables
+const NODE_ENV = Deno.env.get("NODE_ENV") || "production";
 const SENDGRID_API_KEY = Deno.env.get("SENDGRID_API_KEY") || "";
 const FROM_EMAIL = Deno.env.get("SENDGRID_FROM_EMAIL") || "";
 const FROM_NAME = Deno.env.get("SENDGRID_FROM_NAME") || "";
+
+// Mailtrap credentials
+const MAILTRAP_HOST = Deno.env.get("MAILTRAP_HOST") || "";
+const MAILTRAP_PORT = parseInt(Deno.env.get("MAILTRAP_PORT") || "2525");
+const MAILTRAP_USER = Deno.env.get("MAILTRAP_USER") || "";
+const MAILTRAP_PASS = Deno.env.get("MAILTRAP_PASS") || "";
 
 // CORS headers
 const corsHeaders = {
@@ -12,11 +20,94 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-interface EmailRequest {
-  to: string;
-  subject: string;
-  html: string;
-  text: string;
+async function sendWithMailtrap(
+  to: string,
+  subject: string,
+  html: string,
+  text: string
+) {
+  // Use Mailtrap's API instead of SMTP for Edge Function compatibility
+  const message = {
+    from: {
+      email: FROM_EMAIL,
+      name: FROM_NAME,
+    },
+    to: [
+      {
+        email: to,
+      },
+    ],
+    subject: subject,
+    html: html,
+    text: text,
+    category: "Welcome Email",
+  };
+
+  // Note: Replace 3772478 with your inbox ID from the Mailtrap API URL
+  const response = await fetch(
+    "https://sandbox.api.mailtrap.io/api/send/3772478",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${MAILTRAP_PASS}`,
+      },
+      body: JSON.stringify(message),
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Mailtrap API error: ${errorText}`);
+  }
+
+  return response;
+}
+
+async function sendWithSendGrid(
+  to: string,
+  subject: string,
+  html: string,
+  text: string
+) {
+  const data = {
+    personalizations: [
+      {
+        to: [{ email: to }],
+      },
+    ],
+    from: {
+      email: FROM_EMAIL,
+      name: FROM_NAME,
+    },
+    subject,
+    content: [
+      {
+        type: "text/plain",
+        value: text || "",
+      },
+      {
+        type: "text/html",
+        value: html || "",
+      },
+    ],
+  };
+
+  const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${SENDGRID_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`SendGrid API error: ${errorText}`);
+  }
+
+  return response;
 }
 
 serve(async (req) => {
@@ -37,15 +128,17 @@ serve(async (req) => {
       throw new Error("Method not allowed");
     }
 
-    // Verify API key is configured
-    if (!SENDGRID_API_KEY) {
-      console.error("SendGrid API key not configured");
-      throw new Error("Email service not properly configured");
-    }
-
-    if (!FROM_EMAIL || !FROM_NAME) {
-      console.error("Sender email configuration missing");
-      throw new Error("Email service not properly configured");
+    // Verify email service configuration based on environment
+    if (NODE_ENV === "development") {
+      if (!MAILTRAP_HOST || !MAILTRAP_USER || !MAILTRAP_PASS) {
+        console.error("Mailtrap configuration missing");
+        throw new Error("Email service not properly configured");
+      }
+    } else {
+      if (!SENDGRID_API_KEY || !FROM_EMAIL || !FROM_NAME) {
+        console.error("SendGrid configuration missing");
+        throw new Error("Email service not properly configured");
+      }
     }
 
     // Log request headers for debugging
@@ -61,38 +154,13 @@ serve(async (req) => {
       throw new Error("Invalid request body");
     }
 
-    const { to, subject, html, text }: EmailRequest = body;
+    const { to, subject, html, text } = body;
 
     // Validate required fields
-    if (!to) {
-      throw new Error("Recipient email is required");
-    }
-    if (!subject) {
-      throw new Error("Email subject is required");
-    }
-    if (!html && !text) {
+    if (!to) throw new Error("Recipient email is required");
+    if (!subject) throw new Error("Email subject is required");
+    if (!html && !text)
       throw new Error("Email content (html or text) is required");
-    }
-
-    // Prepare email data
-    const data = {
-      personalizations: [{ to: [{ email: to }] }],
-      from: {
-        email: FROM_EMAIL,
-        name: FROM_NAME,
-      },
-      subject,
-      content: [
-        {
-          type: "text/plain",
-          value: text || "",
-        },
-        {
-          type: "text/html",
-          value: html || "",
-        },
-      ],
-    };
 
     console.log("Sending email with data:", {
       to,
@@ -102,35 +170,28 @@ serve(async (req) => {
         text: text?.length || 0,
         html: html?.length || 0,
       },
+      environment: NODE_ENV,
     });
 
-    // Send email via SendGrid
-    const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${SENDGRID_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(data),
-    });
-
-    const responseText = await response.text();
-    console.log("SendGrid API response:", {
-      status: response.status,
-      statusText: response.statusText,
-      body: responseText,
-    });
-
-    if (!response.ok) {
-      throw new Error(`SendGrid API error: ${responseText}`);
+    // Send email based on environment
+    let response;
+    if (NODE_ENV === "development") {
+      response = await sendWithMailtrap(to, subject, html, text);
+    } else {
+      response = await sendWithSendGrid(to, subject, html, text);
     }
 
-    return new Response(JSON.stringify({ success: true }), {
-      headers: {
-        ...corsHeaders,
-        "Content-Type": "application/json",
-      },
-    });
+    return new Response(
+      JSON.stringify({
+        success: true,
+      }),
+      {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      }
+    );
   } catch (error) {
     console.error("Function error:", error.message);
     return new Response(

@@ -43,7 +43,10 @@ import {
   UserStatus,
 } from "../../types";
 import { hashPassword, generateResetToken } from "../../utils/auth";
+import { sendCompanyAdminInviteEmail } from "../../utils/emailService";
+import { generateWelcomeEmail } from "../../utils/emailTemplates";
 import CustomSnackbar from "../../components/CustomSnackbar";
+import { t } from "i18next";
 
 interface EmployeeFormData {
   first_name: string;
@@ -76,117 +79,22 @@ interface EmployeeFormData {
   password: string;
 }
 
-// Skeleton component for form loading state
-const CreateEmployeeFormSkeleton = () => {
-  const theme = useTheme();
+// Update the interfaces for company data structure
+interface CompanyDetails {
+  company_name: string;
+}
 
-  const SkeletonBlock = ({
-    width,
-    height,
-    style,
-  }: {
-    width: string | number;
-    height: number;
-    style?: any;
-  }) => (
-    <View
-      style={[
-        {
-          width,
-          height,
-          backgroundColor: theme.colors.surfaceVariant,
-          borderRadius: 4,
-          opacity: 0.3,
-        },
-        style,
-      ]}
-    />
-  );
+interface CompanyUserResponse {
+  company_id: string;
+  company: {
+    company_name: string;
+  };
+}
 
-  return (
-    <ScrollView
-      style={styles.scrollView}
-      contentContainerStyle={styles.scrollContent}
-    >
-      <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
-        Personal Information
-      </Text>
-
-      <View style={styles.row}>
-        <View style={styles.halfInput}>
-          <SkeletonBlock width="100%" height={56} style={{ marginBottom: 8 }} />
-          <SkeletonBlock width="70%" height={16} style={{ marginBottom: 16 }} />
-        </View>
-
-        <View style={styles.halfInput}>
-          <SkeletonBlock width="100%" height={56} style={{ marginBottom: 8 }} />
-          <SkeletonBlock width="70%" height={16} style={{ marginBottom: 16 }} />
-        </View>
-      </View>
-
-      <SkeletonBlock width="100%" height={56} style={{ marginBottom: 8 }} />
-      <SkeletonBlock width="70%" height={16} style={{ marginBottom: 16 }} />
-
-      <SkeletonBlock width="100%" height={56} style={{ marginBottom: 8 }} />
-      <SkeletonBlock width="70%" height={16} style={{ marginBottom: 16 }} />
-
-      <Text style={styles.inputLabel}>Date of Birth *</Text>
-      <SkeletonBlock width="100%" height={40} style={{ marginBottom: 16 }} />
-
-      <Text style={styles.inputLabel}>Gender *</Text>
-      <SkeletonBlock width="100%" height={40} style={{ marginBottom: 16 }} />
-
-      <SkeletonBlock width="100%" height={56} style={{ marginBottom: 16 }} />
-
-      <Text style={styles.inputLabel}>Marital Status *</Text>
-      <SkeletonBlock width="100%" height={40} style={{ marginBottom: 16 }} />
-
-      <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
-        Employment Details
-      </Text>
-
-      <SkeletonBlock width="100%" height={56} style={{ marginBottom: 16 }} />
-
-      <Text style={styles.inputLabel}>Employment Type *</Text>
-      <SkeletonBlock width="100%" height={40} style={{ marginBottom: 16 }} />
-
-      <SkeletonBlock width="100%" height={56} style={{ marginBottom: 16 }} />
-
-      <Text style={styles.inputLabel}>Employment Start Date *</Text>
-      <SkeletonBlock width="100%" height={40} style={{ marginBottom: 16 }} />
-
-      <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
-        Access Level
-      </Text>
-      <SkeletonBlock width="100%" height={40} style={{ marginBottom: 8 }} />
-      <SkeletonBlock width="70%" height={16} style={{ marginBottom: 16 }} />
-
-      <Text style={[styles.sectionTitle, { color: theme.colors.onBackground }]}>
-        Address
-      </Text>
-
-      <SkeletonBlock width="100%" height={56} style={{ marginBottom: 16 }} />
-      <SkeletonBlock width="100%" height={56} style={{ marginBottom: 16 }} />
-
-      <View style={styles.row}>
-        <View style={styles.halfInput}>
-          <SkeletonBlock
-            width="100%"
-            height={56}
-            style={{ marginBottom: 16 }}
-          />
-        </View>
-        <View style={styles.halfInput}>
-          <SkeletonBlock
-            width="100%"
-            height={56}
-            style={{ marginBottom: 16 }}
-          />
-        </View>
-      </View>
-    </ScrollView>
-  );
-};
+interface CompanyData {
+  company_id: string;
+  company_name: string;
+}
 
 // Add window dimensions hook
 const useWindowDimensions = () => {
@@ -224,6 +132,7 @@ const CreateEmployeeScreen = () => {
 
   const [loading, setLoading] = useState(false);
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [companyName, setCompanyName] = useState<string>("");
   const [companyIdLoading, setCompanyIdLoading] = useState(true);
   const [showDobPicker, setShowDobPicker] = useState(false);
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
@@ -291,45 +200,60 @@ const CreateEmployeeScreen = () => {
     return () => clearInterval(intervalId);
   }, []);
 
-  // Memoize the company ID fetch function to prevent recreating it on re-renders
+  // Update the fetchCompanyId function with proper typing
   const fetchCompanyId = useCallback(async () => {
     if (!user) return;
 
     setCompanyIdLoading(true);
     try {
-      // Cache key for this specific user's company ID
-      const cacheKey = `company_id_${user.id}`;
+      const cacheKey = `company_data_${user.id}`;
 
-      // Function to actually fetch the company ID
       const fetchData = async () => {
         const { data, error } = await supabase
           .from("company_user")
-          .select("company_id")
+          .select(
+            `
+            company_id,
+            company:company_id (
+              company_name
+            )
+          `
+          )
           .eq("id", user.id)
           .single();
 
         if (error) {
-          console.error("Error fetching company ID:", error);
-          return { data: null, error };
+          console.error("Error fetching company data:", error);
+          return { data: null as CompanyData | null, error };
         }
 
-        return { data, error: null };
+        // Type assertion for the response data
+        const responseData = data as unknown as CompanyUserResponse;
+
+        const companyData: CompanyData = {
+          company_id: responseData.company_id,
+          company_name: responseData.company.company_name,
+        };
+
+        return { data: companyData, error: null };
       };
 
-      // Use cached query with a relatively long TTL since company ID rarely changes
       const result = await cachedQuery(fetchData, cacheKey, {
-        cacheTtl: 24 * 60 * 60 * 1000, // 24 hours
+        cacheTtl: 24 * 60 * 60 * 1000,
         criticalData: true,
       });
 
       if (result.error) {
-        console.error("Error fetching company ID:", result.error);
+        console.error("Error fetching company data:", result.error);
         return;
       }
 
-      setCompanyId(result.data?.company_id || null);
+      if (result.data) {
+        setCompanyId(result.data.company_id);
+        setCompanyName(result.data.company_name);
+      }
     } catch (error) {
-      console.error("Error fetching company ID:", error);
+      console.error("Error fetching company data:", error);
     } finally {
       setCompanyIdLoading(false);
     }
@@ -472,7 +396,7 @@ const CreateEmployeeScreen = () => {
         last_name: data.last_name,
         email: data.email,
         phone_number: data.phone_number,
-        role: data.is_admin ? UserRole.ADMIN : UserRole.EMPLOYEE,
+        role: data.is_admin ? UserRole.COMPANY_ADMIN : UserRole.EMPLOYEE,
         active_status: UserStatus.ACTIVE,
         created_by: user.id,
         date_of_birth: data.date_of_birth.toISOString(),
@@ -556,15 +480,64 @@ const CreateEmployeeScreen = () => {
 
       console.log(`Employee created with email: ${data.email}`);
 
+      // Send welcome email based on role
+      console.log("Sending employee welcome email...");
+      let emailResult;
+
+      if (data.is_admin) {
+        console.log("Sending company admin invitation email...");
+        emailResult = await sendCompanyAdminInviteEmail(
+          data.email,
+          data.password,
+          companyName // You'll need to get this from your company data
+        );
+      } else {
+        // Send regular employee welcome email
+        const functionUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/send-email`;
+        console.log("Sending email using function URL:", functionUrl);
+
+        const { success: emailSent, error: emailError } = await fetch(
+          functionUrl,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
+              Origin: "https://hdfhr.netlify.app",
+            },
+            body: JSON.stringify({
+              to: data.email,
+              subject: `Welcome to ${companyName} on HDF HR`,
+              html: generateWelcomeEmail(
+                `${data.first_name} ${data.last_name}`,
+                data.email,
+                data.password,
+                companyName
+              ),
+              text: `Welcome to ${companyName} on HDF HR!\n\nHello ${data.first_name} ${data.last_name},\n\nYour account has been created with the following credentials:\n\nEmail: ${data.email}\nPassword: ${data.password}\n\nPlease log in at: https://hdfhr.netlify.app/login\n\nIMPORTANT: Change your password immediately after logging in.\n\nNeed help? Contact us at info@hdf.ch`,
+            }),
+          }
+        ).then((res) => res.json());
+
+        if (!emailSent) {
+          console.error("Error sending welcome email:", emailError);
+        } else {
+          console.log("Welcome email sent successfully");
+        }
+        emailResult = { success: emailSent };
+      }
+
       setSnackbarMessage(
-        `${data.is_admin ? "Company admin" : "Employee"} created successfully!`
+        emailResult.success
+          ? t("superAdmin.employees.createSuccess")
+          : t("superAdmin.employees.createSuccessNoEmail")
       );
       setSnackbarVisible(true);
 
       // Navigate back after a short delay
       setTimeout(() => {
         navigation.goBack();
-      }, 5000); // Give them time to see the password
+      }, 2000);
     } catch (error: any) {
       console.error("Error creating employee:", error);
 
@@ -725,37 +698,6 @@ const CreateEmployeeScreen = () => {
                         )}
                       </View>
                     </View>
-
-                    <Controller
-                      control={control}
-                      rules={{
-                        required: "Email is required",
-                        pattern: {
-                          value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                          message: "Invalid email address",
-                        },
-                      }}
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <TextInput
-                          label="Email *"
-                          mode="outlined"
-                          value={value}
-                          onChangeText={onChange}
-                          onBlur={onBlur}
-                          error={!!errors.email}
-                          style={styles.input}
-                          keyboardType="email-address"
-                          autoCapitalize="none"
-                          disabled={loading}
-                        />
-                      )}
-                      name="email"
-                    />
-                    {errors.email && (
-                      <HelperText type="error">
-                        {errors.email.message}
-                      </HelperText>
-                    )}
 
                     <Controller
                       control={control}
@@ -1001,45 +943,100 @@ const CreateEmployeeScreen = () => {
               ]}
             >
               <Animated.View entering={FadeIn.delay(200)}>
-                {/* Access Level Card */}
-                <Surface style={styles.detailsCard}>
+                {/* Account Details Card */}
+                <Surface style={[styles.detailsCard, { marginTop: 24 }]}>
                   <View style={styles.cardHeader}>
                     <View style={styles.headerLeft}>
                       <View style={styles.iconContainer}>
                         <IconButton
-                          icon="shield-account"
+                          icon="account-key"
                           size={20}
                           iconColor="#64748b"
                           style={styles.headerIcon}
                         />
                       </View>
-                      <Text style={styles.cardTitle}>Access Level</Text>
+                      <Text style={styles.cardTitle}>
+                        {t("superAdmin.employees.accountDetails")}
+                      </Text>
                     </View>
                   </View>
 
                   <View style={styles.cardContent}>
+                    <Controller
+                      control={control}
+                      rules={{
+                        required: t("superAdmin.employees.emailRequired"),
+                        pattern: {
+                          value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                          message: t("superAdmin.employees.invalidEmail"),
+                        },
+                      }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <TextInput
+                          label={`${t("superAdmin.employees.email")} *`}
+                          mode="outlined"
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          error={!!errors.email}
+                          style={styles.input}
+                          keyboardType="email-address"
+                          autoCapitalize="none"
+                          disabled={loading}
+                        />
+                      )}
+                      name="email"
+                    />
+                    {errors.email && (
+                      <HelperText type="error">
+                        {errors.email.message}
+                      </HelperText>
+                    )}
+
+                    <Controller
+                      control={control}
+                      rules={{
+                        required: t("superAdmin.employees.passwordRequired"),
+                        minLength: {
+                          value: 8,
+                          message: t("superAdmin.employees.passwordLength"),
+                        },
+                      }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <TextInput
+                          label={`${t("superAdmin.employees.password")} *`}
+                          mode="outlined"
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          error={!!errors.password}
+                          style={styles.input}
+                          secureTextEntry
+                          disabled={loading}
+                        />
+                      )}
+                      name="password"
+                    />
+                    {errors.password && (
+                      <HelperText type="error">
+                        {errors.password.message}
+                      </HelperText>
+                    )}
+
+                    <Text style={[styles.helperText, { marginBottom: 16 }]}>
+                      {t("superAdmin.employees.inviteEmailHelper")}
+                    </Text>
+
                     <View style={styles.adminToggleContainer}>
                       <Text style={styles.adminToggleLabel}>
-                        Make this employee a company admin?
+                        {t("superAdmin.employees.grantAdminPrivileges")}
                       </Text>
-                      <Controller
-                        control={control}
-                        render={({ field: { value } }) => (
-                          <Switch
-                            value={value}
-                            onValueChange={handleAdminToggle}
-                            disabled={loading}
-                          />
-                        )}
-                        name="is_admin"
+                      <Switch
+                        value={isAdmin}
+                        onValueChange={handleAdminToggle}
+                        disabled={loading}
                       />
                     </View>
-
-                    <Text style={styles.helperText}>
-                      Company admins have full access to manage company
-                      settings, employees, departments, and other administrative
-                      functions.
-                    </Text>
                   </View>
                 </Surface>
 
@@ -1342,7 +1339,7 @@ const CreateEmployeeScreen = () => {
                 styles.button,
                 {
                   backgroundColor: loading
-                    ? theme.colors.disabled
+                    ? theme.colors.surfaceVariant
                     : theme.colors.primary,
                 },
               ]}
@@ -1554,6 +1551,12 @@ const styles = StyleSheet.create({
     },
     shadowOpacity: 0.27,
     shadowRadius: 4.65,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontFamily: getFontFamily("600"),
+    color: "#1e293b",
+    marginBottom: 16,
   },
 });
 

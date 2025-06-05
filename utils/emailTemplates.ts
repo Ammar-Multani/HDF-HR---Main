@@ -18,10 +18,6 @@ export const generatePasswordResetEmail = (token: string) => {
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>Reset Your Password</title>
       <style>
-        :root {
-          color-scheme: light dark;
-        }
-        
         body {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
           line-height: 1.6;
@@ -29,19 +25,20 @@ export const generatePasswordResetEmail = (token: string) => {
           margin: 0;
           padding: 0;
           background: #f8f9fa;
+          -webkit-text-size-adjust: 100%;
         }
         .container {
           max-width: 600px;
           margin: 0 auto;
           padding: 20px;
+          box-sizing: border-box;
         }
         .card {
-          background: rgba(255, 255, 255, 0.9);
-          backdrop-filter: blur(10px);
+          background: #ffffff;
           border-radius: 24px;
           padding: 40px;
           box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
-          border: 1px solid rgba(255, 255, 255, 0.2);
+          border: 1px solid rgba(0, 0, 0, 0.1);
           margin-bottom: 24px;
           position: relative;
           overflow: hidden;
@@ -121,37 +118,13 @@ export const generatePasswordResetEmail = (token: string) => {
             90deg,
             rgba(10,185,129,1),
             rgba(6,169,169,1),
-            rgba(38,127,161,1),
-            rgba(74,78,153,1),
-            rgba(94,52,149,1)
+            rgba(38,127,161,1)
           );
           box-shadow: 0 4px 15px rgba(10,185,129,0.3);
         }
         .button:hover {
           transform: translateY(-2px);
           box-shadow: 0 6px 20px rgba(10,185,129,0.4);
-        }
-        .button::before {
-          content: '';
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: linear-gradient(
-            90deg,
-            rgba(10,185,129,1),
-            rgba(6,169,169,1),
-            rgba(38,127,161,1),
-            rgba(74,78,153,1),
-            rgba(94,52,149,1)
-          );
-          opacity: 0;
-          z-index: -1;
-          transition: opacity 0.3s ease;
-        }
-        .button:hover::before {
-          opacity: 1;
         }
         .link-box {
           background: rgba(10,185,129,0.05);
@@ -232,56 +205,52 @@ export const generatePasswordResetEmail = (token: string) => {
         .social-links a:hover {
           background: rgba(38,127,161,0.2);
         }
-        @media (prefers-color-scheme: dark) {
-          body {
-            background: #0a0a0a;
-            color: #fff;
+        @media (max-width: 480px) {
+          .container {
+            padding: 12px;
           }
           .card {
-            background: rgba(30,30,30,0.9);
-            border-color: rgba(255,255,255,0.1);
+            padding: 24px;
+            border-radius: 16px;
           }
           .header {
-            background: linear-gradient(
-              135deg,
-              rgba(10,185,129,0.15),
-              rgba(94,52,149,0.15)
-            );
-            border-color: rgba(10,185,129,0.3);
+            padding: 20px !important;
+          }
+          .title {
+            font-size: 24px !important;
           }
           .subtitle {
-            color: #aaa;
+            font-size: 15px !important;
           }
-          .link-box {
-            background: rgba(10,185,129,0.1);
-            border-color: rgba(10,185,129,0.3);
-            color: rgba(10,185,129,1);
+          .button {
+            width: 100% !important;
+            padding: 14px 20px !important;
+            box-sizing: border-box;
           }
-          .link-box::before {
-            background: #1e1e1e;
+          .credentials-box,
+          .warning-box,
+          .support-box,
+          .feature-box {
+            padding: 20px !important;
           }
-          .warning {
-            background: rgba(94,52,149,0.1);
-            border-color: rgba(94,52,149,0.3);
-          }
-          .support-box {
-            background: linear-gradient(
-              135deg,
-              rgba(10,185,129,0.1),
-              rgba(38,127,161,0.1)
-            );
-            border-color: rgba(10,185,129,0.25);
-          }
-          .footer {
-            color: #aaa;
-            border-color: rgba(255,255,255,0.1);
+          .social-links {
+            flex-direction: column !important;
+            gap: 8px !important;
           }
           .social-links a {
-            background: rgba(38,127,161,0.2);
-            color: rgba(10,185,129,1);
+            width: 100% !important;
+            box-sizing: border-box;
+            text-align: center;
           }
-          .social-links a:hover {
-            background: rgba(38,127,161,0.3);
+          .feature-list li {
+            font-size: 14px;
+          }
+          .credential-item {
+            padding: 12px !important;
+          }
+          .credential-value {
+            font-size: 13px !important;
+            word-break: break-all;
           }
         }
       </style>
@@ -358,10 +327,6 @@ export const generateWelcomeEmail = (
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>Welcome to ${companyName}</title>
       <style>
-        :root {
-          color-scheme: light dark;
-        }
-        
         body {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
           line-height: 1.6;
@@ -369,19 +334,20 @@ export const generateWelcomeEmail = (
           margin: 0;
           padding: 0;
           background: #f8f9fa;
+          -webkit-text-size-adjust: 100%;
         }
         .container {
           max-width: 600px;
           margin: 0 auto;
           padding: 20px;
+          box-sizing: border-box;
         }
         .card {
-          background: rgba(255, 255, 255, 0.9);
-          backdrop-filter: blur(10px);
+          background: #ffffff;
           border-radius: 24px;
           padding: 40px;
           box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
-          border: 1px solid rgba(255, 255, 255, 0.2);
+          border: 1px solid rgba(0, 0, 0, 0.1);
           margin-bottom: 24px;
           position: relative;
           overflow: hidden;
@@ -622,66 +588,52 @@ export const generateWelcomeEmail = (
         .social-links a:hover {
           background: rgba(38,127,161,0.2);
         }
-        @media (prefers-color-scheme: dark) {
-          body {
-            background: #0a0a0a;
-            color: #fff;
+        @media (max-width: 480px) {
+          .container {
+            padding: 12px;
           }
           .card {
-            background: rgba(30,30,30,0.9);
-            border-color: rgba(255,255,255,0.1);
+            padding: 24px;
+            border-radius: 16px;
           }
           .header {
-            background: linear-gradient(
-              135deg,
-              rgba(10,185,129,0.15),
-              rgba(94,52,149,0.15)
-            );
-            border-color: rgba(10,185,129,0.3);
+            padding: 20px !important;
+          }
+          .title {
+            font-size: 24px !important;
           }
           .subtitle {
-            color: #aaa;
+            font-size: 15px !important;
           }
-          .credentials-box {
-            background: rgba(10,185,129,0.1);
-            border-color: rgba(10,185,129,0.3);
+          .button {
+            width: 100% !important;
+            padding: 14px 20px !important;
+            box-sizing: border-box;
           }
-          .credential-item {
-            background: rgba(30,30,30,0.9);
-            border-color: rgba(10,185,129,0.2);
-          }
-          .credential-label {
-            color: #aaa;
-          }
-          .credential-value {
-            color: rgba(10,185,129,1);
-          }
+          .credentials-box,
+          .warning-box,
+          .support-box,
           .feature-box {
-            background: linear-gradient(
-              135deg,
-              rgba(10,185,129,0.1),
-              rgba(38,127,161,0.1)
-            );
-            border-color: rgba(10,185,129,0.25);
+            padding: 20px !important;
           }
-          .warning-box {
-            background: rgba(94,52,149,0.1);
-            border-color: rgba(94,52,149,0.3);
-          }
-          .support-box {
-            background: rgba(94,52,149,0.1);
-            border-color: rgba(94,52,149,0.25);
-          }
-          .footer {
-            color: #aaa;
-            border-color: rgba(255,255,255,0.1);
+          .social-links {
+            flex-direction: column !important;
+            gap: 8px !important;
           }
           .social-links a {
-            background: rgba(38,127,161,0.2);
-            color: rgba(10,185,129,1);
+            width: 100% !important;
+            box-sizing: border-box;
+            text-align: center;
           }
-          .social-links a:hover {
-            background: rgba(38,127,161,0.3);
+          .feature-list li {
+            font-size: 14px;
+          }
+          .credential-item {
+            padding: 12px !important;
+          }
+          .credential-value {
+            font-size: 13px !important;
+            word-break: break-all;
           }
         }
       </style>
@@ -783,10 +735,6 @@ export const generateAdminInviteEmail = (
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>Welcome to ${companyName} on HDF HR</title>
       <style>
-        :root {
-          color-scheme: light dark;
-        }
-        
         body {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
           line-height: 1.6;
@@ -794,19 +742,20 @@ export const generateAdminInviteEmail = (
           margin: 0;
           padding: 0;
           background: #f8f9fa;
+          -webkit-text-size-adjust: 100%;
         }
         .container {
           max-width: 600px;
           margin: 0 auto;
           padding: 20px;
+          box-sizing: border-box;
         }
         .card {
-          background: rgba(255, 255, 255, 0.9);
-          backdrop-filter: blur(10px);
+          background: #ffffff;
           border-radius: 24px;
           padding: 40px;
           box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
-          border: 1px solid rgba(255, 255, 255, 0.2);
+          border: 1px solid rgba(0, 0, 0, 0.1);
           margin-bottom: 24px;
           position: relative;
           overflow: hidden;
@@ -1047,66 +996,52 @@ export const generateAdminInviteEmail = (
         .social-links a:hover {
           background: rgba(38,127,161,0.2);
         }
-        @media (prefers-color-scheme: dark) {
-          body {
-            background: #0a0a0a;
-            color: #fff;
+        @media (max-width: 480px) {
+          .container {
+            padding: 12px;
           }
           .card {
-            background: rgba(30,30,30,0.9);
-            border-color: rgba(255,255,255,0.1);
+            padding: 24px;
+            border-radius: 16px;
           }
           .header {
-            background: linear-gradient(
-              135deg,
-              rgba(10,185,129,0.15),
-              rgba(94,52,149,0.15)
-            );
-            border-color: rgba(10,185,129,0.3);
+            padding: 20px !important;
+          }
+          .title {
+            font-size: 24px !important;
           }
           .subtitle {
-            color: #aaa;
+            font-size: 15px !important;
           }
-          .credentials-box {
-            background: rgba(10,185,129,0.1);
-            border-color: rgba(10,185,129,0.3);
+          .button {
+            width: 100% !important;
+            padding: 14px 20px !important;
+            box-sizing: border-box;
           }
-          .credential-item {
-            background: rgba(30,30,30,0.9);
-            border-color: rgba(10,185,129,0.2);
-          }
-          .credential-label {
-            color: #aaa;
-          }
-          .credential-value {
-            color: rgba(10,185,129,1);
-          }
+          .credentials-box,
+          .warning-box,
+          .support-box,
           .feature-box {
-            background: linear-gradient(
-              135deg,
-              rgba(10,185,129,0.1),
-              rgba(38,127,161,0.1)
-            );
-            border-color: rgba(10,185,129,0.25);
+            padding: 20px !important;
           }
-          .warning-box {
-            background: rgba(94,52,149,0.1);
-            border-color: rgba(94,52,149,0.3);
-          }
-          .support-box {
-            background: rgba(94,52,149,0.1);
-            border-color: rgba(94,52,149,0.25);
-          }
-          .footer {
-            color: #aaa;
-            border-color: rgba(255,255,255,0.1);
+          .social-links {
+            flex-direction: column !important;
+            gap: 8px !important;
           }
           .social-links a {
-            background: rgba(38,127,161,0.2);
-            color: rgba(10,185,129,1);
+            width: 100% !important;
+            box-sizing: border-box;
+            text-align: center;
           }
-          .social-links a:hover {
-            background: rgba(38,127,161,0.3);
+          .feature-list li {
+            font-size: 14px;
+          }
+          .credential-item {
+            padding: 12px !important;
+          }
+          .credential-value {
+            font-size: 13px !important;
+            word-break: break-all;
           }
         }
       </style>
@@ -1209,10 +1144,6 @@ export const generateSuperAdminWelcomeEmail = (
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>Welcome to HDF HR as Super Admin</title>
       <style>
-        :root {
-          color-scheme: light dark;
-        }
-        
         body {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
           line-height: 1.6;
@@ -1220,19 +1151,20 @@ export const generateSuperAdminWelcomeEmail = (
           margin: 0;
           padding: 0;
           background: #f8f9fa;
+          -webkit-text-size-adjust: 100%;
         }
         .container {
           max-width: 600px;
           margin: 0 auto;
           padding: 20px;
+          box-sizing: border-box;
         }
         .card {
-          background: rgba(255, 255, 255, 0.9);
-          backdrop-filter: blur(10px);
+          background: #ffffff;
           border-radius: 24px;
           padding: 40px;
           box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
-          border: 1px solid rgba(255, 255, 255, 0.2);
+          border: 1px solid rgba(0, 0, 0, 0.1);
           margin-bottom: 24px;
           position: relative;
           overflow: hidden;
@@ -1475,66 +1407,52 @@ export const generateSuperAdminWelcomeEmail = (
         .social-links a:hover {
           background: rgba(38,127,161,0.2);
         }
-        @media (prefers-color-scheme: dark) {
-          body {
-            background: #0a0a0a;
-            color: #fff;
+        @media (max-width: 480px) {
+          .container {
+            padding: 12px;
           }
           .card {
-            background: rgba(30,30,30,0.9);
-            border-color: rgba(255,255,255,0.1);
+            padding: 24px;
+            border-radius: 16px;
           }
           .header {
-            background: linear-gradient(
-              135deg,
-              rgba(10,185,129,0.15),
-              rgba(94,52,149,0.15)
-            );
-            border-color: rgba(10,185,129,0.3);
+            padding: 20px !important;
+          }
+          .title {
+            font-size: 24px !important;
           }
           .subtitle {
-            color: #aaa;
+            font-size: 15px !important;
           }
-          .credentials-box {
-            background: rgba(10,185,129,0.1);
-            border-color: rgba(10,185,129,0.3);
+          .button {
+            width: 100% !important;
+            padding: 14px 20px !important;
+            box-sizing: border-box;
           }
-          .credential-item {
-            background: rgba(30,30,30,0.9);
-            border-color: rgba(10,185,129,0.2);
-          }
-          .credential-label {
-            color: #aaa;
-          }
-          .credential-value {
-            color: rgba(10,185,129,1);
-          }
+          .credentials-box,
+          .warning-box,
+          .support-box,
           .feature-box {
-            background: linear-gradient(
-              135deg,
-              rgba(10,185,129,0.1),
-              rgba(38,127,161,0.1)
-            );
-            border-color: rgba(10,185,129,0.25);
+            padding: 20px !important;
           }
-          .warning-box {
-            background: rgba(94,52,149,0.1);
-            border-color: rgba(94,52,149,0.3);
-          }
-          .support-box {
-            background: rgba(94,52,149,0.1);
-            border-color: rgba(94,52,149,0.25);
-          }
-          .footer {
-            color: #aaa;
-            border-color: rgba(255,255,255,0.1);
+          .social-links {
+            flex-direction: column !important;
+            gap: 8px !important;
           }
           .social-links a {
-            background: rgba(38,127,161,0.2);
-            color: rgba(10,185,129,1);
+            width: 100% !important;
+            box-sizing: border-box;
+            text-align: center;
           }
-          .social-links a:hover {
-            background: rgba(38,127,161,0.3);
+          .feature-list li {
+            font-size: 14px;
+          }
+          .credential-item {
+            padding: 12px !important;
+          }
+          .credential-value {
+            font-size: 13px !important;
+            word-break: break-all;
           }
         }
       </style>
