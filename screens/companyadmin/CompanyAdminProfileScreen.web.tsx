@@ -39,6 +39,7 @@ import Animated, {
 } from "react-native-reanimated";
 import CustomSnackbar from "../../components/CustomSnackbar";
 import { t } from "i18next";
+import { initEmailService } from "../../utils/emailService";
 
 // Add Shimmer component for loading states
 interface ShimmerProps {
@@ -103,9 +104,96 @@ const Shimmer: React.FC<ShimmerProps> = ({ width, height, style }) => {
   );
 };
 
+// Add ResetPasswordModal interface after ShimmerProps
+interface ResetPasswordModalProps {
+  visible: boolean;
+  onDismiss: () => void;
+  onConfirm: () => void;
+  loading: boolean;
+  email: string;
+}
+
+// Add ResetPasswordModal component before CompanyAdminProfileScreen
+const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({
+  visible,
+  onDismiss,
+  onConfirm,
+  loading,
+  email,
+}) => {
+  const theme = useTheme();
+  const dimensions = useWindowDimensions();
+  const isLargeScreen = dimensions.width >= 1440;
+  const isMediumScreen = dimensions.width >= 768 && dimensions.width < 1440;
+  const modalWidth = isLargeScreen ? 400 : isMediumScreen ? 360 : "90%";
+  const modalPadding = isLargeScreen ? 32 : isMediumScreen ? 24 : 16;
+
+  return (
+    <Portal>
+      <Modal
+        visible={visible}
+        onDismiss={onDismiss}
+        contentContainerStyle={[
+          styles.resetPasswordModal,
+          {
+            width: modalWidth,
+            maxWidth: 400,
+            alignSelf: "center",
+          },
+        ]}
+      >
+        <View
+          style={[styles.resetPasswordModalContent, { padding: modalPadding }]}
+        >
+          <View style={styles.resetPasswordModalHeader}>
+            <MaterialCommunityIcons
+              name="lock-reset"
+              size={32}
+              color={theme.colors.primary}
+            />
+            <Text style={styles.resetPasswordModalTitle}>
+              {t("superAdmin.profile.resetPassword")}
+            </Text>
+          </View>
+
+          <Text style={styles.resetPasswordModalMessage}>
+            {t("superAdmin.profile.resetPasswordConfirm", {
+              email: email,
+            }) ||
+              `Are you sure you want to reset the password for ${email}? A password reset link will be sent to your email.`}
+          </Text>
+
+          <View style={styles.resetPasswordModalActions}>
+            <Button
+              mode="outlined"
+              onPress={onDismiss}
+              style={[styles.resetPasswordModalButton, styles.cancelButton]}
+              labelStyle={[styles.resetPasswordModalButtonText]}
+              disabled={loading}
+            >
+              {t("superAdmin.profile.cancel")}
+            </Button>
+            <Button
+              mode="contained"
+              onPress={onConfirm}
+              style={[styles.resetPasswordModalButton, styles.confirmButton]}
+              buttonColor={theme.colors.primary}
+              labelStyle={[styles.resetPasswordModalButtonText]}
+              loading={loading}
+              disabled={loading}
+            >
+              {t("superAdmin.profile.sendResetLink")}
+            </Button>
+          </View>
+        </View>
+      </Modal>
+    </Portal>
+  );
+};
+
 const CompanyAdminProfileScreen = () => {
   const theme = useTheme();
-  const { user, signOut } = useAuth();
+  const { user, signOut, forgotPassword } = useAuth();
   const navigation = useNavigation();
   const dimensions = useWindowDimensions();
 
@@ -123,6 +211,14 @@ const CompanyAdminProfileScreen = () => {
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [signOutModalVisible, setSignOutModalVisible] = useState(false);
+  const [resetPasswordModalVisible, setResetPasswordModalVisible] =
+    useState(false);
+  const [resettingPassword, setResettingPassword] = useState(false);
+
+  // Initialize email service
+  useEffect(() => {
+    initEmailService();
+  }, []);
 
   const fetchProfileData = async () => {
     try {
@@ -303,6 +399,62 @@ const CompanyAdminProfileScreen = () => {
         </Modal>
       </Portal>
     );
+  };
+
+  const handleResetPasswordClick = () => {
+    setResetPasswordModalVisible(true);
+  };
+
+  const handleResetPassword = async () => {
+    try {
+      if (!user?.email) {
+        setSnackbarMessage(
+          t("superAdmin.profile.emailRequired") || "Email is required"
+        );
+        setSnackbarVisible(true);
+        return;
+      }
+
+      setResettingPassword(true);
+      console.log("Initiating password reset for email:", user.email);
+      const { error } = await forgotPassword(user.email);
+
+      if (error) {
+        let errorMessage = error.message || t("forgotPassword.failedReset");
+        let messageType = "error";
+
+        // Handle specific error cases
+        if (error.message?.includes("sender identity")) {
+          errorMessage = t("forgotPassword.emailServiceError");
+        } else if (error.message?.includes("rate limit")) {
+          errorMessage = t("forgotPassword.tooManyAttempts");
+          messageType = "warning";
+        } else if (error.message?.includes("network")) {
+          errorMessage = t("forgotPassword.networkError");
+          messageType = "warning";
+        }
+
+        console.error("Password reset error:", error);
+        setSnackbarMessage(errorMessage);
+        setSnackbarVisible(true);
+      } else {
+        console.log("Password reset request successful");
+        setSnackbarMessage(
+          t("forgotPassword.resetInstructions") ||
+            "Password reset instructions have been sent to your email."
+        );
+        setSnackbarVisible(true);
+      }
+    } catch (err) {
+      console.error("Unexpected error during password reset:", err);
+      setSnackbarMessage(
+        t("common.unexpectedError") || "An unexpected error occurred"
+      );
+      setSnackbarVisible(true);
+    } finally {
+      setResettingPassword(false);
+      setResetPasswordModalVisible(false);
+    }
   };
 
   if (loading) {
@@ -729,12 +881,7 @@ const CompanyAdminProfileScreen = () => {
                       <View style={styles.cardContent}>
                         <TouchableOpacity
                           style={styles.settingItem}
-                          onPress={() => {
-                            setSnackbarMessage(
-                              "Password reset link sent to your email"
-                            );
-                            setSnackbarVisible(true);
-                          }}
+                          onPress={handleResetPasswordClick}
                         >
                           <View style={styles.settingItemContent}>
                             <MaterialCommunityIcons
@@ -792,6 +939,13 @@ const CompanyAdminProfileScreen = () => {
       </KeyboardAvoidingView>
 
       {renderSignOutModal()}
+      <ResetPasswordModal
+        visible={resetPasswordModalVisible}
+        onDismiss={() => setResetPasswordModalVisible(false)}
+        onConfirm={handleResetPassword}
+        loading={resettingPassword}
+        email={user?.email || ""}
+      />
       <CustomSnackbar
         visible={snackbarVisible}
         message={snackbarMessage}
@@ -1056,6 +1210,48 @@ const styles = StyleSheet.create({
     },
     shadowOpacity: 0.27,
     shadowRadius: 4.65,
+  },
+  resetPasswordModal: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    elevation: 5,
+    overflow: "hidden",
+  },
+  resetPasswordModalContent: {
+    alignItems: "center",
+  },
+  resetPasswordModalHeader: {
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  resetPasswordModalTitle: {
+    fontSize: 20,
+    fontFamily: "Poppins-SemiBold",
+    color: "#1e293b",
+    marginTop: 16,
+    textAlign: "center",
+  },
+  resetPasswordModalMessage: {
+    fontSize: 16,
+    fontFamily: "Poppins-Regular",
+    color: "#64748b",
+    textAlign: "center",
+    marginBottom: 24,
+    lineHeight: 24,
+  },
+  resetPasswordModalActions: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 12,
+    marginTop: 8,
+  },
+  resetPasswordModalButton: {
+    borderRadius: 8,
+    minWidth: 100,
+  },
+  resetPasswordModalButtonText: {
+    fontFamily: "Poppins-Medium",
+    fontSize: 14,
   },
 });
 

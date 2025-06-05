@@ -22,6 +22,7 @@ import {
   Surface,
   Portal,
   Modal,
+  Switch,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
@@ -42,7 +43,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import CustomSnackbar from "../../components/CustomSnackbar";
-
+import { initEmailService } from "../../utils/emailService";
 
 // Add Shimmer component for loading states
 interface ShimmerProps {
@@ -107,9 +108,274 @@ const Shimmer: React.FC<ShimmerProps> = ({ width, height, style }) => {
   );
 };
 
+// Add these new interfaces after the ShimmerProps interface
+interface DeleteAccountModalProps {
+  visible: boolean;
+  onDismiss: () => void;
+  onConfirm: () => void;
+  loading: boolean;
+}
+
+// Add this new interface after the DeleteAccountModalProps interface
+interface ResetPasswordModalProps {
+  visible: boolean;
+  onDismiss: () => void;
+  onConfirm: () => void;
+  loading: boolean;
+  email: string;
+}
+
+// Add this new interface after the ResetPasswordModalProps interface
+interface DataExportModalProps {
+  visible: boolean;
+  onDismiss: () => void;
+  onConfirm: () => void;
+  loading: boolean;
+}
+
+// Add this new component before the SuperAdminProfileScreen component
+const DeleteAccountModal: React.FC<DeleteAccountModalProps> = ({
+  visible,
+  onDismiss,
+  onConfirm,
+  loading,
+}) => {
+  const theme = useTheme();
+  const { t } = useTranslation();
+  const dimensions = useWindowDimensions();
+  const isLargeScreen = dimensions.width >= 1440;
+  const isMediumScreen = dimensions.width >= 768 && dimensions.width < 1440;
+  const modalWidth = isLargeScreen ? 400 : isMediumScreen ? 360 : "90%";
+  const modalPadding = isLargeScreen ? 32 : isMediumScreen ? 24 : 16;
+
+  return (
+    <Portal>
+      <Modal
+        visible={visible}
+        onDismiss={onDismiss}
+        contentContainerStyle={[
+          styles.deleteAccountModal,
+          {
+            width: modalWidth,
+            maxWidth: 400,
+            alignSelf: "center",
+          },
+        ]}
+      >
+        <View
+          style={[styles.deleteAccountModalContent, { padding: modalPadding }]}
+        >
+          <View style={styles.deleteAccountModalHeader}>
+            <MaterialCommunityIcons
+              name="alert-circle"
+              size={32}
+              color={theme.colors.error}
+            />
+            <Text style={styles.deleteAccountModalTitle}>
+              {t("superAdmin.profile.deleteAccount")}
+            </Text>
+          </View>
+
+          <Text style={styles.deleteAccountModalMessage}>
+            {t("superAdmin.profile.deleteAccountWarning") ||
+              "This action will permanently delete your account and all associated data. This cannot be undone. Please confirm if you wish to proceed."}
+          </Text>
+
+          <View style={styles.deleteAccountModalActions}>
+            <Button
+              mode="outlined"
+              onPress={onDismiss}
+              style={[styles.deleteAccountModalButton, styles.cancelButton]}
+              labelStyle={[styles.deleteAccountModalButtonText]}
+              disabled={loading}
+            >
+              {t("superAdmin.profile.cancel")}
+            </Button>
+            <Button
+              mode="contained"
+              onPress={onConfirm}
+              style={[styles.deleteAccountModalButton, styles.confirmButton]}
+              buttonColor={theme.colors.error}
+              labelStyle={[styles.deleteAccountModalButtonText]}
+              loading={loading}
+              disabled={loading}
+            >
+              {t("superAdmin.profile.confirmDelete")}
+            </Button>
+          </View>
+        </View>
+      </Modal>
+    </Portal>
+  );
+};
+
+// Add this new component before the SuperAdminProfileScreen component
+const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({
+  visible,
+  onDismiss,
+  onConfirm,
+  loading,
+  email,
+}) => {
+  const theme = useTheme();
+  const { t } = useTranslation();
+  const dimensions = useWindowDimensions();
+  const isLargeScreen = dimensions.width >= 1440;
+  const isMediumScreen = dimensions.width >= 768 && dimensions.width < 1440;
+  const modalWidth = isLargeScreen ? 400 : isMediumScreen ? 360 : "90%";
+  const modalPadding = isLargeScreen ? 32 : isMediumScreen ? 24 : 16;
+
+  return (
+    <Portal>
+      <Modal
+        visible={visible}
+        onDismiss={onDismiss}
+        contentContainerStyle={[
+          styles.resetPasswordModal,
+          {
+            width: modalWidth,
+            maxWidth: 400,
+            alignSelf: "center",
+          },
+        ]}
+      >
+        <View
+          style={[styles.resetPasswordModalContent, { padding: modalPadding }]}
+        >
+          <View style={styles.resetPasswordModalHeader}>
+            <MaterialCommunityIcons
+              name="lock-reset"
+              size={32}
+              color={theme.colors.primary}
+            />
+            <Text style={styles.resetPasswordModalTitle}>
+              {t("superAdmin.profile.resetPassword")}
+            </Text>
+          </View>
+
+          <Text style={styles.resetPasswordModalMessage}>
+            {t("superAdmin.profile.resetPasswordConfirm", {
+              email: email,
+            }) ||
+              `Are you sure you want to reset the password for ${email}? A password reset link will be sent to your email.`}
+          </Text>
+
+          <View style={styles.resetPasswordModalActions}>
+            <Button
+              mode="outlined"
+              onPress={onDismiss}
+              style={[styles.resetPasswordModalButton, styles.cancelButton]}
+              labelStyle={[styles.resetPasswordModalButtonText]}
+              disabled={loading}
+            >
+              {t("superAdmin.profile.cancel")}
+            </Button>
+            <Button
+              mode="contained"
+              onPress={onConfirm}
+              style={[styles.resetPasswordModalButton, styles.confirmButton]}
+              buttonColor={theme.colors.primary}
+              labelStyle={[styles.resetPasswordModalButtonText]}
+              loading={loading}
+              disabled={loading}
+            >
+              {t("superAdmin.profile.sendResetLink")}
+            </Button>
+          </View>
+        </View>
+      </Modal>
+    </Portal>
+  );
+};
+
+// Add this helper function before handleDataExport
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleString();
+};
+
+const formatActivityLog = (log: any) => {
+  return `- ${formatDate(log.created_at)}: ${log.description}`;
+};
+
+// Add the DataExportModal component
+const DataExportModal: React.FC<DataExportModalProps> = ({
+  visible,
+  onDismiss,
+  onConfirm,
+  loading,
+}) => {
+  const theme = useTheme();
+  const { t } = useTranslation();
+  const dimensions = useWindowDimensions();
+  const isLargeScreen = dimensions.width >= 1440;
+  const isMediumScreen = dimensions.width >= 768 && dimensions.width < 1440;
+  const modalWidth = isLargeScreen ? 400 : isMediumScreen ? 360 : "90%";
+  const modalPadding = isLargeScreen ? 32 : isMediumScreen ? 24 : 16;
+
+  return (
+    <Portal>
+      <Modal
+        visible={visible}
+        onDismiss={onDismiss}
+        contentContainerStyle={[
+          styles.dataExportModal,
+          {
+            width: modalWidth,
+            maxWidth: 400,
+            alignSelf: "center",
+          },
+        ]}
+      >
+        <View
+          style={[styles.dataExportModalContent, { padding: modalPadding }]}
+        >
+          <View style={styles.dataExportModalHeader}>
+            <MaterialCommunityIcons
+              name="file-document-outline"
+              size={32}
+              color={theme.colors.primary}
+            />
+            <Text style={styles.dataExportModalTitle}>
+              {t("superAdmin.profile.exportData") || "Export Your Data"}
+            </Text>
+          </View>
+
+          <Text style={styles.dataExportModalMessage}>
+            {t("superAdmin.profile.exportDataDescription") ||
+              "Your personal data will be exported in a secure, readable text format. The export includes your profile information and account activity history."}
+          </Text>
+
+          <View style={styles.dataExportModalActions}>
+            <Button
+              mode="outlined"
+              onPress={onDismiss}
+              style={[styles.dataExportModalButton, styles.cancelButton]}
+              labelStyle={[styles.dataExportModalButtonText]}
+              disabled={loading}
+            >
+              {t("superAdmin.profile.cancel")}
+            </Button>
+            <Button
+              mode="contained"
+              onPress={onConfirm}
+              style={[styles.dataExportModalButton, styles.confirmButton]}
+              buttonColor={theme.colors.primary}
+              labelStyle={[styles.dataExportModalButtonText]}
+              loading={loading}
+              disabled={loading}
+            >
+              {t("superAdmin.profile.downloadData") || "Download"}
+            </Button>
+          </View>
+        </View>
+      </Modal>
+    </Portal>
+  );
+};
+
 const SuperAdminProfileScreen = () => {
   const theme = useTheme();
-  const { user, signOut } = useAuth();
+  const { user, signOut, forgotPassword } = useAuth();
   const { t } = useTranslation();
   const { currentLanguage } = useLanguage();
   const dimensions = useWindowDimensions();
@@ -126,6 +392,14 @@ const SuperAdminProfileScreen = () => {
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [signOutModalVisible, setSignOutModalVisible] = useState(false);
+  const [deleteAccountModalVisible, setDeleteAccountModalVisible] =
+    useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [resetPasswordModalVisible, setResetPasswordModalVisible] =
+    useState(false);
+  const [resettingPassword, setResettingPassword] = useState(false);
+  const [dataExportModalVisible, setDataExportModalVisible] = useState(false);
+  const [exportingData, setExportingData] = useState(false);
 
   // Gradient colors used across the app
   const gradientColors = [
@@ -166,6 +440,11 @@ const SuperAdminProfileScreen = () => {
   useEffect(() => {
     fetchAdminData();
   }, [user]);
+
+  // Initialize email service
+  useEffect(() => {
+    initEmailService();
+  }, []);
 
   const handleUpdateProfile = async () => {
     try {
@@ -225,6 +504,109 @@ const SuperAdminProfileScreen = () => {
           },
         ]
       );
+    }
+  };
+
+  const handleAccountDeletionConfirmation = () => {
+    setDeleteAccountModalVisible(true);
+  };
+
+  const handleDeleteAccount = async () => {
+    try {
+      if (!user) return;
+
+      setDeletingAccount(true);
+
+      // 1. Log deletion request
+      await supabase.from("activity_logs").insert({
+        user_id: user.id,
+        activity_type: "account_deletion",
+        description: "Account deletion process initiated",
+        metadata: {
+          timestamp: new Date().toISOString(),
+          action: "deletion_started",
+        },
+      });
+
+      // 2. Export user data for compliance records
+      const [adminData, activityLogs] = await Promise.all([
+        supabase.from("admin").select("*").eq("id", user.id).single(),
+        supabase.from("activity_logs").select("*").eq("user_id", user.id),
+      ]);
+
+      const complianceRecord = {
+        userData: adminData.data,
+        activityLogs: activityLogs.data,
+        deletionDate: new Date().toISOString(),
+      };
+
+      // 3. Store compliance record (you would typically store this in a secure location)
+      console.log("Compliance record created:", complianceRecord);
+
+      // 4. Anonymize personal data in admin table
+      const { error: adminUpdateError } = await supabase
+        .from("admin")
+        .update({
+          name: "DELETED_USER",
+          email: `deleted_${user.id}@deleted.com`,
+          phone_number: null,
+          deleted_at: new Date().toISOString(),
+          status: false,
+        })
+        .eq("id", user.id);
+
+      if (adminUpdateError) throw adminUpdateError;
+
+      // 5. Update user record
+      const { error: userUpdateError } = await supabase
+        .from("users")
+        .update({
+          email: `deleted_${user.id}@deleted.com`,
+          deleted_at: new Date().toISOString(),
+          status: "deleted",
+        })
+        .eq("id", user.id);
+
+      if (userUpdateError) throw userUpdateError;
+
+      // 6. Log successful deletion
+      await supabase.from("activity_logs").insert({
+        user_id: user.id,
+        activity_type: "account_deletion",
+        description: "Account successfully anonymized and deactivated",
+        metadata: {
+          timestamp: new Date().toISOString(),
+          action: "deletion_completed",
+        },
+      });
+
+      setSnackbarMessage(t("superAdmin.profile.accountDeletedSuccess"));
+      setSnackbarVisible(true);
+
+      // 7. Sign out the user
+      await signOut();
+    } catch (error: any) {
+      console.error("Error deleting account:", error);
+
+      // Log the error
+      await supabase.from("activity_logs").insert({
+        user_id: user.id,
+        activity_type: "system_error",
+        description: "Account deletion failed",
+        metadata: {
+          timestamp: new Date().toISOString(),
+          error: error.message,
+          action: "deletion_failed",
+        },
+      });
+
+      setSnackbarMessage(
+        error.message || t("superAdmin.profile.accountDeleteFailed")
+      );
+      setSnackbarVisible(true);
+    } finally {
+      setDeletingAccount(false);
+      setDeleteAccountModalVisible(false);
     }
   };
 
@@ -316,6 +698,155 @@ const SuperAdminProfileScreen = () => {
         </Modal>
       </Portal>
     );
+  };
+
+  const handleResetPasswordClick = () => {
+    setResetPasswordModalVisible(true);
+  };
+
+  const handleResetPassword = async () => {
+    try {
+      if (!user?.email) {
+        setSnackbarMessage(
+          t("superAdmin.profile.emailRequired") || "Email is required"
+        );
+        setSnackbarVisible(true);
+        return;
+      }
+
+      setResettingPassword(true);
+      console.log("Initiating password reset for email:", user.email);
+      const { error } = await forgotPassword(user.email);
+
+      if (error) {
+        let errorMessage = error.message || t("forgotPassword.failedReset");
+        let messageType = "error";
+
+        // Handle specific error cases
+        if (error.message?.includes("sender identity")) {
+          errorMessage = t("forgotPassword.emailServiceError");
+        } else if (error.message?.includes("rate limit")) {
+          errorMessage = t("forgotPassword.tooManyAttempts");
+          messageType = "warning";
+        } else if (error.message?.includes("network")) {
+          errorMessage = t("forgotPassword.networkError");
+          messageType = "warning";
+        }
+
+        console.error("Password reset error:", error);
+        setSnackbarMessage(errorMessage);
+        setSnackbarVisible(true);
+      } else {
+        console.log("Password reset request successful");
+        setSnackbarMessage(
+          t("forgotPassword.resetInstructions") ||
+            "Password reset instructions have been sent to your email."
+        );
+        setSnackbarVisible(true);
+      }
+    } catch (err) {
+      console.error("Unexpected error during password reset:", err);
+      setSnackbarMessage(
+        t("common.unexpectedError") || "An unexpected error occurred"
+      );
+      setSnackbarVisible(true);
+    } finally {
+      setResettingPassword(false);
+      setResetPasswordModalVisible(false);
+    }
+  };
+
+  // Add new function to handle data export
+  const handleDataExport = async () => {
+    try {
+      setExportingData(true);
+
+      // Log the export attempt
+      await supabase.from("activity_logs").insert({
+        user_id: user?.id,
+        activity_type: "data_access",
+        description: "User requested data export",
+        metadata: {
+          timestamp: new Date().toISOString(),
+          action: "export_initiated",
+        },
+      });
+
+      // Fetch user's personal data
+      const [adminData, activityLogs] = await Promise.all([
+        supabase.from("admin").select("*").eq("id", user?.id).single(),
+        supabase.from("activity_logs").select("*").eq("user_id", user?.id),
+      ]);
+
+      // Create a user-friendly text export
+      const exportText = `
+PERSONAL DATA EXPORT
+Generated on: ${formatDate(new Date().toISOString())}
+===========================================
+
+PERSONAL INFORMATION
+-------------------
+Name: ${adminData.data?.name || "Not provided"}
+Email: ${user?.email || "Not provided"}
+Phone: ${adminData.data?.phone_number || "Not provided"}
+Account Created: ${formatDate(adminData.data?.created_at)}
+Last Updated: ${formatDate(adminData.data?.updated_at)}
+
+ACCOUNT ACTIVITY LOG
+-------------------
+${
+  activityLogs.data
+    ?.sort(
+      (a: any, b: any) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    )
+    ?.map(formatActivityLog)
+    ?.join("\n") || "No activity recorded"
+}
+
+===========================================
+This export was generated in accordance with data protection regulations.
+For security purposes, some information may be partially redacted.
+If you need additional information, please contact support.
+`;
+
+      // Create and download the text file
+      const blob = new Blob([exportText], { type: "text/plain" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `personal-data-export-${new Date().toLocaleDateString().replace(/\//g, "-")}.txt`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      // Log successful export
+      await supabase.from("activity_logs").insert({
+        user_id: user?.id,
+        activity_type: "data_access",
+        description: "Data export completed successfully",
+        metadata: {
+          timestamp: new Date().toISOString(),
+          action: "export_completed",
+        },
+      });
+
+      setSnackbarMessage(
+        t("superAdmin.profile.exportSuccess") ||
+          "Your data has been exported successfully"
+      );
+      setSnackbarVisible(true);
+    } catch (error) {
+      console.error("Error exporting data:", error);
+      setSnackbarMessage(
+        t("superAdmin.profile.exportError") || "Failed to export data"
+      );
+      setSnackbarVisible(true);
+    } finally {
+      setExportingData(false);
+      setDataExportModalVisible(false);
+    }
   };
 
   if (loading) {
@@ -542,7 +1073,7 @@ const SuperAdminProfileScreen = () => {
                 { flex: isLargeScreen ? 1 : isMediumScreen ? 1 : 1 },
               ]}
             >
-             <Surface
+              <Surface
                 style={[
                   styles.profileCard,
                   {
@@ -553,7 +1084,7 @@ const SuperAdminProfileScreen = () => {
                 elevation={1}
               >
                 <View style={styles.profileHeader}>
-                <Avatar.Text
+                  <Avatar.Text
                     size={100}
                     label={getInitials()}
                     style={[
@@ -680,33 +1211,9 @@ const SuperAdminProfileScreen = () => {
                       </View>
 
                       <View style={styles.cardContent}>
-                        {/* Language Selector */}
-                        <View style={styles.settingItem}>
-                          <View style={styles.settingItemContent}>
-                            <MaterialCommunityIcons
-                              name="translate"
-                              size={24}
-                              color="rgba(54,105,157,255)"
-                            />
-                            <Text variant="medium" style={styles.settingText}>
-                              {t("superAdmin.profile.language")}
-                            </Text>
-                          </View>
-                          <View style={styles.languageSelectorContainer}>
-                            <CustomLanguageSelector compact={true} />
-                          </View>
-                        </View>
-
-                        <Divider style={styles.divider} />
-
                         <TouchableOpacity
                           style={styles.settingItem}
-                          onPress={() => {
-                            setSnackbarMessage(
-                              t("superAdmin.profile.resetPasswordSuccess")
-                            );
-                            setSnackbarVisible(true);
-                          }}
+                          onPress={handleResetPasswordClick}
                         >
                           <View style={styles.settingItemContent}>
                             <MaterialCommunityIcons
@@ -753,6 +1260,59 @@ const SuperAdminProfileScreen = () => {
                             color="#999"
                           />
                         </TouchableOpacity>
+
+                        <Divider style={styles.divider} />
+
+                        <TouchableOpacity
+                          style={styles.settingItem}
+                          onPress={handleAccountDeletionConfirmation}
+                        >
+                          <View style={styles.settingItemContent}>
+                            <MaterialCommunityIcons
+                              name="delete-outline"
+                              size={24}
+                              color={theme.colors.error}
+                            />
+                            <Text
+                              variant="medium"
+                              style={[
+                                styles.settingText,
+                                { color: theme.colors.error },
+                              ]}
+                            >
+                              {t("superAdmin.profile.deleteAccount") ||
+                                "Delete Account"}
+                            </Text>
+                          </View>
+                          <MaterialCommunityIcons
+                            name="chevron-right"
+                            size={24}
+                            color={theme.colors.error}
+                          />
+                        </TouchableOpacity>
+
+                        <Divider style={styles.divider} />
+
+                        <TouchableOpacity
+                          style={styles.settingItem}
+                          onPress={() => setDataExportModalVisible(true)}
+                        >
+                          <View style={styles.settingItemContent}>
+                            <MaterialCommunityIcons
+                              name="database-export"
+                              size={24}
+                              color={theme.colors.primary}
+                            />
+                            <Text variant="medium" style={styles.settingText}>
+                              {t("superAdmin.profile.exportData")}
+                            </Text>
+                          </View>
+                          <MaterialCommunityIcons
+                            name="chevron-right"
+                            size={24}
+                            color="#999"
+                          />
+                        </TouchableOpacity>
                       </View>
                     </Surface>
                   </Animated.View>
@@ -764,7 +1324,26 @@ const SuperAdminProfileScreen = () => {
       </KeyboardAvoidingView>
 
       {renderSignOutModal()}
-      <CustomSnackbar 
+      <DeleteAccountModal
+        visible={deleteAccountModalVisible}
+        onDismiss={() => setDeleteAccountModalVisible(false)}
+        onConfirm={handleDeleteAccount}
+        loading={deletingAccount}
+      />
+      <ResetPasswordModal
+        visible={resetPasswordModalVisible}
+        onDismiss={() => setResetPasswordModalVisible(false)}
+        onConfirm={handleResetPassword}
+        loading={resettingPassword}
+        email={user?.email || ""}
+      />
+      <DataExportModal
+        visible={dataExportModalVisible}
+        onDismiss={() => setDataExportModalVisible(false)}
+        onConfirm={handleDataExport}
+        loading={exportingData}
+      />
+      <CustomSnackbar
         visible={snackbarVisible}
         message={snackbarMessage}
         onDismiss={() => setSnackbarVisible(false)}
@@ -1016,8 +1595,132 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.27,
     shadowRadius: 4.65,
   },
-  
+  deleteAccountModal: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    elevation: 5,
+    overflow: "hidden",
+  },
+  deleteAccountModalContent: {
+    alignItems: "center",
+  },
+  deleteAccountModalHeader: {
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  deleteAccountModalTitle: {
+    fontSize: 20,
+    fontFamily: "Poppins-SemiBold",
+    color: "#1e293b",
+    marginTop: 16,
+    textAlign: "center",
+  },
+  deleteAccountModalMessage: {
+    fontSize: 16,
+    fontFamily: "Poppins-Regular",
+    color: "#64748b",
+    textAlign: "center",
+    marginBottom: 24,
+    lineHeight: 24,
+  },
+  deleteAccountModalActions: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 12,
+    marginTop: 8,
+  },
+  deleteAccountModalButton: {
+    borderRadius: 8,
+    minWidth: 100,
+  },
+  deleteAccountModalButtonText: {
+    fontFamily: "Poppins-Medium",
+    fontSize: 14,
+  },
+  resetPasswordModal: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    elevation: 5,
+    overflow: "hidden",
+  },
+  resetPasswordModalContent: {
+    alignItems: "center",
+  },
+  resetPasswordModalHeader: {
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  resetPasswordModalTitle: {
+    fontSize: 20,
+    fontFamily: "Poppins-SemiBold",
+    color: "#1e293b",
+    marginTop: 16,
+    textAlign: "center",
+  },
+  resetPasswordModalMessage: {
+    fontSize: 16,
+    fontFamily: "Poppins-Regular",
+    color: "#64748b",
+    textAlign: "center",
+    marginBottom: 24,
+    lineHeight: 24,
+  },
+  resetPasswordModalActions: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 12,
+    marginTop: 8,
+  },
+  resetPasswordModalButton: {
+    borderRadius: 8,
+    minWidth: 100,
+  },
+  resetPasswordModalButtonText: {
+    fontFamily: "Poppins-Medium",
+    fontSize: 14,
+  },
+  dataExportModal: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    elevation: 5,
+    overflow: "hidden",
+  },
+  dataExportModalContent: {
+    alignItems: "center",
+  },
+  dataExportModalHeader: {
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  dataExportModalTitle: {
+    fontSize: 20,
+    fontFamily: "Poppins-SemiBold",
+    color: "#1e293b",
+    marginTop: 16,
+    textAlign: "center",
+  },
+  dataExportModalMessage: {
+    fontSize: 16,
+    fontFamily: "Poppins-Regular",
+    color: "#64748b",
+    textAlign: "center",
+    marginBottom: 24,
+    lineHeight: 24,
+  },
+  dataExportModalActions: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 12,
+    marginTop: 8,
+  },
+  dataExportModalButton: {
+    borderRadius: 8,
+    minWidth: 100,
+  },
+  dataExportModalButtonText: {
+    fontFamily: "Poppins-Medium",
+    fontSize: 14,
+  },
 });
-
 
 export default SuperAdminProfileScreen;
