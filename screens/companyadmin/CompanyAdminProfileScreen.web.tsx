@@ -38,6 +38,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import CustomSnackbar from "../../components/CustomSnackbar";
+import { t } from "i18next";
 
 // Add Shimmer component for loading states
 interface ShimmerProps {
