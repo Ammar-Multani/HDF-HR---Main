@@ -476,7 +476,6 @@ const FormSubmissionsScreen = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [forms, setForms] = useState<FormSubmission[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -484,6 +483,9 @@ const FormSubmissionsScreen = () => {
   const [page, setPage] = useState(0);
   const [totalItems, setTotalItems] = useState(0);
   const PAGE_SIZE = 10;
+
+  // Calculate total pages
+  const totalPages = Math.ceil(totalItems / PAGE_SIZE);
 
   // Add window dimensions state
   const [windowDimensions, setWindowDimensions] = useState({
@@ -718,7 +720,7 @@ const FormSubmissionsScreen = () => {
           illnessError,
           departureError,
         });
-        return;
+        throw new Error("Failed to fetch forms");
       }
 
       // Process accident reports
@@ -755,10 +757,10 @@ const FormSubmissionsScreen = () => {
           id: report.id,
           type: "departure",
           title: "Staff Departure Report",
-          employee_name: `${report.company_user.first_name} ${report.company_user.last_name}`,
+          employee_name: `${report.company_user[0].first_name} ${report.company_user[0].last_name}`,
           employee_id: report.employee_id,
           status: report.status,
-          submission_date: report.submission_date,
+          submission_date: report.created_at,
           updated_at: report.updated_at,
           modified_by: report.modified_by,
         })) || [];
@@ -811,6 +813,12 @@ const FormSubmissionsScreen = () => {
   // Add page handling
   const handlePageChange = (newPage: number) => {
     setPage(newPage);
+  };
+
+  // Update onRefresh
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchForms(true);
   };
 
   // Update filter handling
@@ -1185,7 +1193,11 @@ const FormSubmissionsScreen = () => {
       );
     }
 
-    const totalPages = Math.ceil(totalItems / PAGE_SIZE);
+    const onRefresh = () => {
+      setRefreshing(true);
+      fetchForms(true);
+      setRefreshing(false);
+    };
 
     return (
       <>

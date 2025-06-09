@@ -27,6 +27,7 @@ import {
   Divider,
   RadioButton,
   Banner,
+  Surface,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -57,6 +58,14 @@ import Animated, {
   interpolate,
 } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
+import Pagination from "../../components/Pagination";
+import FilterModal from "../../components/FilterModal";
+import {
+  FilterSection,
+  RadioFilterGroup,
+  FilterDivider,
+  PillFilterGroup,
+} from "../../components/FilterSections";
 
 // Add window dimensions hook
 const useWindowDimensions = () => {
@@ -428,6 +437,39 @@ const TaskItemSkeleton = () => {
   );
 };
 
+// Add extended Task interface
+interface ExtendedTask extends Task {
+  assignee?: {
+    first_name: string;
+    last_name: string;
+    email: string;
+    role: string;
+  };
+  creator?: {
+    first_name: string;
+    last_name: string;
+    email: string;
+    role: string;
+  };
+  isCreatedBySuperAdmin?: boolean;
+}
+
+// Add interfaces for user types
+interface CompanyUser {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  role: string;
+}
+
+interface AdminUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+}
+
 const CompanyAdminTasksScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
@@ -442,31 +484,32 @@ const CompanyAdminTasksScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [companyId, setCompanyId] = useState<string | null>(null);
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<ExtendedTask[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
+  const [filteredTasks, setFilteredTasks] = useState<ExtendedTask[]>([]);
   const [statusFilter, setStatusFilter] = useState<TaskStatus | "all">("all");
   const [page, setPage] = useState(0);
   const [hasMoreData, setHasMoreData] = useState(true);
   const [networkStatus, setNetworkStatus] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [totalCount, setTotalCount] = useState<number>(0);
+  const [totalItems, setTotalItems] = useState(0);
   const PAGE_SIZE = 10;
+
+  // Calculate total pages
+  const totalPages = Math.ceil(totalItems / PAGE_SIZE);
 
   // Filter modal state
   const [filterModalVisible, setFilterModalVisible] = useState(false);
-  const [sortOrder, setSortOrder] = useState<string>("desc");
   const [priorityFilter, setPriorityFilter] = useState<TaskPriority | "all">(
     "all"
   );
   const [appliedFilters, setAppliedFilters] = useState<{
     status: TaskStatus | "all";
     priority: TaskPriority | "all";
-    sortOrder: string;
   }>({
     status: "all",
     priority: "all",
-    sortOrder: "desc",
   });
 
   // Check network status when screen focuses
@@ -543,7 +586,7 @@ const CompanyAdminTasksScreen = () => {
     }
   };
 
-  // Memoize filteredTasks to avoid unnecessary re-filtering
+  // Update memoizedFilteredTasks to always sort by newest first
   const memoizedFilteredTasks = useMemo(() => {
     try {
       let filtered = tasks;
@@ -562,22 +605,26 @@ const CompanyAdminTasksScreen = () => {
         );
       }
 
-      // Apply search filter - safely check if description exists
+      // Apply search filter
       if (searchQuery.trim() !== "") {
         filtered = filtered.filter(
           (task) =>
             task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (typeof task.description === "string" &&
+            (task.description &&
               task.description
                 .toLowerCase()
                 .includes(searchQuery.toLowerCase()))
         );
       }
 
-      return filtered;
+      // Always sort by newest first
+      return filtered.sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
     } catch (error) {
       console.error("Error filtering tasks:", error);
-      return tasks; // Return unfiltered tasks on error
+      return tasks;
     }
   }, [tasks, appliedFilters.status, appliedFilters.priority, searchQuery]);
 
@@ -588,7 +635,6 @@ const CompanyAdminTasksScreen = () => {
 
   const fetchTasks = async (refresh = false) => {
     try {
-      console.log("=== Starting fetchTasks ===");
       // Clear any previous errors
       setError(null);
 
@@ -609,7 +655,6 @@ const CompanyAdminTasksScreen = () => {
         .eq("active_status", "active")
         .single();
 
-      console.log("Company user data:", { companyUserData, companyUserError });
 
       if (companyUserError || !companyUserData) {
         console.error("Error fetching company user data:", companyUserError);
@@ -628,7 +673,7 @@ const CompanyAdminTasksScreen = () => {
       const to = from + PAGE_SIZE - 1;
 
       // Generate a cache key based on all filters
-      const filterKey = `${appliedFilters.status}_${appliedFilters.priority}_${appliedFilters.sortOrder}`;
+      const filterKey = `${appliedFilters.status}_${appliedFilters.priority}`;
       const cacheKey = `tasks_${companyUserData.company_id}_${searchQuery.trim()}_${filterKey}_page${currentPage}_size${PAGE_SIZE}`;
 
       // Only force refresh when explicitly requested
@@ -637,21 +682,10 @@ const CompanyAdminTasksScreen = () => {
       // Check network availability
       const networkAvailable = await isNetworkAvailable();
       if (!networkAvailable && refresh) {
-        console.log(
-          "Network appears to be offline, but still attempting fetch"
-        );
       }
 
       // Use cached query implementation with proper typing
       const fetchData = async () => {
-        console.log("Fetching tasks with filters:", {
-          companyId: companyUserData.company_id,
-          userId: companyUserData.id,
-          status: appliedFilters.status,
-          priority: appliedFilters.priority,
-          sortOrder: appliedFilters.sortOrder,
-        });
-
         // First get total count without range
         const countQuery = supabase
           .from("tasks")
@@ -691,11 +725,10 @@ const CompanyAdminTasksScreen = () => {
         // Apply sorting based on the applied sort order
         query = query
           .order("created_at", {
-            ascending: appliedFilters.sortOrder === "asc",
+            ascending: false,
           })
           .range(from, to);
 
-        console.log("Executing queries...");
 
         // Execute both queries
         const [countResult, tasksResult] = await Promise.all([
@@ -703,12 +736,6 @@ const CompanyAdminTasksScreen = () => {
           query,
         ]);
 
-        console.log("Query results:", {
-          countError: countResult.error,
-          tasksError: tasksResult.error,
-          taskCount: countResult.count,
-          tasksFound: tasksResult.data?.length,
-        });
 
         if (countResult.error) throw countResult.error;
         if (tasksResult.error) throw tasksResult.error;
@@ -724,17 +751,15 @@ const CompanyAdminTasksScreen = () => {
           ];
           const allUserIds = [...new Set([...creatorIds, ...assigneeIds])];
 
-          console.log("Fetching user details for IDs:", allUserIds);
 
           // First check which creators are super admins
           const { data: adminUsers } = await supabase
             .from("admin")
-            .select("id, role, name")
-            .in("id", creatorIds);
+            .select("id, role, name, email")
+            .in("id", allUserIds);
 
-          console.log("Admin users found:", adminUsers);
 
-          // Identify super admin creators but don't filter them out
+          // Identify super admin creators
           const superAdminIds =
             adminUsers
               ?.filter(
@@ -743,7 +768,6 @@ const CompanyAdminTasksScreen = () => {
               )
               .map((admin) => admin.id) || [];
 
-          console.log("Super admin IDs:", superAdminIds);
 
           // Fetch user details from company_user table
           const { data: userDetails } = await supabase
@@ -751,15 +775,53 @@ const CompanyAdminTasksScreen = () => {
             .select("id, first_name, last_name, email, role")
             .in("id", allUserIds);
 
-          // Map user details to tasks, including super admin info
-          const tasksWithUsers = tasks.map((task) => ({
-            ...task,
-            creator:
-              userDetails?.find((user) => user.id === task.created_by) ||
-              adminUsers?.find((admin) => admin.id === task.created_by),
-            assignee: userDetails?.find((user) => user.id === task.assigned_to),
-            isCreatedBySuperAdmin: superAdminIds.includes(task.created_by),
-          }));
+          // Map user details to tasks
+          const tasksWithUsers = tasks.map((task) => {
+            const creator =
+              (userDetails?.find(
+                (user) => user.id === task.created_by
+              ) as CompanyUser) ||
+              (adminUsers?.find(
+                (admin) => admin.id === task.created_by
+              ) as AdminUser);
+
+            const assignee =
+              (userDetails?.find(
+                (user) => user.id === task.assigned_to
+              ) as CompanyUser) ||
+              (adminUsers?.find(
+                (admin) => admin.id === task.assigned_to
+              ) as AdminUser);
+
+            // Format admin users to match company_user structure
+            const formatAdminUser = (
+              admin: AdminUser | null
+            ): CompanyUser | null => {
+              if (!admin) return null;
+              return {
+                id: admin.id,
+                first_name: admin.name?.split(" ")[0] || "",
+                last_name: admin.name?.split(" ").slice(1).join(" ") || "",
+                email: admin.email,
+                role: admin.role,
+              };
+            };
+
+            return {
+              ...task,
+              creator: creator
+                ? "first_name" in creator
+                  ? creator
+                  : formatAdminUser(creator)
+                : null,
+              assignee: assignee
+                ? "first_name" in assignee
+                  ? assignee
+                  : formatAdminUser(assignee)
+                : null,
+              isCreatedBySuperAdmin: superAdminIds.includes(task.created_by),
+            };
+          });
 
           return {
             data: tasksWithUsers,
@@ -825,6 +887,9 @@ const CompanyAdminTasksScreen = () => {
       } else {
         setTasks((prev) => [...prev, ...data]);
       }
+
+      // Set total items for pagination
+      setTotalItems(count || 0);
     } catch (error) {
       console.error("Error fetching tasks:", error);
       if (!networkStatus) {
@@ -904,50 +969,34 @@ const CompanyAdminTasksScreen = () => {
     }
   };
 
-  // Apply filters and refresh tasks list
+  // Update applyFilters to remove sort order
   const applyFilters = () => {
-    // Close modal first
     setFilterModalVisible(false);
-
-    // Apply new filters
     const newFilters = {
       status: statusFilter,
       priority: priorityFilter,
-      sortOrder: sortOrder,
     };
-
-    // Set applied filters
     setAppliedFilters(newFilters);
-
-    // Fetch tasks with new filters
-    fetchTasks(true);
   };
 
-  // Clear all filters
-  const clearFilters = () => {
+  // Update clearFilters to remove sort order
+  const clearFilters = useCallback(() => {
+
+    // Reset all filter states
     setStatusFilter("all");
     setPriorityFilter("all");
-    setSortOrder("desc");
-    setFilterModalVisible(false);
-
-    // Clear applied filters
     setAppliedFilters({
       status: "all",
       priority: "all",
-      sortOrder: "desc",
     });
+    setPage(0);
 
-    // Call the regular fetch after resetting everything
     fetchTasks(true);
-  };
+  }, [statusFilter, priorityFilter, appliedFilters]);
 
-  // Check if we have any active filters
+  // Update hasActiveFilters to remove sort order check
   const hasActiveFilters = () => {
-    return (
-      appliedFilters.status !== "all" ||
-      appliedFilters.priority !== "all" ||
-      appliedFilters.sortOrder !== "desc"
-    );
+    return appliedFilters.status !== "all" || appliedFilters.priority !== "all";
   };
 
   const getPriorityColor = (priority: TaskPriority) => {
@@ -963,13 +1012,53 @@ const CompanyAdminTasksScreen = () => {
     }
   };
 
-  // Render active filter indicator
+  // Move handlers to component level
+  const handleStatusClear = useCallback(() => {
+    setStatusFilter("all");
+    setAppliedFilters((prev) => {
+      return {
+        ...prev,
+        status: "all",
+      };
+    });
+    setPage(0);
+    fetchTasks(true);
+  }, []);
+
+  const handlePriorityClear = useCallback(() => {
+    setPriorityFilter("all");
+    setAppliedFilters((prev) => {
+      return {
+        ...prev,
+        priority: "all",
+      };
+    });
+    setPage(0);
+    fetchTasks(true);
+  }, []);
+
+  const handleClearAllFilters = useCallback(() => {
+    clearFilters();
+  }, [clearFilters]);
+
+  // Render active filter indicator without hooks inside
   const renderActiveFilterIndicator = () => {
-    if (!hasActiveFilters()) return null;
+    if (!hasActiveFilters()) {
+      
+      return null;
+    }
 
     return (
       <View style={styles.activeFiltersContainer}>
-        <Text style={styles.activeFiltersText}>Active Filters:</Text>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Text style={styles.activeFiltersText}>Active Filters</Text>
+          {/* <IconButton
+            icon="close-circle"
+            size={16}
+            onPress={handleClearAllFilters}
+            style={{ margin: -8 }}
+          /> */}
+        </View>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -978,14 +1067,7 @@ const CompanyAdminTasksScreen = () => {
           {appliedFilters.status !== "all" && (
             <Chip
               mode="outlined"
-              onClose={() => {
-                setAppliedFilters({
-                  ...appliedFilters,
-                  status: "all",
-                });
-                setStatusFilter("all");
-                fetchTasks(true);
-              }}
+              onClose={handleStatusClear}
               style={[
                 styles.activeFilterChip,
                 {
@@ -1001,14 +1083,7 @@ const CompanyAdminTasksScreen = () => {
           {appliedFilters.priority !== "all" && (
             <Chip
               mode="outlined"
-              onClose={() => {
-                setAppliedFilters({
-                  ...appliedFilters,
-                  priority: "all",
-                });
-                setPriorityFilter("all");
-                fetchTasks(true);
-              }}
+              onClose={handlePriorityClear}
               style={[
                 styles.activeFilterChip,
                 {
@@ -1023,155 +1098,91 @@ const CompanyAdminTasksScreen = () => {
                 appliedFilters.priority.slice(1)}
             </Chip>
           )}
-          {appliedFilters.sortOrder !== "desc" && (
-            <Chip
-              mode="outlined"
-              onClose={() => {
-                setAppliedFilters({
-                  ...appliedFilters,
-                  sortOrder: "desc",
-                });
-                setSortOrder("desc");
-                fetchTasks(true);
-              }}
-              style={[
-                styles.activeFilterChip,
-                {
-                  backgroundColor: "#1a73e815",
-                  borderColor: "#1a73e8",
-                },
-              ]}
-              textStyle={{ color: "#1a73e8" }}
-            >
-              Date: Oldest first
-            </Chip>
-          )}
         </ScrollView>
       </View>
     );
   };
 
-  // Render the filter modal
+  // Add effect to sync filter states
+  useEffect(() => {
+
+    const needsSync =
+      appliedFilters.status !== statusFilter ||
+      appliedFilters.priority !== priorityFilter;
+
+    if (needsSync) {
+      setAppliedFilters({
+        status: statusFilter,
+        priority: priorityFilter,
+      });
+    }
+  }, [statusFilter, priorityFilter]);
+
+  // Update the filter modal
   const renderFilterModal = () => {
+    const statusOptions = [
+      { label: "All Status", value: "all" },
+      ...Object.values(TaskStatus).map((status) => ({
+        label: status
+          .split("_")
+          .map(
+            (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+          )
+          .join(" "),
+        value: status,
+      })),
+    ];
+
+    const priorityOptions = [
+      { label: "All Priorities", value: "all" },
+      ...Object.values(TaskPriority).map((priority) => ({
+        label: priority
+          .split("_")
+          .map(
+            (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+          )
+          .join(" "),
+        value: priority,
+      })),
+    ];
+
     return (
-      <Portal>
-        <Modal
-          visible={filterModalVisible}
-          onDismiss={() => setFilterModalVisible(false)}
-          contentContainerStyle={styles.modalContainer}
-        >
-          <View style={styles.modalHeaderContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Filter Options</Text>
-              <IconButton
-                icon="close"
-                size={24}
-                onPress={() => setFilterModalVisible(false)}
-              />
-            </View>
-            <Divider style={styles.modalDivider} />
-          </View>
+      <FilterModal
+        visible={filterModalVisible}
+        onDismiss={() => setFilterModalVisible(false)}
+        title="Filter Options"
+        onClear={clearFilters}
+        onApply={applyFilters}
+        isLargeScreen={isLargeScreen}
+        isMediumScreen={isMediumScreen}
+      >
+        <FilterSection title="Status">
+          <PillFilterGroup
+            options={statusOptions}
+            value={statusFilter}
+            onValueChange={(value) =>
+              setStatusFilter(value as TaskStatus | "all")
+            }
+          />
+        </FilterSection>
 
-          <ScrollView style={styles.modalContent}>
-            {/* Status Filter Section */}
-            <View style={styles.modalSection}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Filter by status</Text>
-              </View>
-              <RadioButton.Group
-                onValueChange={(value) =>
-                  setStatusFilter(value as TaskStatus | "all")
-                }
-                value={statusFilter}
-              >
-                <View style={styles.radioItem}>
-                  <RadioButton.Android value="all" color="#1a73e8" />
-                  <Text style={styles.radioLabel}>All Statuses</Text>
-                </View>
-                {Object.values(TaskStatus).map((status) => (
-                  <View key={status} style={styles.radioItem}>
-                    <RadioButton.Android value={status} color="#1a73e8" />
-                    <Text style={styles.radioLabel}>
-                      {status.charAt(0).toUpperCase() +
-                        status.slice(1).replace(/_/g, " ")}
-                    </Text>
-                  </View>
-                ))}
-              </RadioButton.Group>
-            </View>
+        <FilterDivider />
 
-            <Divider style={styles.modalDivider} />
-
-            {/* Priority Filter */}
-            <View style={styles.modalSection}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Filter by priority</Text>
-              </View>
-              <RadioButton.Group
-                onValueChange={(value) =>
-                  setPriorityFilter(value as TaskPriority | "all")
-                }
-                value={priorityFilter}
-              >
-                <View style={styles.radioItem}>
-                  <RadioButton.Android value="all" color="#1a73e8" />
-                  <Text style={styles.radioLabel}>All Priorities</Text>
-                </View>
-                {Object.values(TaskPriority).map((priority) => (
-                  <View key={priority} style={styles.radioItem}>
-                    <RadioButton.Android value={priority} color="#1a73e8" />
-                    <Text style={styles.radioLabel}>
-                      {priority.charAt(0).toUpperCase() + priority.slice(1)}
-                    </Text>
-                  </View>
-                ))}
-              </RadioButton.Group>
-            </View>
-
-            <Divider style={styles.modalDivider} />
-
-            {/* Date Sort Section */}
-            <View style={styles.modalSection}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Sort by creation date</Text>
-              </View>
-              <RadioButton.Group
-                onValueChange={(value) => setSortOrder(value)}
-                value={sortOrder}
-              >
-                <View style={styles.radioItem}>
-                  <RadioButton.Android value="desc" color="#1a73e8" />
-                  <Text style={styles.radioLabel}>Newest first</Text>
-                </View>
-                <View style={styles.radioItem}>
-                  <RadioButton.Android value="asc" color="#1a73e8" />
-                  <Text style={styles.radioLabel}>Oldest first</Text>
-                </View>
-              </RadioButton.Group>
-            </View>
-          </ScrollView>
-
-          <View style={styles.modalFooter}>
-            <TouchableOpacity
-              style={styles.footerButton}
-              onPress={clearFilters}
-            >
-              <Text style={styles.clearButtonText}>Clear Filters</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.footerButton, styles.applyButton]}
-              onPress={applyFilters}
-            >
-              <Text style={styles.applyButtonText}>Apply</Text>
-            </TouchableOpacity>
-          </View>
-        </Modal>
-      </Portal>
+        <FilterSection title="Priority">
+          <PillFilterGroup
+            options={priorityOptions}
+            value={priorityFilter}
+            onValueChange={(value) =>
+              setPriorityFilter(value as TaskPriority | "all")
+            }
+          />
+        </FilterSection>
+      </FilterModal>
     );
   };
 
-  // Enhanced renderTaskItem with better UI
-  const renderTaskItem = ({ item }: { item: Task }) => (
+  // Update the renderTaskItem to use the new ExtendedTask type
+  const renderTaskItem = ({ item }: { item: ExtendedTask }) => (
     <TouchableOpacity
       onPress={() =>
         navigation.navigate(
@@ -1282,8 +1293,8 @@ const CompanyAdminTasksScreen = () => {
     </TouchableOpacity>
   );
 
-  // Add TableRow component
-  const TableRow = ({ item }: { item: Task }) => (
+  // Update the TableRow component to use ExtendedTask and show formatted names
+  const TableRow = ({ item }: { item: ExtendedTask }) => (
     <Pressable
       onPress={() => navigation.navigate("TaskDetails", { taskId: item.id })}
       style={({ pressed }: PressableStateCallbackType) => [
@@ -1295,7 +1306,13 @@ const CompanyAdminTasksScreen = () => {
         <TooltipText text={item.title} />
       </View>
       <View style={styles.tableCell}>
-        <TooltipText text={item.assigned_to || "-"} />
+        <TooltipText
+          text={
+            item.assignee
+              ? `${item.assignee.first_name} ${item.assignee.last_name}`
+              : "-"
+          }
+        />
       </View>
       <View style={styles.tableCell}>
         <TooltipText text={format(new Date(item.deadline), "MMM d, yyyy")} />
@@ -1320,108 +1337,86 @@ const CompanyAdminTasksScreen = () => {
     </Pressable>
   );
 
+  // Add page handling
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+  };
+
   // Update renderContent to handle table layout
   const renderContent = () => {
-    if (filteredTasks.length === 0 && !loading && !refreshing) {
+    if (error) {
       return (
-        <ScrollView
-          contentContainerStyle={{ flexGrow: 1 }}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-        >
-          <EmptyState
-            icon="clipboard-text-off"
-            title="No Tasks Found"
-            message={
-              searchQuery || hasActiveFilters()
-                ? "No tasks match your search criteria."
-                : "You haven't created any tasks yet."
-            }
-            buttonTitle={
-              searchQuery || hasActiveFilters()
-                ? "Clear Filters"
-                : "Create Task"
-            }
-            onButtonPress={() => {
-              if (searchQuery || hasActiveFilters()) {
-                setSearchQuery("");
-                clearFilters();
-              } else {
-                navigation.navigate("CreateTask" as never);
-              }
-            }}
-          />
-        </ScrollView>
-      );
-    }
-
-    // Show skeleton loaders when initially loading
-    if (loading && filteredTasks.length === 0) {
-      if (isMediumScreen || isLargeScreen) {
-        return <TableSkeleton />;
-      }
-      return (
-        <FlatList
-          data={Array(3).fill(0)}
-          renderItem={() => <TaskItemSkeleton />}
-          keyExtractor={(_, index) => `skeleton-${index}`}
-          contentContainerStyle={styles.listContent}
+        <EmptyState
+          icon="alert-circle"
+          title="Error"
+          message={error}
+          buttonTitle={networkStatus ? "Try Again" : "Retry"}
+          onButtonPress={() => fetchTasks(true)}
         />
       );
     }
 
-    if (isMediumScreen || isLargeScreen) {
+    if (filteredTasks.length === 0) {
       return (
-        <View style={styles.tableContainer}>
-          <TableHeader />
-          <FlatList
-            data={filteredTasks}
-            renderItem={({ item }) => <TableRow item={item} />}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.tableContent}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
-            onEndReached={loadMoreTasks}
-            onEndReachedThreshold={0.5}
-            ListFooterComponent={() => (
-              <View style={styles.loadingFooter}>
-                {loadingMore && hasMoreData && (
-                  <ActivityIndicator size="small" color="#1a73e8" />
-                )}
-                {!hasMoreData && filteredTasks.length > 0 && (
-                  <Text style={styles.endListText}>No more tasks to load</Text>
-                )}
-              </View>
-            )}
-          />
-        </View>
+        <EmptyState
+          icon="clipboard-text"
+          title="No Tasks Found"
+          message={
+            searchQuery || hasActiveFilters()
+              ? "No tasks match your search criteria."
+              : "No tasks available."
+          }
+          buttonTitle={
+            searchQuery || hasActiveFilters() ? "Clear Filters" : undefined
+          }
+          onButtonPress={
+            searchQuery || hasActiveFilters()
+              ? () => {
+                  setSearchQuery("");
+                  clearFilters();
+                }
+              : undefined
+          }
+        />
       );
     }
 
     return (
-      <FlatList
-        data={filteredTasks}
-        renderItem={renderTaskItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        onEndReached={loadMoreTasks}
-        onEndReachedThreshold={0.3}
-        ListFooterComponent={() => (
-          <View style={styles.loadingFooter}>
-            {loadingMore && hasMoreData && (
-              <ActivityIndicator size="small" color="#1a73e8" />
-            )}
-            {!hasMoreData && filteredTasks.length > 0 && (
-              <Text style={styles.endListText}>No more tasks to load</Text>
-            )}
+      <>
+        {isMediumScreen || isLargeScreen ? (
+          <View style={styles.tableContainer}>
+            <TableHeader />
+            <FlatList
+              data={filteredTasks}
+              renderItem={({ item }) => <TableRow item={item} />}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.tableContent}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+              }
+            />
+          </View>
+        ) : (
+          <FlatList
+            data={filteredTasks}
+            renderItem={renderTaskItem}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+          />
+        )}
+        {totalPages > 1 && (
+          <View style={styles.paginationWrapper}>
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              onPageChange={handlePageChange}
+            />
           </View>
         )}
-      />
+      </>
     );
   };
 
@@ -1545,7 +1540,6 @@ const CompanyAdminTasksScreen = () => {
         />
       </View>
 
-      {renderActiveFilterIndicator()}
       {renderFilterModal()}
 
       <View
@@ -1559,6 +1553,7 @@ const CompanyAdminTasksScreen = () => {
           },
         ]}
       >
+        {renderActiveFilterIndicator()}
         {renderContent()}
       </View>
     </SafeAreaView>
@@ -1680,6 +1675,14 @@ const styles = StyleSheet.create({
     color: "#666",
     lineHeight: 20,
   },
+  taskCard: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.03)",
+    padding: 16,
+    marginBottom: 16,
+  },
   detailsSection: {
     backgroundColor: "#f9f9f9",
     borderRadius: 8,
@@ -1797,7 +1800,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e0e0e0",
     overflow: "hidden",
-    marginTop: 16,
     flex: 1,
   },
   tableHeaderRow: {
@@ -1883,6 +1885,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Poppins-Regular",
     lineHeight: 16,
+  },
+  paginationWrapper: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    borderRadius: 16,
+    marginTop: 12,
+    overflow: "hidden",
+    width: "auto",
+    alignSelf: "center",
   },
 });
 

@@ -23,6 +23,7 @@ import AppHeader from "../../components/AppHeader";
 import { UserRole, UserStatus } from "../../types";
 import { hashPassword } from "../../utils/auth";
 import CustomSnackbar from "../../components/CustomSnackbar";
+import { t } from "i18next";
 
 interface AdminFormData {
   name: string;

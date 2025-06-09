@@ -7,6 +7,7 @@ import {
   Platform,
   Alert,
   TouchableOpacity,
+  Dimensions,
 } from "react-native";
 import {
   Text,
@@ -34,6 +35,32 @@ import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import { TaskPriority, UserRole, TaskStatus } from "../../types";
 import CustomSnackbar from "../../components/CustomSnackbar";
+import Animated, { FadeIn } from "react-native-reanimated";
+import { useTranslation } from "react-i18next";
+
+// Add window dimensions hook
+const useWindowDimensions = () => {
+  const [dimensions, setDimensions] = useState({
+    width: Dimensions.get("window").width,
+    height: Dimensions.get("window").height,
+  });
+
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      const handleResize = () => {
+        setDimensions({
+          width: Dimensions.get("window").width,
+          height: Dimensions.get("window").height,
+        });
+      };
+
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }
+  }, []);
+
+  return dimensions;
+};
 
 type EditTaskRouteParams = {
   taskId: string;
@@ -55,6 +82,12 @@ const CompanyAdminEditTaskScreen = () => {
     useRoute<RouteProp<Record<string, EditTaskRouteParams>, string>>();
   const { taskId } = route.params;
   const { user } = useAuth();
+  const { t } = useTranslation();
+  const dimensions = useWindowDimensions();
+
+  // Calculate responsive breakpoints
+  const isLargeScreen = dimensions.width >= 1440;
+  const isMediumScreen = dimensions.width >= 768 && dimensions.width < 1440;
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -401,32 +434,34 @@ const CompanyAdminEditTaskScreen = () => {
   // If user doesn't have permission to edit, show a notice
   if (!canEdit) {
     return (
-      <SafeAreaView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
+      <SafeAreaView style={[styles.container, { backgroundColor: "#F8F9FA" }]}>
         <AppHeader
-          title="Edit Task"
-          subtitle="Update task details"
+          title={t("tasks.editTask")}
+          subtitle={t("tasks.updateTaskDetails")}
           showBackButton
           showLogo={false}
+          showHelpButton={true}
+          absolute={false}
         />
 
         <View style={styles.permissionErrorContainer}>
           <IconButton icon="lock" size={64} iconColor={theme.colors.error} />
-          <Text style={styles.permissionErrorTitle}>Permission Denied</Text>
+          <Text style={styles.permissionErrorTitle}>
+            {t("tasks.permissionDenied")}
+          </Text>
           <Text style={styles.permissionErrorText}>
-            {permissionErrorMessage ||
-              "You don't have permission to edit this task"}
+            {permissionErrorMessage || t("tasks.noPermissionToEditTask")}
           </Text>
           <Text style={styles.permissionErrorDescription}>
-            Only the creator of a task can edit it
+            {t("tasks.onlyCreatorCanEdit")}
           </Text>
           <Button
             mode="contained"
             onPress={() => navigation.goBack()}
             style={styles.goBackButton}
+            buttonColor={theme.colors.primary}
           >
-            Go Back
+            {t("common.goBack")}
           </Button>
         </View>
       </SafeAreaView>
@@ -434,93 +469,15 @@ const CompanyAdminEditTaskScreen = () => {
   }
 
   return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
+    <SafeAreaView style={[styles.container, { backgroundColor: "#F8F9FA" }]}>
       <AppHeader
-        title="Edit Task"
-        subtitle="Update task details"
+        title={t("tasks.editTask")}
+        subtitle={t("tasks.updateTaskDetails")}
         showBackButton
         showLogo={false}
+        showHelpButton={true}
+        absolute={false}
       />
-
-      <Portal>
-        <Modal
-          visible={statusMenuVisible}
-          onDismiss={() => setStatusMenuVisible(false)}
-          contentContainerStyle={styles.modalContainer}
-        >
-          <Surface style={styles.modalSurface}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Update Status</Text>
-              <IconButton
-                icon="close"
-                onPress={() => setStatusMenuVisible(false)}
-              />
-            </View>
-            <Divider />
-
-            <ScrollView style={styles.statusOptionsContainer}>
-              {Object.values(TaskStatus).map((status) => (
-                <TouchableOpacity
-                  key={status}
-                  style={[
-                    styles.statusOption,
-                    currentStatus === status && {
-                      backgroundColor: getStatusBackgroundColor(status),
-                    },
-                  ]}
-                  onPress={() => handleStatusChange(status)}
-                  disabled={submitting}
-                >
-                  <View style={styles.statusOptionContent}>
-                    <View
-                      style={[
-                        styles.statusIconContainer,
-                        { backgroundColor: getStatusBackgroundColor(status) },
-                      ]}
-                    >
-                      <IconButton
-                        icon={getStatusIcon(status)}
-                        size={20}
-                        iconColor={getStatusTextColor(status)}
-                        style={{ margin: 0 }}
-                      />
-                    </View>
-                    <View style={styles.statusTextContainer}>
-                      <Text
-                        style={[
-                          styles.statusText,
-                          { color: getStatusTextColor(status) },
-                        ]}
-                      >
-                        {status.replace(/_/g, " ")}
-                      </Text>
-                      <Text style={styles.statusDescription}>
-                        {status === TaskStatus.COMPLETED && "Mark as completed"}
-                        {status === TaskStatus.OVERDUE && "Mark as overdue"}
-                        {status === TaskStatus.IN_PROGRESS &&
-                          "Mark as in progress"}
-                        {status === TaskStatus.AWAITING_RESPONSE &&
-                          "Mark as awaiting response"}
-                        {status === TaskStatus.OPEN && "Mark as open"}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {currentStatus === status && (
-                    <IconButton
-                      icon="check"
-                      size={20}
-                      iconColor={getStatusTextColor(status)}
-                    />
-                  )}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </Surface>
-        </Modal>
-      </Portal>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -528,205 +485,302 @@ const CompanyAdminEditTaskScreen = () => {
       >
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              maxWidth: isLargeScreen ? 1400 : isMediumScreen ? 1100 : "100%",
+              paddingHorizontal: isLargeScreen ? 48 : isMediumScreen ? 32 : 16,
+            },
+          ]}
         >
-          <Text
-            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
-          >
-            Task Details
-          </Text>
-
-          <Controller
-            control={control}
-            rules={{ required: "Title is required" }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Title *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.title}
-                style={styles.input}
-                disabled={submitting}
-              />
-            )}
-            name="title"
-          />
-          {errors.title && (
-            <Text style={styles.errorText}>{errors.title.message}</Text>
-          )}
-
-          <Controller
-            control={control}
-            rules={{ required: "Description is required" }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Description *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.description}
-                style={styles.input}
-                multiline
-                numberOfLines={4}
-                disabled={submitting}
-              />
-            )}
-            name="description"
-          />
-          {errors.description && (
-            <Text style={styles.errorText}>{errors.description.message}</Text>
-          )}
-
-          <Text style={styles.inputLabel}>Deadline *</Text>
-          <Button
-            mode="outlined"
-            onPress={() => setShowDatePicker(true)}
-            style={styles.dateButton}
-            icon="calendar"
-            disabled={submitting}
-          >
-            {format(deadline, "MMMM d, yyyy")}
-          </Button>
-
-          <DateTimePickerModal
-            isVisible={showDatePicker}
-            mode="date"
-            onConfirm={handleDateConfirm}
-            onCancel={handleDateCancel}
-            date={deadline}
-            minimumDate={new Date()}
-          />
-
-          <Text style={styles.inputLabel}>Priority *</Text>
-          <Controller
-            control={control}
-            render={({ field: { onChange, value } }) => (
-              <SegmentedButtons
-                value={value}
-                onValueChange={onChange}
-                buttons={[
-                  { value: TaskPriority.LOW, label: "Low" },
-                  { value: TaskPriority.MEDIUM, label: "Medium" },
-                  { value: TaskPriority.HIGH, label: "High" },
-                ]}
-                style={styles.segmentedButtons}
-              />
-            )}
-            name="priority"
-          />
-
-          <Text style={styles.inputLabel}>Status *</Text>
-          <Controller
-            control={control}
-            render={({ field: { value } }) => (
-              <TouchableOpacity
-                onPress={() => setStatusMenuVisible(true)}
-                disabled={submitting}
-                style={[
-                  styles.statusSelector,
-                  {
-                    backgroundColor: getStatusBackgroundColor(value),
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.statusText,
-                    { color: getStatusTextColor(value) },
-                  ]}
-                >
-                  {value.replace(/_/g, " ")}
-                </Text>
-                <IconButton
-                  icon={getStatusIcon(value)}
-                  size={20}
-                  style={styles.statusIcon}
-                  iconColor={getStatusTextColor(value)}
-                />
-              </TouchableOpacity>
-            )}
-            name="status"
-          />
-
-          <Controller
-            control={control}
-            rules={{
-              required: "Reminder days is required",
-              validate: (value) =>
-                !isNaN(parseInt(value)) &&
-                parseInt(value) >= 0 &&
-                parseInt(value) <= 365
-                  ? true
-                  : "Please enter a value between 0 and 365 days",
-            }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Reminder (days before deadline) *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.reminder_days_before}
-                style={styles.input}
-                keyboardType="numeric"
-                disabled={submitting}
-              />
-            )}
-            name="reminder_days_before"
-          />
-          {errors.reminder_days_before && (
-            <Text style={styles.errorText}>
-              {errors.reminder_days_before.message}
-            </Text>
-          )}
-
-          <Text
-            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
-          >
-            Assign Users
-          </Text>
-
-          <Text style={styles.helperText}>
-            Select one company admin to assign this task to (required)
-          </Text>
-
-          <View style={styles.usersContainer}>
-            {availableUsers.map((user) => (
-              <Chip
-                key={`assignee-${user.id}`}
-                selected={selectedAssignees.includes(user.id)}
-                onPress={() => toggleAssignee(user.id)}
-                style={styles.userChip}
-                showSelectedCheck
-                mode="outlined"
-                disabled={submitting}
-              >
-                {user.name} (Admin)
-              </Chip>
-            ))}
+          <View style={styles.headerSection}>
+            <Text style={styles.pageTitle}>{t("tasks.editTask")}</Text>
           </View>
 
+          <View style={styles.gridContainer}>
+            <View style={styles.gridColumn}>
+              <Animated.View entering={FadeIn.delay(100)}>
+                {/* Basic Information Card */}
+                <Surface style={styles.formCard}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="clipboard-text"
+                          size={20}
+                          iconColor="#64748b"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>Basic Information</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardContent}>
+                    <Controller
+                      control={control}
+                      rules={{ required: t("tasks.titleRequired") }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <TextInput
+                          label={t("tasks.title") + " *"}
+                          mode="outlined"
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          error={!!errors.title}
+                          style={styles.input}
+                          disabled={submitting}
+                        />
+                      )}
+                      name="title"
+                    />
+                    {errors.title && (
+                      <Text style={styles.errorText}>
+                        {errors.title.message}
+                      </Text>
+                    )}
+
+                    <Controller
+                      control={control}
+                      rules={{ required: t("tasks.descriptionRequired") }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <TextInput
+                          label={t("tasks.description") + " *"}
+                          mode="outlined"
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          error={!!errors.description}
+                          style={styles.input}
+                          multiline
+                          numberOfLines={4}
+                          disabled={submitting}
+                        />
+                      )}
+                      name="description"
+                    />
+                    {errors.description && (
+                      <Text style={styles.errorText}>
+                        {errors.description.message}
+                      </Text>
+                    )}
+
+                    <Text style={styles.inputLabel}>
+                      {t("tasks.deadline")} *
+                    </Text>
+                    <Button
+                      mode="outlined"
+                      onPress={() => setShowDatePicker(true)}
+                      style={styles.dateButton}
+                      icon="calendar"
+                      disabled={submitting}
+                    >
+                      {format(deadline, "MMMM d, yyyy")}
+                    </Button>
+
+                    <DateTimePickerModal
+                      isVisible={showDatePicker}
+                      mode="date"
+                      onConfirm={handleDateConfirm}
+                      onCancel={handleDateCancel}
+                      date={deadline}
+                      minimumDate={new Date()}
+                    />
+                  </View>
+                </Surface>
+
+                {/* Task Settings Card */}
+                <Surface style={[styles.formCard, { marginTop: 24 }]}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="cog"
+                          size={20}
+                          iconColor="#64748b"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>Task Settings</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardContent}>
+                    <Text style={styles.inputLabel}>
+                      {t("tasks.priority")} *
+                    </Text>
+                    <Controller
+                      control={control}
+                      render={({ field: { onChange, value } }) => (
+                        <SegmentedButtons
+                          value={value}
+                          onValueChange={onChange}
+                          buttons={[
+                            {
+                              value: TaskPriority.LOW,
+                              label: t("tasks.low"),
+                            },
+                            {
+                              value: TaskPriority.MEDIUM,
+                              label: t("tasks.medium"),
+                            },
+                            {
+                              value: TaskPriority.HIGH,
+                              label: t("tasks.high"),
+                            },
+                          ]}
+                          style={styles.segmentedButtons}
+                        />
+                      )}
+                      name="priority"
+                    />
+
+                    <Text style={styles.inputLabel}>{t("tasks.status")} *</Text>
+                    <Controller
+                      control={control}
+                      render={({ field: { value } }) => (
+                        <TouchableOpacity
+                          onPress={() => setStatusMenuVisible(true)}
+                          disabled={submitting}
+                          style={[
+                            styles.statusSelector,
+                            {
+                              backgroundColor: getStatusBackgroundColor(value),
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.statusText,
+                              { color: getStatusTextColor(value) },
+                            ]}
+                          >
+                            {value.replace(/_/g, " ")}
+                          </Text>
+                          <IconButton
+                            icon={getStatusIcon(value)}
+                            size={20}
+                            style={styles.statusIcon}
+                            iconColor={getStatusTextColor(value)}
+                          />
+                        </TouchableOpacity>
+                      )}
+                      name="status"
+                    />
+
+                    <Controller
+                      control={control}
+                      rules={{
+                        required: t("tasks.reminderDaysRequired"),
+                        validate: (value) =>
+                          !isNaN(parseInt(value)) &&
+                          parseInt(value) >= 0 &&
+                          parseInt(value) <= 365
+                            ? true
+                            : t("tasks.reminderDaysRange"),
+                      }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <TextInput
+                          label={t("tasks.reminderDays") + " *"}
+                          mode="outlined"
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          error={!!errors.reminder_days_before}
+                          style={styles.input}
+                          keyboardType="numeric"
+                          disabled={submitting}
+                        />
+                      )}
+                      name="reminder_days_before"
+                    />
+                    {errors.reminder_days_before && (
+                      <Text style={styles.errorText}>
+                        {errors.reminder_days_before.message}
+                      </Text>
+                    )}
+                  </View>
+                </Surface>
+              </Animated.View>
+            </View>
+
+            <View style={styles.gridColumn}>
+              <Animated.View entering={FadeIn.delay(200)}>
+                {/* Assigned Users Card */}
+                <Surface style={styles.formCard}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="account-group"
+                          size={20}
+                          iconColor="#64748b"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>
+                        {t("tasks.assignUsers")}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardContent}>
+                    <Text style={styles.helperText}>
+                      {t("tasks.selectOneAdminToAssign")}
+                    </Text>
+
+                    <View style={styles.usersContainer}>
+                      {availableUsers.map((user) => (
+                        <Chip
+                          key={`assignee-${user.id}`}
+                          selected={selectedAssignees.includes(user.id)}
+                          onPress={() => toggleAssignee(user.id)}
+                          style={styles.userChip}
+                          showSelectedCheck
+                          mode="outlined"
+                          disabled={submitting}
+                        >
+                          {user.name} ({t("tasks.companyAdmin")})
+                        </Chip>
+                      ))}
+                    </View>
+                  </View>
+                </Surface>
+              </Animated.View>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      <Surface style={styles.bottomBar}>
+        <View style={styles.bottomBarContent}>
+          <Button
+            mode="outlined"
+            onPress={() => navigation.goBack()}
+            style={styles.button}
+            disabled={submitting}
+          >
+            {t("common.cancel")}
+          </Button>
           <Button
             mode="contained"
             onPress={handleSubmit(onSubmit)}
-            style={styles.submitButton}
+            style={styles.button}
             loading={submitting}
             disabled={submitting}
+            buttonColor={theme.colors.primary}
           >
-            Update Task
+            {t("tasks.updateTask")}
           </Button>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </View>
+      </Surface>
+
       <CustomSnackbar
         visible={snackbarVisible}
         message={snackbarMessage}
         onDismiss={() => setSnackbarVisible(false)}
         type={
-          snackbarMessage?.includes("successful") ||
-          snackbarMessage?.includes("instructions will be sent")
+          snackbarMessage?.includes("successful")
             ? "success"
             : snackbarMessage?.includes("rate limit") ||
                 snackbarMessage?.includes("network")
@@ -748,6 +802,95 @@ const CompanyAdminEditTaskScreen = () => {
           },
         ]}
       />
+
+      <Portal>
+        <Modal
+          visible={statusMenuVisible}
+          onDismiss={() => setStatusMenuVisible(false)}
+          contentContainerStyle={[
+            styles.modalContainer,
+            {
+              width: isLargeScreen ? 480 : isMediumScreen ? 420 : "90%",
+              alignSelf: "center",
+            },
+          ]}
+        >
+          <Surface style={styles.modalSurface}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t("tasks.updateStatus")}</Text>
+              <IconButton
+                icon="close"
+                onPress={() => setStatusMenuVisible(false)}
+              />
+            </View>
+            <Divider />
+
+            <ScrollView style={{ maxHeight: 400 }}>
+              {Object.values(TaskStatus).map((status) => {
+                const currentStatus = watch("status");
+                return (
+                  <TouchableOpacity
+                    key={status}
+                    style={[
+                      styles.statusOption,
+                      currentStatus === status && {
+                        backgroundColor: getStatusBackgroundColor(status),
+                      },
+                    ]}
+                    onPress={() => handleStatusChange(status)}
+                    disabled={submitting}
+                  >
+                    <View style={styles.statusOptionContent}>
+                      <View
+                        style={[
+                          styles.statusIconContainer,
+                          { backgroundColor: getStatusBackgroundColor(status) },
+                        ]}
+                      >
+                        <IconButton
+                          icon={getStatusIcon(status)}
+                          size={20}
+                          iconColor={getStatusTextColor(status)}
+                          style={{ margin: 0 }}
+                        />
+                      </View>
+                      <View style={styles.statusTextContainer}>
+                        <Text
+                          style={[
+                            styles.statusText,
+                            { color: getStatusTextColor(status) },
+                          ]}
+                        >
+                          {status.replace(/_/g, " ")}
+                        </Text>
+                        <Text style={styles.statusDescription}>
+                          {status === TaskStatus.COMPLETED &&
+                            t("tasks.markAsCompleted")}
+                          {status === TaskStatus.OVERDUE &&
+                            t("tasks.markAsOverdue")}
+                          {status === TaskStatus.IN_PROGRESS &&
+                            t("tasks.markAsInProgress")}
+                          {status === TaskStatus.AWAITING_RESPONSE &&
+                            t("tasks.markAsAwaitingResponse")}
+                          {status === TaskStatus.OPEN && t("tasks.markAsOpen")}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {currentStatus === status && (
+                      <IconButton
+                        icon="check"
+                        size={20}
+                        iconColor={getStatusTextColor(status)}
+                      />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </Surface>
+        </Modal>
+      </Portal>
     </SafeAreaView>
   );
 };
@@ -755,6 +898,7 @@ const CompanyAdminEditTaskScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#F8F9FA",
   },
   keyboardAvoidingView: {
     flex: 1,
@@ -763,22 +907,83 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
+    paddingVertical: 32,
+    alignSelf: "center",
+    width: "100%",
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginTop: 24,
-    marginBottom: 16,
+  headerSection: {
+    marginBottom: 32,
+  },
+  pageTitle: {
+    fontSize: Platform.OS === "web" ? 32 : 24,
+    fontWeight: "600",
+    color: "#1e293b",
+    fontFamily: "Poppins-SemiBold",
+  },
+  gridContainer: {
+    flexDirection: "row",
+    gap: 24,
+    flexWrap: "wrap",
+  },
+  gridColumn: {
+    flex: 1,
+    minWidth: 320,
+    gap: 24,
+  },
+  formCard: {
+    borderRadius: 16,
+    overflow: "hidden",
+    elevation: 1,
+    shadowColor: "rgba(0,0,0,0.1)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  iconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "#f1f5f9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerIcon: {
+    margin: 0,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1e293b",
+    fontFamily: "Poppins-SemiBold",
+  },
+  cardContent: {
+    padding: 24,
   },
   input: {
-    marginBottom: 12,
+    marginBottom: 16,
+    backgroundColor: "#FFFFFF",
   },
   inputLabel: {
     fontSize: 14,
     marginBottom: 8,
-    opacity: 0.7,
+    color: "#64748b",
+    fontFamily: "Poppins-Medium",
   },
   dateButton: {
     marginBottom: 16,
@@ -797,8 +1002,8 @@ const styles = StyleSheet.create({
     borderColor: "rgba(0,0,0,0.05)",
   },
   statusText: {
-    fontSize: 16,
-    fontWeight: "500",
+    fontSize: 14,
+    fontFamily: "Poppins-Medium",
     textTransform: "capitalize",
   },
   statusIcon: {
@@ -808,35 +1013,26 @@ const styles = StyleSheet.create({
     color: "#EF4444",
     fontSize: 12,
     marginTop: -8,
-    marginBottom: 8,
+    marginBottom: 16,
     marginLeft: 4,
+    fontFamily: "Poppins-Regular",
   },
   helperText: {
     fontSize: 14,
-    opacity: 0.7,
-    marginBottom: 12,
+    color: "#64748b",
+    marginBottom: 16,
+    fontFamily: "Poppins-Regular",
   },
   usersContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginBottom: 16,
+    gap: 8,
   },
   userChip: {
-    margin: 4,
-  },
-  submitButton: {
-    marginTop: 24,
-    paddingVertical: 6,
-  },
-  companySelector: {
-    marginBottom: 16,
-    zIndex: 1000,
-  },
-  companyButton: {
-    width: "100%",
+    backgroundColor: "#f8fafc",
   },
   modalContainer: {
-    margin: 20,
+    margin: 0,
     borderRadius: 16,
     overflow: "hidden",
     backgroundColor: "transparent",
@@ -845,26 +1041,19 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     borderRadius: 16,
     overflow: "hidden",
-    elevation: 1,
-    shadowColor: "rgba(0,0,0,0.1)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 18,
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
   },
   modalTitle: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: "#424242",
-  },
-  statusOptionsContainer: {
-    maxHeight: 400,
-    padding: 12,
+    fontSize: 16,
+    fontFamily: "Poppins-SemiBold",
+    color: "#1e293b",
   },
   statusOption: {
     flexDirection: "row",
@@ -872,7 +1061,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     padding: 12,
     borderRadius: 12,
-    marginVertical: 6,
+    marginVertical: 4,
   },
   statusOptionContent: {
     flexDirection: "row",
@@ -880,19 +1069,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   statusIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 14,
+    marginRight: 12,
   },
   statusTextContainer: {
     flex: 1,
   },
   statusDescription: {
     fontSize: 12,
-    color: "#757575",
+    color: "#64748b",
+    fontFamily: "Poppins-Regular",
+    marginTop: 2,
   },
   permissionErrorContainer: {
     flex: 1,
@@ -905,19 +1096,37 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     marginBottom: 12,
     color: "#EF4444",
+    fontFamily: "Poppins-Bold",
   },
   permissionErrorText: {
     fontSize: 16,
     marginBottom: 24,
     textAlign: "center",
+    color: "#334155",
+    fontFamily: "Poppins-Regular",
   },
   permissionErrorDescription: {
     fontSize: 14,
-    opacity: 0.7,
+    color: "#64748b",
     marginBottom: 32,
     textAlign: "center",
+    fontFamily: "Poppins-Regular",
   },
   goBackButton: {
+    minWidth: 120,
+  },
+  bottomBar: {
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+    padding: 16,
+  },
+  bottomBarContent: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+  },
+  button: {
     minWidth: 120,
   },
   snackbar: {

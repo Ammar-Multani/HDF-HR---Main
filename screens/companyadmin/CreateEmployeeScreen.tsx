@@ -37,6 +37,7 @@ import {
 } from "../../types";
 import { hashPassword, generateResetToken } from "../../utils/auth";
 import CustomSnackbar from "../../components/CustomSnackbar";
+import { t } from "i18next";
 
 interface EmployeeFormData {
   first_name: string;

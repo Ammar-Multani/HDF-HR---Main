@@ -1003,7 +1003,7 @@ const CompanyAdminTaskDetailsScreen = () => {
                   const canEdit = await canEditTask();
                   if (canEdit) {
                     // @ts-ignore - suppress type error for navigation
-                    navigation.navigate("CompanyAdminEditTask", {
+                    navigation.navigate("EditTask", {
                       taskId: task.id,
                     });
                   } else {

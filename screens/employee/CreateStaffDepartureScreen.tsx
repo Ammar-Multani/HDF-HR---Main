@@ -28,6 +28,7 @@ import LoadingIndicator from "../../components/LoadingIndicator";
 import { FormStatus, DocumentType } from "../../types";
 import { pickAndUploadDocument } from "../../utils/documentPicker";
 import CustomSnackbar from "../../components/CustomSnackbar";
+import { t } from "i18next";
 
 interface StaffDepartureFormData {
   exit_date: Date;

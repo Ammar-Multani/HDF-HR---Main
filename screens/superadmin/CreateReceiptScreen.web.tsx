@@ -42,6 +42,7 @@ import { UserRole } from "../../types";
 import Animated, { FadeIn } from "react-native-reanimated";
 import Constants from "expo-constants";
 import CustomSnackbar from "../../components/CustomSnackbar";
+import { t } from "i18next";
 
 // Add window dimensions hook
 const useWindowDimensions = () => {

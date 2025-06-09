@@ -34,6 +34,7 @@ import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import { UserRole } from "../../types";
 import CustomSnackbar from "../../components/CustomSnackbar";
+import { t } from "i18next";
 
 interface ReceiptFormData {
   receipt_number: string;

@@ -18,7 +18,6 @@ interface ActivityLog {
   created_at: string;
   metadata?: {
     task_title?: string;
-    priority?: string;
     created_by?: {
       name: string;
       email: string;
@@ -120,9 +119,6 @@ const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({ logs }) => {
       metadata["Task"] = log.metadata.task_title;
     }
 
-    if (log.metadata.priority) {
-      metadata["Priority"] = log.metadata.priority;
-    }
 
     if (log.metadata.changes) {
       metadata["Changes"] = log.metadata.changes.join(", ");
@@ -225,7 +221,12 @@ const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({ logs }) => {
                         />
                       )}
                     </View>
-                    <Surface style={styles.logContent}>
+                    <View style={styles.logContent}>
+                      <View style={styles.logTimeContainer}>
+                        <Text style={styles.logTime}>
+                          {format(new Date(log.created_at), "h:mm a")}
+                        </Text>
+                      </View>
                       <View style={styles.logHeader}>
                         <View style={styles.logTypeContainer}>
                           <IconButton
@@ -243,26 +244,13 @@ const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({ logs }) => {
                             {log.activity_type.replace(/_/g, " ")}
                           </Text>
                         </View>
-                        <Text style={styles.logTime}>
-                          {format(new Date(log.created_at), "h:mm a")}
-                        </Text>
+
                       </View>
                       <Text style={styles.logDescription}>
                         {log.description}
                       </Text>
-                      {formatMetadata(log) && (
-                        <View style={styles.metadataContainer}>
-                          {formatMetadata(log)?.map(([key, value]) => (
-                            <View key={key} style={styles.metadataItem}>
-                              <Text style={styles.metadataLabel}>
-                                {key.toUpperCase()}:
-                              </Text>
-                              <Text style={styles.metadataValue}>{value}</Text>
-                            </View>
-                          ))}
-                        </View>
-                      )}
-                    </Surface>
+                    
+                    </View>
                   </View>
                 ))}
             </View>
@@ -316,7 +304,6 @@ const styles = StyleSheet.create({
   },
   logItem: {
     flexDirection: "row",
-    marginBottom: 16,
   },
   timelineConnector: {
     width: 24,
@@ -333,20 +320,25 @@ const styles = StyleSheet.create({
     width: 2,
     flex: 1,
     marginTop: 4,
+    marginBottom: -6,
   },
   logContent: {
     flex: 1,
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
+    padding: 12,
+    alignItems: "flex-start",
+    justifyContent: "flex-start",
+    marginTop: -7,
+    marginBottom: 10,
+  },
+  logTimeContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   logHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 4,
   },
   logTypeContainer: {
     flexDirection: "row",
@@ -354,7 +346,8 @@ const styles = StyleSheet.create({
   },
   logIcon: {
     margin: 0,
-    marginRight: 8,
+    marginRight: 4,
+    marginLeft:-12,
   },
   logType: {
     fontSize: 14,

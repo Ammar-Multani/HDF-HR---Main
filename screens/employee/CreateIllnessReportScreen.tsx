@@ -27,6 +27,7 @@ import LoadingIndicator from "../../components/LoadingIndicator";
 import { FormStatus } from "../../types";
 import { pickAndUploadDocument } from "../../utils/documentPicker";
 import CustomSnackbar from "../../components/CustomSnackbar";
+import { t } from "i18next";
 
 interface IllnessReportFormData {
   date_of_onset_leave: Date;

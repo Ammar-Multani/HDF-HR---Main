@@ -57,6 +57,7 @@ import {
   withTiming,
 } from "react-native-reanimated";
 import { getFontFamily } from "../../utils/globalStyles";
+import Pagination from "../../components/Pagination";
 
 // Update the CompanyUser interface to include created_at
 interface ExtendedCompanyUser extends CompanyUser {
@@ -708,13 +709,6 @@ const EmployeeListScreen = () => {
     };
   }, [searchQuery, networkStatus, companyId]);
 
-  const loadMoreEmployees = () => {
-    if (!loading && !loadingMore && hasMoreData && networkStatus !== false) {
-      setPage((prevPage) => prevPage + 1);
-      fetchEmployees();
-    }
-  };
-
   const onRefresh = () => {
     if (networkStatus === false) {
       setError("Cannot refresh while offline");
@@ -723,11 +717,7 @@ const EmployeeListScreen = () => {
 
     // Explicitly set refreshing to true for pull-to-refresh
     setRefreshing(true);
-
-    // Use a slight delay to ensure the refreshing indicator appears
-    setTimeout(() => {
-      fetchEmployees(true);
-    }, 100);
+    fetchEmployees(true);
   };
 
   const getInitials = (firstName: string, lastName: string) => {
@@ -813,7 +803,7 @@ const EmployeeListScreen = () => {
     );
   };
 
-  // Update renderContent to use table layout on larger screens
+  // Update renderContent to include pagination
   const renderContent = () => {
     if (loading && !refreshing) {
       if (useTableLayout) {
@@ -894,65 +884,60 @@ const EmployeeListScreen = () => {
       );
     }
 
+    const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+
     // Show the actual data
     return useTableLayout ? (
-      <View style={styles.tableContainer}>
-        <EmployeeTableHeader />
+      <>
+        <View style={styles.tableContainer}>
+          <EmployeeTableHeader />
+          <FlatList
+            data={filteredEmployees}
+            renderItem={({ item }) => <EmployeeTableRow item={item} />}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.tableContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+          />
+        </View>
+        {totalPages > 1 && (
+          <View style={styles.paginationWrapper}>
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              onPageChange={(newPage) => {
+                setPage(newPage);
+                fetchEmployees(false);
+              }}
+            />
+          </View>
+        )}
+      </>
+    ) : (
+      <>
         <FlatList
           data={filteredEmployees}
-          renderItem={({ item }) => <EmployeeTableRow item={item} />}
+          renderItem={renderEmployeeItem}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.tableContent}
+          contentContainerStyle={styles.listContent}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
-          onEndReached={loadMoreEmployees}
-          onEndReachedThreshold={0.5}
-          ListFooterComponent={() => (
-            <>
-              {loadingMore && hasMoreData && (
-                <View style={styles.loadingFooter}>
-                  <ActivityIndicator
-                    size="small"
-                    color={theme.colors.primary}
-                  />
-                </View>
-              )}
-              {totalCount > 0 && (
-                <Text style={styles.resultsCount}>
-                  Showing {filteredEmployees.length} of {totalCount} employees
-                </Text>
-              )}
-            </>
-          )}
         />
-      </View>
-    ) : (
-      <FlatList
-        data={filteredEmployees}
-        renderItem={renderEmployeeItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        onEndReached={loadMoreEmployees}
-        onEndReachedThreshold={0.5}
-        ListHeaderComponent={
-          totalCount > 0 ? (
-            <Text style={styles.resultsCount}>
-              Showing {filteredEmployees.length} of {totalCount} employees
-            </Text>
-          ) : null
-        }
-        ListFooterComponent={
-          loadingMore && hasMoreData ? (
-            <View style={styles.loadingFooter}>
-              <ActivityIndicator size="small" color={theme.colors.primary} />
-            </View>
-          ) : null
-        }
-      />
+        {totalPages > 1 && (
+          <View style={styles.paginationWrapper}>
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              onPageChange={(newPage) => {
+                setPage(newPage);
+                fetchEmployees(false);
+              }}
+            />
+          </View>
+        )}
+      </>
     );
   };
 
@@ -1387,7 +1372,7 @@ const EmployeeListScreen = () => {
           </View>
         )}
 
-        <View style={styles.listContainer}>{renderContent()}</View>
+        {renderContent()}
       </View>
     </SafeAreaView>
   );
@@ -1463,12 +1448,13 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   tableContainer: {
-    flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: "white",
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "#e0e0e0",
     overflow: "hidden",
+    marginTop: 16,
+    flex: 1,
   },
   tableHeader: {
     flexDirection: "row",
@@ -1806,6 +1792,16 @@ const styles = StyleSheet.create({
   },
   cardContent: {
     padding: 16,
+  },
+  paginationWrapper: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    borderRadius: 16,
+    marginTop: 12,
+    overflow: "hidden",
+    width: "auto",
+    alignSelf: "center",
   },
 });
 

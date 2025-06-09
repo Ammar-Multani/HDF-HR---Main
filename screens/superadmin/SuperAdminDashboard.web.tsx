@@ -260,13 +260,15 @@ const SuperAdminDashboard = () => {
         supabase
           .from("company_user")
           .select("*", { count: "exact", head: true })
-          .eq("role", "employee"),
+          .eq("role", "employee")
+          .is("deleted_at", null),
 
         // Today's employees count
         supabase
           .from("company_user")
           .select("*", { count: "exact", head: true })
           .eq("role", "employee")
+          .is("deleted_at", null)
           .gte("created_at", today.toISOString()),
 
         // Today's companies count
@@ -438,7 +440,8 @@ const SuperAdminDashboard = () => {
               .from("company_user")
               .select("*", { count: "exact", head: true })
               .eq("company_id", company.id)
-              .eq("role", "employee");
+              .eq("role", "employee")
+              .is("deleted_at", null);
 
             // Get today's employee count for company
             const { count: todayCount, error: todayError } = await supabase
@@ -446,6 +449,7 @@ const SuperAdminDashboard = () => {
               .select("*", { count: "exact", head: true })
               .eq("company_id", company.id)
               .eq("role", "employee")
+              .is("deleted_at", null)
               .gte("created_at", today.toISOString());
 
             // Calculate growth percentage
@@ -511,6 +515,7 @@ const SuperAdminDashboard = () => {
             "id, first_name, last_name, company_id, company:company_id(company_name)"
           )
           .eq("role", "employee")
+          .is("deleted_at", null)
           .limit(100),
       ]);
 

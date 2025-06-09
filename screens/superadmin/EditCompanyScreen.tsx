@@ -22,6 +22,7 @@ import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import { Company } from "../../types";
 import CustomSnackbar from "../../components/CustomSnackbar";
+import { t } from "i18next";
 
 type EditCompanyRouteParams = {
   companyId: string;

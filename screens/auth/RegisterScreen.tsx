@@ -32,6 +32,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import AppHeader from "../../components/AppHeader";
 import { BlurView } from "expo-blur";
 import CustomSnackbar from "../../components/CustomSnackbar";
+import { t } from "i18next";
 
 const { width, height } = Dimensions.get("window");
 

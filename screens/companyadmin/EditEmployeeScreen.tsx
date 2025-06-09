@@ -40,6 +40,7 @@ import {
   UserRole,
 } from "../../types";
 import CustomSnackbar from "../../components/CustomSnackbar";
+import { t } from "i18next";
 
 type EditEmployeeRouteParams = {
   employeeId: string;

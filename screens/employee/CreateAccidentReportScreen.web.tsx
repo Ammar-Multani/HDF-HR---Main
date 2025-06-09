@@ -34,6 +34,7 @@ import { FormStatus } from "../../types";
 import { pickAndUploadDocument } from "../../utils/documentPicker";
 import Animated, { FadeIn } from "react-native-reanimated";
 import CustomSnackbar from "../../components/CustomSnackbar";
+import { t } from "i18next";
 
 // Add window dimensions hook
 const useWindowDimensions = () => {
