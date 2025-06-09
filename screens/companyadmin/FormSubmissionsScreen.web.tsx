@@ -54,6 +54,13 @@ import {
 } from "react-native-reanimated";
 import Animated from "react-native-reanimated";
 import Pagination from "../../components/Pagination";
+import FilterModal from "../../components/FilterModal";
+import {
+  FilterSection,
+  RadioFilterGroup,
+  FilterDivider,
+  PillFilterGroup,
+} from "../../components/FilterSections";
 
 // Add navigation type definitions
 type RootStackParamList = {
@@ -521,15 +528,12 @@ const FormSubmissionsScreen = () => {
     "all" | "accident" | "illness" | "departure"
   >("all");
   const [statusFilter, setStatusFilter] = useState<FormStatus | "all">("all");
-  const [sortOrder, setSortOrder] = useState<string>("desc");
   const [appliedFilters, setAppliedFilters] = useState<{
     status: FormStatus | "all";
     formType: "all" | "accident" | "illness" | "departure";
-    sortOrder: string;
   }>({
     status: "all",
     formType: "all",
-    sortOrder: "desc",
   });
 
   const fetchCompanyId = async () => {
@@ -584,10 +588,15 @@ const FormSubmissionsScreen = () => {
         );
       }
 
-      return filtered;
+      // Sort by submission date
+      return filtered.sort((a, b) => {
+        const dateA = new Date(a.submission_date).getTime();
+        const dateB = new Date(b.submission_date).getTime();
+        return dateA - dateB;
+      });
     } catch (error) {
       console.error("Error filtering forms:", error);
-      return forms; // Return unfiltered forms on error
+      return forms;
     }
   }, [forms, appliedFilters.status, appliedFilters.formType, searchQuery]);
 
@@ -643,8 +652,9 @@ const FormSubmissionsScreen = () => {
           { count: "exact" }
         )
         .eq("company_id", currentCompanyId)
+        .neq("status", FormStatus.DRAFT)
         .order("created_at", {
-          ascending: appliedFilters.sortOrder === "asc",
+          ascending: true,
         })
         .range(from, to)) as {
         data: AccidentReport[] | null;
@@ -676,8 +686,9 @@ const FormSubmissionsScreen = () => {
           { count: "exact" }
         )
         .eq("company_id", currentCompanyId)
+        .neq("status", FormStatus.DRAFT)
         .order("submission_date", {
-          ascending: appliedFilters.sortOrder === "asc",
+          ascending: true,
         })
         .range(from, to)) as {
         data: IllnessReport[] | null;
@@ -709,8 +720,9 @@ const FormSubmissionsScreen = () => {
           { count: "exact" }
         )
         .eq("company_id", currentCompanyId)
+        .neq("status", FormStatus.DRAFT)
         .order("created_at", {
-          ascending: appliedFilters.sortOrder === "asc",
+          ascending: true,
         })
         .range(from, to);
 
@@ -776,9 +788,7 @@ const FormSubmissionsScreen = () => {
       const sortedForms = allForms.sort((a, b) => {
         const dateA = new Date(a.submission_date).getTime();
         const dateB = new Date(b.submission_date).getTime();
-        return appliedFilters.sortOrder === "asc"
-          ? dateA - dateB
-          : dateB - dateA;
+        return dateA - dateB;
       });
 
       // Calculate total items
@@ -828,32 +838,62 @@ const FormSubmissionsScreen = () => {
     const newFilters = {
       status: statusFilter,
       formType: typeFilter,
-      sortOrder: sortOrder,
     };
     setAppliedFilters(newFilters);
+    fetchForms(true);
   };
 
   // Update clear filters
   const clearFilters = () => {
     setTypeFilter("all");
     setStatusFilter("all");
-    setSortOrder("desc");
     setPage(0); // Reset to first page when clearing filters
     setAppliedFilters({
       status: "all",
       formType: "all",
-      sortOrder: "desc",
     });
+    fetchForms(true);
   };
 
   // Check if we have any active filters
   const hasActiveFilters = () => {
-    return (
-      appliedFilters.status !== "all" ||
-      appliedFilters.formType !== "all" ||
-      appliedFilters.sortOrder !== "desc"
-    );
+    return appliedFilters.status !== "all" || appliedFilters.formType !== "all";
   };
+
+  // Add handlers for individual filter clearing
+  const handleStatusClear = useCallback(() => {
+    setStatusFilter("all");
+    setAppliedFilters((prev) => ({
+      ...prev,
+      status: "all",
+    }));
+    setPage(0);
+    fetchForms(true);
+  }, []);
+
+  const handleTypeClear = useCallback(() => {
+    setTypeFilter("all");
+    setAppliedFilters((prev) => ({
+      ...prev,
+      formType: "all",
+    }));
+    setPage(0);
+    fetchForms(true);
+  }, []);
+
+  // Add effect to sync filter states
+  useEffect(() => {
+    const needsSync =
+      appliedFilters.status !== statusFilter ||
+      appliedFilters.formType !== typeFilter;
+
+    if (needsSync) {
+      setAppliedFilters({
+        status: statusFilter,
+        formType: typeFilter,
+      });
+    }
+  }, [statusFilter, typeFilter]);
 
   const getFormTypeIcon = (type: "accident" | "illness" | "departure") => {
     switch (type) {
@@ -974,14 +1014,7 @@ const FormSubmissionsScreen = () => {
           {appliedFilters.status !== "all" && (
             <Chip
               mode="outlined"
-              onClose={() => {
-                setAppliedFilters({
-                  ...appliedFilters,
-                  status: "all",
-                });
-                setStatusFilter("all");
-                fetchForms(true);
-              }}
+              onClose={handleStatusClear}
               style={[
                 styles.activeFilterChip,
                 {
@@ -997,14 +1030,7 @@ const FormSubmissionsScreen = () => {
           {appliedFilters.formType !== "all" && (
             <Chip
               mode="outlined"
-              onClose={() => {
-                setAppliedFilters({
-                  ...appliedFilters,
-                  formType: "all",
-                });
-                setTypeFilter("all");
-                fetchForms(true);
-              }}
+              onClose={handleTypeClear}
               style={[
                 styles.activeFilterChip,
                 {
@@ -1019,29 +1045,6 @@ const FormSubmissionsScreen = () => {
                 appliedFilters.formType.slice(1)}
             </Chip>
           )}
-          {appliedFilters.sortOrder !== "desc" && (
-            <Chip
-              mode="outlined"
-              onClose={() => {
-                setAppliedFilters({
-                  ...appliedFilters,
-                  sortOrder: "desc",
-                });
-                setSortOrder("desc");
-                fetchForms(true);
-              }}
-              style={[
-                styles.activeFilterChip,
-                {
-                  backgroundColor: "#1a73e815",
-                  borderColor: "#1a73e8",
-                },
-              ]}
-              textStyle={{ color: "#1a73e8" }}
-            >
-              Date: Oldest first
-            </Chip>
-          )}
         </ScrollView>
       </View>
     );
@@ -1049,120 +1052,63 @@ const FormSubmissionsScreen = () => {
 
   // Render the filter modal
   const renderFilterModal = () => {
+    const typeOptions = [
+      { label: "All Types", value: "all" },
+      { label: "Accident Report", value: "accident" },
+      { label: "Illness Report", value: "illness" },
+      { label: "Staff Departure Report", value: "departure" },
+    ];
+
+    const statusOptions = [
+      { label: "All Statuses", value: "all" },
+      ...Object.values(FormStatus)
+        .filter((status) => status !== FormStatus.DRAFT) // Remove DRAFT status
+        .map((status) => ({
+          label: status
+            .split("_")
+            .map(
+              (word) =>
+                word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+            )
+            .join(" "),
+          value: status,
+        })),
+    ];
+
     return (
-      <Portal>
-        <Modal
-          visible={filterModalVisible}
-          onDismiss={() => setFilterModalVisible(false)}
-          contentContainerStyle={styles.modalContainer}
-        >
-          <View style={styles.modalHeaderContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Filter Options</Text>
-              <IconButton
-                icon="close"
-                size={24}
-                onPress={() => setFilterModalVisible(false)}
-              />
-            </View>
-            <Divider style={styles.modalDivider} />
-          </View>
+      <FilterModal
+        visible={filterModalVisible}
+        onDismiss={() => setFilterModalVisible(false)}
+        title="Filter Options"
+        onClear={clearFilters}
+        onApply={applyFilters}
+        isLargeScreen={isLargeScreen}
+        isMediumScreen={isMediumScreen}
+      >
+        <FilterSection title="Form Type">
+          <PillFilterGroup
+            options={typeOptions}
+            value={typeFilter}
+            onValueChange={(value) =>
+              setTypeFilter(
+                value as "all" | "accident" | "illness" | "departure"
+              )
+            }
+          />
+        </FilterSection>
 
-          <ScrollView style={styles.modalContent}>
-            <View style={styles.modalSection}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Form Type</Text>
-              </View>
-              <RadioButton.Group
-                onValueChange={(value) =>
-                  setTypeFilter(
-                    value as "all" | "accident" | "illness" | "departure"
-                  )
-                }
-                value={typeFilter}
-              >
-                <View style={styles.radioItem}>
-                  <RadioButton.Android value="all" color="#1a73e8" />
-                  <Text style={styles.radioLabel}>All Types</Text>
-                </View>
-                <View style={styles.radioItem}>
-                  <RadioButton.Android value="accident" color="#1a73e8" />
-                  <Text style={styles.radioLabel}>Accident Report</Text>
-                </View>
-                <View style={styles.radioItem}>
-                  <RadioButton.Android value="illness" color="#1a73e8" />
-                  <Text style={styles.radioLabel}>Illness Report</Text>
-                </View>
-                <View style={styles.radioItem}>
-                  <RadioButton.Android value="departure" color="#1a73e8" />
-                  <Text style={styles.radioLabel}>Staff Departure Report</Text>
-                </View>
-              </RadioButton.Group>
-            </View>
+        <FilterDivider />
 
-            <Divider style={styles.modalDivider} />
-
-            <View style={styles.modalSection}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Status</Text>
-              </View>
-              <RadioButton.Group
-                onValueChange={(value) =>
-                  setStatusFilter(value as FormStatus | "all")
-                }
-                value={statusFilter}
-              >
-                <View style={styles.radioItem}>
-                  <RadioButton.Android value="all" color="#1a73e8" />
-                  <Text style={styles.radioLabel}>All Statuses</Text>
-                </View>
-                {Object.values(FormStatus).map((status) => (
-                  <View key={status} style={styles.radioItem}>
-                    <RadioButton.Android value={status} color="#1a73e8" />
-                    <Text style={styles.radioLabel}>{status}</Text>
-                  </View>
-                ))}
-              </RadioButton.Group>
-            </View>
-
-            <Divider style={styles.modalDivider} />
-
-            <View style={styles.modalSection}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Sort by date</Text>
-              </View>
-              <RadioButton.Group
-                onValueChange={(value) => setSortOrder(value)}
-                value={sortOrder}
-              >
-                <View style={styles.radioItem}>
-                  <RadioButton.Android value="desc" color="#1a73e8" />
-                  <Text style={styles.radioLabel}>Newest first</Text>
-                </View>
-                <View style={styles.radioItem}>
-                  <RadioButton.Android value="asc" color="#1a73e8" />
-                  <Text style={styles.radioLabel}>Oldest first</Text>
-                </View>
-              </RadioButton.Group>
-            </View>
-          </ScrollView>
-
-          <View style={styles.modalFooter}>
-            <TouchableOpacity
-              style={styles.footerButton}
-              onPress={clearFilters}
-            >
-              <Text style={styles.clearButtonText}>Clear Filters</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.footerButton, styles.applyButton]}
-              onPress={applyFilters}
-            >
-              <Text style={styles.applyButtonText}>Apply</Text>
-            </TouchableOpacity>
-          </View>
-        </Modal>
-      </Portal>
+        <FilterSection title="Status">
+          <PillFilterGroup
+            options={statusOptions}
+            value={statusFilter}
+            onValueChange={(value) =>
+              setStatusFilter(value as FormStatus | "all")
+            }
+          />
+        </FilterSection>
+      </FilterModal>
     );
   };
 
@@ -1365,7 +1311,6 @@ const FormSubmissionsScreen = () => {
         </View>
       </View>
 
-      {renderActiveFilterIndicator()}
       {renderFilterModal()}
 
       <View
@@ -1379,6 +1324,7 @@ const FormSubmissionsScreen = () => {
           },
         ]}
       >
+        {renderActiveFilterIndicator()}
         {renderContent()}
       </View>
     </SafeAreaView>

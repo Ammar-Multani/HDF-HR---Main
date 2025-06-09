@@ -58,6 +58,13 @@ import {
 } from "react-native-reanimated";
 import { getFontFamily } from "../../utils/globalStyles";
 import Pagination from "../../components/Pagination";
+import FilterModal from "../../components/FilterModal";
+import {
+  FilterSection,
+  RadioFilterGroup,
+  FilterDivider,
+  PillFilterGroup,
+} from "../../components/FilterSections";
 
 // Update the CompanyUser interface to include created_at
 interface ExtendedCompanyUser extends CompanyUser {
@@ -282,6 +289,16 @@ const EmployeeListScreen = () => {
 
   // New filter states
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [appliedFilters, setAppliedFilters] = useState<{
+    status: string;
+    sortOrder: string;
+    jobTitle: string[];
+  }>({
+    status: "all",
+    sortOrder: DateSortOrder.NEWEST_FIRST,
+    jobTitle: [],
+  });
+
   const [sortOrder, setSortOrder] = useState<string>(
     DateSortOrder.NEWEST_FIRST
   );
@@ -471,191 +488,97 @@ const EmployeeListScreen = () => {
     }
   };
 
-  const fetchEmployees = async (refresh = false) => {
-    try {
-      // Clear any previous errors
-      setError(null);
-
-      if (refresh) {
-        setPage(0);
-        setHasMoreData(true);
-
-        // Only show refreshing indicator when explicitly requested via pull-to-refresh
-        // or when searching, but not during initial load
-        if (page > 0 || searchQuery.trim() !== "") {
-          setRefreshing(true);
+  const fetchEmployees = useCallback(
+    async (refresh = false) => {
+      try {
+        if (refresh) {
+          setPage(0);
+          setLoading(true);
         } else {
-          // For initial load, we want the skeleton loader instead of the refresh indicator
-          setRefreshing(false);
+          setLoading(true);
         }
-      } else if (!refresh && page > 0) {
-        setLoadingMore(true);
-      }
 
-      // Get company ID if not already set
-      const currentCompanyId = companyId || (await fetchCompanyId());
-      if (!currentCompanyId) {
-        console.error("No company ID found");
-        setError("Unable to identify your company");
-        setLoading(false);
-        setRefreshing(false);
-        setLoadingMore(false);
-        return;
-      }
+        // Get company ID if not already set
+        const currentCompanyId = companyId || (await fetchCompanyId());
+        if (!currentCompanyId) {
+          console.error("No company ID found");
+          setLoading(false);
+          return;
+        }
 
-      setCompanyId(currentCompanyId);
+        setCompanyId(currentCompanyId);
 
-      // Fetch job titles if not already loaded
-      if (availableJobTitles.length === 0) {
-        fetchJobTitles();
-      }
+        // Fetch job titles if not already loaded
+        if (availableJobTitles.length === 0) {
+          fetchJobTitles();
+        }
 
-      // Calculate pagination parameters
-      const currentPage = refresh ? 0 : page;
-      const from = currentPage * PAGE_SIZE;
-      const to = from + PAGE_SIZE - 1;
+        const currentPage = refresh ? 0 : page;
+        const from = currentPage * PAGE_SIZE;
+        const to = from + PAGE_SIZE - 1;
 
-      // Generate a cache key based on all filters
-      const filterKey = `${statusFilter}_${sortOrder}_${jobTitleFilter.join("_")}`;
-      const cacheKey = `employees_${currentCompanyId}_${searchQuery.trim()}_${filterKey}_page${currentPage}_size${PAGE_SIZE}`;
-
-      // Only force refresh when explicitly requested
-      const forceRefresh = refresh;
-
-      // Modified network check logic - only prevent refresh if DEFINITELY offline
-      const networkAvailable = await isNetworkAvailable();
-      if (!networkAvailable && refresh) {
-        console.log(
-          "Network appears to be offline, but still attempting fetch"
-        );
-        // We'll still try the fetch but prepare for potential errors
-      }
-
-      // Use cached query implementation with proper typing
-      const fetchData = async () => {
         let query = supabase
           .from("company_user")
-          .select(
-            // Select fields from the company_user table
-            "id, company_id, first_name, last_name, email, phone_number, role, active_status, created_by, created_at, updated_at, address, date_of_birth, nationality, id_type, ahv_number, marital_status, gender, employment_start_date, employment_end_date, employment_type, workload_percentage, job_title, education, ahv_card_path, id_card_path, bank_details, comments",
-            { count: "exact" }
-          )
+          .select("*", { count: "exact" })
           .eq("company_id", currentCompanyId)
-          .eq("role", "employee"); // Make sure we only get employees
+          .eq("role", "employee");
 
         // Apply status filter if not "all"
-        if (statusFilter !== "all") {
+        if (statusFilter && statusFilter !== "all") {
+          console.log("Applying status filter:", statusFilter); // Debug log
           query = query.eq("active_status", statusFilter);
         }
 
         // Apply job title filter if any selected
-        if (jobTitleFilter.length > 0) {
+        if (jobTitleFilter && jobTitleFilter.length > 0) {
           query = query.in("job_title", jobTitleFilter);
         }
 
-        // Apply search filter if present using optimized query patterns
+        // Apply search filter if present
         if (searchQuery.trim() !== "") {
-          if (searchQuery.length > 2) {
-            // For longer queries use wildcard search (uses our GIN index)
-            const searchPattern = `%${searchQuery.toLowerCase()}%`;
-            query = query.or(
-              `first_name.ilike.${searchPattern},last_name.ilike.${searchPattern},email.ilike.${searchPattern},job_title.ilike.${searchPattern}`
-            );
+          const searchPattern = `%${searchQuery.toLowerCase()}%`;
+          query = query.or(
+            `first_name.ilike.${searchPattern},last_name.ilike.${searchPattern},email.ilike.${searchPattern},job_title.ilike.${searchPattern}`
+          );
+        }
+
+        // Add sorting
+        query = query.order("created_at", {
+          ascending: sortOrder === DateSortOrder.OLDEST_FIRST,
+        });
+
+        // Add pagination
+        query = query.range(from, to);
+
+        const { data, error, count } = await query;
+
+        if (error) {
+          console.error("Error fetching employees:", error);
+          throw error;
+        }
+
+        // Update total count
+        if (count !== null) {
+          setTotalCount(count);
+        }
+
+        if (data) {
+          if (refresh) {
+            setEmployees(data);
+            setFilteredEmployees(data);
           } else {
-            // For short queries just search for starts-with for better performance
-            const searchPattern = `${searchQuery.toLowerCase()}%`;
-            query = query.or(
-              `first_name.ilike.${searchPattern},last_name.ilike.${searchPattern},email.ilike.${searchPattern},job_title.ilike.${searchPattern}`
-            );
+            setEmployees((prev) => [...prev, ...data]);
+            setFilteredEmployees((prev) => [...prev, ...data]);
           }
         }
-
-        // Add proper pagination with consistent ordering
-        query = query
-          .order("created_at", {
-            ascending: sortOrder === DateSortOrder.OLDEST_FIRST,
-          })
-          .range(from, to);
-
-        const result = await query;
-        return result;
-      };
-
-      const result = await cachedQuery<any>(fetchData, cacheKey, {
-        forceRefresh,
-        criticalData: true, // Mark as critical data that should be available offline
-      });
-
-      // Check if we're using stale data
-      if (result.fromCache && result.error) {
-        // Show a gentle warning about using stale data
-        setError(
-          "You're viewing cached data. Some information may be outdated."
-        );
-      }
-
-      const { data, error } = result;
-      // Get count from the Supabase response metadata
-      const count = result.data?.length ? (result as any).count : 0;
-
-      if (error && !result.fromCache) {
+      } catch (error) {
         console.error("Error fetching employees:", error);
-
-        // Check if it's a network error
-        if (
-          error.message &&
-          (error.message.includes("network") ||
-            error.message.includes("connection") ||
-            error.message.includes("offline"))
-        ) {
-          // This is likely a network error - update network status
-          setNetworkStatus(false);
-          throw new Error(
-            "Network connection issue. Check your internet connection."
-          );
-        } else {
-          throw new Error(error.message || "Failed to fetch employees");
-        }
+      } finally {
+        setLoading(false);
       }
-
-      // If we got here, we're definitely online
-      if (networkStatus === false) {
-        setNetworkStatus(true);
-      }
-
-      // Use the count metadata for pagination (if available)
-      if (count !== undefined) {
-        setTotalCount(count);
-        setHasMoreData(from + (data?.length || 0) < count);
-      } else if (data && data.length < PAGE_SIZE) {
-        setHasMoreData(false);
-      }
-
-      const typedData = (data as CompanyUser[]) || [];
-
-      if (refresh || currentPage === 0) {
-        setEmployees(typedData);
-        setFilteredEmployees(typedData);
-      } else {
-        setEmployees((prevEmployees) => [...prevEmployees, ...typedData]);
-        setFilteredEmployees((prevEmployees) => [
-          ...prevEmployees,
-          ...typedData,
-        ]);
-      }
-    } catch (error: any) {
-      console.error("Error fetching employees:", error);
-      if (!networkStatus) {
-        setError("You're offline. Some features may be unavailable.");
-      } else {
-        setError(error.message || "Failed to load employees");
-      }
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-      setLoadingMore(false);
-    }
-  };
+    },
+    [companyId, page, statusFilter, jobTitleFilter, searchQuery, sortOrder]
+  );
 
   useEffect(() => {
     // Start fetching immediately, but don't show a full-screen loader
@@ -1005,29 +928,43 @@ const EmployeeListScreen = () => {
 
   // Handle clearing all filters
   const handleClearFilters = () => {
+    setFilterModalVisible(false);
     setStatusFilter("all");
     setJobTitleFilter([]);
     setSortOrder(DateSortOrder.NEWEST_FIRST);
-
-    // Apply the cleared filters
-    applyFiltersDirect();
+    setAppliedFilters({
+      status: "all",
+      sortOrder: DateSortOrder.NEWEST_FIRST,
+      jobTitle: [],
+    });
+    setPage(0);
+    fetchEmployees(true);
   };
 
-  // Indicator for active filters
+  // Handle clearing status filter only
+  const handleClearStatusFilter = useCallback(() => {
+    setStatusFilter("");
+    setJobTitleFilter([]); // Reset job title filter as well since they're related
+    setAppliedFilters((prev) => ({
+      ...prev,
+      status: "all",
+      jobTitle: [],
+    }));
+
+    // Ensure we reset the page and trigger a new fetch
+    setTimeout(() => {
+      setPage(0);
+      fetchEmployees(true);
+    }, 0);
+  }, [fetchEmployees]);
+
+  // Update the active filter indicator
   const renderActiveFilterIndicator = () => {
     if (!hasActiveFilters()) return null;
 
-    const localStyles = {
-      activeFilterChip: {
-        margin: 4,
-        backgroundColor: theme.colors.primary + "15",
-        borderColor: theme.colors.primary,
-      },
-    };
-
     return (
       <View style={styles.activeFiltersContainer}>
-        <Text style={styles.activeFiltersText}>Active filters:</Text>
+        <Text style={styles.activeFiltersText}>Active Filters:</Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -1037,44 +974,18 @@ const EmployeeListScreen = () => {
             <Chip
               mode="outlined"
               onClose={() => {
-                setStatusFilter("all");
-                applyFiltersDirect();
+                handleClearStatusFilter();
               }}
-              style={localStyles.activeFilterChip}
-              textStyle={{ color: theme.colors.primary }}
+              style={[
+                styles.activeFilterChip,
+                {
+                  backgroundColor: "#1a73e815",
+                  borderColor: "#1a73e8",
+                },
+              ]}
+              textStyle={{ color: "#1a73e8" }}
             >
-              Status:{" "}
-              {statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}
-            </Chip>
-          )}
-
-          {jobTitleFilter.length > 0 && (
-            <Chip
-              mode="outlined"
-              onClose={() => {
-                setJobTitleFilter([]);
-                applyFiltersDirect();
-              }}
-              style={localStyles.activeFilterChip}
-              textStyle={{ color: theme.colors.primary }}
-            >
-              {jobTitleFilter.length > 1
-                ? `${jobTitleFilter.length} Job Titles`
-                : `Job: ${jobTitleFilter[0]}`}
-            </Chip>
-          )}
-
-          {sortOrder !== DateSortOrder.NEWEST_FIRST && (
-            <Chip
-              mode="outlined"
-              onClose={() => {
-                setSortOrder(DateSortOrder.NEWEST_FIRST);
-                applyFiltersDirect();
-              }}
-              style={localStyles.activeFilterChip}
-              textStyle={{ color: theme.colors.primary }}
-            >
-              Date: Oldest first
+              {`Status: ${statusFilter === "active" ? "Active" : "Inactive"}`}
             </Chip>
           )}
         </ScrollView>
@@ -1082,153 +993,37 @@ const EmployeeListScreen = () => {
     );
   };
 
-  // Filter modal component
+  // Update the filter modal component
   const renderFilterModal = () => {
+    const statusOptions = [
+      { label: "All Statuses", value: "all" },
+      { label: "Active", value: "active" },
+      { label: "Inactive", value: "inactive" },
+    ];
+
+    const sortOptions = [
+      { label: "Newest first", value: DateSortOrder.NEWEST_FIRST },
+      { label: "Oldest first", value: DateSortOrder.OLDEST_FIRST },
+    ];
+
     return (
-      <Portal>
-        <Modal
-          visible={filterModalVisible}
-          onDismiss={() => setFilterModalVisible(false)}
-          contentContainerStyle={styles.modalContainer}
-        >
-          <View style={styles.modalHeaderContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Filter Options</Text>
-              <IconButton
-                icon="close"
-                size={24}
-                onPress={() => setFilterModalVisible(false)}
-              />
-            </View>
-            <Divider style={styles.modalDivider} />
-          </View>
-
-          <ScrollView style={styles.modalContent}>
-            {/* Status Filter Section */}
-            <View style={styles.modalSection}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Filter by status</Text>
-              </View>
-              <RadioButton.Group
-                onValueChange={(value) => setStatusFilter(value)}
-                value={statusFilter}
-              >
-                <View style={styles.radioItem}>
-                  <RadioButton.Android
-                    value="all"
-                    color={theme.colors.primary}
-                  />
-                  <Text style={styles.radioLabel}>All Statuses</Text>
-                </View>
-                <View style={styles.radioItem}>
-                  <RadioButton.Android
-                    value="active"
-                    color={theme.colors.primary}
-                  />
-                  <Text style={styles.radioLabel}>Active</Text>
-                </View>
-                <View style={styles.radioItem}>
-                  <RadioButton.Android
-                    value="inactive"
-                    color={theme.colors.primary}
-                  />
-                  <Text style={styles.radioLabel}>Inactive</Text>
-                </View>
-              </RadioButton.Group>
-            </View>
-
-            <Divider style={styles.modalDivider} />
-
-            {/* Date Sort Section */}
-            <View style={styles.modalSection}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Sort by creation date</Text>
-              </View>
-              <RadioButton.Group
-                onValueChange={(value) => setSortOrder(value)}
-                value={sortOrder}
-              >
-                <View style={styles.radioItem}>
-                  <RadioButton.Android
-                    value={DateSortOrder.NEWEST_FIRST}
-                    color={theme.colors.primary}
-                  />
-                  <Text style={styles.radioLabel}>Newest first</Text>
-                </View>
-                <View style={styles.radioItem}>
-                  <RadioButton.Android
-                    value={DateSortOrder.OLDEST_FIRST}
-                    color={theme.colors.primary}
-                  />
-                  <Text style={styles.radioLabel}>Oldest first</Text>
-                </View>
-              </RadioButton.Group>
-            </View>
-
-            <Divider style={styles.modalDivider} />
-
-            {/* Job Title Section */}
-            {availableJobTitles.length > 0 && (
-              <View style={styles.modalSection}>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Filter by job title</Text>
-                  <View style={styles.selectionBadge}>
-                    <Text style={styles.selectionHint}>
-                      {jobTitleFilter.length > 0
-                        ? `${jobTitleFilter.length} selected`
-                        : "All"}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Job Title Chips */}
-                <View style={styles.chipContainer}>
-                  {availableJobTitles.map((title) => (
-                    <Chip
-                      key={title}
-                      selected={jobTitleFilter.includes(title)}
-                      onPress={() => toggleJobTitleSelection(title)}
-                      style={[
-                        styles.filterChip,
-                        jobTitleFilter.includes(title) && {
-                          backgroundColor: theme.colors.primary + "20",
-                          borderColor: theme.colors.primary,
-                        },
-                      ]}
-                      textStyle={
-                        jobTitleFilter.includes(title)
-                          ? { color: theme.colors.primary }
-                          : {}
-                      }
-                    >
-                      {title}
-                    </Chip>
-                  ))}
-                </View>
-              </View>
-            )}
-          </ScrollView>
-
-          <View style={styles.modalFooter}>
-            <TouchableOpacity
-              style={styles.footerButton}
-              onPress={handleClearFilters}
-            >
-              <Text style={styles.clearButtonText}>Clear Filters</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.footerButton,
-                styles.applyButton,
-                { backgroundColor: theme.colors.primary },
-              ]}
-              onPress={applyFiltersDirect}
-            >
-              <Text style={styles.applyButtonText}>Apply</Text>
-            </TouchableOpacity>
-          </View>
-        </Modal>
-      </Portal>
+      <FilterModal
+        visible={filterModalVisible}
+        onDismiss={() => setFilterModalVisible(false)}
+        title="Filter Options"
+        onClear={handleClearFilters}
+        onApply={applyFiltersDirect}
+        isLargeScreen={isLargeScreen}
+        isMediumScreen={isMediumScreen}
+      >
+        <FilterSection title="Filter by status">
+          <PillFilterGroup
+            options={statusOptions}
+            value={statusFilter}
+            onValueChange={(value) => setStatusFilter(value)}
+          />
+        </FilterSection>
+      </FilterModal>
     );
   };
 
@@ -1580,152 +1375,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: getFontFamily("700"),
   },
-  // Filter modal styles
-  modalContainer: {
-    backgroundColor: "white",
-    borderRadius: 16,
-    margin: 16,
-    overflow: "hidden",
-    maxHeight: "80%",
-    elevation: 5,
-  },
-  modalHeaderContainer: {
-    backgroundColor: "white",
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    zIndex: 1,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontFamily: getFontFamily("600"),
-    color: "#212121",
-  },
-  modalContent: {
-    padding: 16,
-  },
-  modalFooter: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: "#E0E0E0",
-    backgroundColor: "#FFFFFF",
-  },
-  modalDivider: {
-    height: 1,
-    backgroundColor: "#E0E0E0",
-  },
-  modalSection: {
-    marginBottom: 24,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontFamily: getFontFamily("600"),
-    color: "#212121",
-    marginBottom: 0,
-  },
-  radioItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: 4,
-  },
-  radioLabel: {
-    fontSize: 16,
-    marginLeft: 8,
-    fontFamily: getFontFamily("normal"),
-    color: "#424242",
-  },
-  chipContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginTop: 8,
-  },
-  filterChip: {
-    margin: 4,
-  },
-  selectionBadge: {
-    backgroundColor: "#F5F5F5",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 16,
-  },
-  selectionHint: {
-    fontSize: 12,
-    color: "#616161",
-    fontFamily: getFontFamily("500"),
-  },
-  footerButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    marginLeft: 12,
-  },
-  clearButtonText: {
-    fontSize: 14,
-    fontFamily: getFontFamily("500"),
-    color: "#616161",
-  },
-  applyButton: {
-    elevation: 2,
-  },
-  applyButtonText: {
-    fontSize: 14,
-    fontFamily: getFontFamily("500"),
-    color: "#FFFFFF",
-  },
-  // Active filter indicator styles
-  activeFiltersContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
-    marginBottom: 12,
-    paddingHorizontal: 4,
-  },
-  activeFiltersText: {
-    fontSize: 14,
-    fontFamily: getFontFamily("normal"),
-    color: "#616161",
-    marginRight: 8,
-  },
-  filtersScrollView: {
-    flexGrow: 0,
-    marginVertical: 4,
-  },
-  searchTips: {
-    backgroundColor: "#e8f4fd",
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  searchTipsText: {
-    color: "#0066cc",
-    fontFamily: getFontFamily("500"),
-    fontSize: 14,
-  },
-  searchResultsContainer: {
-    backgroundColor: "#e8f4fd",
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  searchResultsText: {
-    color: "#0066cc",
-    fontFamily: getFontFamily("500"),
-    fontSize: 14,
-  },
   card: {
     borderRadius: 12,
     borderWidth: 1,
@@ -1802,6 +1451,56 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     width: "auto",
     alignSelf: "center",
+  },
+  activeFiltersContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  activeFiltersText: {
+    fontSize: 14,
+    fontFamily: getFontFamily("normal"),
+    color: "#616161",
+    marginRight: 8,
+  },
+  filtersScrollView: {
+    flexGrow: 0,
+    marginVertical: 4,
+  },
+  searchTips: {
+    backgroundColor: "#e8f4fd",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  searchTipsText: {
+    color: "#0066cc",
+    fontFamily: getFontFamily("500"),
+    fontSize: 14,
+  },
+  searchResultsContainer: {
+    backgroundColor: "#e8f4fd",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  searchResultsText: {
+    color: "#0066cc",
+    fontFamily: getFontFamily("500"),
+    fontSize: 14,
+  },
+  chipContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: 8,
+  },
+  filterChip: {
+    margin: 4,
+  },
+  activeFilterChip: {
+    margin: 4,
   },
 });
 
