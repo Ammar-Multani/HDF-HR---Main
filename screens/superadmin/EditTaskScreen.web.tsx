@@ -386,6 +386,77 @@ const EditTaskScreen = () => {
         throw error;
       }
 
+      // Get user's full name from available users
+      const updatingUser = allUsers.find((u) => u.email === user.email);
+      const userDisplayName = updatingUser ? updatingUser.name : user.email;
+
+      // Prepare change details for title and description
+      const changes = [];
+      if (originalTask.title !== data.title) {
+        changes.push(
+          `Title changed from "${originalTask.title}" to "${data.title}"`
+        );
+      }
+      if (originalTask.description !== data.description) {
+        changes.push(
+          `Description changed from "${originalTask.description}" to "${data.description}"`
+        );
+      }
+
+      // Log the activity with detailed change tracking
+      const activityLogData = {
+        user_id: user.id,
+        activity_type: "UPDATE",
+        description: `Task updated by ${userDisplayName} (${user.email}). ${changes.join(". ")}`,
+        company_id: selectedCompany.id,
+        metadata: {
+          task_title: data.title,
+          assigned_to: selectedAssignees[0],
+          priority: data.priority,
+          status: data.status,
+          changes: changes,
+          updated_by: {
+            name: userDisplayName,
+            email: user.email,
+          },
+        },
+        old_value: {
+          title: {
+            previous: originalTask.title,
+            changed: originalTask.title !== data.title,
+          },
+          description: {
+            previous: originalTask.description,
+            changed: originalTask.description !== data.description,
+          },
+          deadline: originalTask.deadline,
+          priority: originalTask.priority,
+          status: originalTask.status,
+        },
+        new_value: {
+          title: {
+            current: data.title,
+            changed: originalTask.title !== data.title,
+          },
+          description: {
+            current: data.description,
+            changed: originalTask.description !== data.description,
+          },
+          deadline: data.deadline.toISOString(),
+          priority: data.priority,
+          status: data.status,
+        },
+      };
+
+      const { error: logError } = await supabase
+        .from("activity_logs")
+        .insert([activityLogData]);
+
+      if (logError) {
+        console.error("Error logging activity:", logError);
+        // Don't throw error here, as the task was updated successfully
+      }
+
       setSnackbarMessage(t("superAdmin.tasks.taskUpdatedSuccessfully"));
       setSnackbarVisible(true);
 

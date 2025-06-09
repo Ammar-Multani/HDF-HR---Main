@@ -10,7 +10,7 @@ import {
   Dimensions,
   Platform,
 } from "react-native";
-import { useTheme, Avatar, Divider, Button } from "react-native-paper";
+import { useTheme, Avatar, Divider, Button, Surface } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { supabase, isNetworkAvailable } from "../../lib/supabase";
@@ -31,6 +31,7 @@ import Animated, {
   withSequence,
 } from "react-native-reanimated";
 import DynamicChart from "../../components/DynamicChart";
+import ActivityLogTimeline from "../../components/ActivityLogTimeline";
 
 const { width } = Dimensions.get("window");
 
@@ -145,6 +146,7 @@ const SuperAdminDashboard = () => {
     monthlyForms: [] as number[],
     topCompanies: [] as CompanyData[],
     topEmployees: [] as EmployeeData[],
+    latestActivities: [] as ActivityLog[],
   });
 
   const [windowDimensions, setWindowDimensions] = useState({
@@ -719,6 +721,17 @@ const SuperAdminDashboard = () => {
         }
       }
 
+      // Add this new fetch call for latest activities
+      const { data: latestActivities, error: activitiesError } = await supabase
+        .from("activity_logs")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(10);
+
+      if (activitiesError) {
+        console.error("Error fetching latest activities:", activitiesError);
+      }
+
       // Update state with all the data
       setStats({
         totalCompanies: totalCompanies || 0,
@@ -738,6 +751,7 @@ const SuperAdminDashboard = () => {
         monthlyForms: recentMonthsFormData,
         topCompanies: topCompanies,
         topEmployees: topEmployees,
+        latestActivities: latestActivities || [],
       });
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
@@ -1244,6 +1258,26 @@ const SuperAdminDashboard = () => {
               </View>
             </View>
 
+            {/* Activity Logs section */}
+            <View style={styles.activityLogsSection}>
+              <Surface style={styles.activityLogsCard} elevation={0}>
+                {stats.latestActivities && stats.latestActivities.length > 0 ? (
+                  <ActivityLogTimeline logs={stats.latestActivities} />
+                ) : (
+                  <View style={styles.emptyState}>
+                    <MaterialCommunityIcons
+                      name="clock-outline"
+                      size={48}
+                      color={theme.colors.outlineVariant}
+                    />
+                    <Text style={styles.emptyStateText}>
+                      {t("superAdmin.activityLogs.noLogs")}
+                    </Text>
+                  </View>
+                )}
+              </Surface>
+            </View>
+
             <View
               style={[
                 styles.listsContainer,
@@ -1681,6 +1715,33 @@ const styles = StyleSheet.create({
   },
   topEmployeesContainer: {
     flex: 1,
+  },
+  activityLogsSection: {
+    width: "100%",
+    marginBottom: 24,
+    elevation: 0,
+  },
+  activityLogsHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  activityLogsCard: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    borderColor: "#e0e0e0",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+    elevation: 0,
+    minHeight: 400,
+    maxHeight: 600,
+    overflow: "hidden",
   },
 });
 

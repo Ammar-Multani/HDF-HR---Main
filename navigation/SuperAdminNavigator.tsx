@@ -47,6 +47,7 @@ import ReceiptsListScreen from "../screens/superadmin/ReceiptsListScreen";
 import ReceiptDetailsScreen from "../screens/superadmin/ReceiptDetailsScreen";
 import EditTaskScreen from "../screens/superadmin/EditTaskScreen";
 import EditReceiptScreen from "../screens/superadmin/EditReceiptScreen";
+import ActivityLogsScreen from "../screens/superadmin/ActivityLogsScreen";
 
 // Stack navigators
 const SuperAdminStack = createNativeStackNavigator();
@@ -318,6 +319,11 @@ const WebStackNavigator = () => {
           component={EditReceiptScreen}
           options={{ title: t("navigation.editReceipt") }}
         />
+        <ContentStack.Screen
+          name="ActivityLogs"
+          component={ActivityLogsScreen}
+          options={{ title: t("navigation.activityLog") }}
+        />
       </ContentStack.Navigator>
     );
   };
@@ -578,6 +584,10 @@ export const SuperAdminNavigator = () => {
       <SuperAdminStack.Screen
         name="EditReceipt"
         component={EditReceiptScreen}
+      />
+      <SuperAdminStack.Screen
+        name="ActivityLog"
+        component={ActivityLogsScreen}
       />
     </SuperAdminStack.Navigator>
   );

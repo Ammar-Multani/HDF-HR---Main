@@ -31,6 +31,7 @@ import {
   Divider,
   RadioButton,
   Menu,
+  Button,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -80,6 +81,8 @@ interface ExtendedTask extends Task {
   modified_by?: string;
   modified_at?: string;
   modifier_name?: string;
+  created_by: string;
+  reminder_days_before: number;
 }
 
 // Define user details interface
@@ -398,6 +401,144 @@ const TableSkeleton: React.FC = () => {
   );
 };
 
+// Add this before the SuperAdminTasksScreen component
+const Pagination = ({
+  currentPage,
+  totalPages,
+  onPageChange,
+}: {
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+}) => {
+  const theme = useTheme();
+  const { t } = useTranslation();
+  const pageNumbers = [];
+  const maxVisiblePages = 5;
+
+  let startPage = Math.max(0, currentPage - Math.floor(maxVisiblePages / 2));
+  let endPage = Math.min(totalPages - 1, startPage + maxVisiblePages - 1);
+
+  if (endPage - startPage + 1 < maxVisiblePages) {
+    startPage = Math.max(0, endPage - maxVisiblePages + 1);
+  }
+
+  for (let i = startPage; i <= endPage; i++) {
+    pageNumbers.push(i);
+  }
+
+  return (
+    <View style={paginationStyles.container}>
+      <Button
+        mode="text"
+        onPress={() => onPageChange(currentPage - 1)}
+        disabled={currentPage === 0}
+        icon="chevron-left"
+        style={paginationStyles.button}
+      >
+        {t("common.previous")}
+      </Button>
+      <View style={paginationStyles.pageNumbersContainer}>
+        {startPage > 0 && (
+          <>
+            <Button
+              mode="text"
+              onPress={() => onPageChange(0)}
+              style={paginationStyles.pageButton}
+              labelStyle={[
+                paginationStyles.pageButtonText,
+                currentPage === 0 && { color: theme.colors.primary },
+              ]}
+            >
+              1
+            </Button>
+            {startPage > 1 && (
+              <Text style={paginationStyles.ellipsis}>...</Text>
+            )}
+          </>
+        )}
+        {pageNumbers.map((pageNum) => (
+          <Button
+            key={`page-${pageNum}`}
+            mode="text"
+            onPress={() => onPageChange(pageNum)}
+            style={paginationStyles.pageButton}
+            labelStyle={[
+              paginationStyles.pageButtonText,
+              currentPage === pageNum && { color: theme.colors.primary },
+            ]}
+          >
+            {pageNum + 1}
+          </Button>
+        ))}
+        {endPage < totalPages - 1 && (
+          <>
+            {endPage < totalPages - 2 && (
+              <Text style={paginationStyles.ellipsis}>...</Text>
+            )}
+            <Button
+              mode="text"
+              onPress={() => onPageChange(totalPages - 1)}
+              style={paginationStyles.pageButton}
+              labelStyle={[
+                paginationStyles.pageButtonText,
+                currentPage === totalPages - 1 && {
+                  color: theme.colors.primary,
+                },
+              ]}
+            >
+              {totalPages}
+            </Button>
+          </>
+        )}
+      </View>
+      <Button
+        mode="text"
+        onPress={() => onPageChange(currentPage + 1)}
+        disabled={currentPage >= totalPages - 1}
+        icon="chevron-right"
+        contentStyle={{ flexDirection: "row-reverse" }}
+        style={paginationStyles.button}
+      >
+        {t("common.next")}
+      </Button>
+    </View>
+  );
+};
+
+// Add pagination styles separately
+const paginationStyles = StyleSheet.create({
+  container: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 8,
+    borderTopColor: "#e0e0e0",
+    backgroundColor: "#fff",
+    width: "100%",
+  },
+  pageNumbersContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 8,
+  },
+  button: {
+    marginHorizontal: 4,
+  },
+  pageButton: {
+    minWidth: 40,
+    marginHorizontal: 2,
+  },
+  pageButtonText: {
+    fontSize: 14,
+    color: "#666",
+  },
+  ellipsis: {
+    marginHorizontal: 8,
+    color: "#666",
+  },
+});
+
 const SuperAdminTasksScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
@@ -421,7 +562,8 @@ const SuperAdminTasksScreen = () => {
   });
   const [page, setPage] = useState(0);
   const [hasMoreData, setHasMoreData] = useState(true);
-  const PAGE_SIZE = 10;
+  const PAGE_SIZE = 13;
+  const [totalItems, setTotalItems] = useState(0);
 
   // Filter modal state
   const [filterModalVisible, setFilterModalVisible] = useState(false);
@@ -454,7 +596,7 @@ const SuperAdminTasksScreen = () => {
   const isMediumScreen =
     windowDimensions.width >= 768 && windowDimensions.width < 1440;
 
-  // Memoize filteredTasks to avoid unnecessary re-filtering
+  // Update memoizedFilteredTasks to consider pagination
   const memoizedFilteredTasks = useMemo(() => {
     try {
       let filtered = tasks;
@@ -473,7 +615,7 @@ const SuperAdminTasksScreen = () => {
         );
       }
 
-      // Apply search filter - safely check if description exists
+      // Apply search filter
       if (searchQuery.trim() !== "") {
         filtered = filtered.filter(
           (task) =>
@@ -488,7 +630,7 @@ const SuperAdminTasksScreen = () => {
       return filtered;
     } catch (error) {
       console.error("Error filtering tasks:", error);
-      return tasks; // Return unfiltered tasks on error
+      return tasks;
     }
   }, [tasks, appliedFilters.status, appliedFilters.priority, searchQuery]);
 
@@ -497,6 +639,7 @@ const SuperAdminTasksScreen = () => {
     setFilteredTasks(memoizedFilteredTasks);
   }, [memoizedFilteredTasks]);
 
+  // Update fetchTasks to handle pagination properly
   const fetchTasks = async (refresh = false) => {
     try {
       if (refresh) {
@@ -511,9 +654,10 @@ const SuperAdminTasksScreen = () => {
       const from = currentPage * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      // First fetch tasks with basic data
-      let query = supabase.from("tasks").select(
-        `
+      let query = supabase
+        .from("tasks")
+        .select(
+          `
           id, 
           title, 
           description, 
@@ -524,16 +668,30 @@ const SuperAdminTasksScreen = () => {
           updated_at,
           modified_by,
           assigned_to,
+          created_by,
+          reminder_days_before,
           company:company_id (
             id, 
             company_name
           )
         `,
-        { count: "exact" }
-      );
+          { count: "exact" }
+        )
+        .order("created_at", { ascending: false });
 
-      // Update the query to always sort by newest first
-      query = query.order("created_at", { ascending: false }).range(from, to);
+      // Apply filters to the query
+      if (appliedFilters.status !== "all") {
+        query = query.eq("status", appliedFilters.status);
+      }
+      if (appliedFilters.priority !== "all") {
+        query = query.eq("priority", appliedFilters.priority);
+      }
+      if (searchQuery.trim() !== "") {
+        query = query.ilike("title", `%${searchQuery}%`);
+      }
+
+      // Apply pagination
+      query = query.range(from, to);
 
       const { data, error, count } = await query;
 
@@ -542,10 +700,11 @@ const SuperAdminTasksScreen = () => {
         throw error;
       }
 
-      if (!data) {
-        console.log("No task data returned");
+      if (!data || data.length === 0) {
         if (refresh) {
           setTasks([]);
+          setFilteredTasks([]);
+          setTotalItems(0);
         }
         setLoading(false);
         setRefreshing(false);
@@ -553,39 +712,28 @@ const SuperAdminTasksScreen = () => {
         return;
       }
 
-      console.log(
-        "Raw task data from database:",
-        data.map((task) => ({
-          id: task.id,
-          title: task.title,
-          assigned_to: task.assigned_to,
-        }))
-      );
+      // Update total items count
+      if (count !== null) {
+        setTotalItems(count);
+      }
 
+      // Process user details
       try {
-        // Prepare assignedTo arrays for bulk fetching
-        const allAssignedIds =
-          data
-            .map((task) => {
-              // Handle both string and array cases
-              if (Array.isArray(task.assigned_to)) {
-                return task.assigned_to;
-              } else if (task.assigned_to) {
-                return [task.assigned_to];
-              }
-              return [];
-            })
-            .flat() || [];
+        const allAssignedIds = data
+          .map((task) => {
+            if (Array.isArray(task.assigned_to)) {
+              return task.assigned_to;
+            } else if (task.assigned_to) {
+              return [task.assigned_to];
+            }
+            return [];
+          })
+          .flat();
 
-        // Only fetch user details if there are assigned users
         const uniqueAssignedIds = Array.from(new Set(allAssignedIds));
-
-        // Get all modifier IDs
         const allModifierIds = data
           .map((task) => task.modified_by)
           .filter(Boolean);
-
-        // Combine all user IDs
         const allUserIds = Array.from(
           new Set([...uniqueAssignedIds, ...allModifierIds])
         );
@@ -594,42 +742,35 @@ const SuperAdminTasksScreen = () => {
         let adminUsers: any[] = [];
 
         if (allUserIds.length > 0) {
-          try {
-            // Fetch all company users in one batch
-            const { data: companyUsersData } = await supabase
-              .from("company_user")
-              .select("id, first_name, last_name, email, role")
-              .in("id", allUserIds);
+          const { data: companyUsersData } = await supabase
+            .from("company_user")
+            .select("id, first_name, last_name, email, role")
+            .in("id", allUserIds);
 
-            if (companyUsersData) {
-              companyUsers = companyUsersData.map((user) => ({
-                id: user.id,
-                name: `${user.first_name} ${user.last_name}`,
-                email: user.email,
-                role: user.role,
-              }));
-            }
+          if (companyUsersData) {
+            companyUsers = companyUsersData.map((user) => ({
+              id: user.id,
+              name: `${user.first_name} ${user.last_name}`,
+              email: user.email,
+              role: user.role,
+            }));
+          }
 
-            // Fetch all admin users in one batch
-            const { data: adminUsersData } = await supabase
-              .from("admin")
-              .select("id, name, email, role")
-              .in("id", allUserIds);
+          const { data: adminUsersData } = await supabase
+            .from("admin")
+            .select("id, name, email, role")
+            .in("id", allUserIds);
 
-            if (adminUsersData) {
-              adminUsers = adminUsersData.map((admin) => ({
-                id: admin.id,
-                name: admin.name,
-                email: admin.email,
-                role: admin.role,
-              }));
-            }
-          } catch (userError) {
-            console.error("Error fetching user details:", userError);
+          if (adminUsersData) {
+            adminUsers = adminUsersData.map((admin) => ({
+              id: admin.id,
+              name: admin.name,
+              email: admin.email,
+              role: admin.role,
+            }));
           }
         }
 
-        // Create a lookup map for quick access to user details
         const userDetailsMap: { [key: string]: any } = {};
         [...companyUsers, ...adminUsers].forEach((user) => {
           if (user && user.id) {
@@ -637,62 +778,57 @@ const SuperAdminTasksScreen = () => {
           }
         });
 
-        // Map task data with assigned users and modifier information
-        const tasksWithDetails = data.map((task) => {
-          // Handle both string and array cases for assigned_to
-          const assignedToArray = Array.isArray(task.assigned_to)
-            ? task.assigned_to
-            : task.assigned_to
-              ? [task.assigned_to]
-              : [];
+        const tasksWithDetails = data.map((task: any) => {
+          // Handle assigned users
+          let assignedUserDetails = [];
+          const assignedTo = task.assigned_to;
 
-          const assignedUserDetails = assignedToArray
-            .map((id: string) => userDetailsMap[id])
-            .filter(Boolean);
-
-          const modifierName = task.modified_by
-            ? userDetailsMap[task.modified_by]?.name
-            : undefined;
+          if (Array.isArray(assignedTo)) {
+            assignedUserDetails = assignedTo
+              .map((id: string) => userDetailsMap[id])
+              .filter(Boolean);
+          } else if (
+            assignedTo &&
+            typeof assignedTo === "string" &&
+            userDetailsMap[assignedTo]
+          ) {
+            assignedUserDetails = [userDetailsMap[assignedTo]];
+          }
 
           return {
             ...task,
             assignedUserDetails,
             modified_at: task.updated_at,
-            modifier_name: modifierName,
-          } as unknown as ExtendedTask;
+            modifier_name: task.modified_by
+              ? userDetailsMap[task.modified_by]?.name
+              : undefined,
+            created_by: task.created_by || "",
+            reminder_days_before: task.reminder_days_before || 0,
+          };
         });
 
-        if (count !== null) {
-          setHasMoreData(from + (data?.length || 0) < count);
-        } else {
-          setHasMoreData(data?.length === PAGE_SIZE);
-        }
-
-        if (refresh) {
-          setTasks(tasksWithDetails);
-        } else {
-          setTasks((prev) => [...prev, ...tasksWithDetails]);
-        }
+        // Always set tasks directly when paginating or refreshing
+        setTasks(tasksWithDetails);
+        setFilteredTasks(tasksWithDetails);
       } catch (dataProcessingError) {
         console.error("Error processing task data:", dataProcessingError);
-        const basicTasks = data.map(
-          (task) =>
-            ({
-              ...task,
-              assignedUserDetails: [],
-              modified_at: task.updated_at,
-              modifier_name: undefined,
-            }) as unknown as ExtendedTask
-        );
+        const basicTasks: ExtendedTask[] = data.map((task: any) => ({
+          ...task,
+          assignedUserDetails: [],
+          modified_at: task.updated_at,
+          modifier_name: undefined,
+          created_by: task.created_by || "",
+          reminder_days_before: task.reminder_days_before || 0,
+        }));
 
-        if (refresh) {
-          setTasks(basicTasks);
-        } else {
-          setTasks((prev) => [...prev, ...basicTasks]);
-        }
+        // Always set tasks directly when paginating or refreshing
+        setTasks(basicTasks);
+        setFilteredTasks(basicTasks);
       }
     } catch (error) {
       console.error("Error fetching tasks:", error);
+      setTasks([]);
+      setFilteredTasks([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -700,25 +836,37 @@ const SuperAdminTasksScreen = () => {
     }
   };
 
+  // Remove the separate useEffect for filter changes
   useEffect(() => {
     fetchTasks(true);
-  }, []);
+  }, []); // Only run on mount
+
+  // Add new effect to handle page, filter, and search changes
+  useEffect(() => {
+    fetchTasks(false);
+  }, [page, appliedFilters.status, appliedFilters.priority, searchQuery]);
+
+  // Update handlePageChange to fetch tasks for the new page
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+    // fetchTasks will be called automatically by the useEffect
+  };
+
+  // Update search handling
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    setPage(0); // Reset to first page when search changes
+  };
 
   const onRefresh = () => {
     setRefreshing(true);
     fetchTasks(true);
   };
 
-  const loadMoreTasks = () => {
-    if (!loading && !loadingMore && hasMoreData) {
-      setPage((prevPage) => prevPage + 1);
-      fetchTasks(false);
-    }
-  };
-
-  // Update the applyFilters function
+  // Update applyFilters to reset page and fetch tasks
   const applyFilters = () => {
     setFilterModalVisible(false);
+    setPage(0); // Reset to first page when filters change
     const newFilters = {
       status: statusFilter,
       priority: priorityFilter,
@@ -727,11 +875,12 @@ const SuperAdminTasksScreen = () => {
     fetchTasks(true);
   };
 
-  // Update the clearFilters function
+  // Update clearFilters to reset page and fetch tasks
   const clearFilters = () => {
     setStatusFilter("all");
     setPriorityFilter("all");
     setFilterModalVisible(false);
+    setPage(0); // Reset to first page when clearing filters
     setAppliedFilters({
       status: "all",
       priority: "all",
@@ -1176,7 +1325,7 @@ const SuperAdminTasksScreen = () => {
     </Pressable>
   );
 
-  // Update the renderContent section to use the correct TableHeader
+  // Update the renderContent function to include pagination
   const renderContent = () => {
     if (filteredTasks.length === 0) {
       return (
@@ -1205,76 +1354,59 @@ const SuperAdminTasksScreen = () => {
       );
     }
 
-    // Show skeleton loaders when initially loading
-    if (loading && filteredTasks.length === 0) {
-      if (isMediumScreen || isLargeScreen) {
-        return <TableSkeleton />;
-      }
-      return (
-        <FlatList
-          data={Array(3).fill(0)}
-          renderItem={() => <TaskItemSkeleton />}
-          keyExtractor={(_, index) => `skeleton-${index}`}
-          contentContainerStyle={styles.listContent}
-        />
-      );
-    }
+    const totalPages = Math.ceil(totalItems / PAGE_SIZE);
 
     if (isMediumScreen || isLargeScreen) {
       return (
-        <View style={styles.tableContainer}>
-          <TableHeader />
-          <FlatList
-            data={filteredTasks}
-            renderItem={({ item }) => <TableRow item={item} />}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.tableContent}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
-            onEndReached={loadMoreTasks}
-            onEndReachedThreshold={0.5}
-            ListFooterComponent={() => (
-              <View style={styles.loadingFooter}>
-                {loadingMore && hasMoreData && (
-                  <ActivityIndicator size="small" color="#1a73e8" />
-                )}
-                {!hasMoreData && filteredTasks.length > 0 && (
-                  <Text style={styles.endListText}>
-                    {t("superAdmin.tasks.noMoreTasks")}
-                  </Text>
-                )}
-              </View>
-            )}
-          />
-        </View>
+        <>
+          <View style={styles.tableContainer}>
+            <TableHeader />
+            <FlatList
+              data={filteredTasks}
+              renderItem={({ item }) => <TableRow item={item} />}
+              keyExtractor={(item) => `task-${item.id}`}
+              contentContainerStyle={styles.tableContent}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+              }
+            />
+          </View>
+          {totalPages > 1 && (
+            <View style={styles.paginationWrapper}>
+              <Pagination
+                currentPage={page}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+              />
+            </View>
+          )}
+        </>
       );
     }
 
     return (
-      <FlatList
-        data={filteredTasks}
-        renderItem={renderTaskItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        onEndReached={loadMoreTasks}
-        onEndReachedThreshold={0.3}
-        ListFooterComponent={() => (
-          <View style={styles.loadingFooter}>
-            {loadingMore && hasMoreData && (
-              <ActivityIndicator size="small" color="#1a73e8" />
-            )}
-            {!hasMoreData && filteredTasks.length > 0 && (
-              <Text style={styles.endListText}>
-                {t("superAdmin.tasks.noMoreTasks")}
-              </Text>
-            )}
+      <>
+        <View style={{ flex: 1 }}>
+          <FlatList
+            data={filteredTasks}
+            renderItem={renderTaskItem}
+            keyExtractor={(item) => `task-${item.id}`}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+          />
+        </View>
+        {totalPages > 1 && (
+          <View style={styles.paginationWrapper}>
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              onPageChange={handlePageChange}
+            />
           </View>
         )}
-      />
+      </>
     );
   };
 
@@ -1306,7 +1438,7 @@ const SuperAdminTasksScreen = () => {
         >
           <View style={styles.searchBarContainer}>
             <Shimmer
-              width="85%"
+              width={Dimensions.get("window").width * 0.85}
               height={60}
               style={{
                 borderRadius: 18,
@@ -1380,7 +1512,7 @@ const SuperAdminTasksScreen = () => {
         <View style={styles.searchBarContainer}>
           <Searchbar
             placeholder={t("superAdmin.tasks.search")}
-            onChangeText={setSearchQuery}
+            onChangeText={handleSearch}
             value={searchQuery}
             style={styles.searchbar}
             theme={{ colors: { primary: "#1a73e8" } }}
@@ -1389,7 +1521,7 @@ const SuperAdminTasksScreen = () => {
                 <IconButton
                   icon="close-circle"
                   size={18}
-                  onPress={() => setSearchQuery("")}
+                  onPress={() => handleSearch("")}
                 />
               ) : null
             }
@@ -1462,7 +1594,7 @@ const styles = StyleSheet.create({
   searchContainer: {
     padding: Platform.OS === "web" ? 24 : 16,
     paddingTop: 10,
-    paddingBottom: 8,
+    paddingBottom: 2,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -1723,7 +1855,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e0e0e0",
     overflow: "hidden",
-    marginTop: 16,
     flex: 1,
   },
   tableHeader: {
@@ -1753,7 +1884,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     borderBottomWidth: 1,
     borderBottomColor: "#e0e0e0",
-    paddingVertical: 16,
+    paddingVertical: 13,
     backgroundColor: "#fff",
     paddingHorizontal: 26,
     alignItems: "center",
@@ -1820,6 +1951,16 @@ const styles = StyleSheet.create({
     alignContent: "center",
     justifyContent: "center",
     alignItems: "center",
+  },
+  paginationWrapper: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    borderRadius: 16,
+    marginTop: 12,
+    overflow: "hidden",
+    width: "auto",
+    alignSelf: "center",
   },
 } as const);
 

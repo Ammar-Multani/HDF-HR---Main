@@ -53,10 +53,20 @@ interface CommentWithSender extends TaskComment {
 }
 
 // Define extended Task type with the properties needed for our UI
-interface ExtendedTask extends Task {
+interface Company {
+  id: string;
+  company_name: string;
+  active?: boolean;
+}
+
+interface ExtendedTask extends Omit<Task, "created_by" | "updated_at"> {
+  created_by?: string;
+  updated_at?: string;
   modified_by?: string;
   modified_at?: string;
   modifier_name?: string;
+  company_id?: string;
+  company?: Company;
 }
 
 // Add window dimensions hook
@@ -107,15 +117,18 @@ const SuperAdminTaskDetailsScreen = () => {
   const [statusMenuVisible, setStatusMenuVisible] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<TaskStatus | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [companies, setCompanies] = useState<Company[]>([]);
 
   const fetchTaskDetails = async () => {
     try {
       setLoading(true);
 
-      // Fetch task details
+      // Fetch task details with company information
       const { data: taskData, error: taskError } = await supabase
         .from("tasks")
-        .select("*, modified_by, updated_at")
+        .select(
+          "*, modified_by, updated_at, company:company_id(id, company_name)"
+        )
         .eq("id", taskId)
         .single();
 
@@ -126,6 +139,16 @@ const SuperAdminTaskDetailsScreen = () => {
 
       // First store basic task data
       setTask(taskData);
+
+      // Fetch companies for reference
+      const { data: companiesData } = await supabase
+        .from("company")
+        .select("id, company_name")
+        .eq("active", true);
+
+      if (companiesData) {
+        setCompanies(companiesData);
+      }
 
       // Fetch modifier user details if available
       if (taskData.modified_by) {
@@ -313,30 +336,29 @@ const SuperAdminTaskDetailsScreen = () => {
   // Get color based on user role for comments
   const getCommentColorByRole = (comment: CommentWithSender) => {
     // If it's the current user
-    if (comment.sender_id === user?.id) return theme.colors.primary;
+    if (comment.sender_id === user?.id) return "#1976D2"; // Bright blue for current user
 
     // Check sender details
     if (comment.senderDetails) {
-      if (comment.senderDetails.role === "superadmin") return "#8E24AA"; // purple for super admin
-      if (comment.senderDetails.role === "admin") return "#0288D1"; // blue for company admin
+      if (comment.senderDetails.role === "superadmin") return "#6200EA"; // Deep purple for super admin
+      if (comment.senderDetails.role === "admin") return "#00838F"; // Teal for company admin
     }
 
     // Check in assignedUsers array
     const assignedUser = assignedUsers.find((u) => u.id === comment.sender_id);
     if (assignedUser) {
-      if (assignedUser.role === "SUPER_ADMIN") return "#8E24AA"; // purple for super admin
-      if (assignedUser.role === "COMPANY_ADMIN") return "#0288D1"; // blue for company admin
+      if (assignedUser.role === "SUPER_ADMIN") return "#6200EA"; // Deep purple for super admin
+      if (assignedUser.role === "COMPANY_ADMIN") return "#00838F"; // Teal for company admin
     }
 
     // Default for other users
-    return "#689F38"; // green for regular users
+    return "#2E7D32"; // Dark green for regular users
   };
 
   // Get background color for comment bubble
   const getCommentBgColor = (comment: CommentWithSender) => {
     const baseColor = getCommentColorByRole(comment);
-    // Return a lighter version of the color for the background
-    return baseColor + "15"; // 15 is hex for low opacity
+    return `${baseColor}10`; // Very light opacity for better contrast
   };
 
   const onRefresh = () => {
@@ -345,22 +367,17 @@ const SuperAdminTaskDetailsScreen = () => {
   };
 
   const handleAddComment = async () => {
-    if (!newComment.trim() || !user) return;
+    if (!newComment.trim() || !user || !task) return;
 
     try {
       setSubmittingComment(true);
 
-      // Create a comment object without explicitly accessing company_id
-      const commentData: any = {
+      const commentData = {
         task_id: taskId,
         sender_id: user.id,
         message: newComment.trim(),
+        company_id: task.company_id,
       };
-
-      // Only add company_id if it exists in the task
-      if (task && "company_id" in task) {
-        commentData.company_id = (task as any).company_id;
-      }
 
       const { error } = await supabase
         .from("task_comments")
@@ -368,6 +385,35 @@ const SuperAdminTaskDetailsScreen = () => {
 
       if (error) {
         throw error;
+      }
+
+      // Log the activity
+      const activityLogData = {
+        user_id: user.id,
+        activity_type: "ADD_COMMENT",
+        description: `New comment added by ${user.email} on task "${task.title}"`,
+        company_id: task.company_id,
+        metadata: {
+          task_title: task.title,
+          comment: newComment.trim(),
+          added_by: {
+            name: user.email,
+            email: user.email,
+          },
+        },
+        old_value: null,
+        new_value: {
+          comment: newComment.trim(),
+          added_at: new Date().toISOString(),
+        },
+      };
+
+      const { error: logError } = await supabase
+        .from("activity_logs")
+        .insert([activityLogData]);
+
+      if (logError) {
+        console.error("Error logging activity:", logError);
       }
 
       // Refresh comments
@@ -453,46 +499,75 @@ const SuperAdminTaskDetailsScreen = () => {
         throw error;
       }
 
+      // Get user's name from appropriate table
+      let userDisplayName = user.email;
+      try {
+        // Check admin table first
+        const { data: adminData } = await supabase
+          .from("admin")
+          .select("name")
+          .eq("id", user.id)
+          .single();
+
+        if (adminData) {
+          userDisplayName = adminData.name;
+        } else {
+          // Check company_user table
+          const { data: userData } = await supabase
+            .from("company_user")
+            .select("first_name, last_name")
+            .eq("id", user.id)
+            .single();
+
+          if (userData) {
+            userDisplayName = `${userData.first_name} ${userData.last_name}`;
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching user details:", error);
+      }
+
+      // Log the activity
+      const activityLogData = {
+        user_id: user.id,
+        activity_type: "UPDATE_STATUS",
+        description: `Task status updated by ${userDisplayName} (${user.email}). Status changed from "${getTranslatedStatus(task.status)}" to "${getTranslatedStatus(newStatus)}"`,
+        company_id: task.company_id,
+        metadata: {
+          task_title: task.title,
+          updated_by: {
+            name: userDisplayName,
+            email: user.email,
+          },
+          status_change: {
+            from: task.status,
+            to: newStatus,
+          },
+        },
+        old_value: {
+          status: task.status,
+        },
+        new_value: {
+          status: newStatus,
+        },
+      };
+
+      const { error: logError } = await supabase
+        .from("activity_logs")
+        .insert([activityLogData]);
+
+      if (logError) {
+        console.error("Error logging activity:", logError);
+      }
+
       // Update local state
       setTask({
         ...task,
         status: newStatus,
         modified_by: user.id,
         modified_at: updateData.updated_at,
+        modifier_name: userDisplayName,
       });
-
-      // Fetch the modifier name for display
-      try {
-        // Check company_user table
-        const { data: userModifier } = await supabase
-          .from("company_user")
-          .select("first_name, last_name")
-          .eq("id", user.id)
-          .single();
-
-        if (userModifier) {
-          setTask((prevState) => ({
-            ...prevState!,
-            modifier_name: `${userModifier.first_name} ${userModifier.last_name}`,
-          }));
-        } else {
-          // Check admin table
-          const { data: adminModifier } = await supabase
-            .from("admin")
-            .select("name")
-            .eq("id", user.id)
-            .single();
-
-          if (adminModifier) {
-            setTask((prevState) => ({
-              ...prevState!,
-              modifier_name: adminModifier.name,
-            }));
-          }
-        }
-      } catch (modifierError) {
-        console.error("Error fetching modifier name:", modifierError);
-      }
     } catch (error: any) {
       console.error("Error updating task status:", error);
       Alert.alert(
@@ -607,6 +682,32 @@ const SuperAdminTaskDetailsScreen = () => {
       return `${user.first_name} ${user.last_name}`;
     }
     return user.email;
+  };
+
+  // Add this new function after renderUserName
+  const getUserRoleBadgeColor = (role: string) => {
+    switch (role) {
+      case "SUPER_ADMIN":
+      case "superadmin":
+        return {
+          background: "#F3E5F5",
+          text: "#6200EA",
+          border: "#E1BEE7",
+        };
+      case "COMPANY_ADMIN":
+      case "admin":
+        return {
+          background: "#E0F7FA",
+          text: "#00838F",
+          border: "#B2EBF2",
+        };
+      default:
+        return {
+          background: "#E8F5E9",
+          text: "#2E7D32",
+          border: "#C8E6C9",
+        };
+    }
   };
 
   if (loading && !refreshing) {
@@ -763,21 +864,21 @@ const SuperAdminTaskDetailsScreen = () => {
         <View style={styles.headerSection}>
           <Text style={styles.pageTitle}>{task.title}</Text>
           <View style={styles.buttonContainer}>
-          {canEditTask() && (
-            <Button
-              mode="contained"
-              onPress={() => {
-                // @ts-ignore - Navigation typing can be complex
-                navigation.navigate("EditTask", { taskId: task.id });
-              }}
-              style={styles.button}
-              icon="pencil"
-              buttonColor={theme.colors.primary}
-            >
-              {t("superAdmin.tasks.editTask")}
-            </Button>
-          )}
-        </View>
+            {canEditTask() && (
+              <Button
+                mode="contained"
+                onPress={() => {
+                  // @ts-ignore - Navigation typing can be complex
+                  navigation.navigate("EditTask", { taskId: task.id });
+                }}
+                style={styles.button}
+                icon="pencil"
+                buttonColor={theme.colors.primary}
+              >
+                {t("superAdmin.tasks.editTask")}
+              </Button>
+            )}
+          </View>
         </View>
 
         <View style={styles.gridContainer}>
@@ -786,79 +887,54 @@ const SuperAdminTaskDetailsScreen = () => {
               {/* Task Details Card */}
               <Surface style={styles.detailsCard}>
                 <View style={styles.cardHeader}>
-                  <View style={styles.headerLeft}>
-                    <View style={styles.iconContainer}>
-                      <IconButton
-                        icon="clipboard-text"
-                        size={20}
-                        iconColor="#64748b"
-                        style={styles.headerIcon}
-                      />
-                    </View>
-                    <Text style={styles.cardTitle}>Task Details</Text>
+                  <View style={styles.simpleCardHeader}>
+                    <IconButton
+                      icon="clipboard-text"
+                      size={22}
+                      iconColor={theme.colors.primary}
+                    />
+                    <Text style={styles.simpleCardHeaderTitle}>
+                      {task.title}
+                    </Text>
                   </View>
                 </View>
 
                 <View style={styles.cardContent}>
-                  <View style={styles.statusSection}>
-                    <View style={styles.statusRow}>
-                      <Text style={styles.statusLabel}>
-                        {t("superAdmin.tasks.currentStatus")}:
-                      </Text>
-                      <TouchableOpacity
-                        onPress={() => setStatusMenuVisible(true)}
-                        disabled={submitting || !canUpdateStatus()}
+                  <View style={styles.taskMetaContainer}>
+                    <Chip
+                      icon="flag"
+                      style={[
+                        styles.priorityChip,
+                        {
+                          backgroundColor:
+                            getPriorityColor(task.priority) + "20",
+                          borderColor: getPriorityColor(task.priority),
+                        },
+                      ]}
+                      textStyle={{ color: getPriorityColor(task.priority) }}
+                    >
+                      {getTranslatedPriority(task.priority)}{" "}
+                      {t("superAdmin.tasks.priority")}
+                    </Chip>
+
+                    {task.company_id && (
+                      <Chip
+                        icon="office-building"
                         style={[
-                          styles.statusBadgeClickable,
+                          styles.companyChip,
                           {
-                            backgroundColor: getStatusBackgroundColor(
-                              task.status
-                            ),
-                            opacity: canUpdateStatus() ? 1 : 0.7,
+                            backgroundColor:
+                              theme.colors.border,
                           },
                         ]}
+                        mode="flat"
                       >
-                        <Text
-                          style={[
-                            styles.statusText,
-                            { color: getStatusTextColor(task.status) },
-                          ]}
-                        >
-                          {getTranslatedStatus(task.status)}
-                        </Text>
-                        {canUpdateStatus() ? (
-                          <IconButton
-                            icon={getStatusIcon(task.status)}
-                            size={16}
-                            style={styles.editStatusIcon}
-                            iconColor={getStatusTextColor(task.status)}
-                          />
-                        ) : (
-                          <IconButton
-                            icon="lock"
-                            size={16}
-                            style={styles.editStatusIcon}
-                            iconColor={getStatusTextColor(task.status)}
-                          />
-                        )}
-                      </TouchableOpacity>
-                    </View>
+                        {companies.find((c) => c.id === task.company_id)
+                          ?.company_name ||
+                          t("superAdmin.tasks.companyNotFound")}
+                      </Chip>
+                    )}
                   </View>
-
-                  <Chip
-                    icon="flag"
-                    style={[
-                      styles.priorityChip,
-                      {
-                        backgroundColor: getPriorityColor(task.priority) + "20",
-                        borderColor: getPriorityColor(task.priority),
-                      },
-                    ]}
-                    textStyle={{ color: getPriorityColor(task.priority) }}
-                  >
-                    {getTranslatedPriority(task.priority)}{" "}
-                    {t("superAdmin.tasks.priority")}
-                  </Chip>
 
                   <Divider style={styles.sectionDivider} />
 
@@ -940,16 +1016,13 @@ const SuperAdminTaskDetailsScreen = () => {
               {/* Assigned Users Card */}
               <Surface style={[styles.detailsCard, { marginTop: 24 }]}>
                 <View style={styles.cardHeader}>
-                  <View style={styles.headerLeft}>
-                    <View style={styles.iconContainer}>
-                      <IconButton
-                        icon="account-group"
-                        size={20}
-                        iconColor="#64748b"
-                        style={styles.headerIcon}
-                      />
-                    </View>
-                    <Text style={styles.cardTitle}>
+                  <View style={styles.simpleCardHeader}>
+                    <IconButton
+                      icon="account-group"
+                      size={22}
+                      iconColor={theme.colors.primary}
+                    />
+                    <Text style={styles.simpleCardHeaderTitle}>
                       {t("superAdmin.tasks.assignedUsers")}
                     </Text>
                   </View>
@@ -957,17 +1030,62 @@ const SuperAdminTaskDetailsScreen = () => {
 
                 <View style={styles.cardContent}>
                   {assignedUsers.length > 0 ? (
-                    <View style={styles.usersContainer}>
-                      {assignedUsers.map((user) => (
-                        <Chip
-                          key={user.id}
-                          icon="account"
-                          style={styles.userChip}
-                          mode="outlined"
-                        >
-                          {renderUserName(user)}
-                        </Chip>
-                      ))}
+                    <View style={styles.assignedUsersGrid}>
+                      {assignedUsers.map((user) => {
+                        const roleColors = getUserRoleBadgeColor(user.role);
+                        return (
+                          <Surface key={user.id} style={styles.userCard}>
+                            {/* <View style={styles.userCardHeader}>
+                              <IconButton
+                                icon="account-circle"
+                                size={24}
+                                iconColor={roleColors.text}
+                              />
+                              <View
+                                style={[
+                                  styles.roleBadge,
+                                  {
+                                    backgroundColor: roleColors.background,
+                                    borderColor: roleColors.border,
+                                  },
+                                ]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.roleText,
+                                    { color: roleColors.text },
+                                  ]}
+                                >
+                                  {user.role === "SUPER_ADMIN"
+                                    ? t("superAdmin.tasks.superAdmin")
+                                    : user.role === "COMPANY_ADMIN"
+                                      ? t("superAdmin.tasks.companyAdmin")
+                                      : t("superAdmin.tasks.user")}
+                                </Text>
+                              </View>
+                            </View> */}
+
+                            <Text style={styles.userName}>
+                              {user.first_name} {user.last_name}
+                            </Text>
+                            <Text style={styles.userEmail}>{user.email}</Text>
+
+                            {user.company_name && (
+                              <View style={styles.userCompanyContainer}>
+                                <IconButton
+                                  icon="office-building"
+                                  size={16}
+                                  iconColor="#64748B"
+                                  style={styles.companyIcon}
+                                />
+                                <Text style={styles.userCompany}>
+                                  {user.company_name}
+                                </Text>
+                              </View>
+                            )}
+                          </Surface>
+                        );
+                      })}
                     </View>
                   ) : (
                     <Text style={styles.noUsersText}>
@@ -1077,12 +1195,9 @@ const SuperAdminTaskDetailsScreen = () => {
                   </View>
                 </View>
               </Surface>
-              
             </Animated.View>
           </View>
         </View>
-
-        
       </ScrollView>
     </SafeAreaView>
   );
@@ -1203,6 +1318,9 @@ const styles = StyleSheet.create({
   priorityChip: {
     alignSelf: "flex-start",
     marginTop: 16,
+    height: 32,
+    width: "fit-content",
+    paddingHorizontal: 12,
   },
   sectionDivider: {
     marginVertical: 24,
@@ -1250,7 +1368,8 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins-Regular",
   },
   commentContainer: {
-    marginBottom: 16,
+    marginBottom: 20,
+    maxWidth: "100%",
   },
   currentUserComment: {
     alignItems: "flex-end",
@@ -1260,47 +1379,62 @@ const styles = StyleSheet.create({
   },
   commentBubble: {
     maxWidth: "85%",
-    padding: 12,
-    borderRadius: 12,
+    padding: 16,
+    borderRadius: 20,
     borderWidth: 1,
+    shadowColor: "rgba(0,0,0,0.08)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 2,
   },
   commentHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 4,
+    marginBottom: 8,
   },
   commentUser: {
-    fontSize: 13,
-    fontFamily: "Poppins-Medium",
+    fontWeight: "600",
+    fontSize: 14,
+    marginRight: 8,
+    fontFamily: "Poppins-SemiBold",
   },
   commentDate: {
     fontSize: 12,
-    color: "#64748b",
-    marginLeft: 8,
+    opacity: 0.6,
     fontFamily: "Poppins-Regular",
+    color: "#64748B",
   },
   commentText: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 15,
+    lineHeight: 24,
     color: "#334155",
     fontFamily: "Poppins-Regular",
   },
   noCommentsText: {
-    color: "#64748b",
     fontStyle: "italic",
+    opacity: 0.7,
     marginBottom: 16,
+    color: "#64748B",
     fontFamily: "Poppins-Regular",
+    textAlign: "center",
+    paddingVertical: 20,
   },
   addCommentContainer: {
     marginTop: 24,
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F0",
+    paddingTop: 20,
   },
   commentInput: {
     marginBottom: 16,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFFFF",
   },
   addCommentButton: {
     alignSelf: "flex-end",
+    borderRadius: 8,
+    paddingHorizontal: 20,
   },
   buttonContainer: {
     marginTop: 32,
@@ -1370,6 +1504,89 @@ const styles = StyleSheet.create({
     color: "#64748b",
     fontFamily: "Poppins-Regular",
     marginTop: 2,
+  },
+  taskMetaContainer: {
+    flexDirection: "column",
+    flexWrap: "nowrap",
+    gap: 14,
+  },
+  companyChip: {
+    height: 32,
+    width: "fit-content",
+    paddingHorizontal: 12,
+  },
+  assignedUsersGrid: {
+    display: "flex",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 16,
+    width: "100%",
+    alignItems: "flex-start",
+    justifyContent: "flex-start",
+  },
+  userCard: {
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    elevation: 1,
+    shadowColor: "rgba(0,0,0,0.1)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  userCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  roleBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  roleText: {
+    fontSize: 12,
+    fontFamily: "Poppins-Medium",
+  },
+  userName: {
+    fontSize: 16,
+    fontFamily: "Poppins-SemiBold",
+    color: "#1E293B",
+    marginBottom: 4,
+  },
+  userEmail: {
+    fontSize: 14,
+    fontFamily: "Poppins-Regular",
+    color: "#64748B",
+    marginBottom: 8,
+  },
+  userCompanyContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  companyIcon: {
+    margin: 0,
+    marginRight: 4,
+  },
+  userCompany: {
+    fontSize: 13,
+    fontFamily: "Poppins-Regular",
+    color: "#64748B",
+  },
+  simpleCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  simpleCardHeaderTitle: {
+    fontSize: 16,
+    fontFamily: "Poppins-SemiBold",
+    color: "#1E293B",
   },
 });
 

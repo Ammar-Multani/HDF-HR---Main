@@ -45,353 +45,6 @@ import Animated, {
 import CustomSnackbar from "../../components/CustomSnackbar";
 import { initEmailService } from "../../utils/emailService";
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  keyboardAvoidingView: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 40,
-    maxWidth: 1200,
-    alignSelf: "center",
-    width: "100%",
-  },
-  gridContainer: {
-    flexDirection: "column",
-    gap: 16,
-  },
-  profileSection: {
-    width: "100%",
-    marginBottom: 24,
-  },
-  profileCard: {
-    borderRadius: 16,
-    overflow: "hidden",
-    elevation: 1,
-    shadowColor: "rgba(0,0,0,0.1)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    marginTop: 24,
-  },
-  profileHeader: {
-    alignItems: "center",
-    paddingVertical: 20,
-    position: "relative",
-  },
-  avatar: {
-    borderWidth: 4,
-    borderColor: "#fff",
-    backgroundColor: "rgba(54,105,157,255)",
-    marginBottom: 16,
-  },
-  userName: {
-    fontSize: 24,
-    color: "#1e293b",
-    marginBottom: 8,
-  },
-  userEmail: {
-    fontSize: 16,
-    color: "#64748b",
-    marginBottom: 16,
-  },
-  roleBadge: {
-    backgroundColor: "#ffffff",
-    paddingVertical: 6,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(54,105,157,255)",
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-  },
-  roleText: {
-    fontSize: 14,
-    color: "rgba(54,105,157,255)",
-  },
-  contentContainer: {
-    flex: 1,
-  },
-  gridColumns: {
-    flexDirection: "row",
-    gap: 24,
-    flexWrap: "wrap",
-  },
-  gridColumn: {
-    minWidth: 320,
-    flex: 1,
-  },
-  detailsCard: {
-    borderRadius: 16,
-    overflow: "hidden",
-    elevation: 1,
-    shadowColor: "rgba(0,0,0,0.1)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
-  },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  iconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: "#f1f5f9",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerIcon: {
-    margin: 0,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1e293b",
-    fontFamily: "Poppins-SemiBold",
-  },
-  cardContent: {
-    padding: 24,
-  },
-  input: {
-    marginBottom: 16,
-    backgroundColor: "#fff",
-  },
-  updateButton: {
-    marginTop: 8,
-    borderRadius: 12,
-    paddingVertical: 4,
-  },
-  settingItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 12,
-  },
-  settingItemContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-  },
-  settingText: {
-    fontSize: 16,
-    color: "#1e293b",
-  },
-  divider: {
-    height: 1,
-    backgroundColor: "#e2e8f0",
-  },
-  languageSelectorContainer: {
-    marginLeft: "auto",
-  },
-  signOutModal: {
-    backgroundColor: "white",
-    borderRadius: 16,
-    elevation: 5,
-    overflow: "hidden",
-  },
-  signOutModalContent: {
-    alignItems: "center",
-  },
-  signOutModalHeader: {
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  signOutModalTitle: {
-    fontSize: 20,
-    fontFamily: "Poppins-SemiBold",
-    color: "#1e293b",
-    marginTop: 16,
-    textAlign: "center",
-  },
-  signOutModalMessage: {
-    fontSize: 16,
-    fontFamily: "Poppins-Regular",
-    color: "#64748b",
-    textAlign: "center",
-    marginBottom: 24,
-  },
-  signOutModalActions: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 12,
-    marginTop: 8,
-  },
-  signOutModalButton: {
-    borderRadius: 8,
-    minWidth: 100,
-  },
-  signOutModalButtonText: {
-    fontFamily: "Poppins-Medium",
-  },
-  cancelButton: {
-    borderColor: "#e2e8f0",
-  },
-  confirmButton: {
-    borderWidth: 0,
-  },
-  snackbar: {
-    marginBottom: 16,
-    elevation: 6,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    shadowOpacity: 0.27,
-    shadowRadius: 4.65,
-  },
-  deleteAccountModal: {
-    backgroundColor: "white",
-    borderRadius: 16,
-    padding: 24,
-  },
-  deleteAccountModalContent: {
-    gap: 24,
-  },
-  deleteAccountModalHeader: {
-    alignItems: "center",
-    gap: 12,
-  },
-  deleteAccountModalTitle: {
-    fontSize: 24,
-    fontFamily: "Poppins-SemiBold",
-    color: "#1e293b",
-    textAlign: "center",
-  },
-  deleteAccountWarningBox: {
-    backgroundColor: "#FEF2F2",
-    borderRadius: 12,
-    padding: 16,
-    flexDirection: "row",
-    gap: 12,
-    borderWidth: 1,
-    borderColor: "#FEE2E2",
-  },
-  warningIcon: {
-    marginTop: 2,
-  },
-  deleteAccountWarningText: {
-    flex: 1,
-    fontSize: 14,
-    fontFamily: "Poppins-Regular",
-    color: "#991B1B",
-    lineHeight: 20,
-  },
-  deleteAccountDetails: {
-    gap: 12,
-  },
-  deleteAccountDetailText: {
-    fontSize: 16,
-    fontFamily: "Poppins-Medium",
-    color: "#1e293b",
-  },
-  bulletPoints: {
-    gap: 8,
-  },
-  bulletPoint: {
-    fontSize: 14,
-    fontFamily: "Poppins-Regular",
-    color: "#64748b",
-  },
-  confirmInputContainer: {
-    gap: 8,
-  },
-  confirmLabel: {
-    fontSize: 14,
-    fontFamily: "Poppins-Medium",
-    color: "#1e293b",
-  },
-  confirmInput: {
-    backgroundColor: "#fff",
-  },
-  deleteAccountModalActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 12,
-  },
-  deleteAccountModalButton: {
-    minWidth: 100,
-  },
-  deleteAccountModalButtonText: {
-    fontFamily: "Poppins-Medium",
-  },
-  dangerZoneContainer: {
-    marginTop: 24,
-    width: "100%",
-  },
-  dangerZoneCard: {
-    borderRadius: 16,
-    overflow: "hidden",
-    elevation: 1,
-    borderWidth: 1,
-    backgroundColor: "#FFFFFF",
-  },
-  dangerZoneHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#fee2e2",
-    backgroundColor: "#FEF2F2",
-  },
-  dangerZoneContent: {
-    padding: 24,
-  },
-  dangerZoneItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 16,
-  },
-  dangerZoneItemInfo: {
-    flex: 1,
-  },
-  dangerZoneItemTitle: {
-    fontSize: 16,
-    fontFamily: "Poppins-Medium",
-    color: "#1e293b",
-    marginBottom: 4,
-  },
-  dangerZoneItemDescription: {
-    fontSize: 14,
-    fontFamily: "Poppins-Regular",
-    color: "#64748b",
-  },
-  deleteButton: {
-    borderRadius: 8,
-  },
-  deleteButtonLabel: {
-    fontSize: 14,
-    fontFamily: "Poppins-Medium",
-  },
-});
-
 // Add Shimmer component for loading states
 interface ShimmerProps {
   width: number | string;
@@ -461,7 +114,6 @@ interface DeleteAccountModalProps {
   onDismiss: () => void;
   onConfirm: () => void;
   loading: boolean;
-  email: string;
 }
 
 // Add this new interface after the DeleteAccountModalProps interface
@@ -481,19 +133,533 @@ interface DataExportModalProps {
   loading: boolean;
 }
 
+// Add this new interface for delete verification modal
+interface DeleteVerificationModalProps {
+  visible: boolean;
+  onDismiss: () => void;
+  onConfirm: () => void;
+  loading: boolean;
+  verificationText: string;
+  onVerificationTextChange: (text: string) => void;
+}
+
+// Add interfaces for activity logs and admin data
+interface ActivityLog {
+  id: string;
+  user_id: string;
+  activity_type: string;
+  description: string;
+  metadata: {
+    timestamp: string;
+    action: string;
+    error?: string;
+  };
+  created_at: string;
+}
+
+interface AdminData {
+  id: string;
+  name: string;
+  email: string;
+  phone_number?: string;
+  created_at: string;
+  updated_at: string;
+  status: boolean;
+  deleted_at?: string;
+}
+
+// Move styles definition before components
+const getStyles = (theme: any) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+    },
+    keyboardAvoidingView: {
+      flex: 1,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    scrollContent: {
+      paddingBottom: 40,
+      maxWidth: 1200,
+      alignSelf: "center",
+      width: "100%",
+    },
+    gridContainer: {
+      flexDirection: "column",
+      gap: 16,
+    },
+    profileSection: {
+      width: "100%",
+      marginBottom: 24,
+    },
+    profileCard: {
+      borderRadius: 16,
+      overflow: "hidden",
+      elevation: 1,
+      shadowColor: "rgba(0,0,0,0.1)",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      backgroundColor: "#FFFFFF",
+      borderWidth: 1,
+      borderColor: "#e2e8f0",
+      marginTop: 24,
+    },
+    profileHeader: {
+      alignItems: "center",
+      paddingVertical: 20,
+      position: "relative",
+    },
+    avatar: {
+      borderWidth: 4,
+      borderColor: "#fff",
+      backgroundColor: "rgba(54,105,157,255)",
+      marginBottom: 16,
+    },
+    userName: {
+      fontSize: 24,
+      color: "#1e293b",
+      marginBottom: 8,
+    },
+    userEmail: {
+      fontSize: 16,
+      color: "#64748b",
+      marginBottom: 16,
+    },
+    roleBadge: {
+      backgroundColor: "#ffffff",
+      paddingVertical: 6,
+      paddingHorizontal: 16,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: "rgba(54,105,157,255)",
+      elevation: 2,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.2,
+      shadowRadius: 2,
+    },
+    roleText: {
+      fontSize: 14,
+      color: "rgba(54,105,157,255)",
+    },
+    contentContainer: {
+      flex: 1,
+    },
+    gridColumns: {
+      flexDirection: "row",
+      gap: 24,
+      flexWrap: "wrap",
+    },
+    gridColumn: {
+      minWidth: 320,
+      flex: 1,
+    },
+    detailsCard: {
+      borderRadius: 16,
+      overflow: "hidden",
+      elevation: 1,
+      shadowColor: "rgba(0,0,0,0.1)",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      backgroundColor: "#FFFFFF",
+      borderWidth: 1,
+      borderColor: "#e2e8f0",
+    },
+    cardHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: "#e2e8f0",
+    },
+    headerLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    iconContainer: {
+      width: 32,
+      height: 32,
+      borderRadius: 8,
+      backgroundColor: "#f1f5f9",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    headerIcon: {
+      margin: 0,
+    },
+    cardTitle: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: "#1e293b",
+      fontFamily: "Poppins-SemiBold",
+    },
+    cardContent: {
+      padding: 24,
+    },
+    input: {
+      marginBottom: 16,
+      backgroundColor: "#fff",
+    },
+    updateButton: {
+      marginTop: 8,
+      borderRadius: 12,
+      paddingVertical: 4,
+    },
+    settingItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: 12,
+    },
+    settingItemContent: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 16,
+    },
+    settingText: {
+      fontSize: 16,
+      color: "#1e293b",
+    },
+    divider: {
+      height: 1,
+      backgroundColor: "#e2e8f0",
+    },
+    languageSelectorContainer: {
+      marginLeft: "auto",
+    },
+    signOutModal: {
+      backgroundColor: "white",
+      borderRadius: 16,
+      elevation: 5,
+      overflow: "hidden",
+    },
+    signOutModalContent: {
+      alignItems: "center",
+    },
+    signOutModalHeader: {
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    signOutModalTitle: {
+      fontSize: 20,
+      fontFamily: "Poppins-SemiBold",
+      color: "#1e293b",
+      marginTop: 16,
+      textAlign: "center",
+    },
+    signOutModalMessage: {
+      fontSize: 16,
+      fontFamily: "Poppins-Regular",
+      color: "#64748b",
+      textAlign: "center",
+      marginBottom: 24,
+    },
+    signOutModalActions: {
+      flexDirection: "row",
+      justifyContent: "center",
+      gap: 12,
+      marginTop: 8,
+    },
+    signOutModalButton: {
+      borderRadius: 8,
+      minWidth: 100,
+    },
+    signOutModalButtonText: {
+      fontFamily: "Poppins-Medium",
+    },
+    cancelButton: {
+      borderColor: "#e2e8f0",
+    },
+    confirmButton: {
+      borderWidth: 0,
+    },
+    snackbar: {
+      marginBottom: 16,
+      elevation: 6,
+      shadowColor: "#000",
+      shadowOffset: {
+        width: 0,
+        height: 3,
+      },
+      shadowOpacity: 0.27,
+      shadowRadius: 4.65,
+    },
+    deleteAccountModal: {
+      backgroundColor: "white",
+      borderRadius: 16,
+      elevation: 5,
+      overflow: "hidden",
+    },
+    deleteAccountModalContent: {
+      alignItems: "center",
+    },
+    deleteAccountModalHeader: {
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    deleteAccountModalTitle: {
+      fontSize: 20,
+      fontFamily: "Poppins-SemiBold",
+      color: "#1e293b",
+      marginTop: 16,
+      textAlign: "center",
+    },
+    deleteAccountModalMessage: {
+      fontSize: 16,
+      fontFamily: "Poppins-Regular",
+      color: "#64748b",
+      textAlign: "center",
+      marginBottom: 24,
+      lineHeight: 24,
+    },
+    deleteAccountModalActions: {
+      flexDirection: "row",
+      justifyContent: "center",
+      gap: 12,
+      marginTop: 8,
+    },
+    deleteAccountModalButton: {
+      borderRadius: 8,
+      minWidth: 100,
+    },
+    deleteAccountModalButtonText: {
+      fontFamily: "Poppins-Medium",
+      fontSize: 14,
+    },
+    resetPasswordModal: {
+      backgroundColor: "white",
+      borderRadius: 16,
+      elevation: 5,
+      overflow: "hidden",
+    },
+    resetPasswordModalContent: {
+      alignItems: "center",
+    },
+    resetPasswordModalHeader: {
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    resetPasswordModalTitle: {
+      fontSize: 20,
+      fontFamily: "Poppins-SemiBold",
+      color: "#1e293b",
+      marginTop: 16,
+      textAlign: "center",
+    },
+    resetPasswordModalMessage: {
+      fontSize: 16,
+      fontFamily: "Poppins-Regular",
+      color: "#64748b",
+      textAlign: "center",
+      marginBottom: 24,
+      lineHeight: 24,
+    },
+    resetPasswordModalActions: {
+      flexDirection: "row",
+      justifyContent: "center",
+      gap: 12,
+      marginTop: 8,
+    },
+    resetPasswordModalButton: {
+      borderRadius: 8,
+      minWidth: 100,
+    },
+    resetPasswordModalButtonText: {
+      fontFamily: "Poppins-Medium",
+      fontSize: 14,
+    },
+    dataExportModal: {
+      backgroundColor: "white",
+      borderRadius: 16,
+      elevation: 5,
+      overflow: "hidden",
+    },
+    dataExportModalContent: {
+      alignItems: "center",
+    },
+    dataExportModalHeader: {
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    dataExportModalTitle: {
+      fontSize: 20,
+      fontFamily: "Poppins-SemiBold",
+      color: "#1e293b",
+      marginTop: 16,
+      textAlign: "center",
+    },
+    dataExportModalMessage: {
+      fontSize: 16,
+      fontFamily: "Poppins-Regular",
+      color: "#64748b",
+      textAlign: "center",
+      marginBottom: 24,
+      lineHeight: 24,
+    },
+    dataExportModalActions: {
+      flexDirection: "row",
+      justifyContent: "center",
+      gap: 12,
+      marginTop: 8,
+    },
+    dataExportModalButton: {
+      borderRadius: 8,
+      minWidth: 100,
+    },
+    dataExportModalButtonText: {
+      fontFamily: "Poppins-Medium",
+      fontSize: 14,
+    },
+    dangerZoneCard: {
+      marginTop: 24,
+      borderRadius: 16,
+      overflow: "hidden",
+      borderWidth: 1,
+      borderColor: "#fecaca",
+      backgroundColor: "#fff1f2",
+    },
+    dangerZoneHeader: {
+      padding: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: "#fecaca",
+    },
+    dangerZoneHeaderLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    dangerZoneTitle: {
+      fontSize: 18,
+      fontFamily: "Poppins-SemiBold",
+      color: theme.colors.error,
+    },
+    dangerZoneContent: {
+      padding: 16,
+    },
+    dangerZoneDescription: {
+      fontSize: 14,
+      fontFamily: "Poppins-Regular",
+      color: "#64748b",
+      marginBottom: 16,
+    },
+    dangerZoneItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: 16,
+      backgroundColor: "#fff",
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: "#fecaca",
+    },
+    dangerZoneItemContent: {
+      flex: 1,
+      marginRight: 16,
+    },
+    dangerZoneItemTitle: {
+      fontSize: 16,
+      fontFamily: "Poppins-Medium",
+      color: "#1e293b",
+      marginBottom: 4,
+    },
+    dangerZoneItemDescription: {
+      fontSize: 14,
+      fontFamily: "Poppins-Regular",
+      color: "#64748b",
+    },
+    dangerZoneButton: {
+      borderColor: theme.colors.error,
+    },
+    dangerZoneButtonText: {
+      fontSize: 14,
+      fontFamily: "Poppins-Medium",
+    },
+    deleteVerificationModal: {
+      backgroundColor: "white",
+      borderRadius: 16,
+      padding: 24,
+      margin: 16,
+      maxWidth: 400,
+      alignSelf: "center",
+    },
+    deleteVerificationModalContent: {
+      alignItems: "center",
+    },
+    deleteVerificationIcon: {
+      marginBottom: 16,
+    },
+    deleteVerificationTitle: {
+      fontSize: 20,
+      fontFamily: "Poppins-SemiBold",
+      color: "#1e293b",
+      marginBottom: 16,
+      textAlign: "center",
+    },
+    deleteVerificationMessage: {
+      fontSize: 16,
+      fontFamily: "Poppins-Regular",
+      color: "#64748b",
+      textAlign: "center",
+      marginBottom: 24,
+      lineHeight: 24,
+    },
+    deleteVerificationInstruction: {
+      fontSize: 14,
+      fontFamily: "Poppins-Medium",
+      color: "#1e293b",
+      marginBottom: 8,
+    },
+    deleteVerificationInput: {
+      width: "100%",
+      marginBottom: 24,
+    },
+    deleteVerificationActions: {
+      flexDirection: "row",
+      justifyContent: "flex-end",
+      gap: 12,
+      width: "100%",
+    },
+    deleteVerificationButton: {
+      minWidth: 100,
+    },
+    deleteVerificationButtonText: {
+      fontFamily: "Poppins-Medium",
+      fontSize: 14,
+    },
+    advancedSettingsContainer: {
+      backgroundColor: "#fafafa",
+      borderRadius: 8,
+      marginTop: 8,
+      borderWidth: 1,
+      borderColor: "#e2e8f0",
+    },
+    dangerSettingItem: {
+      backgroundColor: "#fff1f2",
+      padding: 16,
+    },
+  });
+
 // Add this new component before the SuperAdminProfileScreen component
 const DeleteAccountModal: React.FC<DeleteAccountModalProps> = ({
   visible,
   onDismiss,
   onConfirm,
   loading,
-  email,
 }) => {
   const theme = useTheme();
   const { t } = useTranslation();
-  const [confirmText, setConfirmText] = useState("");
-  const expectedText = "delete my account";
-  const isConfirmValid = confirmText.toLowerCase() === expectedText;
+  const dimensions = useWindowDimensions();
+  const isLargeScreen = dimensions.width >= 1440;
+  const isMediumScreen = dimensions.width >= 768 && dimensions.width < 1440;
+  const modalWidth = isLargeScreen ? 400 : isMediumScreen ? 360 : "90%";
+  const modalPadding = isLargeScreen ? 32 : isMediumScreen ? 24 : 16;
+  const styles = getStyles(theme);
 
   return (
     <Portal>
@@ -503,17 +669,19 @@ const DeleteAccountModal: React.FC<DeleteAccountModalProps> = ({
         contentContainerStyle={[
           styles.deleteAccountModal,
           {
-            maxWidth: 480,
-            width: "90%",
+            width: modalWidth,
+            maxWidth: 400,
             alignSelf: "center",
           },
         ]}
       >
-        <View style={styles.deleteAccountModalContent}>
+        <View
+          style={[styles.deleteAccountModalContent, { padding: modalPadding }]}
+        >
           <View style={styles.deleteAccountModalHeader}>
             <MaterialCommunityIcons
               name="alert-circle"
-              size={40}
+              size={32}
               color={theme.colors.error}
             />
             <Text style={styles.deleteAccountModalTitle}>
@@ -521,62 +689,17 @@ const DeleteAccountModal: React.FC<DeleteAccountModalProps> = ({
             </Text>
           </View>
 
-          <View style={styles.deleteAccountWarningBox}>
-            <MaterialCommunityIcons
-              name="information"
-              size={24}
-              color={theme.colors.error}
-              style={styles.warningIcon}
-            />
-            <Text style={styles.deleteAccountWarningText}>
-              {t("superAdmin.profile.deleteAccountWarning") ||
-                "This action cannot be undone. This will permanently delete your account and remove all access to the system."}
-            </Text>
-          </View>
-
-          <View style={styles.deleteAccountDetails}>
-            <Text style={styles.deleteAccountDetailText}>
-              {t("superAdmin.profile.deleteAccountDetails") ||
-                "Please read the following carefully:"}
-            </Text>
-            <View style={styles.bulletPoints}>
-              <Text style={styles.bulletPoint}>
-                • All your personal data will be anonymized
-              </Text>
-              <Text style={styles.bulletPoint}>
-                • Your access will be immediately revoked
-              </Text>
-              <Text style={styles.bulletPoint}>
-                • This action cannot be reversed
-              </Text>
-              <Text style={styles.bulletPoint}>
-                • You'll need to contact support for any recovery
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.confirmInputContainer}>
-            <Text style={styles.confirmLabel}>
-              {t("superAdmin.profile.typeToConfirm") ||
-                `To confirm, type "${expectedText}" below:`}
-            </Text>
-            <TextInput
-              mode="outlined"
-              value={confirmText}
-              onChangeText={setConfirmText}
-              style={styles.confirmInput}
-              placeholder={expectedText}
-              error={confirmText.length > 0 && !isConfirmValid}
-              outlineStyle={{ borderRadius: 8 }}
-            />
-          </View>
+          <Text style={styles.deleteAccountModalMessage}>
+            {t("superAdmin.profile.deleteAccountWarning") ||
+              "This action will permanently delete your account and all associated data. This cannot be undone. Please confirm if you wish to proceed."}
+          </Text>
 
           <View style={styles.deleteAccountModalActions}>
             <Button
               mode="outlined"
               onPress={onDismiss}
               style={[styles.deleteAccountModalButton, styles.cancelButton]}
-              labelStyle={styles.deleteAccountModalButtonText}
+              labelStyle={[styles.deleteAccountModalButtonText]}
               disabled={loading}
             >
               {t("superAdmin.profile.cancel")}
@@ -586,9 +709,9 @@ const DeleteAccountModal: React.FC<DeleteAccountModalProps> = ({
               onPress={onConfirm}
               style={[styles.deleteAccountModalButton, styles.confirmButton]}
               buttonColor={theme.colors.error}
-              labelStyle={styles.deleteAccountModalButtonText}
+              labelStyle={[styles.deleteAccountModalButtonText]}
               loading={loading}
-              disabled={loading || !isConfirmValid}
+              disabled={loading}
             >
               {t("superAdmin.profile.confirmDelete")}
             </Button>
@@ -614,6 +737,7 @@ const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({
   const isMediumScreen = dimensions.width >= 768 && dimensions.width < 1440;
   const modalWidth = isLargeScreen ? 400 : isMediumScreen ? 360 : "90%";
   const modalPadding = isLargeScreen ? 32 : isMediumScreen ? 24 : 16;
+  const styles = getStyles(theme);
 
   return (
     <Portal>
@@ -678,15 +802,6 @@ const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({
   );
 };
 
-// Add this helper function before handleDataExport
-const formatDate = (dateString: string) => {
-  return new Date(dateString).toLocaleString();
-};
-
-const formatActivityLog = (log: any) => {
-  return `- ${formatDate(log.created_at)}: ${log.description}`;
-};
-
 // Add the DataExportModal component
 const DataExportModal: React.FC<DataExportModalProps> = ({
   visible,
@@ -701,6 +816,7 @@ const DataExportModal: React.FC<DataExportModalProps> = ({
   const isMediumScreen = dimensions.width >= 768 && dimensions.width < 1440;
   const modalWidth = isLargeScreen ? 400 : isMediumScreen ? 360 : "90%";
   const modalPadding = isLargeScreen ? 32 : isMediumScreen ? 24 : 16;
+  const styles = getStyles(theme);
 
   return (
     <Portal>
@@ -763,73 +879,86 @@ const DataExportModal: React.FC<DataExportModalProps> = ({
   );
 };
 
-// Add this interface for DangerZoneCard props
-interface DangerZoneCardProps {
-  onDeleteAccount: () => Promise<void>;
-  isDeleting: boolean;
-}
-
-// Update the DangerZoneCard component to accept props
-const DangerZoneCard: React.FC<DangerZoneCardProps> = ({
-  onDeleteAccount,
-  isDeleting,
+// Add DeleteVerificationModal component
+const DeleteVerificationModal: React.FC<DeleteVerificationModalProps> = ({
+  visible,
+  onDismiss,
+  onConfirm,
+  loading,
+  verificationText,
+  onVerificationTextChange,
 }) => {
   const theme = useTheme();
   const { t } = useTranslation();
-  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
-  const { user } = useAuth();
+  const styles = getStyles(theme);
+
+  const isVerified = verificationText.toLowerCase() === "delete";
 
   return (
-    <Surface
-      style={[styles.dangerZoneCard, { borderColor: theme.colors.error }]}
-    >
-      <View style={styles.dangerZoneHeader}>
-        <View style={styles.headerLeft}>
-          <View style={[styles.iconContainer, { backgroundColor: "#FEE2E2" }]}>
-            <IconButton
-              icon="alert-octagon"
-              size={20}
-              iconColor={theme.colors.error}
-              style={styles.headerIcon}
-            />
-          </View>
-          <Text style={[styles.cardTitle, { color: theme.colors.error }]}>
-            {t("superAdmin.profile.dangerZone")}
+    <Portal>
+      <Modal
+        visible={visible}
+        onDismiss={onDismiss}
+        contentContainerStyle={styles.deleteVerificationModal}
+      >
+        <View style={styles.deleteVerificationModalContent}>
+          <MaterialCommunityIcons
+            name="alert-circle"
+            size={40}
+            color={theme.colors.error}
+            style={styles.deleteVerificationIcon}
+          />
+
+          <Text style={styles.deleteVerificationTitle}>
+            {t("superAdmin.profile.finalDeleteConfirmation") ||
+              "Final Confirmation Required"}
           </Text>
-        </View>
-      </View>
 
-      <View style={styles.dangerZoneContent}>
-        <View style={styles.dangerZoneItem}>
-          <View style={styles.dangerZoneItemInfo}>
-            <Text style={styles.dangerZoneItemTitle}>
-              {t("superAdmin.profile.deleteAccount")}
-            </Text>
-            <Text style={styles.dangerZoneItemDescription}>
-              {t("superAdmin.profile.deleteAccountDescription") ||
-                "Permanently remove your account and all associated data"}
-            </Text>
+          <Text style={styles.deleteVerificationMessage}>
+            {t("superAdmin.profile.deleteVerificationMessage") ||
+              "This action cannot be undone. This will permanently delete your account and remove all access to the system."}
+          </Text>
+
+          <TextInput
+            value={verificationText}
+            onChangeText={onVerificationTextChange}
+            mode="outlined"
+            label={
+              t("superAdmin.profile.deleteVerificationInstruction") ||
+              "Please type 'delete' to confirm:"
+            }
+            style={styles.deleteVerificationInput}
+            error={verificationText.length > 0 && !isVerified}
+            disabled={loading}
+            autoCapitalize="none"
+            outlineStyle={{ borderRadius: 8 }}
+          />
+
+          <View style={styles.deleteVerificationActions}>
+            <Button
+              mode="outlined"
+              onPress={onDismiss}
+              style={[styles.deleteVerificationButton, styles.cancelButton]}
+              labelStyle={styles.deleteVerificationButtonText}
+              disabled={loading}
+            >
+              {t("superAdmin.profile.cancel")}
+            </Button>
+            <Button
+              mode="contained"
+              onPress={onConfirm}
+              style={[styles.deleteVerificationButton]}
+              buttonColor={theme.colors.error}
+              labelStyle={styles.deleteVerificationButtonText}
+              loading={loading}
+              disabled={loading || !isVerified}
+            >
+              {t("superAdmin.profile.confirmDelete")}
+            </Button>
           </View>
-          <Button
-            mode="contained"
-            onPress={() => setDeleteModalVisible(true)}
-            style={styles.deleteButton}
-            buttonColor={theme.colors.error}
-            labelStyle={styles.deleteButtonLabel}
-          >
-            {t("superAdmin.profile.delete")}
-          </Button>
         </View>
-      </View>
-
-      <DeleteAccountModal
-        visible={deleteModalVisible}
-        onDismiss={() => setDeleteModalVisible(false)}
-        onConfirm={onDeleteAccount}
-        loading={isDeleting}
-        email={user?.email || ""}
-      />
-    </Surface>
+      </Modal>
+    </Portal>
   );
 };
 
@@ -839,14 +968,25 @@ const SuperAdminProfileScreen = () => {
   const { t } = useTranslation();
   const { currentLanguage } = useLanguage();
   const dimensions = useWindowDimensions();
+  const styles = getStyles(theme);
 
   // Calculate responsive breakpoints
   const isLargeScreen = dimensions.width >= 1440;
   const isMediumScreen = dimensions.width >= 768 && dimensions.width < 1440;
 
+  // Helper functions
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString();
+  };
+
+  const formatActivityLog = (log: ActivityLog) => {
+    return `- ${formatDate(log.created_at)}: ${log.description}`;
+  };
+
+  // State management
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
-  const [adminData, setAdminData] = useState<any>(null);
+  const [adminData, setAdminData] = useState<AdminData | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [snackbarVisible, setSnackbarVisible] = useState(false);
@@ -860,6 +1000,10 @@ const SuperAdminProfileScreen = () => {
   const [resettingPassword, setResettingPassword] = useState(false);
   const [dataExportModalVisible, setDataExportModalVisible] = useState(false);
   const [exportingData, setExportingData] = useState(false);
+  const [deleteVerificationModalVisible, setDeleteVerificationModalVisible] =
+    useState(false);
+  const [deleteVerificationText, setDeleteVerificationText] = useState("");
+  const [advancedSettingsVisible, setAdvancedSettingsVisible] = useState(false);
 
   // Gradient colors used across the app
   const gradientColors = [
@@ -968,7 +1112,14 @@ const SuperAdminProfileScreen = () => {
   };
 
   const handleAccountDeletionConfirmation = () => {
-    setDeleteAccountModalVisible(true);
+    setDeleteVerificationModalVisible(true);
+  };
+
+  const handleDeleteVerification = () => {
+    if (deleteVerificationText.toLowerCase() === "delete") {
+      setDeleteVerificationModalVisible(false);
+      setDeleteAccountModalVisible(true);
+    }
   };
 
   const handleDeleteAccount = async () => {
@@ -1221,53 +1372,129 @@ const SuperAdminProfileScreen = () => {
     try {
       setExportingData(true);
 
-      // Log the export attempt
-      await supabase.from("activity_logs").insert({
-        user_id: user?.id,
-        activity_type: "data_access",
-        description: "User requested data export",
+      if (!user?.id) {
+        throw new Error("User ID not found");
+      }
+
+      // First update the users table with current activity
+      const { error: userUpdateError } = await supabase
+        .from("users")
+        .update({
+          updated_at: new Date().toISOString(),
+          last_login: new Date().toISOString(),
+          status: "active",
+        })
+        .eq("id", user.id);
+
+      if (userUpdateError) {
+        throw userUpdateError;
+      }
+
+      // Log the export activity
+      const { error: logError } = await supabase.from("activity_logs").insert({
+        user_id: user.id,
+        activity_type: "data_export",
+        description: "User data export requested",
         metadata: {
           timestamp: new Date().toISOString(),
           action: "export_initiated",
         },
       });
 
-      // Fetch user's personal data
-      const [adminData, activityLogs] = await Promise.all([
-        supabase.from("admin").select("*").eq("id", user?.id).single(),
-        supabase.from("activity_logs").select("*").eq("user_id", user?.id),
+      if (logError) {
+        console.error("Error logging activity:", logError);
+      }
+
+      // Fetch user data from both users and admin tables, and activity logs
+      const [userData, adminData, activityLogs] = await Promise.all([
+        supabase.from("users").select("*").eq("id", user.id).single(),
+        supabase
+          .from("admin")
+          .select(
+            "name, email, role, status, created_at, updated_at, phone_number"
+          )
+          .eq("id", user.id)
+          .single(),
+        supabase
+          .from("activity_logs")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false }),
       ]);
 
-      // Create a user-friendly text export
+      if (!userData.data || !adminData.data) {
+        throw new Error("User data not found");
+      }
+
+      // Create a well-structured export
+      const exportData = {
+        exportInfo: {
+          timestamp: new Date().toISOString(),
+          version: "1.0",
+          exportType: "user_data",
+        },
+        userData: {
+          profile: {
+            id: userData.data.id,
+            name: adminData.data.name,
+            email: adminData.data.email,
+            role: adminData.data.role,
+            phone_number: adminData.data.phone_number || "Not provided",
+            created_at: formatDate(userData.data.created_at),
+            updated_at: formatDate(userData.data.updated_at),
+            last_login: userData.data.last_login
+              ? formatDate(userData.data.last_login)
+              : "Never",
+            status: userData.data.status,
+          },
+        },
+        activityHistory: {
+          summary: {
+            totalActivities: activityLogs.data?.length || 0,
+            firstActivity: activityLogs.data?.[activityLogs.data.length - 1]
+              ?.created_at
+              ? formatDate(
+                  activityLogs.data[activityLogs.data.length - 1].created_at
+                )
+              : "N/A",
+            lastActivity: activityLogs.data?.[0]?.created_at
+              ? formatDate(activityLogs.data[0].created_at)
+              : "N/A",
+          },
+          activities: activityLogs.data?.map(formatActivityLog) || [],
+        },
+      };
+
+      // Convert to a nicely formatted text
       const exportText = `
 PERSONAL DATA EXPORT
-Generated on: ${formatDate(new Date().toISOString())}
-===========================================
+==========================================
+Generated: ${formatDate(new Date().toISOString())}
+Export Version: ${exportData.exportInfo.version}
+==========================================
 
-PERSONAL INFORMATION
--------------------
-Name: ${adminData.data?.name || "Not provided"}
-Email: ${user?.email || "Not provided"}
-Phone: ${adminData.data?.phone_number || "Not provided"}
-Account Created: ${formatDate(adminData.data?.created_at)}
-Last Updated: ${formatDate(adminData.data?.updated_at)}
+1. PROFILE INFORMATION
+------------------------------------------
+User ID: ${exportData.userData.profile.id}
+Name: ${exportData.userData.profile.name}
+Email: ${exportData.userData.profile.email}
+Role: ${exportData.userData.profile.role}
+Phone: ${exportData.userData.profile.phone_number}
+Account Created: ${exportData.userData.profile.created_at}
+Last Updated: ${exportData.userData.profile.updated_at}
+Last Login: ${exportData.userData.profile.last_login}
+Account Status: ${exportData.userData.profile.status}
 
-ACCOUNT ACTIVITY LOG
--------------------
-${
-  activityLogs.data
-    ?.sort(
-      (a: any, b: any) =>
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    )
-    ?.map(formatActivityLog)
-    ?.join("\n") || "No activity recorded"
-}
+2. ACTIVITY HISTORY
+------------------------------------------
+Total Activities: ${exportData.activityHistory.summary.totalActivities}
+First Activity: ${exportData.activityHistory.summary.firstActivity}
+Last Activity: ${exportData.activityHistory.summary.lastActivity}
 
-===========================================
-This export was generated in accordance with data protection regulations.
-For security purposes, some information may be partially redacted.
-If you need additional information, please contact support.
+Detailed Activity Log:
+${exportData.activityHistory.activities.join("\n")}
+
+==========================================
 `;
 
       // Create and download the text file
@@ -1275,7 +1502,8 @@ If you need additional information, please contact support.
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `personal-data-export-${new Date().toLocaleDateString().replace(/\//g, "-")}.txt`;
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      link.download = `data-export-${timestamp}.txt`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -1283,12 +1511,13 @@ If you need additional information, please contact support.
 
       // Log successful export
       await supabase.from("activity_logs").insert({
-        user_id: user?.id,
-        activity_type: "data_access",
+        user_id: user.id,
+        activity_type: "data_export",
         description: "Data export completed successfully",
         metadata: {
           timestamp: new Date().toISOString(),
           action: "export_completed",
+          exportVersion: exportData.exportInfo.version,
         },
       });
 
@@ -1530,7 +1759,7 @@ If you need additional information, please contact support.
               entering={FadeIn.delay(100)}
               style={[
                 styles.profileSection,
-                { flex: isLargeScreen ? 1 : isMediumScreen ? 1 : 1 },
+               
               ]}
             >
               <Surface
@@ -1642,6 +1871,27 @@ If you need additional information, please contact support.
                       </View>
                     </Surface>
                   </Animated.View>
+                  <Animated.View entering={FadeIn.delay(200)} style={{ marginTop: 16 }}>
+                    <Surface style={styles.detailsCard}>
+                    <View style={styles.cardContent}>
+                      <View style={styles.settingItem}>
+                        <View style={styles.settingItemContent}>
+                          <MaterialCommunityIcons
+                              name="translate"
+                              size={24}
+                              color="rgba(54,105,157,255)"
+                            />
+                            <Text variant="medium" style={styles.settingText}>
+                              {t("superAdmin.profile.language")}
+                            </Text>
+                          </View>
+                          <View style={styles.languageSelectorContainer}>
+                          <CustomLanguageSelector compact={true} />
+                          </View>
+                        </View>
+                      </View>
+                    </Surface>
+                  </Animated.View>
                 </View>
 
                 {/* Right Column */}
@@ -1671,6 +1921,7 @@ If you need additional information, please contact support.
                       </View>
 
                       <View style={styles.cardContent}>
+
                         <TouchableOpacity
                           style={styles.settingItem}
                           onPress={handleResetPasswordClick}
@@ -1725,36 +1976,6 @@ If you need additional information, please contact support.
 
                         <TouchableOpacity
                           style={styles.settingItem}
-                          onPress={handleAccountDeletionConfirmation}
-                        >
-                          <View style={styles.settingItemContent}>
-                            <MaterialCommunityIcons
-                              name="delete-outline"
-                              size={24}
-                              color={theme.colors.error}
-                            />
-                            <Text
-                              variant="medium"
-                              style={[
-                                styles.settingText,
-                                { color: theme.colors.error },
-                              ]}
-                            >
-                              {t("superAdmin.profile.deleteAccount") ||
-                                "Delete Account"}
-                            </Text>
-                          </View>
-                          <MaterialCommunityIcons
-                            name="chevron-right"
-                            size={24}
-                            color={theme.colors.error}
-                          />
-                        </TouchableOpacity>
-
-                        <Divider style={styles.divider} />
-
-                        <TouchableOpacity
-                          style={styles.settingItem}
                           onPress={() => setDataExportModalVisible(true)}
                         >
                           <View style={styles.settingItemContent}>
@@ -1773,25 +1994,89 @@ If you need additional information, please contact support.
                             color="#999"
                           />
                         </TouchableOpacity>
+
+                        <Divider style={styles.divider} />
+
+                        {/* Advanced Settings Section */}
+                        <TouchableOpacity
+                          style={styles.settingItem}
+                          onPress={() =>
+                            setAdvancedSettingsVisible(!advancedSettingsVisible)
+                          }
+                        >
+                          <View style={styles.settingItemContent}>
+                            <MaterialCommunityIcons
+                              name="cog"
+                              size={24}
+                              color="#64748b"
+                            />
+                            <Text variant="medium" style={styles.settingText}>
+                              {t("superAdmin.profile.advancedSettings") ||
+                                "Advanced Settings"}
+                            </Text>
+                          </View>
+                          <MaterialCommunityIcons
+                            name={
+                              advancedSettingsVisible
+                                ? "chevron-up"
+                                : "chevron-down"
+                            }
+                            size={24}
+                            color="#999"
+                          />
+                        </TouchableOpacity>
+
+                        {advancedSettingsVisible && (
+                          <View style={styles.advancedSettingsContainer}>
+                            <TouchableOpacity
+                              style={[
+                                styles.settingItem,
+                                styles.dangerSettingItem,
+                              ]}
+                              onPress={handleAccountDeletionConfirmation}
+                            >
+                              <View style={styles.settingItemContent}>
+                                <MaterialCommunityIcons
+                                  name="delete-outline"
+                                  size={24}
+                                  color={theme.colors.error}
+                                />
+                                <Text
+                                  variant="medium"
+                                  style={[
+                                    styles.settingText,
+                                    { color: theme.colors.error },
+                                  ]}
+                                >
+                                  {t("superAdmin.profile.deleteAccount") ||
+                                    "Delete Account"}
+                                </Text>
+                              </View>
+                              <MaterialCommunityIcons
+                                name="chevron-right"
+                                size={24}
+                                color={theme.colors.error}
+                              />
+                            </TouchableOpacity>
+                          </View>
+                        )}
                       </View>
                     </Surface>
                   </Animated.View>
                 </View>
               </View>
             </View>
-
-            {/* Add Danger Zone Card at the bottom */}
-            <View style={styles.dangerZoneContainer}>
-              <DangerZoneCard
-                onDeleteAccount={handleDeleteAccount}
-                isDeleting={deletingAccount}
-              />
-            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
       {renderSignOutModal()}
+      <DeleteAccountModal
+        visible={deleteAccountModalVisible}
+        onDismiss={() => setDeleteAccountModalVisible(false)}
+        onConfirm={handleDeleteAccount}
+        loading={deletingAccount}
+      />
       <ResetPasswordModal
         visible={resetPasswordModalVisible}
         onDismiss={() => setResetPasswordModalVisible(false)}
@@ -1804,6 +2089,17 @@ If you need additional information, please contact support.
         onDismiss={() => setDataExportModalVisible(false)}
         onConfirm={handleDataExport}
         loading={exportingData}
+      />
+      <DeleteVerificationModal
+        visible={deleteVerificationModalVisible}
+        onDismiss={() => {
+          setDeleteVerificationModalVisible(false);
+          setDeleteVerificationText("");
+        }}
+        onConfirm={handleDeleteVerification}
+        loading={deletingAccount}
+        verificationText={deleteVerificationText}
+        onVerificationTextChange={setDeleteVerificationText}
       />
       <CustomSnackbar
         visible={snackbarVisible}

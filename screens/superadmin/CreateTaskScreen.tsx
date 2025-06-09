@@ -234,6 +234,48 @@ const CreateTaskScreen = () => {
         throw createError;
       }
 
+      // Get admin's name from admin table
+      const { data: adminDetails, error: adminDetailsError } = await supabase
+        .from("admin")
+        .select("id, name")
+        .eq("email", user.email)
+        .single();
+
+      const userDisplayName = adminDetails?.name || user.email;
+
+      // Create activity log with task ID
+      const activityLogData = {
+        user_id: adminDetails?.id,
+        activity_type: "CREATE_TASK",
+        description: `New task '${data.title}' created by ${userDisplayName} (${user.email}). Assigned to ${availableUsers.find((u) => u.id === selectedAssignees[0])?.name || "Unknown User"}`,
+        company_id: selectedCompany.id,
+        task_id: createdTask.id, // Add task_id at root level
+        metadata: {
+          task_id: createdTask.id, // Also include in metadata
+          task_title: data.title,
+          priority: data.priority,
+          created_by: {
+            name: userDisplayName,
+            email: user.email,
+          },
+          assigned_to: {
+            id: selectedAssignees[0],
+            name:
+              availableUsers.find((u) => u.id === selectedAssignees[0])?.name ||
+              "Unknown User",
+          },
+        },
+      };
+
+      // Log the activity
+      const { error: logError } = await supabase
+        .from("activity_logs")
+        .insert([activityLogData]);
+
+      if (logError) {
+        console.error("Error creating activity log:", logError);
+      }
+
       setSnackbarMessage("Task created successfully");
       setSnackbarVisible(true);
 

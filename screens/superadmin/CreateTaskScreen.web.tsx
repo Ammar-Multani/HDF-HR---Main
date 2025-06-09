@@ -241,6 +241,67 @@ const CreateTaskScreen = () => {
         throw createError;
       }
 
+      // Get admin's name from admin table
+      const { data: adminDetails, error: adminDetailsError } = await supabase
+        .from("admin")
+        .select("id, name")
+        .eq("email", user.email)
+        .single();
+
+      if (adminDetailsError) {
+        console.error("Error fetching admin details:", adminDetailsError);
+      }
+
+      const userDisplayName = adminDetails?.name || user.email;
+
+      // Get assigned user's name
+      const assignedUser = availableUsers.find(
+        (u) => u.id === selectedAssignees[0]
+      );
+      const assignedUserName = assignedUser
+        ? assignedUser.name
+        : "Unknown User";
+
+      // Log the activity
+      const activityLogData = {
+        user_id: adminData.id, // Super admin's ID
+        activity_type: "CREATE",
+        description: `New task "${data.title}" created by ${userDisplayName} (${user.email}). Assigned to ${assignedUserName}`,
+        company_id: selectedCompany.id,
+        metadata: {
+          task_title: data.title,
+          assigned_to: {
+            id: selectedAssignees[0],
+            name: assignedUserName,
+          },
+          priority: data.priority,
+          created_by: {
+            name: userDisplayName,
+            email: user.email,
+          },
+        },
+        old_value: null,
+        new_value: {
+          title: data.title,
+          description: data.description,
+          deadline: data.deadline.toISOString(),
+          priority: data.priority,
+          assigned_to: {
+            id: selectedAssignees[0],
+            name: assignedUserName,
+          },
+        },
+      };
+
+      const { error: logError } = await supabase
+        .from("activity_logs")
+        .insert([activityLogData]);
+
+      if (logError) {
+        console.error("Error logging activity:", logError);
+        // Don't throw error here, as the task was created successfully
+      }
+
       setSnackbarMessage("Task created successfully");
       setSnackbarVisible(true);
 

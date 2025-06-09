@@ -300,9 +300,9 @@ const ResetPasswordScreen = () => {
                   colors={[
                     theme.colors.secondary,
                     theme.colors.tertiary,
-                    theme.colors.primary,
-                    theme.colors.secondary,
-                    theme.colors.tertiary,
+                    (theme.colors as any).quaternary,
+                    (theme.colors as any).quinary,
+                    (theme.colors as any).senary,
                   ]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
