@@ -232,6 +232,78 @@ const Shimmer: React.FC<ShimmerProps> = ({ width, height, style }) => {
   );
 };
 
+// Add Pagination component after Shimmer component
+const Pagination = ({
+  currentPage,
+  totalPages,
+  onPageChange,
+}: {
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+}) => {
+  const visiblePages = 5;
+  const getVisiblePageNumbers = () => {
+    const pages = [];
+    const leftOffset = Math.floor(visiblePages / 2);
+    let start = Math.max(0, currentPage - leftOffset);
+    let end = Math.min(totalPages - 1, start + visiblePages - 1);
+
+    // Adjust start if we're near the end
+    start = Math.max(0, Math.min(start, end - visiblePages + 1));
+
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
+
+  return (
+    <View style={styles.paginationContainer}>
+      <IconButton
+        icon="chevron-left"
+        size={24}
+        disabled={currentPage === 0}
+        onPress={() => onPageChange(currentPage - 1)}
+        style={[
+          styles.paginationButton,
+          currentPage === 0 && styles.paginationButtonDisabled,
+        ]}
+      />
+      {getVisiblePageNumbers().map((pageNum) => (
+        <Pressable
+          key={pageNum}
+          onPress={() => onPageChange(pageNum)}
+          style={({ pressed }) => [
+            styles.pageButton,
+            pageNum === currentPage && styles.currentPageButton,
+            pressed && styles.pageButtonPressed,
+          ]}
+        >
+          <Text
+            style={[
+              styles.pageButtonText,
+              pageNum === currentPage && styles.currentPageButtonText,
+            ]}
+          >
+            {pageNum + 1}
+          </Text>
+        </Pressable>
+      ))}
+      <IconButton
+        icon="chevron-right"
+        size={24}
+        disabled={currentPage === totalPages - 1}
+        onPress={() => onPageChange(currentPage + 1)}
+        style={[
+          styles.paginationButton,
+          currentPage === totalPages - 1 && styles.paginationButtonDisabled,
+        ]}
+      />
+    </View>
+  );
+};
+
 // Component for skeleton loading UI
 const CompanyItemSkeleton = () => {
   return (
@@ -367,112 +439,76 @@ const CompanyListScreen = () => {
 
   const fetchCompanies = async (refresh = false) => {
     try {
-      // Clear any previous errors
       setError(null);
 
       if (refresh) {
         setPage(0);
-        setHasMoreData(true);
-
-        // Only show refreshing indicator when explicitly requested via pull-to-refresh
-        // or when searching, but not during initial load
-        if (page > 0 || searchQuery.trim() !== "") {
-          setRefreshing(true);
-        } else {
-          // For initial load, we want the skeleton loader instead of the refresh indicator
-          setRefreshing(false);
-        }
-      } else if (!refresh && page > 0) {
-        setLoadingMore(true);
+        setLoading(true);
       }
 
-      // Generate a cache key based on search query and pagination
-      const cacheKey = `companies_${searchQuery.trim()}_page${page}_size${PAGE_SIZE}_status${appliedFilters.status}_sort${appliedFilters.sortOrder}`;
-
-      // Only force refresh when explicitly requested
-      const forceRefresh = refresh;
-
-      const currentPage = refresh ? 0 : page;
-      const from = currentPage * PAGE_SIZE;
+      const from = page * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      // Modified network check logic - only prevent refresh if DEFINITELY offline
-      // This fixes false "offline" errors
-      const networkAvailable = await isNetworkAvailable();
-      if (!networkAvailable && refresh) {
-        console.log(
-          "Network appears to be offline, but still attempting fetch"
-        );
-        // We'll still try the fetch but prepare for potential errors
-      }
+      // Generate cache key
+      const cacheKey = `companies_${searchQuery.trim()}_page${page}_size${PAGE_SIZE}_status${appliedFilters.status}_sort${appliedFilters.sortOrder}`;
 
-      // Use cached query implementation with proper typing
       const fetchData = async () => {
-        let query = supabase.from("company").select(
-          // Select only the fields needed for the list view
-          "id, company_name, registration_number, industry_type, contact_number, contact_email, active, created_at",
-          { count: "exact" } // Get exact count for better pagination
-        );
+        let query = supabase
+          .from("company")
+          .select(
+            "id, company_name, registration_number, industry_type, contact_number, contact_email, active, created_at",
+            { count: "exact" }
+          );
 
-        // Apply status filter if set
+        // Apply status filter
         if (appliedFilters.status === "active") {
           query = query.eq("active", true);
         } else if (appliedFilters.status === "inactive") {
           query = query.eq("active", false);
         }
 
-        // Apply optimization: use text_search for better performance when searching
+        // Apply search
         if (searchQuery.trim() !== "") {
-          // Better performance using the pg_trgm index we've added
           if (searchQuery.length > 2) {
             query = query.or(
               `company_name.ilike.%${searchQuery.toLowerCase()}%,registration_number.ilike.%${searchQuery.toLowerCase()}%,industry_type.ilike.%${searchQuery.toLowerCase()}%,contact_email.ilike.%${searchQuery.toLowerCase()}%,contact_number.ilike.%${searchQuery.toLowerCase()}%`
             );
           } else {
-            // For very short queries, use exact matching for better performance
             query = query.or(
               `company_name.ilike.${searchQuery.toLowerCase()}%,registration_number.ilike.${searchQuery.toLowerCase()}%,industry_type.ilike.${searchQuery.toLowerCase()}%,contact_email.ilike.${searchQuery.toLowerCase()}%,contact_number.ilike.${searchQuery.toLowerCase()}%`
             );
           }
         }
 
-        // Apply sorting based on the selected sort order
+        // Apply sorting and pagination
         query = query
           .order("created_at", {
             ascending: appliedFilters.sortOrder === "asc",
           })
           .range(from, to);
 
-        const result = await query;
-        return result;
+        return await query;
       };
 
       const result = await cachedQuery<any>(fetchData, cacheKey, {
-        forceRefresh,
-        criticalData: true, // Mark as critical data that should be available offline
+        forceRefresh: refresh,
+        criticalData: true,
       });
 
-      // Check if we're using stale data
       if (result.fromCache && result.error) {
-        // Show a gentle warning about using stale data
         setError(t("superAdmin.companies.cachedData"));
       }
 
       const { data, error } = result;
-      // Get count from the Supabase response metadata
       const count = result.data?.length ? (result as any).count : 0;
 
       if (error && !result.fromCache) {
-        console.error("Error fetching companies:", error);
-
-        // Check if it's a network error
         if (
           error.message &&
           (error.message.includes("network") ||
             error.message.includes("connection") ||
             error.message.includes("offline"))
         ) {
-          // This is likely a network error - update network status
           setNetworkStatus(false);
           throw new Error(
             "Network connection issue. Check your internet connection."
@@ -482,30 +518,36 @@ const CompanyListScreen = () => {
         }
       }
 
-      // If we got here, we're definitely online
       if (networkStatus === false) {
         setNetworkStatus(true);
       }
 
-      // Use the count metadata for pagination (if available)
+      // Update total count for pagination
       if (count !== undefined) {
         setTotalCount(count);
-        setHasMoreData(from + (data?.length || 0) < count);
-      } else if (data && data.length < PAGE_SIZE) {
-        setHasMoreData(false);
       }
 
       const typedData = (data as Company[]) || [];
+      setCompanies(typedData);
+      setFilteredCompanies(typedData);
 
-      if (refresh || currentPage === 0) {
-        setCompanies(typedData);
-        setFilteredCompanies(typedData);
-      } else {
-        setCompanies((prevCompanies) => [...prevCompanies, ...typedData]);
-        setFilteredCompanies((prevCompanies) => [
-          ...prevCompanies,
-          ...typedData,
-        ]);
+      // Show results count
+      if (count > 0) {
+        const start = from + 1;
+        const end = Math.min(from + typedData.length, count);
+        const resultsText = `${t("superAdmin.companies.showing")} ${start}-${end} ${t(
+          "superAdmin.companies.of"
+        )} ${count} ${t("superAdmin.companies.companies")}`;
+
+        // Add results count to the UI
+        if (isMediumScreen || isLargeScreen) {
+          return (
+            <>
+              <Text style={styles.resultsCount}>{resultsText}</Text>
+              {/* ... existing table view ... */}
+            </>
+          );
+        }
       }
     } catch (error) {
       console.error("Error fetching companies:", error);
@@ -519,7 +561,6 @@ const CompanyListScreen = () => {
     } finally {
       setLoading(false);
       setRefreshing(false);
-      setLoadingMore(false);
     }
   };
 
@@ -789,6 +830,17 @@ const CompanyListScreen = () => {
     );
   };
 
+  // Calculate total pages
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+
+  // Handle page change
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+    setRefreshing(true);
+    fetchCompanies(false);
+  };
+
+  // Update renderContent to include pagination
   const renderContent = () => {
     // Show empty state when no results and not loading
     if (filteredCompanies.length === 0 && !loading && !refreshing) {
@@ -879,70 +931,53 @@ const CompanyListScreen = () => {
     // Show the actual data
     if (isMediumScreen || isLargeScreen) {
       return (
-        <View style={styles.tableContainer}>
-          <TableHeader />
-          <FlatList
-            data={filteredCompanies}
-            renderItem={({ item }) => <TableRow item={item} />}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.tableContent}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
-            onEndReached={loadMoreCompanies}
-            onEndReachedThreshold={0.5}
-            ListFooterComponent={() => (
-              <>
-                {totalCount > 0 && (
-                  <Text style={styles.resultsCount}>
-                    {t("superAdmin.companies.showing")}{" "}
-                    {filteredCompanies.length} {t("superAdmin.companies.of")}{" "}
-                    {totalCount} {t("superAdmin.companies.companies")}
-                  </Text>
-                )}
-                {loadingMore && hasMoreData && (
-                  <View style={styles.loadingFooter}>
-                    <ActivityIndicator
-                      size="small"
-                      color={theme.colors.primary}
-                    />
-                  </View>
-                )}
-              </>
-            )}
-          />
-        </View>
+        <>
+          <View style={styles.tableContainer}>
+            <TableHeader />
+            <FlatList
+              data={filteredCompanies}
+              renderItem={({ item }) => <TableRow item={item} />}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.tableContent}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+              }
+            />
+          </View>
+          {totalPages > 1 && (
+            <View style={styles.paginationWrapper}>
+              <Pagination
+                currentPage={page}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+              />
+            </View>
+          )}
+        </>
       );
     }
 
     return (
-      <FlatList
-        data={filteredCompanies}
-        renderItem={renderCompanyItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        onEndReached={loadMoreCompanies}
-        onEndReachedThreshold={0.5}
-        ListFooterComponent={() => (
-          <>
-            {totalCount > 0 && (
-              <Text style={styles.resultsCount}>
-                {t("superAdmin.companies.showing")} {filteredCompanies.length}{" "}
-                {t("superAdmin.companies.of")} {totalCount}{" "}
-                {t("superAdmin.companies.companies")}
-              </Text>
-            )}
-            {loadingMore && hasMoreData && (
-              <View style={styles.loadingFooter}>
-                <ActivityIndicator size="small" color={theme.colors.primary} />
-              </View>
-            )}
-          </>
+      <>
+        <FlatList
+          data={filteredCompanies}
+          renderItem={renderCompanyItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        />
+        {totalPages > 1 && (
+          <View style={styles.paginationWrapper}>
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              onPageChange={handlePageChange}
+            />
+          </View>
         )}
-      />
+      </>
     );
   };
 
@@ -1446,10 +1481,11 @@ const styles = StyleSheet.create({
   },
   resultsCount: {
     textAlign: "center",
-    marginBottom: 10,
-    marginTop: 20,
-    opacity: 0.7,
-    fontSize: 12,
+    marginTop: 8,
+    marginBottom: 8,
+    color: "#616161",
+    fontSize: 14,
+    fontFamily: "Poppins-Regular",
   },
   // Filter styles
   filterButtonContainer: {
@@ -1609,6 +1645,49 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Poppins-Regular",
     lineHeight: 16,
+  },
+  paginationWrapper: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    borderRadius: 16,
+    marginTop: 12,
+    overflow: "hidden",
+    width: "auto",
+    alignSelf: "center",
+    padding: 8,
+  },
+  paginationContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  paginationButton: {
+    margin: 0,
+  },
+  paginationButtonDisabled: {
+    opacity: 0.5,
+  },
+  pageButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    marginHorizontal: 2,
+  },
+  currentPageButton: {
+    backgroundColor: "#1a73e8",
+  },
+  pageButtonPressed: {
+    backgroundColor: "rgba(26, 115, 232, 0.1)",
+  },
+  pageButtonText: {
+    fontSize: 14,
+    fontFamily: "Poppins-Medium",
+    color: "#616161",
+  },
+  currentPageButtonText: {
+    color: "#FFFFFF",
   },
 } as const);
 

@@ -1162,7 +1162,7 @@ const SuperAdminProfileScreen = () => {
           email: `deleted_${user.id}@deleted.com`,
           phone_number: null,
           deleted_at: new Date().toISOString(),
-          status: false,
+          status: null,
         })
         .eq("id", user.id);
 

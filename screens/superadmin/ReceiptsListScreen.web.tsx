@@ -42,6 +42,8 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
+import { useTranslation } from "react-i18next";
+import Pagination from "../../components/Pagination";
 
 // Define the navigation param list type
 type RootStackParamList = {
@@ -581,11 +583,22 @@ const createStyles = (theme: MD3Theme) =>
       fontFamily: "Poppins-Regular",
       lineHeight: 16,
     },
+    paginationWrapper: {
+      backgroundColor: "#fff",
+      borderWidth: 1,
+      borderColor: "#e0e0e0",
+      borderRadius: 16,
+      marginTop: 12,
+      overflow: "hidden",
+      width: "auto",
+      alignSelf: "center",
+    },
   });
 
 const ReceiptsListScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation<ReceiptsListNavigationProp>();
+  const { t } = useTranslation();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -601,6 +614,12 @@ const ReceiptsListScreen = () => {
     sortBy: "date",
     sortOrder: "desc" as "asc" | "desc",
   });
+
+  // Add pagination state
+  const [page, setPage] = useState(0);
+  const [totalItems, setTotalItems] = useState(0);
+  const PAGE_SIZE = 10;
+
   const [windowDimensions, setWindowDimensions] = useState({
     width: Dimensions.get("window").width,
     height: Dimensions.get("window").height,
@@ -626,14 +645,22 @@ const ReceiptsListScreen = () => {
     }
   };
 
-  const fetchReceipts = async () => {
+  const fetchReceipts = async (refresh = false) => {
     try {
-      setLoading(true);
+      if (refresh) {
+        setPage(0);
+        setLoading(true);
+      } else {
+        setLoading(true);
+      }
 
-      let query = supabase
-        .from("receipts")
-        .select(
-          `
+      const currentPage = refresh ? 0 : page;
+      const from = currentPage * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
+      // Build the base query with count
+      let query = supabase.from("receipts").select(
+        `
           id, 
           company_id,
           receipt_number,
@@ -644,28 +671,50 @@ const ReceiptsListScreen = () => {
           tax_amount,
           payment_method,
           created_at,
-          company:company_id (company_name)
-        `
-        )
-        .order(appliedFilters.sortBy, {
-          ascending: appliedFilters.sortOrder === "asc",
-        });
+          company:company_id (
+            id, 
+            company_name
+          )
+        `,
+        { count: "exact" }
+      );
 
       // Apply company filter if selected
       if (appliedFilters.companyId) {
         query = query.eq("company_id", appliedFilters.companyId);
       }
 
-      const { data, error } = await query;
+      // Apply search filter if present
+      if (searchQuery.trim() !== "") {
+        query = query.or(
+          `merchant_name.ilike.%${searchQuery}%,receipt_number.ilike.%${searchQuery}%`
+        );
+      }
+
+      // Apply sorting
+      query = query.order(appliedFilters.sortBy, {
+        ascending: appliedFilters.sortOrder === "asc",
+      });
+
+      // Apply pagination
+      query = query.range(from, to);
+
+      const { data, error, count } = await query;
 
       if (error) {
         console.error("Error fetching receipts:", error);
         return;
       }
 
+      // Update total items count
+      if (count !== null) {
+        setTotalItems(count);
+      }
+
       setReceipts(data || []);
     } catch (error) {
       console.error("Error fetching receipts:", error);
+      setReceipts([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -674,32 +723,15 @@ const ReceiptsListScreen = () => {
 
   useEffect(() => {
     fetchCompanies();
-    fetchReceipts();
   }, []);
 
   useEffect(() => {
-    fetchReceipts();
-  }, [appliedFilters]);
-
-  useEffect(() => {
-    if (Platform.OS === "web") {
-      const handleResize = () => {
-        setWindowDimensions({
-          width: Dimensions.get("window").width,
-          height: Dimensions.get("window").height,
-        });
-      };
-
-      window.addEventListener("resize", handleResize);
-
-      // Cleanup
-      return () => window.removeEventListener("resize", handleResize);
-    }
-  }, []);
+    fetchReceipts(true);
+  }, [appliedFilters, searchQuery]);
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchReceipts();
+    fetchReceipts(true);
   };
 
   const handleCreateReceipt = () => {
@@ -707,29 +739,29 @@ const ReceiptsListScreen = () => {
   };
 
   const handleViewReceipt = (receipt: Receipt) => {
-    // Navigate to view receipt screen
     navigation.navigate("ReceiptDetails", { receiptId: receipt.id });
   };
 
-  const filteredReceipts = receipts.filter(
-    (receipt) =>
-      receipt.merchant_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      receipt.receipt_number.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Update search handling
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    setPage(0); // Reset to first page when search changes
+  };
 
-  // Apply filters and refresh receipts list
+  // Update page handling
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+  };
+
+  // Filter modal state and handlers
   const applyFilters = () => {
-    // Close modal first
     setFilterModalVisible(false);
-
-    // Apply new filters
+    setPage(0); // Reset to first page when filters change
     const newFilters = {
       companyId: selectedCompany,
       sortBy: sortBy,
       sortOrder: sortOrder,
     };
-
-    // Set applied filters
     setAppliedFilters(newFilters);
   };
 
@@ -737,6 +769,7 @@ const ReceiptsListScreen = () => {
     setSelectedCompany(null);
     setSortBy("date");
     setSortOrder("desc");
+    setPage(0); // Reset to first page when clearing filters
 
     setAppliedFilters({
       companyId: null,
@@ -744,6 +777,100 @@ const ReceiptsListScreen = () => {
       sortOrder: "desc",
     });
   };
+
+  // Calculate responsive breakpoints
+  const isLargeScreen = windowDimensions.width >= 1440;
+  const isMediumScreen =
+    windowDimensions.width >= 768 && windowDimensions.width < 1440;
+
+  // Update renderContent to include pagination
+  const renderContent = () => {
+    if (receipts.length === 0) {
+      return (
+        <EmptyState
+          icon="receipt"
+          title={t("receipts.noReceiptsFound")}
+          message={
+            searchQuery || hasActiveFilters()
+              ? t("receipts.noReceiptsMatch")
+              : t("receipts.noReceiptsCreated")
+          }
+          buttonTitle={
+            searchQuery || hasActiveFilters()
+              ? t("common.clearFilters")
+              : t("receipts.createReceipt")
+          }
+          onButtonPress={() => {
+            if (searchQuery || hasActiveFilters()) {
+              setSearchQuery("");
+              clearFilters();
+            } else {
+              handleCreateReceipt();
+            }
+          }}
+        />
+      );
+    }
+
+    const totalPages = Math.ceil(totalItems / PAGE_SIZE);
+
+    if (isMediumScreen || isLargeScreen) {
+      return (
+        <>
+          <View style={styles.tableContainer}>
+            <TableHeader />
+            <FlatList
+              data={receipts}
+              renderItem={({ item }) => <TableRow item={item} />}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.tableContent}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+              }
+            />
+          </View>
+          {totalPages > 1 && (
+            <View style={styles.paginationWrapper}>
+              <Pagination
+                currentPage={page}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+              />
+            </View>
+          )}
+        </>
+      );
+    }
+
+    return (
+      <>
+        <FlatList
+          data={receipts}
+          renderItem={renderReceiptItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        />
+        {totalPages > 1 && (
+          <View style={styles.paginationWrapper}>
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              onPageChange={handlePageChange}
+            />
+          </View>
+        )}
+      </>
+    );
+  };
+
+  const filteredReceipts = receipts.filter(
+    (receipt) =>
+      receipt.merchant_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      receipt.receipt_number.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   // Check if we have any active filters
   const hasActiveFilters = () => {
@@ -1128,11 +1255,6 @@ const ReceiptsListScreen = () => {
     </Surface>
   );
 
-  // Calculate responsive breakpoints
-  const isLargeScreen = windowDimensions.width >= 1440;
-  const isMediumScreen =
-    windowDimensions.width >= 768 && windowDimensions.width < 1440;
-
   // Add TableHeader component
   const TableHeader = () => (
     <View style={styles.tableHeader}>
@@ -1410,7 +1532,7 @@ const ReceiptsListScreen = () => {
         <View style={styles.searchBarContainer}>
           <Searchbar
             placeholder="Search receipts..."
-            onChangeText={setSearchQuery}
+            onChangeText={handleSearch}
             value={searchQuery}
             style={styles.searchbar}
             theme={{ colors: { primary: theme.colors.primary } }}
@@ -1419,7 +1541,7 @@ const ReceiptsListScreen = () => {
                 <IconButton
                   icon="close-circle"
                   size={18}
-                  onPress={() => setSearchQuery("")}
+                  onPress={() => handleSearch("")}
                 />
               ) : null
             }
@@ -1473,53 +1595,7 @@ const ReceiptsListScreen = () => {
           },
         ]}
       >
-        {filteredReceipts.length === 0 ? (
-          <EmptyState
-            icon="receipt"
-            title="No Receipts Found"
-            message={
-              searchQuery || hasActiveFilters()
-                ? "No receipts match your search or filters"
-                : "No receipts have been added yet"
-            }
-            buttonTitle={
-              searchQuery || hasActiveFilters()
-                ? "Clear Filters"
-                : "Add New Receipt"
-            }
-            onButtonPress={() => {
-              if (searchQuery || hasActiveFilters()) {
-                setSearchQuery("");
-                clearFilters();
-              } else {
-                handleCreateReceipt();
-              }
-            }}
-          />
-        ) : isMediumScreen || isLargeScreen ? (
-          <View style={styles.tableContainer}>
-            <TableHeader />
-            <FlatList
-              data={filteredReceipts}
-              renderItem={({ item }) => <TableRow item={item} />}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.tableContent}
-              refreshControl={
-                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-              }
-            />
-          </View>
-        ) : (
-          <FlatList
-            data={filteredReceipts}
-            renderItem={renderReceiptItem}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.listContent}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
-          />
-        )}
+        {renderContent()}
       </View>
     </SafeAreaView>
   );

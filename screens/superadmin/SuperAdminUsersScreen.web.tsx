@@ -12,6 +12,7 @@ import {
   Pressable,
   Dimensions,
   PressableStateCallbackType,
+  Switch,
 } from "react-native";
 import {
   Card,
@@ -61,6 +62,7 @@ import {
   PillFilterGroup,
 } from "../../components/FilterSections";
 import { formatDate } from "../../utils/dateUtils";
+import Pagination from "../../components/Pagination";
 
 // User list types
 enum UserListType {
@@ -282,6 +284,11 @@ const SuperAdminUsersScreen = () => {
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [menuVisible, setMenuVisible] = useState(false);
 
+  // Add pagination state
+  const PAGE_SIZE = 10;
+  const [page, setPage] = useState(0);
+  const [totalItems, setTotalItems] = useState(0);
+
   // State for different user types
   const [superAdmins, setSuperAdmins] = useState<Admin[]>([]);
   const [companyAdmins, setCompanyAdmins] = useState<CompanyUser[]>([]);
@@ -353,16 +360,40 @@ const SuperAdminUsersScreen = () => {
     }
   };
 
-  // Fetch super admins
+  // Fetch super admins with pagination
   const fetchSuperAdmins = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("admin")
-        .select("*")
+        .select("*", { count: "exact" })
         .eq("role", "superadmin")
-        .order("created_at", {
-          ascending: sortOrder === DateSortOrder.OLDEST_FIRST,
-        });
+        .order("created_at", { ascending: false });
+
+      // Apply status filter
+      if (statusFilter === "deleted") {
+        query = query.not("deleted_at", "is", null);
+      } else {
+        query = query.is("deleted_at", null);
+        if (statusFilter === "active") {
+          query = query.eq("status", true);
+        } else if (statusFilter === "inactive") {
+          query = query.eq("status", false);
+        }
+      }
+
+      // Apply search filter
+      if (searchQuery && searchQuery.length >= 3) {
+        query = query.or(
+          `name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`
+        );
+      }
+
+      // Apply pagination
+      const from = page * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+      query = query.range(from, to);
+
+      const { data, error, count } = await query;
 
       if (error) {
         console.error("Error fetching super admins:", error);
@@ -371,30 +402,51 @@ const SuperAdminUsersScreen = () => {
 
       setSuperAdmins(data || []);
       setFilteredSuperAdmins(data || []);
+      if (count !== null) {
+        setTotalItems(count);
+      }
     } catch (error) {
-      console.error("Error fetching super admins:", error);
+      console.error("Error in fetchSuperAdmins:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  // Fetch company admins
+  // Fetch company admins with pagination
   const fetchCompanyAdmins = async () => {
     try {
       let query = supabase
         .from("company_user")
-        .select("*, company:company_id(company_name)")
+        .select("*, company:company_id(company_name)", { count: "exact" })
         .eq("role", "admin")
-        .order("created_at", {
-          ascending: sortOrder === DateSortOrder.OLDEST_FIRST,
-        });
+        .order("created_at", { ascending: false });
 
-      // Apply company filter if selected
-      if (selectedCompanyIds.length > 0) {
-        query = query.in("company_id", selectedCompanyIds);
-      } else if (selectedCompanyId !== "all") {
-        query = query.eq("company_id", selectedCompanyId);
+      // Apply status filter
+      if (statusFilter === "deleted") {
+        query = query.not("deleted_at", "is", null);
+      } else {
+        query = query.is("deleted_at", null);
+        if (statusFilter === "active") {
+          query = query.eq("active_status", "active");
+        } else if (statusFilter === "inactive") {
+          query = query.eq("active_status", "inactive");
+        }
       }
 
-      const { data, error } = await query;
+      // Apply search filter
+      if (searchQuery && searchQuery.length >= 3) {
+        query = query.or(
+          `first_name.ilike.%${searchQuery}%,last_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`
+        );
+      }
+
+      // Apply pagination
+      const from = page * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+      query = query.range(from, to);
+
+      const { data, error, count } = await query;
 
       if (error) {
         console.error("Error fetching company admins:", error);
@@ -403,31 +455,51 @@ const SuperAdminUsersScreen = () => {
 
       setCompanyAdmins(data || []);
       setFilteredCompanyAdmins(data || []);
+      if (count !== null) {
+        setTotalItems(count);
+      }
     } catch (error) {
-      console.error("Error fetching company admins:", error);
+      console.error("Error in fetchCompanyAdmins:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  // Fetch employees
+  // Fetch employees with pagination
   const fetchEmployees = async () => {
     try {
       let query = supabase
         .from("company_user")
-        .select("*, company:company_id(company_name)")
+        .select("*, company:company_id(company_name)", { count: "exact" })
         .eq("role", "employee")
-        .order("created_at", {
-          ascending: sortOrder === DateSortOrder.OLDEST_FIRST,
-        })
-        .limit(100); // Limit to 100 employees for better performance
+        .order("created_at", { ascending: false });
 
-      // Apply company filter if selected
-      if (selectedCompanyIds.length > 0) {
-        query = query.in("company_id", selectedCompanyIds);
-      } else if (selectedCompanyId !== "all") {
-        query = query.eq("company_id", selectedCompanyId);
+      // Apply status filter
+      if (statusFilter === "deleted") {
+        query = query.not("deleted_at", "is", null);
+      } else {
+        query = query.is("deleted_at", null);
+        if (statusFilter === "active") {
+          query = query.eq("active_status", "active");
+        } else if (statusFilter === "inactive") {
+          query = query.eq("active_status", "inactive");
+        }
       }
 
-      const { data, error } = await query;
+      // Apply search filter
+      if (searchQuery && searchQuery.length >= 3) {
+        query = query.or(
+          `first_name.ilike.%${searchQuery}%,last_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`
+        );
+      }
+
+      // Apply pagination
+      const from = page * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+      query = query.range(from, to);
+
+      const { data, error, count } = await query;
 
       if (error) {
         console.error("Error fetching employees:", error);
@@ -436,8 +508,14 @@ const SuperAdminUsersScreen = () => {
 
       setEmployees(data || []);
       setFilteredEmployees(data || []);
+      if (count !== null) {
+        setTotalItems(count);
+      }
     } catch (error) {
-      console.error("Error fetching employees:", error);
+      console.error("Error in fetchEmployees:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -553,73 +631,178 @@ const SuperAdminUsersScreen = () => {
 
   const onRefresh = () => {
     setRefreshing(true);
-    // Reset company filter on refresh
-    setSelectedCompanyIds([]);
-    setSelectedCompanyId("all");
+    setPage(0);
     fetchAllUsers();
   };
 
-  // Update the handleClearFilters function to use applyFiltersDirect logic
+  // Update useEffect for fetching data when filters change
+  useEffect(() => {
+    if (selectedTab === UserListType.SUPER_ADMIN) {
+      fetchSuperAdmins();
+    } else if (selectedTab === UserListType.COMPANY_ADMIN) {
+      fetchCompanyAdmins();
+    } else if (selectedTab === UserListType.EMPLOYEE) {
+      fetchEmployees();
+    }
+  }, [
+    selectedTab,
+    statusFilter,
+    page,
+    selectedCompanyIds,
+    selectedCompanyId,
+    searchQuery,
+  ]);
+
+  // Update the applyFiltersDirect function
+  const applyFiltersDirect = async () => {
+    setFilterModalVisible(false);
+    setLoading(true);
+    setPage(0); // Reset page when applying filters
+
+    try {
+      if (selectedTab === UserListType.SUPER_ADMIN) {
+        let query = supabase
+          .from("admin")
+          .select("*", { count: "exact" })
+          .eq("role", "superadmin")
+          .order("created_at", { ascending: false });
+
+        // Apply status filter
+        if (statusFilter === "deleted") {
+          query = query.not("deleted_at", "is", null);
+        } else {
+          query = query.is("deleted_at", null);
+          if (statusFilter === "active") {
+            query = query.eq("status", true);
+          } else if (statusFilter === "inactive") {
+            query = query.eq("status", false);
+          }
+        }
+
+        const { data, error, count } = await query.range(0, PAGE_SIZE - 1);
+
+        if (error) throw error;
+        if (data) {
+          setSuperAdmins(data);
+          setFilteredSuperAdmins(data);
+          if (count !== null) {
+            setTotalItems(count);
+          }
+        }
+      } else if (selectedTab === UserListType.COMPANY_ADMIN) {
+        let query = supabase
+          .from("company_user")
+          .select("*, company:company_id(company_name)", { count: "exact" })
+          .eq("role", "admin")
+          .order("created_at", { ascending: false });
+
+        // Apply status filter
+        if (statusFilter === "deleted") {
+          query = query.not("deleted_at", "is", null);
+        } else {
+          query = query.is("deleted_at", null);
+          if (statusFilter === "active") {
+            query = query.eq("active_status", "active");
+          } else if (statusFilter === "inactive") {
+            query = query.eq("active_status", "inactive");
+          }
+        }
+
+        // Apply company filter
+        if (selectedCompanyIds.length > 0) {
+          query = query.in("company_id", selectedCompanyIds);
+        } else if (selectedCompanyId !== "all") {
+          query = query.eq("company_id", selectedCompanyId);
+        }
+
+        const { data, error, count } = await query.range(0, PAGE_SIZE - 1);
+
+        if (error) throw error;
+        if (data) {
+          setCompanyAdmins(data);
+          setFilteredCompanyAdmins(data);
+          if (count !== null) {
+            setTotalItems(count);
+          }
+        }
+      } else if (selectedTab === UserListType.EMPLOYEE) {
+        let query = supabase
+          .from("company_user")
+          .select("*, company:company_id(company_name)", { count: "exact" })
+          .eq("role", "employee")
+          .order("created_at", { ascending: false });
+
+        // Apply status filter
+        if (statusFilter === "deleted") {
+          query = query.not("deleted_at", "is", null);
+        } else {
+          query = query.is("deleted_at", null);
+          if (statusFilter === "active") {
+            query = query.eq("active_status", "active");
+          } else if (statusFilter === "inactive") {
+            query = query.eq("active_status", "inactive");
+          }
+        }
+
+        // Apply company filter
+        if (selectedCompanyIds.length > 0) {
+          query = query.in("company_id", selectedCompanyIds);
+        } else if (selectedCompanyId !== "all") {
+          query = query.eq("company_id", selectedCompanyId);
+        }
+
+        const { data, error, count } = await query.range(0, PAGE_SIZE - 1);
+
+        if (error) throw error;
+        if (data) {
+          setEmployees(data);
+          setFilteredEmployees(data);
+          if (count !== null) {
+            setTotalItems(count);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error applying filters:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  // Update handleClearFilters to ensure proper state reset
   const handleClearFilters = () => {
-    // First clear all filter states
     setFilterModalVisible(false);
     setSelectedCompanyIds([]);
     setSelectedCompanyId("all");
     setStatusFilter("");
-    setSearchQuery("");
+    setPage(0);
+    setLoading(true);
 
-    // Then fetch fresh data using the same logic as applyFiltersDirect
-    const fetchWithClearedFilters = async () => {
-      setLoading(true);
-      try {
-        if (selectedTab === UserListType.SUPER_ADMIN) {
-          const { data, error } = await supabase
-            .from("admin")
-            .select("*")
-            .eq("role", "superadmin")
-            .order("created_at", { ascending: false });
+    // Immediately fetch fresh data after clearing filters
+    applyFiltersDirect();
+  };
 
-          if (error) throw error;
-          if (data) {
-            setSuperAdmins(data);
-            setFilteredSuperAdmins(data);
-          }
-        } else if (selectedTab === UserListType.COMPANY_ADMIN) {
-          const { data, error } = await supabase
-            .from("company_user")
-            .select("*, company:company_id(company_name)")
-            .eq("role", "admin")
-            .order("created_at", { ascending: false });
-
-          if (error) throw error;
-          if (data) {
-            setCompanyAdmins(data);
-            setFilteredCompanyAdmins(data);
-          }
-        } else if (selectedTab === UserListType.EMPLOYEE) {
-          const { data, error } = await supabase
-            .from("company_user")
-            .select("*, company:company_id(company_name)")
-            .eq("role", "employee")
-            .order("created_at", { ascending: false })
-            .limit(100);
-
-          if (error) throw error;
-          if (data) {
-            setEmployees(data);
-            setFilteredEmployees(data);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching data:", error);
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
+  // Update handleClearIndividualFilter to ensure proper refresh
+  const handleClearIndividualFilter = async (
+    filterType: "status" | "company" | "deleted"
+  ) => {
+    setLoading(true);
+    try {
+      if (filterType === "deleted" || filterType === "status") {
+        setStatusFilter("");
+      } else {
+        setSelectedCompanyIds([]);
+        setSelectedCompanyId("all");
       }
-    };
-
-    // Execute the fetch immediately
-    fetchWithClearedFilters();
+      setPage(0);
+      // Immediately fetch fresh data after clearing individual filter
+      await applyFiltersDirect();
+    } catch (error) {
+      console.error("Error clearing filter:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getInitials = (name: string, email: string) => {
@@ -877,112 +1060,6 @@ const SuperAdminUsersScreen = () => {
       margin: 4,
       backgroundColor: "rgba(26, 115, 232, 0.1)",
       borderColor: theme.colors.primary,
-    };
-
-    // Add a function to handle clearing individual filters
-    const handleClearIndividualFilter = async (
-      filterType: "status" | "company"
-    ) => {
-      setLoading(true);
-      try {
-        // First fetch the data
-        if (selectedTab === UserListType.SUPER_ADMIN) {
-          const { data, error } = await supabase
-            .from("admin")
-            .select("*")
-            .eq("role", "superadmin")
-            .order("created_at", { ascending: false });
-
-          if (error) throw error;
-          if (data) {
-            // Then clear the filter state
-            if (filterType === "status") {
-              setStatusFilter("");
-            } else {
-              setSelectedCompanyIds([]);
-              setSelectedCompanyId("all");
-            }
-            // Finally update the data
-            setSuperAdmins(data);
-            setFilteredSuperAdmins(data);
-          }
-        } else if (selectedTab === UserListType.COMPANY_ADMIN) {
-          let query = supabase
-            .from("company_user")
-            .select("*, company:company_id(company_name)")
-            .eq("role", "admin")
-            .order("created_at", { ascending: false });
-
-          // Keep other filter if we're only clearing one
-          if (
-            filterType === "status" &&
-            (selectedCompanyIds.length > 0 || selectedCompanyId !== "all")
-          ) {
-            if (selectedCompanyIds.length > 0) {
-              query = query.in("company_id", selectedCompanyIds);
-            } else {
-              query = query.eq("company_id", selectedCompanyId);
-            }
-          } else if (filterType === "company" && statusFilter) {
-            query = query.eq("active_status", statusFilter);
-          }
-
-          const { data, error } = await query;
-          if (error) throw error;
-          if (data) {
-            // Then clear the specific filter state
-            if (filterType === "status") {
-              setStatusFilter("");
-            } else {
-              setSelectedCompanyIds([]);
-              setSelectedCompanyId("all");
-            }
-            // Finally update the data
-            setCompanyAdmins(data);
-            setFilteredCompanyAdmins(data);
-          }
-        } else if (selectedTab === UserListType.EMPLOYEE) {
-          let query = supabase
-            .from("company_user")
-            .select("*, company:company_id(company_name)")
-            .eq("role", "employee")
-            .order("created_at", { ascending: false })
-            .limit(100);
-
-          // Keep other filter if we're only clearing one
-          if (
-            filterType === "status" &&
-            (selectedCompanyIds.length > 0 || selectedCompanyId !== "all")
-          ) {
-            if (selectedCompanyIds.length > 0) {
-              query = query.in("company_id", selectedCompanyIds);
-            } else {
-              query = query.eq("company_id", selectedCompanyId);
-            }
-          } else if (filterType === "company" && statusFilter) {
-            query = query.eq("active_status", statusFilter);
-          }
-
-          const { data, error } = await query;
-          if (error) throw error;
-          if (data) {
-            // Then clear the specific filter state
-            if (filterType === "status") {
-              setStatusFilter("");
-            } else {
-              setSelectedCompanyIds([]);
-              setSelectedCompanyId("all");
-            }
-            // Finally update the data
-            setEmployees(data);
-            setFilteredEmployees(data);
-          }
-        }
-      } catch (error) {
-        console.error("Error clearing filter:", error);
-      } finally {
-        setLoading(false);
-      }
     };
 
     return (
@@ -1446,7 +1523,6 @@ const SuperAdminUsersScreen = () => {
               <CompanyAdminTableHeader />
             )}
             {selectedTab === UserListType.EMPLOYEE && <EmployeeTableHeader />}
-
             {Array(6)
               .fill(0)
               .map((_, index) => (
@@ -1541,94 +1617,153 @@ const SuperAdminUsersScreen = () => {
       );
     }
 
-    // Get window dimensions
+    const totalPages = Math.ceil(totalItems / PAGE_SIZE);
 
     switch (selectedTab) {
       case UserListType.SUPER_ADMIN:
         if (filteredSuperAdmins.length === 0) {
           return renderEmptyState();
         }
-        return useTableLayout ? (
-          <View style={styles.tableContainer}>
-            <SuperAdminTableHeader />
-            <FlatList
-              data={filteredSuperAdmins}
-              renderItem={({ item }) => <SuperAdminTableRow item={item} />}
-              keyExtractor={(item) => `super-${item.id}`}
-              contentContainerStyle={styles.tableContent}
-              refreshControl={
-                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-              }
-            />
-          </View>
-        ) : (
-          <FlatList
-            data={filteredSuperAdmins}
-            renderItem={renderSuperAdminItem}
-            keyExtractor={(item) => `super-${item.id}`}
-            contentContainerStyle={styles.listContent}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
-          />
+        return (
+          <>
+            {useTableLayout ? (
+              <View style={styles.tableContainer}>
+                <SuperAdminTableHeader />
+                <FlatList
+                  data={filteredSuperAdmins}
+                  renderItem={({ item }) => <SuperAdminTableRow item={item} />}
+                  keyExtractor={(item) => `super-${item.id}`}
+                  contentContainerStyle={styles.tableContent}
+                  refreshControl={
+                    <RefreshControl
+                      refreshing={refreshing}
+                      onRefresh={onRefresh}
+                    />
+                  }
+                />
+              </View>
+            ) : (
+              <FlatList
+                data={filteredSuperAdmins}
+                renderItem={renderSuperAdminItem}
+                keyExtractor={(item) => `super-${item.id}`}
+                contentContainerStyle={styles.listContent}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                  />
+                }
+              />
+            )}
+            {totalPages > 1 && (
+              <View style={styles.paginationWrapper}>
+                <Pagination
+                  currentPage={page}
+                  totalPages={totalPages}
+                  onPageChange={handlePageChange}
+                />
+              </View>
+            )}
+          </>
         );
 
       case UserListType.COMPANY_ADMIN:
         if (filteredCompanyAdmins.length === 0) {
           return renderEmptyState();
         }
-        return useTableLayout ? (
-          <View style={styles.tableContainer}>
-            <CompanyAdminTableHeader />
-            <FlatList
-              data={filteredCompanyAdmins}
-              renderItem={({ item }) => <CompanyAdminTableRow item={item} />}
-              keyExtractor={(item) => `admin-${item.id}`}
-              contentContainerStyle={styles.tableContent}
-              refreshControl={
-                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-              }
-            />
-          </View>
-        ) : (
-          <FlatList
-            data={filteredCompanyAdmins}
-            renderItem={renderCompanyAdminItem}
-            keyExtractor={(item) => `admin-${item.id}`}
-            contentContainerStyle={styles.listContent}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
-          />
+        return (
+          <>
+            {useTableLayout ? (
+              <View style={styles.tableContainer}>
+                <CompanyAdminTableHeader />
+                <FlatList
+                  data={filteredCompanyAdmins}
+                  renderItem={({ item }) => (
+                    <CompanyAdminTableRow item={item} />
+                  )}
+                  keyExtractor={(item) => `admin-${item.id}`}
+                  contentContainerStyle={styles.tableContent}
+                  refreshControl={
+                    <RefreshControl
+                      refreshing={refreshing}
+                      onRefresh={onRefresh}
+                    />
+                  }
+                />
+              </View>
+            ) : (
+              <FlatList
+                data={filteredCompanyAdmins}
+                renderItem={renderCompanyAdminItem}
+                keyExtractor={(item) => `admin-${item.id}`}
+                contentContainerStyle={styles.listContent}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                  />
+                }
+              />
+            )}
+            {totalPages > 1 && (
+              <View style={styles.paginationWrapper}>
+                <Pagination
+                  currentPage={page}
+                  totalPages={totalPages}
+                  onPageChange={handlePageChange}
+                />
+              </View>
+            )}
+          </>
         );
 
       case UserListType.EMPLOYEE:
         if (filteredEmployees.length === 0) {
           return renderEmptyState();
         }
-        return useTableLayout ? (
-          <View style={styles.tableContainer}>
-            <EmployeeTableHeader />
-            <FlatList
-              data={filteredEmployees}
-              renderItem={({ item }) => <EmployeeTableRow item={item} />}
-              keyExtractor={(item) => `emp-${item.id}`}
-              contentContainerStyle={styles.tableContent}
-              refreshControl={
-                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-              }
-            />
-          </View>
-        ) : (
-          <FlatList
-            data={filteredEmployees}
-            renderItem={renderEmployeeItem}
-            keyExtractor={(item) => `emp-${item.id}`}
-            contentContainerStyle={styles.listContent}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
-          />
+        return (
+          <>
+            {useTableLayout ? (
+              <View style={styles.tableContainer}>
+                <EmployeeTableHeader />
+                <FlatList
+                  data={filteredEmployees}
+                  renderItem={({ item }) => <EmployeeTableRow item={item} />}
+                  keyExtractor={(item) => `emp-${item.id}`}
+                  contentContainerStyle={styles.tableContent}
+                  refreshControl={
+                    <RefreshControl
+                      refreshing={refreshing}
+                      onRefresh={onRefresh}
+                    />
+                  }
+                />
+              </View>
+            ) : (
+              <FlatList
+                data={filteredEmployees}
+                renderItem={renderEmployeeItem}
+                keyExtractor={(item) => `emp-${item.id}`}
+                contentContainerStyle={styles.listContent}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                  />
+                }
+              />
+            )}
+            {totalPages > 1 && (
+              <View style={styles.paginationWrapper}>
+                <Pagination
+                  currentPage={page}
+                  totalPages={totalPages}
+                  onPageChange={handlePageChange}
+                />
+              </View>
+            )}
+          </>
         );
 
       default:
@@ -1642,6 +1777,7 @@ const SuperAdminUsersScreen = () => {
       { label: "All Status", value: "" },
       { label: "Active", value: "active" },
       { label: "Inactive", value: "inactive" },
+      { label: "Deleted", value: "deleted" },
     ];
 
     return (
@@ -1658,7 +1794,10 @@ const SuperAdminUsersScreen = () => {
           <PillFilterGroup
             options={statusOptions}
             value={statusFilter}
-            onValueChange={(value: string) => setStatusFilter(value)}
+            onValueChange={(value: string) => {
+              setStatusFilter(value);
+              // No need to call applyFiltersDirect here as it will be handled by useEffect
+            }}
           />
         </FilterSection>
 
@@ -1734,109 +1873,6 @@ const SuperAdminUsersScreen = () => {
     });
     // Reset the single company selection mode
     setSelectedCompanyId("all");
-  };
-
-  // Update the applyFiltersDirect function to handle different status types
-  const applyFiltersDirect = () => {
-    setFilterModalVisible(false);
-    setLoading(true);
-
-    const fetchWithCurrentFilters = async () => {
-      try {
-        if (selectedTab === UserListType.SUPER_ADMIN) {
-          let query = supabase
-            .from("admin")
-            .select("*")
-            .eq("role", "superadmin")
-            .order("created_at", { ascending: false });
-
-          // Super admins use boolean status
-          if (statusFilter === "active") {
-            query = query.eq("status", true);
-          } else if (statusFilter === "inactive") {
-            query = query.eq("status", false);
-          }
-
-          const { data, error } = await query;
-
-          if (error) {
-            console.error("Error fetching super admins:", error);
-            return;
-          }
-
-          setSuperAdmins(data || []);
-          setFilteredSuperAdmins(data || []);
-        } else if (selectedTab === UserListType.COMPANY_ADMIN) {
-          let query = supabase
-            .from("company_user")
-            .select("*, company:company_id(company_name)")
-            .eq("role", "admin")
-            .order("created_at", { ascending: false });
-
-          // Company users use string status
-          if (statusFilter === "active") {
-            query = query.eq("active_status", "active");
-          } else if (statusFilter === "inactive") {
-            query = query.eq("active_status", "inactive");
-          }
-
-          // Apply company filter
-          if (selectedCompanyIds.length > 0) {
-            query = query.in("company_id", selectedCompanyIds);
-          } else if (selectedCompanyId !== "all") {
-            query = query.eq("company_id", selectedCompanyId);
-          }
-
-          const { data, error } = await query;
-
-          if (error) {
-            console.error("Error fetching company admins:", error);
-            return;
-          }
-
-          setCompanyAdmins(data || []);
-          setFilteredCompanyAdmins(data || []);
-        } else if (selectedTab === UserListType.EMPLOYEE) {
-          let query = supabase
-            .from("company_user")
-            .select("*, company:company_id(company_name)")
-            .eq("role", "employee")
-            .order("created_at", { ascending: false })
-            .limit(100);
-
-          // Company users use string status
-          if (statusFilter === "active") {
-            query = query.eq("active_status", "active");
-          } else if (statusFilter === "inactive") {
-            query = query.eq("active_status", "inactive");
-          }
-
-          // Apply company filter
-          if (selectedCompanyIds.length > 0) {
-            query = query.in("company_id", selectedCompanyIds);
-          } else if (selectedCompanyId !== "all") {
-            query = query.eq("company_id", selectedCompanyId);
-          }
-
-          const { data, error } = await query;
-
-          if (error) {
-            console.error("Error fetching employees:", error);
-            return;
-          }
-
-          setEmployees(data || []);
-          setFilteredEmployees(data || []);
-        }
-      } catch (error) {
-        console.error("Error applying filters:", error);
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    };
-
-    fetchWithCurrentFilters();
   };
 
   // Check if any filters are active
@@ -2228,6 +2264,13 @@ const SuperAdminUsersScreen = () => {
     return "All Companies";
   };
 
+  // Add page change handler
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+    setLoading(true);
+    // The fetch functions will be called via useEffect when page changes
+  };
+
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -2515,7 +2558,6 @@ const styles = StyleSheet.create({
   contentContainer: {
     flex: 1,
     paddingHorizontal: Platform.OS === "web" ? 24 : 16,
-    paddingVertical: 16,
   },
   filterCard: {
     marginBottom: 12,
@@ -2549,7 +2591,7 @@ const styles = StyleSheet.create({
   searchContainer: {
     padding: Platform.OS === "web" ? 24 : 16,
     paddingTop: 10,
-    paddingBottom: 0,
+    paddingBottom: 8,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -2658,7 +2700,7 @@ const styles = StyleSheet.create({
   listContainer: {
     flex: 1,
     marginTop: 4,
-    marginBottom: 76,
+    marginBottom: 18,
   },
   listHeaderContainer: {
     backgroundColor: "#FFFFFF",
@@ -3322,6 +3364,30 @@ const styles = StyleSheet.create({
     margin: 4,
     backgroundColor: "rgba(26, 115, 232, 0.1)",
     borderColor: "#1a73e8",
+  },
+  paginationWrapper: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    borderRadius: 16,
+    marginTop: 12,
+    overflow: "hidden",
+    width: "auto",
+    alignSelf: "center",
+  },
+  switchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  switchLabel: {
+    fontSize: 14,
+    color: "#424242",
+    fontFamily: "Poppins-Regular",
+    flex: 1,
+    marginRight: 16,
   },
 });
 

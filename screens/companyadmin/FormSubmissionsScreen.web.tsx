@@ -53,6 +53,7 @@ import {
   withTiming,
 } from "react-native-reanimated";
 import Animated from "react-native-reanimated";
+import Pagination from "../../components/Pagination";
 
 // Add navigation type definitions
 type RootStackParamList = {
@@ -481,7 +482,7 @@ const FormSubmissionsScreen = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredForms, setFilteredForms] = useState<FormSubmission[]>([]);
   const [page, setPage] = useState(0);
-  const [hasMoreData, setHasMoreData] = useState(true);
+  const [totalItems, setTotalItems] = useState(0);
   const PAGE_SIZE = 10;
 
   // Add window dimensions state
@@ -597,10 +598,9 @@ const FormSubmissionsScreen = () => {
     try {
       if (refresh) {
         setPage(0);
-        setHasMoreData(true);
         setLoading(true);
       } else {
-        setLoadingMore(true);
+        setLoading(true);
       }
 
       // Get company ID if not already set
@@ -608,7 +608,6 @@ const FormSubmissionsScreen = () => {
       if (!currentCompanyId) {
         console.error("No company ID found");
         setLoading(false);
-        setLoadingMore(false);
         return;
       }
 
@@ -618,8 +617,12 @@ const FormSubmissionsScreen = () => {
       const from = currentPage * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      // Fetch accident reports with proper typing
-      const { data: accidentData, error: accidentError } = (await supabase
+      // Fetch accident reports with count
+      const {
+        data: accidentData,
+        error: accidentError,
+        count: accidentCount,
+      } = (await supabase
         .from("accident_report")
         .select(
           `
@@ -634,16 +637,25 @@ const FormSubmissionsScreen = () => {
             first_name,
             last_name
           )
-        `
+        `,
+          { count: "exact" }
         )
         .eq("company_id", currentCompanyId)
         .order("created_at", {
           ascending: appliedFilters.sortOrder === "asc",
         })
-        .range(from, to)) as { data: AccidentReport[] | null; error: any };
+        .range(from, to)) as {
+        data: AccidentReport[] | null;
+        error: any;
+        count: number | null;
+      };
 
-      // Fetch illness reports with proper typing
-      const { data: illnessData, error: illnessError } = (await supabase
+      // Fetch illness reports with count
+      const {
+        data: illnessData,
+        error: illnessError,
+        count: illnessCount,
+      } = (await supabase
         .from("illness_report")
         .select(
           `
@@ -658,16 +670,25 @@ const FormSubmissionsScreen = () => {
             first_name,
             last_name
           )
-        `
+        `,
+          { count: "exact" }
         )
         .eq("company_id", currentCompanyId)
         .order("submission_date", {
           ascending: appliedFilters.sortOrder === "asc",
         })
-        .range(from, to)) as { data: IllnessReport[] | null; error: any };
+        .range(from, to)) as {
+        data: IllnessReport[] | null;
+        error: any;
+        count: number | null;
+      };
 
-      // Fetch staff departure reports
-      const { data: departureData, error: departureError } = await supabase
+      // Fetch staff departure reports with count
+      const {
+        data: departureData,
+        error: departureError,
+        count: departureCount,
+      } = await supabase
         .from("staff_departure_report")
         .select(
           `
@@ -682,7 +703,8 @@ const FormSubmissionsScreen = () => {
             first_name,
             last_name
           )
-        `
+        `,
+          { count: "exact" }
         )
         .eq("company_id", currentCompanyId)
         .order("created_at", {
@@ -757,65 +779,58 @@ const FormSubmissionsScreen = () => {
           : dateB - dateA;
       });
 
-      // Update state
-      if (refresh) {
-        setForms(sortedForms);
-      } else {
-        setForms((prevForms) => [...prevForms, ...sortedForms]);
-      }
+      // Calculate total items
+      const totalCount =
+        (accidentCount || 0) + (illnessCount || 0) + (departureCount || 0);
+      setTotalItems(totalCount);
 
-      // Update pagination state
-      setHasMoreData(allForms.length === PAGE_SIZE);
-      if (!refresh) {
-        setPage((prevPage) => prevPage + 1);
-      }
+      // Update forms
+      setForms(sortedForms);
+      setFilteredForms(sortedForms);
     } catch (error) {
       console.error("Error fetching forms:", error);
+      setForms([]);
+      setFilteredForms([]);
     } finally {
       setLoading(false);
-      setLoadingMore(false);
+      setRefreshing(false);
     }
   };
 
+  // Update useEffect to handle pagination
   useEffect(() => {
     fetchForms(true);
-  }, [appliedFilters]);
+  }, [appliedFilters, page]);
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchForms(true);
+  // Update search handling
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    setPage(0); // Reset to first page when search changes
   };
 
-  const loadMoreForms = () => {
-    if (!loading && !loadingMore && hasMoreData) {
-      setPage((prevPage) => prevPage + 1);
-      fetchForms(false);
-    }
+  // Add page handling
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
   };
 
-  // Apply filters and refresh forms list
+  // Update filter handling
   const applyFilters = () => {
-    // Close modal first
     setFilterModalVisible(false);
-
-    // Apply new filters
+    setPage(0); // Reset to first page when filters change
     const newFilters = {
       status: statusFilter,
       formType: typeFilter,
       sortOrder: sortOrder,
     };
-
-    // Set applied filters
     setAppliedFilters(newFilters);
   };
 
-  // Clear all filters
+  // Update clear filters
   const clearFilters = () => {
     setTypeFilter("all");
     setStatusFilter("all");
     setSortOrder("desc");
-
-    // Clear applied filters
+    setPage(0); // Reset to first page when clearing filters
     setAppliedFilters({
       status: "all",
       formType: "all",
@@ -1143,6 +1158,76 @@ const FormSubmissionsScreen = () => {
     );
   };
 
+  // Update the content rendering to include pagination
+  const renderContent = () => {
+    if (filteredForms.length === 0) {
+      return (
+        <EmptyState
+          icon="file-document"
+          title="No Forms Found"
+          message={
+            searchQuery || hasActiveFilters()
+              ? "No forms match your search criteria."
+              : "No form submissions yet."
+          }
+          buttonTitle={
+            searchQuery || hasActiveFilters() ? "Clear Filters" : undefined
+          }
+          onButtonPress={
+            searchQuery || hasActiveFilters()
+              ? () => {
+                  setSearchQuery("");
+                  clearFilters();
+                }
+              : undefined
+          }
+        />
+      );
+    }
+
+    const totalPages = Math.ceil(totalItems / PAGE_SIZE);
+
+    return (
+      <>
+        {isMediumScreen || isLargeScreen ? (
+          <View style={styles.tableContainer}>
+            <TableHeader />
+            <FlatList
+              data={filteredForms}
+              renderItem={({ item }) => (
+                <TableRow item={item} navigation={navigation} />
+              )}
+              keyExtractor={(item) => `${item.type}-${item.id}`}
+              contentContainerStyle={styles.tableContent}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+              }
+            />
+          </View>
+        ) : (
+          <FlatList
+            data={filteredForms}
+            renderItem={renderFormItem}
+            keyExtractor={(item) => `${item.type}-${item.id}`}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+          />
+        )}
+        {totalPages > 1 && (
+          <View style={styles.paginationWrapper}>
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              onPageChange={handlePageChange}
+            />
+          </View>
+        )}
+      </>
+    );
+  };
+
   if (loading && !refreshing) {
     const useTableLayout = isLargeScreen || isMediumScreen;
 
@@ -1282,79 +1367,7 @@ const FormSubmissionsScreen = () => {
           },
         ]}
       >
-        {filteredForms.length === 0 ? (
-          <EmptyState
-            icon="file-document"
-            title="No Forms Found"
-            message={
-              searchQuery || hasActiveFilters()
-                ? "No forms match your search criteria."
-                : "No form submissions yet."
-            }
-            buttonTitle={
-              searchQuery || hasActiveFilters() ? "Clear Filters" : undefined
-            }
-            onButtonPress={
-              searchQuery || hasActiveFilters()
-                ? () => {
-                    setSearchQuery("");
-                    clearFilters();
-                  }
-                : undefined
-            }
-          />
-        ) : isMediumScreen || isLargeScreen ? (
-          <View style={styles.tableContainer}>
-            <TableHeader />
-            <FlatList
-              data={filteredForms}
-              renderItem={({ item }) => (
-                <TableRow item={item} navigation={navigation} />
-              )}
-              keyExtractor={(item) => `${item.type}-${item.id}`}
-              contentContainerStyle={styles.tableContent}
-              refreshControl={
-                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-              }
-              onEndReached={loadMoreForms}
-              onEndReachedThreshold={0.3}
-              ListFooterComponent={() => (
-                <View style={styles.loadingFooter}>
-                  {loadingMore && hasMoreData && (
-                    <ActivityIndicator size="small" color="#1a73e8" />
-                  )}
-                  {!hasMoreData && filteredForms.length > 0 && (
-                    <Text style={styles.endListText}>
-                      No more forms to load
-                    </Text>
-                  )}
-                </View>
-              )}
-            />
-          </View>
-        ) : (
-          <FlatList
-            data={filteredForms}
-            renderItem={renderFormItem}
-            keyExtractor={(item) => `${item.type}-${item.id}`}
-            contentContainerStyle={styles.listContent}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
-            onEndReached={loadMoreForms}
-            onEndReachedThreshold={0.3}
-            ListFooterComponent={() => (
-              <View style={styles.loadingFooter}>
-                {loadingMore && hasMoreData && (
-                  <ActivityIndicator size="small" color="#1a73e8" />
-                )}
-                {!hasMoreData && filteredForms.length > 0 && (
-                  <Text style={styles.endListText}>No more forms to load</Text>
-                )}
-              </View>
-            )}
-          />
-        )}
+        {renderContent()}
       </View>
     </SafeAreaView>
   );
@@ -1717,6 +1730,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Poppins-Regular",
     lineHeight: 16,
+  },
+  paginationWrapper: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    borderRadius: 16,
+    marginTop: 12,
+    overflow: "hidden",
+    width: "auto",
+    alignSelf: "center",
   },
 } as const);
 

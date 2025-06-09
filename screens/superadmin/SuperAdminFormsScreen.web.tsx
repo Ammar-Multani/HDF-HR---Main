@@ -61,6 +61,7 @@ import {
   PillFilterGroup,
 } from "../../components/FilterSections";
 import FilterModal from "../../components/FilterModal";
+import Pagination from "../../components/Pagination";
 
 // Define form interface with the properties needed for our UI
 interface FormItem {
@@ -262,6 +263,7 @@ const Shimmer: React.FC<ShimmerProps> = ({ width, height, style }) => {
   );
 };
 
+
 // Update FormItemSkeleton component
 const FormItemSkeleton = () => {
   return (
@@ -364,13 +366,15 @@ const SuperAdminFormsScreen = () => {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [forms, setForms] = useState<FormItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredForms, setFilteredForms] = useState<FormItem[]>([]);
   const [page, setPage] = useState(0);
-  const [hasMoreData, setHasMoreData] = useState(true);
+  const [totalItems, setTotalItems] = useState(0);
   const PAGE_SIZE = 10;
+
+  // Calculate total pages
+  const totalPages = Math.ceil(totalItems / PAGE_SIZE);
 
   // Filter states
   const [filterModalVisible, setFilterModalVisible] = useState(false);
@@ -459,21 +463,30 @@ const SuperAdminFormsScreen = () => {
     setFilteredForms(memoizedFilteredForms);
   }, [memoizedFilteredForms]);
 
+  // Add back the useEffect for initial data loading
+  useEffect(() => {
+    fetchForms(true);
+  }, [appliedFilters]);
+
+  // Add back the onRefresh function
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    setPage(0);
+    fetchForms(true);
+  }, []);
+
+  // Update the fetchForms function to handle loading states better
   const fetchForms = async (refresh = false) => {
     try {
       if (refresh) {
         setPage(0);
-        setHasMoreData(true);
         setLoading(true);
-      } else {
-        setLoadingMore(true);
       }
 
-      const currentPage = refresh ? 0 : page;
-      const from = currentPage * PAGE_SIZE;
+      const from = page * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      // Fetch accident reports
+      // Fetch accident reports with count
       let accidentQuery = supabase
         .from("accident_report")
         .select(
@@ -492,7 +505,8 @@ const SuperAdminFormsScreen = () => {
               company_name
             )
           )
-        `
+        `,
+          { count: "exact" }
         )
         .neq("status", FormStatus.DRAFT)
         .order("created_at", { ascending: false });
@@ -502,10 +516,13 @@ const SuperAdminFormsScreen = () => {
         accidentQuery = accidentQuery.eq("status", appliedFilters.status);
       }
 
-      const { data: accidentData, error: accidentError } =
-        await accidentQuery.range(from, to);
+      const {
+        data: accidentData,
+        count: accidentCount,
+        error: accidentError,
+      } = await accidentQuery.range(from, to);
 
-      // Fetch illness reports
+      // Fetch illness reports with count
       let illnessQuery = supabase
         .from("illness_report")
         .select(
@@ -524,7 +541,8 @@ const SuperAdminFormsScreen = () => {
               company_name
             )
           )
-        `
+        `,
+          { count: "exact" }
         )
         .neq("status", FormStatus.DRAFT)
         .order("submission_date", { ascending: false });
@@ -534,10 +552,13 @@ const SuperAdminFormsScreen = () => {
         illnessQuery = illnessQuery.eq("status", appliedFilters.status);
       }
 
-      const { data: illnessData, error: illnessError } =
-        await illnessQuery.range(from, to);
+      const {
+        data: illnessData,
+        count: illnessCount,
+        error: illnessError,
+      } = await illnessQuery.range(from, to);
 
-      // Fetch staff departure reports
+      // Fetch staff departure reports with count
       let departureQuery = supabase
         .from("staff_departure_report")
         .select(
@@ -556,7 +577,8 @@ const SuperAdminFormsScreen = () => {
               company_name
             )
           )
-        `
+        `,
+          { count: "exact" }
         )
         .neq("status", FormStatus.DRAFT)
         .order("created_at", { ascending: false });
@@ -566,8 +588,11 @@ const SuperAdminFormsScreen = () => {
         departureQuery = departureQuery.eq("status", appliedFilters.status);
       }
 
-      const { data: departureData, error: departureError } =
-        await departureQuery.range(from, to);
+      const {
+        data: departureData,
+        count: departureCount,
+        error: departureError,
+      } = await departureQuery.range(from, to);
 
       if (accidentError || illnessError || departureError) {
         console.error("Error fetching forms:", {
@@ -649,38 +674,43 @@ const SuperAdminFormsScreen = () => {
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
 
-      // Update forms state
-      if (refresh) {
-        setForms(combinedForms);
-      } else {
-        setForms((prevForms) => [...prevForms, ...combinedForms]);
-      }
+      // Update total items count
+      const totalCount =
+        (accidentCount || 0) + (illnessCount || 0) + (departureCount || 0);
+      setTotalItems(totalCount);
 
-      // Check if we have more data
-      setHasMoreData(combinedForms.length >= PAGE_SIZE);
+      // Update forms state
+      setForms(combinedForms);
+      setFilteredForms(combinedForms);
     } catch (error) {
       console.error("Error fetching forms:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
-      setLoadingMore(false);
     }
   };
 
+  // Update search effect
   useEffect(() => {
-    fetchForms(true);
-  }, [appliedFilters]);
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchForms(true);
-  };
-
-  const loadMoreForms = () => {
-    if (!loading && !loadingMore && hasMoreData) {
-      setPage((prevPage) => prevPage + 1);
-      fetchForms(false);
+    if (searchQuery.trim() === "") {
+      setFilteredForms(forms);
+    } else {
+      const filtered = forms.filter(
+        (form) =>
+          form.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          form.employee_name
+            .toLowerCase()
+            .includes(searchQuery.toLowerCase()) ||
+          form.company_name.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      setFilteredForms(filtered);
     }
+  }, [searchQuery, forms]);
+
+  // Handle page change
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+    fetchForms(false);
   };
 
   // Apply filters and refresh forms list
@@ -1216,56 +1246,53 @@ const SuperAdminFormsScreen = () => {
             }}
           />
         ) : isMediumScreen || isLargeScreen ? (
-          <View style={styles.tableContainer}>
-            <TableHeader />
+          <>
+            <View style={styles.tableContainer}>
+              <TableHeader />
+              <FlatList
+                data={filteredForms}
+                renderItem={({ item }) => <TableRow item={item} />}
+                keyExtractor={(item) => `${item.type}-${item.id}`}
+                contentContainerStyle={styles.tableContent}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                  />
+                }
+              />
+            </View>
+            {totalPages > 1 && (
+              <View style={styles.paginationWrapper}>
+                <Pagination
+                  currentPage={page}
+                  totalPages={totalPages}
+                  onPageChange={handlePageChange}
+                />
+              </View>
+            )}
+          </>
+        ) : (
+          <>
             <FlatList
               data={filteredForms}
-              renderItem={({ item }) => <TableRow item={item} />}
+              renderItem={renderFormItem}
               keyExtractor={(item) => `${item.type}-${item.id}`}
-              contentContainerStyle={styles.tableContent}
+              contentContainerStyle={styles.listContent}
               refreshControl={
                 <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
               }
-              onEndReached={loadMoreForms}
-              onEndReachedThreshold={0.3}
-              ListFooterComponent={() => (
-                <View style={styles.loadingFooter}>
-                  {loadingMore && hasMoreData && (
-                    <ActivityIndicator size="small" color="#1a73e8" />
-                  )}
-                  {!hasMoreData && filteredForms.length > 0 && (
-                    <Text style={styles.endListText}>
-                      {t("superAdmin.forms.noMoreForms")}
-                    </Text>
-                  )}
-                </View>
-              )}
             />
-          </View>
-        ) : (
-          <FlatList
-            data={filteredForms}
-            renderItem={renderFormItem}
-            keyExtractor={(item) => `${item.type}-${item.id}`}
-            contentContainerStyle={styles.listContent}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
-            onEndReached={loadMoreForms}
-            onEndReachedThreshold={0.3}
-            ListFooterComponent={() => (
-              <View style={styles.loadingFooter}>
-                {loadingMore && hasMoreData && (
-                  <ActivityIndicator size="small" color="#1a73e8" />
-                )}
-                {!hasMoreData && filteredForms.length > 0 && (
-                  <Text style={styles.endListText}>
-                    {t("superAdmin.forms.noMoreForms")}
-                  </Text>
-                )}
+            {totalPages > 1 && (
+              <View style={styles.paginationWrapper}>
+                <Pagination
+                  currentPage={page}
+                  totalPages={totalPages}
+                  onPageChange={handlePageChange}
+                />
               </View>
             )}
-          />
+          </>
         )}
       </View>
     </SafeAreaView>
@@ -1655,6 +1682,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Poppins-Regular",
     lineHeight: 16,
+  },
+  paginationWrapper: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    borderRadius: 16,
+    marginTop: 12,
+    overflow: "hidden",
+    width: "auto",
+    alignSelf: "center",
   },
 } as const);
 

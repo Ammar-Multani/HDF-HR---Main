@@ -644,7 +644,6 @@ const SuperAdminTasksScreen = () => {
     try {
       if (refresh) {
         setPage(0);
-        setHasMoreData(true);
         setLoading(true);
       } else {
         setLoadingMore(true);
@@ -654,10 +653,9 @@ const SuperAdminTasksScreen = () => {
       const from = currentPage * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      let query = supabase
-        .from("tasks")
-        .select(
-          `
+      // Build the base query with count
+      let query = supabase.from("tasks").select(
+        `
           id, 
           title, 
           description, 
@@ -675,11 +673,10 @@ const SuperAdminTasksScreen = () => {
             company_name
           )
         `,
-          { count: "exact" }
-        )
-        .order("created_at", { ascending: false });
+        { count: "exact" }
+      );
 
-      // Apply filters to the query
+      // Apply all filters on the server side
       if (appliedFilters.status !== "all") {
         query = query.eq("status", appliedFilters.status);
       }
@@ -687,8 +684,12 @@ const SuperAdminTasksScreen = () => {
         query = query.eq("priority", appliedFilters.priority);
       }
       if (searchQuery.trim() !== "") {
+        // Use full-text search if available or ilike for basic search
         query = query.ilike("title", `%${searchQuery}%`);
       }
+
+      // Apply sorting - allow multiple sort fields
+      query = query.order("created_at", { ascending: false });
 
       // Apply pagination
       query = query.range(from, to);
@@ -701,11 +702,9 @@ const SuperAdminTasksScreen = () => {
       }
 
       if (!data || data.length === 0) {
-        if (refresh) {
-          setTasks([]);
-          setFilteredTasks([]);
-          setTotalItems(0);
-        }
+        setTasks([]);
+        setFilteredTasks([]);
+        setTotalItems(0);
         setLoading(false);
         setRefreshing(false);
         setLoadingMore(false);
@@ -715,10 +714,12 @@ const SuperAdminTasksScreen = () => {
       // Update total items count
       if (count !== null) {
         setTotalItems(count);
+        setHasMoreData(from + data.length < count);
       }
 
-      // Process user details
+      // Process user details efficiently
       try {
+        // Extract all user IDs that we need to fetch (assigned users and modifiers)
         const allAssignedIds = data
           .map((task) => {
             if (Array.isArray(task.assigned_to)) {
@@ -730,56 +731,56 @@ const SuperAdminTasksScreen = () => {
           })
           .flat();
 
-        const uniqueAssignedIds = Array.from(new Set(allAssignedIds));
         const allModifierIds = data
           .map((task) => task.modified_by)
           .filter(Boolean);
-        const allUserIds = Array.from(
-          new Set([...uniqueAssignedIds, ...allModifierIds])
+
+        // Get unique user IDs to minimize database queries
+        const uniqueUserIds = Array.from(
+          new Set([...allAssignedIds, ...allModifierIds])
         );
 
-        let companyUsers: any[] = [];
-        let adminUsers: any[] = [];
-
-        if (allUserIds.length > 0) {
-          const { data: companyUsersData } = await supabase
+        // Fetch all user details in parallel
+        const [companyUsersResponse, adminUsersResponse] = await Promise.all([
+          supabase
             .from("company_user")
             .select("id, first_name, last_name, email, role")
-            .in("id", allUserIds);
+            .in("id", uniqueUserIds),
+          supabase
+            .from("admin")
+            .select("id, name, email, role")
+            .in("id", uniqueUserIds),
+        ]);
 
-          if (companyUsersData) {
-            companyUsers = companyUsersData.map((user) => ({
+        // Create a map for quick user lookups
+        const userDetailsMap: { [key: string]: any } = {};
+
+        // Process company users
+        if (companyUsersResponse.data) {
+          companyUsersResponse.data.forEach((user) => {
+            userDetailsMap[user.id] = {
               id: user.id,
               name: `${user.first_name} ${user.last_name}`,
               email: user.email,
               role: user.role,
-            }));
-          }
+            };
+          });
+        }
 
-          const { data: adminUsersData } = await supabase
-            .from("admin")
-            .select("id, name, email, role")
-            .in("id", allUserIds);
-
-          if (adminUsersData) {
-            adminUsers = adminUsersData.map((admin) => ({
+        // Process admin users
+        if (adminUsersResponse.data) {
+          adminUsersResponse.data.forEach((admin) => {
+            userDetailsMap[admin.id] = {
               id: admin.id,
               name: admin.name,
               email: admin.email,
               role: admin.role,
-            }));
-          }
+            };
+          });
         }
 
-        const userDetailsMap: { [key: string]: any } = {};
-        [...companyUsers, ...adminUsers].forEach((user) => {
-          if (user && user.id) {
-            userDetailsMap[user.id] = user;
-          }
-        });
-
+        // Map tasks with user details
         const tasksWithDetails = data.map((task: any) => {
-          // Handle assigned users
           let assignedUserDetails = [];
           const assignedTo = task.assigned_to;
 
@@ -807,12 +808,13 @@ const SuperAdminTasksScreen = () => {
           };
         });
 
-        // Always set tasks directly when paginating or refreshing
+        // Update state with new tasks
         setTasks(tasksWithDetails);
         setFilteredTasks(tasksWithDetails);
       } catch (dataProcessingError) {
         console.error("Error processing task data:", dataProcessingError);
-        const basicTasks: ExtendedTask[] = data.map((task: any) => ({
+        // Fallback to basic task data if user processing fails
+        const basicTasks = data.map((task: any) => ({
           ...task,
           assignedUserDetails: [],
           modified_at: task.updated_at,
@@ -821,7 +823,6 @@ const SuperAdminTasksScreen = () => {
           reminder_days_before: task.reminder_days_before || 0,
         }));
 
-        // Always set tasks directly when paginating or refreshing
         setTasks(basicTasks);
         setFilteredTasks(basicTasks);
       }
