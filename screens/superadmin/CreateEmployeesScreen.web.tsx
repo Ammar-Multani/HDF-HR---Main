@@ -254,13 +254,13 @@ const CreateEmployeeScreen = () => {
       // Check network connectivity first
       const networkAvailable = await isNetworkAvailable();
       if (!networkAvailable) {
-        setErrorBannerMessage(t("superAdmin.employees.offlineCreateError"));
+        setErrorBannerMessage(t("superAdmin.employees.offlineError"));
         setErrorBannerVisible(true);
         return;
       }
 
       if (!user) {
-        setSnackbarMessage(t("common.error"));
+        setSnackbarMessage(t("superAdmin.employees.userInfoNotAvailable"));
         setSnackbarVisible(true);
         return;
       }
@@ -269,20 +269,24 @@ const CreateEmployeeScreen = () => {
       setSnackbarVisible(false);
       setErrorBannerVisible(false);
 
-      // Validate workload percentage
-      const workloadPercentage = parseInt(data.workload_percentage);
-      if (
-        isNaN(workloadPercentage) ||
-        workloadPercentage <= 0 ||
-        workloadPercentage > 100
-      ) {
-        setSnackbarMessage(t("superAdmin.employees.workloadInvalid"));
-        setSnackbarVisible(true);
-        setLoading(false);
-        return;
+      // Only validate workload percentage if provided
+      if (data.workload_percentage) {
+        const workloadPercentage = parseInt(data.workload_percentage);
+        if (
+          isNaN(workloadPercentage) ||
+          workloadPercentage <= 0 ||
+          workloadPercentage > 100
+        ) {
+          setSnackbarMessage(
+            t("superAdmin.employees.workloadPercentageInvalid")
+          );
+          setSnackbarVisible(true);
+          setLoading(false);
+          return;
+        }
       }
 
-      // Validate password strength
+      // Validate password
       if (data.password.length < 8) {
         setSnackbarMessage(t("superAdmin.employees.passwordLength"));
         setSnackbarVisible(true);
@@ -347,7 +351,7 @@ const CreateEmployeeScreen = () => {
         employment_type:
           data.employment_type === EmploymentType.FULL_TIME ||
           data.employment_type === EmploymentType.PART_TIME,
-        workload_percentage: workloadPercentage,
+        workload_percentage: data.workload_percentage,
         job_title: data.job_title,
         education: data.education,
         address: {
@@ -491,7 +495,7 @@ const CreateEmployeeScreen = () => {
         errorMessage.includes("connection") ||
         errorMessage.includes("offline")
       ) {
-        setErrorBannerMessage(t("superAdmin.employees.offlineCreateError"));
+        setErrorBannerMessage(t("superAdmin.employees.offlineError"));
         setErrorBannerVisible(true);
       } else {
         setSnackbarMessage(errorMessage);
@@ -668,24 +672,40 @@ const CreateEmployeeScreen = () => {
                       <View style={styles.halfInput}>
                         <Controller
                           control={control}
+                          name="first_name"
                           rules={{
                             required: t(
                               "superAdmin.employees.firstNameRequired"
                             ),
+                            minLength: {
+                              value: 2,
+                              message: t("superAdmin.employees.nameMinLength"),
+                            },
+                            maxLength: {
+                              value: 50,
+                              message: t("superAdmin.employees.nameMaxLength"),
+                            },
+                            pattern: {
+                              value: /^[a-zA-Z\s\-']+$/,
+                              message: t(
+                                "superAdmin.employees.nameInvalidChars"
+                              ),
+                            },
                           }}
                           render={({ field: { onChange, onBlur, value } }) => (
                             <TextInput
                               label={`${t("superAdmin.employees.firstName")} *`}
                               mode="outlined"
                               value={value}
-                              onChangeText={onChange}
+                              onChangeText={(text) =>
+                                onChange(text.replace(/[^a-zA-Z\s\-']/g, ""))
+                              }
                               onBlur={onBlur}
                               error={!!errors.first_name}
                               style={styles.input}
                               disabled={loading}
                             />
                           )}
-                          name="first_name"
                         />
                         {errors.first_name && (
                           <HelperText type="error">
@@ -697,24 +717,40 @@ const CreateEmployeeScreen = () => {
                       <View style={styles.halfInput}>
                         <Controller
                           control={control}
+                          name="last_name"
                           rules={{
                             required: t(
                               "superAdmin.employees.lastNameRequired"
                             ),
+                            minLength: {
+                              value: 2,
+                              message: t("superAdmin.employees.nameMinLength"),
+                            },
+                            maxLength: {
+                              value: 50,
+                              message: t("superAdmin.employees.nameMaxLength"),
+                            },
+                            pattern: {
+                              value: /^[a-zA-Z\s\-']+$/,
+                              message: t(
+                                "superAdmin.employees.nameInvalidChars"
+                              ),
+                            },
                           }}
                           render={({ field: { onChange, onBlur, value } }) => (
                             <TextInput
                               label={`${t("superAdmin.employees.lastName")} *`}
                               mode="outlined"
                               value={value}
-                              onChangeText={onChange}
+                              onChangeText={(text) =>
+                                onChange(text.replace(/[^a-zA-Z\s\-']/g, ""))
+                              }
                               onBlur={onBlur}
                               error={!!errors.last_name}
                               style={styles.input}
                               disabled={loading}
                             />
                           )}
-                          name="last_name"
                         />
                         {errors.last_name && (
                           <HelperText type="error">
@@ -726,15 +762,23 @@ const CreateEmployeeScreen = () => {
 
                     <Controller
                       control={control}
+                      name="phone_number"
                       rules={{
-                        required: t("superAdmin.employees.phoneNumberRequired"),
+                        pattern: {
+                          value: /^\+?[0-9]{8,15}$/,
+                          message: t(
+                            "superAdmin.employees.phoneNumberInvalidFormat"
+                          ),
+                        },
                       }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label={`${t("superAdmin.employees.phoneNumber")} *`}
+                          label={t("superAdmin.employees.phoneNumber")}
                           mode="outlined"
                           value={value}
-                          onChangeText={onChange}
+                          onChangeText={(text) =>
+                            onChange(text.replace(/[^0-9+]/g, ""))
+                          }
                           onBlur={onBlur}
                           error={!!errors.phone_number}
                           style={styles.input}
@@ -742,7 +786,6 @@ const CreateEmployeeScreen = () => {
                           disabled={loading}
                         />
                       )}
-                      name="phone_number"
                     />
                     {errors.phone_number && (
                       <HelperText type="error">
@@ -803,60 +846,18 @@ const CreateEmployeeScreen = () => {
 
                     <Controller
                       control={control}
-                      rules={{
-                        required: t("superAdmin.employees.nationalityRequired"),
-                      }}
+                      name="nationality"
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label={`${t("superAdmin.employees.nationality")} *`}
+                          label={t("superAdmin.employees.nationality")}
                           mode="outlined"
                           value={value}
                           onChangeText={onChange}
                           onBlur={onBlur}
-                          error={!!errors.nationality}
                           style={styles.input}
                           disabled={loading}
                         />
                       )}
-                      name="nationality"
-                    />
-                    {errors.nationality && (
-                      <HelperText type="error">
-                        {errors.nationality.message}
-                      </HelperText>
-                    )}
-
-                    <Text style={styles.inputLabel}>
-                      {t("superAdmin.employees.maritalStatus")} *
-                    </Text>
-                    <Controller
-                      control={control}
-                      render={({ field: { onChange, value } }) => (
-                        <SegmentedButtons
-                          value={value}
-                          onValueChange={onChange}
-                          buttons={[
-                            {
-                              value: MaritalStatus.SINGLE,
-                              label: t("superAdmin.employees.single"),
-                            },
-                            {
-                              value: MaritalStatus.MARRIED,
-                              label: t("superAdmin.employees.married"),
-                            },
-                            {
-                              value: MaritalStatus.DIVORCED,
-                              label: t("superAdmin.employees.divorced"),
-                            },
-                            {
-                              value: MaritalStatus.WIDOWED,
-                              label: t("superAdmin.employees.widowed"),
-                            },
-                          ]}
-                          style={styles.segmentedButtons}
-                        />
-                      )}
-                      name="marital_status"
                     />
                   </View>
                 </Surface>
@@ -884,20 +885,18 @@ const CreateEmployeeScreen = () => {
                   <View style={styles.cardContent}>
                     <Controller
                       control={control}
-                      rules={{ required: "Job title is required" }}
+                      name="job_title"
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="Job Title *"
+                          label={t("superAdmin.employees.jobTitle")}
                           mode="outlined"
                           value={value}
                           onChangeText={onChange}
                           onBlur={onBlur}
-                          error={!!errors.job_title}
                           style={styles.input}
                           disabled={loading}
                         />
                       )}
-                      name="job_title"
                     />
                     {errors.job_title && (
                       <HelperText type="error">
@@ -938,18 +937,18 @@ const CreateEmployeeScreen = () => {
 
                     <Controller
                       control={control}
+                      name="workload_percentage"
                       rules={{
-                        required: "Workload percentage is required",
                         validate: (value) =>
-                          !isNaN(parseInt(value)) &&
-                          parseInt(value) > 0 &&
-                          parseInt(value) <= 100
-                            ? true
-                            : "Workload must be between 1 and 100",
+                          !value ||
+                          (!isNaN(parseInt(value)) &&
+                            parseInt(value) > 0 &&
+                            parseInt(value) <= 100) ||
+                          t("superAdmin.employees.workloadPercentageInvalid"),
                       }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="Workload Percentage (%) *"
+                          label={t("superAdmin.employees.workloadPercentage")}
                           mode="outlined"
                           value={value}
                           onChangeText={onChange}
@@ -960,7 +959,6 @@ const CreateEmployeeScreen = () => {
                           disabled={loading}
                         />
                       )}
-                      name="workload_percentage"
                     />
                     {errors.workload_percentage && (
                       <HelperText type="error">
@@ -1021,20 +1019,18 @@ const CreateEmployeeScreen = () => {
                   <View style={styles.cardContent}>
                     <Controller
                       control={control}
-                      rules={{ required: "Bank name is required" }}
+                      name="bank_name"
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="Bank Name *"
+                          label={t("superAdmin.employees.bankName")}
                           mode="outlined"
                           value={value}
                           onChangeText={onChange}
                           onBlur={onBlur}
-                          error={!!errors.bank_name}
                           style={styles.input}
                           disabled={loading}
                         />
                       )}
-                      name="bank_name"
                     />
                     {errors.bank_name && (
                       <HelperText type="error">
@@ -1044,20 +1040,18 @@ const CreateEmployeeScreen = () => {
 
                     <Controller
                       control={control}
-                      rules={{ required: "Account number is required" }}
+                      name="account_number"
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="Account Number *"
+                          label="Account Number"
                           mode="outlined"
                           value={value}
                           onChangeText={onChange}
                           onBlur={onBlur}
-                          error={!!errors.account_number}
                           style={styles.input}
                           disabled={loading}
                         />
                       )}
-                      name="account_number"
                     />
                     {errors.account_number && (
                       <HelperText type="error">
@@ -1067,20 +1061,18 @@ const CreateEmployeeScreen = () => {
 
                     <Controller
                       control={control}
-                      rules={{ required: "IBAN is required" }}
+                      name="iban"
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="IBAN *"
+                          label="IBAN"
                           mode="outlined"
                           value={value}
                           onChangeText={onChange}
                           onBlur={onBlur}
-                          error={!!errors.iban}
                           style={styles.input}
                           disabled={loading}
                         />
                       )}
-                      name="iban"
                     />
                     {errors.iban && (
                       <HelperText type="error">
@@ -1090,20 +1082,18 @@ const CreateEmployeeScreen = () => {
 
                     <Controller
                       control={control}
-                      rules={{ required: "SWIFT code is required" }}
+                      name="swift_code"
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="SWIFT Code *"
+                          label="SWIFT Code"
                           mode="outlined"
                           value={value}
                           onChangeText={onChange}
                           onBlur={onBlur}
-                          error={!!errors.swift_code}
                           style={styles.input}
                           disabled={loading}
                         />
                       )}
-                      name="swift_code"
                     />
                     {errors.swift_code && (
                       <HelperText type="error">
@@ -1135,11 +1125,23 @@ const CreateEmployeeScreen = () => {
                   <View style={styles.cardContent}>
                     <Controller
                       control={control}
+                      name="email"
                       rules={{
                         required: t("superAdmin.employees.emailRequired"),
                         pattern: {
                           value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
                           message: t("superAdmin.employees.invalidEmail"),
+                        },
+                        validate: (value) => {
+                          const emailParts = value.split("@");
+                          if (
+                            emailParts.length !== 2 ||
+                            !emailParts[1].includes(".") ||
+                            emailParts[1].length < 3
+                          ) {
+                            return t("superAdmin.employees.invalidEmailDomain");
+                          }
+                          return true;
                         },
                       }}
                       render={({ field: { onChange, onBlur, value } }) => (
@@ -1147,7 +1149,7 @@ const CreateEmployeeScreen = () => {
                           label={`${t("superAdmin.employees.email")} *`}
                           mode="outlined"
                           value={value}
-                          onChangeText={onChange}
+                          onChangeText={(text) => onChange(text.toLowerCase())}
                           onBlur={onBlur}
                           error={!!errors.email}
                           style={styles.input}
@@ -1156,7 +1158,6 @@ const CreateEmployeeScreen = () => {
                           disabled={loading}
                         />
                       )}
-                      name="email"
                     />
                     {errors.email && (
                       <HelperText type="error">
@@ -1166,11 +1167,30 @@ const CreateEmployeeScreen = () => {
 
                     <Controller
                       control={control}
+                      name="password"
                       rules={{
                         required: t("superAdmin.employees.passwordRequired"),
                         minLength: {
                           value: 8,
-                          message: t("superAdmin.employees.passwordLength"),
+                          message: t("superAdmin.employees.passwordMinLength"),
+                        },
+                        pattern: {
+                          value:
+                            /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])[A-Za-z\d@$!%*?&#]{8,}$/,
+                          message: t(
+                            "superAdmin.employees.passwordComplexityRequirements"
+                          ),
+                        },
+                        validate: (value) => {
+                          if (value.includes(" ")) {
+                            return t("superAdmin.employees.passwordNoSpaces");
+                          }
+                          if (/(.)\1{2,}/.test(value)) {
+                            return t(
+                              "superAdmin.employees.passwordNoRepeatingChars"
+                            );
+                          }
+                          return true;
                         },
                       }}
                       render={({ field: { onChange, onBlur, value } }) => (
@@ -1186,7 +1206,6 @@ const CreateEmployeeScreen = () => {
                           disabled={loading}
                         />
                       )}
-                      name="password"
                     />
                     {errors.password && (
                       <HelperText type="error">
@@ -1198,7 +1217,7 @@ const CreateEmployeeScreen = () => {
                       {t("superAdmin.employees.inviteEmailHelper")}
                     </Text>
 
-                    <View style={styles.adminToggleContainer}>
+                    {/* <View style={styles.adminToggleContainer}>
                       <Text style={styles.adminToggleLabel}>
                         {t("superAdmin.employees.grantAdminPrivileges")}
                       </Text>
@@ -1207,7 +1226,7 @@ const CreateEmployeeScreen = () => {
                         onValueChange={handleAdminToggle}
                         disabled={loading}
                       />
-                    </View>
+                    </View> */}
                   </View>
                 </Surface>
               </Animated.View>

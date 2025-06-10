@@ -91,6 +91,7 @@ const CreateCompanyScreen = () => {
     formState: { errors },
     reset,
     watch,
+    register,
   } = useForm<CompanyFormData>({
     defaultValues: {
       company_name: "",
@@ -110,7 +111,88 @@ const CreateCompanyScreen = () => {
       stakeholder_name: "",
       stakeholder_percentage: "",
     },
+    mode: "onBlur",
   });
+
+  useEffect(() => {
+    // Register all fields with their validation rules
+    register("company_name", {
+      required: t("superAdmin.companies.companyNameRequired"),
+      minLength: {
+        value: 2,
+        message: t("superAdmin.companies.companyNameMinLength"),
+      },
+      maxLength: {
+        value: 100,
+        message: t("superAdmin.companies.companyNameMaxLength"),
+      },
+      pattern: {
+        value: /^[a-zA-Z0-9\s\-&.]+$/,
+        message: t("superAdmin.companies.companyNameInvalidChars"),
+      },
+    });
+    register("registration_number", {
+      required: t("superAdmin.companies.registrationNumberRequired"),
+      minLength: {
+        value: 5,
+        message: t("superAdmin.companies.registrationNumberMinLength"),
+      },
+      maxLength: {
+        value: 30,
+        message: t("superAdmin.companies.registrationNumberMaxLength"),
+      },
+    });
+    register("industry_type", {
+      required: t("superAdmin.companies.industryTypeRequired"),
+      minLength: {
+        value: 3,
+        message: t("superAdmin.companies.industryTypeMinLength"),
+      },
+      maxLength: {
+        value: 50,
+        message: t("superAdmin.companies.industryTypeMaxLength"),
+      },
+      pattern: {
+        value: /^[a-zA-Z\s\-&]{3,50}$/,
+        message: t("superAdmin.companies.industryTypeInvalidChars"),
+      },
+    });
+    register("contact_number", {
+      required: t("superAdmin.companies.contactNumberRequired"),
+      pattern: {
+        value: /^\+?[0-9]{8,15}$/,
+        message: t("superAdmin.companies.contactNumberInvalidFormat"),
+      },
+    });
+    register("address_postal_code", {
+      required: t("superAdmin.companies.postalCodeRequired"),
+      pattern: {
+        value: /^[A-Z0-9][A-Z0-9\s-]{1,8}[A-Z0-9]$/i,
+        message: t("superAdmin.companies.postalCodeInvalidFormat"),
+      },
+    });
+    register("admin_password", {
+      required: t("superAdmin.companies.adminPasswordRequired"),
+      minLength: {
+        value: 8,
+        message: t("superAdmin.companies.passwordMinLength"),
+      },
+      pattern: {
+        value:
+          /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])[A-Za-z\d@$!%*?&#]{8,}$/,
+        message: t("superAdmin.companies.passwordComplexityRequirements"),
+      },
+      validate: (value) => {
+        if (value.includes(" ")) {
+          return t("superAdmin.companies.passwordNoSpaces");
+        }
+        if (/(.)\1{2,}/.test(value)) {
+          return t("superAdmin.companies.passwordNoRepeatingChars");
+        }
+        return true;
+      },
+    });
+  }, [register, t]);
 
   const stakeholderName = watch("stakeholder_name");
   const stakeholderPercentage = watch("stakeholder_percentage");
@@ -150,19 +232,32 @@ const CreateCompanyScreen = () => {
       setLoading(true);
       setSnackbarVisible(false);
 
-      // Validate stakeholders
-      if (stakeholders.length > 0) {
-        const totalPercentage = stakeholders.reduce(
-          (sum, s) => sum + s.percentage,
-          0
-        );
+      // Validate stakeholders first
+      if (stakeholders.length === 0) {
+        setSnackbarMessage(t("superAdmin.companies.stakeholdersRequired"));
+        setSnackbarVisible(true);
+        setLoading(false);
+        return;
+      }
 
-        if (totalPercentage > 100) {
-          setSnackbarMessage(t("superAdmin.companies.totalPercentageExceeds"));
-          setSnackbarVisible(true);
-          setLoading(false);
-          return;
-        }
+      // Validate stakeholders total percentage
+      const totalPercentage = stakeholders.reduce(
+        (sum, s) => sum + s.percentage,
+        0
+      );
+
+      if (totalPercentage > 100) {
+        setSnackbarMessage(t("superAdmin.companies.totalPercentageExceeds"));
+        setSnackbarVisible(true);
+        setLoading(false);
+        return;
+      }
+
+      if (totalPercentage < 100) {
+        setSnackbarMessage(t("superAdmin.companies.totalPercentageMustBe100"));
+        setSnackbarVisible(true);
+        setLoading(false);
+        return;
       }
 
       // Validate email domain more thoroughly
@@ -393,9 +488,28 @@ const CreateCompanyScreen = () => {
                   )}
                   <Card.Content style={styles.cardContent}>
                     <Controller
+                      name="company_name"
                       control={control}
                       rules={{
                         required: t("superAdmin.companies.companyNameRequired"),
+                        minLength: {
+                          value: 2,
+                          message: t(
+                            "superAdmin.companies.companyNameMinLength"
+                          ),
+                        },
+                        maxLength: {
+                          value: 100,
+                          message: t(
+                            "superAdmin.companies.companyNameMaxLength"
+                          ),
+                        },
+                        pattern: {
+                          value: /^[a-zA-Z0-9\s\-&.]+$/,
+                          message: t(
+                            "superAdmin.companies.companyNameInvalidChars"
+                          ),
+                        },
                       }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
@@ -409,7 +523,6 @@ const CreateCompanyScreen = () => {
                           disabled={loading}
                         />
                       )}
-                      name="company_name"
                     />
                     {errors.company_name && (
                       <Text style={styles.errorText}>
@@ -418,17 +531,31 @@ const CreateCompanyScreen = () => {
                     )}
 
                     <Controller
+                      name="registration_number"
                       control={control}
                       rules={{
                         required: t(
                           "superAdmin.companies.registrationNumberRequired"
                         ),
+                        minLength: {
+                          value: 5,
+                          message: t(
+                            "superAdmin.companies.registrationNumberMinLength"
+                          ),
+                        },
+                        maxLength: {
+                          value: 20,
+                          message: t(
+                            "superAdmin.companies.registrationNumberMaxLength"
+                          ),
+                        },
+                        
                       }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
                           label={`${t("superAdmin.companies.registrationNumber")} *`}
                           mode="outlined"
-                          value={value}
+                          value={value?.toUpperCase()}
                           onChangeText={onChange}
                           onBlur={onBlur}
                           error={!!errors.registration_number}
@@ -436,7 +563,6 @@ const CreateCompanyScreen = () => {
                           disabled={loading}
                         />
                       )}
-                      name="registration_number"
                     />
                     {errors.registration_number && (
                       <Text style={styles.errorText}>
@@ -445,11 +571,30 @@ const CreateCompanyScreen = () => {
                     )}
 
                     <Controller
+                      name="industry_type"
                       control={control}
                       rules={{
                         required: t(
                           "superAdmin.companies.industryTypeRequired"
                         ),
+                        minLength: {
+                          value: 3,
+                          message: t(
+                            "superAdmin.companies.industryTypeMinLength"
+                          ),
+                        },
+                        maxLength: {
+                          value: 50,
+                          message: t(
+                            "superAdmin.companies.industryTypeMaxLength"
+                          ),
+                        },
+                        pattern: {
+                          value: /^[a-zA-Z\s\-&]{3,50}$/,
+                          message: t(
+                            "superAdmin.companies.industryTypeInvalidChars"
+                          ),
+                        },
                       }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
@@ -463,7 +608,6 @@ const CreateCompanyScreen = () => {
                           disabled={loading}
                         />
                       )}
-                      name="industry_type"
                     />
                     {errors.industry_type && (
                       <Text style={styles.errorText}>
@@ -472,18 +616,27 @@ const CreateCompanyScreen = () => {
                     )}
 
                     <Controller
+                      name="contact_number"
                       control={control}
                       rules={{
                         required: t(
                           "superAdmin.companies.contactNumberRequired"
                         ),
+                        pattern: {
+                          value: /^\+?[0-9]{8,15}$/,
+                          message: t(
+                            "superAdmin.companies.contactNumberInvalidFormat"
+                          ),
+                        },
                       }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
                           label={`${t("superAdmin.companies.contactNumber")} *`}
                           mode="outlined"
                           value={value}
-                          onChangeText={onChange}
+                          onChangeText={(text) =>
+                            onChange(text.replace(/[^0-9+]/g, ""))
+                          }
                           onBlur={onBlur}
                           error={!!errors.contact_number}
                           style={styles.input}
@@ -491,7 +644,6 @@ const CreateCompanyScreen = () => {
                           disabled={loading}
                         />
                       )}
-                      name="contact_number"
                     />
                     {errors.contact_number && (
                       <Text style={styles.errorText}>
@@ -533,6 +685,7 @@ const CreateCompanyScreen = () => {
                     )}
 
                     <Controller
+                      name="vat_type"
                       control={control}
                       rules={{
                         required: t("superAdmin.companies.vatTypeRequired"),
@@ -541,15 +694,17 @@ const CreateCompanyScreen = () => {
                         <TextInput
                           label={`${t("superAdmin.companies.vatType")} *`}
                           mode="outlined"
-                          value={value}
+                          value={value?.toUpperCase()}
                           onChangeText={onChange}
                           onBlur={onBlur}
                           error={!!errors.vat_type}
                           style={styles.input}
                           disabled={loading}
+                          placeholder={t(
+                            "superAdmin.companies.vatTypePlaceholder"
+                          )}
                         />
                       )}
-                      name="vat_type"
                     />
                     {errors.vat_type && (
                       <Text style={styles.errorText}>
@@ -763,24 +918,32 @@ const CreateCompanyScreen = () => {
                       <View style={styles.halfInput}>
                         <Controller
                           control={control}
+                          name="address_postal_code"
                           rules={{
                             required: t(
                               "superAdmin.companies.postalCodeRequired"
                             ),
+                            pattern: {
+                              value: /^[A-Z0-9][A-Z0-9\s-]{1,8}[A-Z0-9]$/i,
+                              message: t(
+                                "superAdmin.companies.postalCodeInvalidFormat"
+                              ),
+                            },
                           }}
                           render={({ field: { onChange, onBlur, value } }) => (
                             <TextInput
                               label={`${t("superAdmin.companies.postalCode")} *`}
                               mode="outlined"
                               value={value}
-                              onChangeText={onChange}
+                              onChangeText={(text) =>
+                                onChange(text.replace(/[^A-Za-z0-9\s-]/g, ""))
+                              }
                               onBlur={onBlur}
                               error={!!errors.address_postal_code}
                               style={styles.input}
                               disabled={loading}
                             />
                           )}
-                          name="address_postal_code"
                         />
                         {errors.address_postal_code && (
                           <Text style={styles.errorText}>
@@ -861,7 +1024,25 @@ const CreateCompanyScreen = () => {
                         ),
                         minLength: {
                           value: 8,
-                          message: t("superAdmin.companies.passwordLength"),
+                          message: t("superAdmin.companies.passwordMinLength"),
+                        },
+                        pattern: {
+                          value:
+                            /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])[A-Za-z\d@$!%*?&#]{8,}$/,
+                          message: t(
+                            "superAdmin.companies.passwordComplexityRequirements"
+                          ),
+                        },
+                        validate: (value) => {
+                          if (value.includes(" ")) {
+                            return t("superAdmin.companies.passwordNoSpaces");
+                          }
+                          if (/(.)\1{2,}/.test(value)) {
+                            return t(
+                              "superAdmin.companies.passwordNoRepeatingChars"
+                            );
+                          }
+                          return true;
                         },
                       }}
                       render={({ field: { onChange, onBlur, value } }) => (

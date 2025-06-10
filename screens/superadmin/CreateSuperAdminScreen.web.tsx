@@ -195,8 +195,8 @@ const CreateSuperAdminScreen = () => {
 
       setSnackbarMessage(
         emailSent
-          ? t("superAdmin.superAdmin.createSuccess")
-          : t("superAdmin.superAdmin.createSuccessNoEmail")
+          ? t("superAdmin.superAdminUsers.createSuccess")
+          : t("superAdmin.superAdminUsers.createSuccessNoEmail")
       );
       setSnackbarVisible(true);
 
@@ -210,7 +210,7 @@ const CreateSuperAdminScreen = () => {
     } catch (error: any) {
       console.error("Error creating super admin:", error);
       setSnackbarMessage(
-        error.message || t("superAdmin.superAdmin.createError")
+        error.message || t("superAdmin.superAdminUsers.createError")
       );
       setSnackbarVisible(true);
     } finally {
@@ -223,7 +223,7 @@ const CreateSuperAdminScreen = () => {
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
       <AppHeader
-        title={t("superAdmin.superAdmin.createAdmin")}
+        title={t("superAdmin.superAdminUsers.createAdmin")}
         showBackButton={true}
         showHelpButton={false}
         showProfileMenu={false}
@@ -260,7 +260,7 @@ const CreateSuperAdminScreen = () => {
                         />
                       </View>
                       <Text style={styles.cardTitle}>
-                        {t("superAdmin.superAdmin.adminInformation")}
+                        {t("superAdmin.superAdminUsers.adminInformation")}
                       </Text>
                     </View>
                   </View>
@@ -268,22 +268,42 @@ const CreateSuperAdminScreen = () => {
                   <View style={styles.cardContent}>
                     <Controller
                       control={control}
+                      name="name"
                       rules={{
-                        required: t("superAdmin.superAdmin.nameRequired"),
+                        required: t("superAdmin.superAdminUsers.nameRequired"),
+                        minLength: {
+                          value: 2,
+                          message: t(
+                            "superAdmin.superAdminUsers.nameMinLength"
+                          ),
+                        },
+                        maxLength: {
+                          value: 50,
+                          message: t(
+                            "superAdmin.superAdminUsers.nameMaxLength"
+                          ),
+                        },
+                        pattern: {
+                          value: /^[a-zA-Z\s\-']+$/,
+                          message: t(
+                            "superAdmin.superAdminUsers.nameInvalidChars"
+                          ),
+                        },
                       }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label={`${t("superAdmin.superAdmin.name")} *`}
+                          label={`${t("superAdmin.superAdminUsers.name")} *`}
                           mode="outlined"
                           value={value}
-                          onChangeText={onChange}
+                          onChangeText={(text) =>
+                            onChange(text.replace(/[^a-zA-Z\s\-']/g, ""))
+                          }
                           onBlur={onBlur}
                           error={!!errors.name}
                           style={styles.input}
                           disabled={loading}
                         />
                       )}
-                      name="name"
                     />
                     {errors.name && (
                       <HelperText type="error">
@@ -293,19 +313,33 @@ const CreateSuperAdminScreen = () => {
 
                     <Controller
                       control={control}
+                      name="email"
                       rules={{
-                        required: t("superAdmin.superAdmin.emailRequired"),
+                        required: t("superAdmin.superAdminUsers.emailRequired"),
                         pattern: {
                           value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                          message: t("superAdmin.superAdmin.invalidEmail"),
+                          message: t("superAdmin.superAdminUsers.invalidEmail"),
+                        },
+                        validate: (value) => {
+                          const emailParts = value.split("@");
+                          if (
+                            emailParts.length !== 2 ||
+                            !emailParts[1].includes(".") ||
+                            emailParts[1].length < 3
+                          ) {
+                            return t(
+                              "superAdmin.superAdminUsers.invalidEmailDomain"
+                            );
+                          }
+                          return true;
                         },
                       }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label={`${t("superAdmin.superAdmin.email")} *`}
+                          label={`${t("superAdmin.superAdminUsers.email")} *`}
                           mode="outlined"
                           value={value}
-                          onChangeText={onChange}
+                          onChangeText={(text) => onChange(text.toLowerCase())}
                           onBlur={onBlur}
                           error={!!errors.email}
                           style={styles.input}
@@ -314,7 +348,6 @@ const CreateSuperAdminScreen = () => {
                           disabled={loading}
                         />
                       )}
-                      name="email"
                     />
                     {errors.email && (
                       <HelperText type="error">
@@ -324,16 +357,41 @@ const CreateSuperAdminScreen = () => {
 
                     <Controller
                       control={control}
+                      name="password"
                       rules={{
-                        required: t("superAdmin.superAdmin.passwordRequired"),
+                        required: t(
+                          "superAdmin.superAdminUsers.passwordRequired"
+                        ),
                         minLength: {
                           value: 8,
-                          message: t("superAdmin.superAdmin.passwordLength"),
+                          message: t(
+                            "superAdmin.superAdminUsers.passwordMinLength"
+                          ),
+                        },
+                        pattern: {
+                          value:
+                            /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])[A-Za-z\d@$!%*?&#]{8,}$/,
+                          message: t(
+                            "superAdmin.superAdminUsers.passwordComplexityRequirements"
+                          ),
+                        },
+                        validate: (value) => {
+                          if (value.includes(" ")) {
+                            return t(
+                              "superAdmin.superAdminUsers.passwordNoSpaces"
+                            );
+                          }
+                          if (/(.)\1{2,}/.test(value)) {
+                            return t(
+                              "superAdmin.superAdminUsers.passwordNoRepeatingChars"
+                            );
+                          }
+                          return true;
                         },
                       }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label={`${t("superAdmin.superAdmin.password")} *`}
+                          label={`${t("superAdmin.superAdminUsers.password")} *`}
                           mode="outlined"
                           value={value}
                           onChangeText={onChange}
@@ -344,7 +402,6 @@ const CreateSuperAdminScreen = () => {
                           disabled={loading}
                         />
                       )}
-                      name="password"
                     />
                     {errors.password && (
                       <HelperText type="error">
@@ -354,23 +411,36 @@ const CreateSuperAdminScreen = () => {
 
                     <Controller
                       control={control}
+                      name="phone_number"
+                      rules={{
+                        pattern: {
+                          value: /^\+?[0-9]{8,15}$/,
+                          message: t(
+                            "superAdmin.superAdminUsers.phoneNumberInvalidFormat"
+                          ),
+                        },
+                      }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label={t("superAdmin.superAdmin.phoneNumberOptional")}
+                          label={t(
+                            "superAdmin.superAdminUsers.phoneNumberOptional"
+                          )}
                           mode="outlined"
                           value={value}
-                          onChangeText={onChange}
+                          onChangeText={(text) =>
+                            onChange(text.replace(/[^0-9+]/g, ""))
+                          }
                           onBlur={onBlur}
+                          error={!!errors.phone_number}
                           style={styles.input}
                           keyboardType="phone-pad"
                           disabled={loading}
                         />
                       )}
-                      name="phone_number"
                     />
 
                     <Text style={styles.helperText}>
-                      {t("superAdmin.superAdmin.helperText")}
+                      {t("superAdmin.superAdminUsers.helperText")}
                     </Text>
                   </View>
                 </Surface>
@@ -397,7 +467,7 @@ const CreateSuperAdminScreen = () => {
             disabled={loading}
             buttonColor={theme.colors.primary}
           >
-            {t("superAdmin.superAdmin.createAdmin")}
+            {t("superAdmin.superAdminUsers.createAdmin")}
           </Button>
         </View>
       </Surface>

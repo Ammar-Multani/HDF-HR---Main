@@ -202,8 +202,29 @@ const EditCompanyScreen = () => {
     try {
       setSubmitting(true);
 
+      // Validate stakeholders first
       if (stakeholders.length === 0) {
-        setSnackbarMessage(t("superAdmin.companies.noStakeholdersAdded"));
+        setSnackbarMessage(t("superAdmin.companies.stakeholdersRequired"));
+        setSnackbarVisible(true);
+        setSubmitting(false);
+        return;
+      }
+
+      // Validate stakeholders total percentage
+      const totalPercentage = stakeholders.reduce(
+        (sum, s) => sum + s.percentage,
+        0
+      );
+
+      if (totalPercentage > 100) {
+        setSnackbarMessage(t("superAdmin.companies.totalPercentageExceeds"));
+        setSnackbarVisible(true);
+        setSubmitting(false);
+        return;
+      }
+
+      if (totalPercentage < 100) {
+        setSnackbarMessage(t("superAdmin.companies.totalPercentageMustBe100"));
         setSnackbarVisible(true);
         setSubmitting(false);
         return;
@@ -355,10 +376,31 @@ const EditCompanyScreen = () => {
                   <Card.Content style={styles.cardContent}>
                     <Controller
                       control={control}
-                      rules={{ required: "Company name is required" }}
+                      name="company_name"
+                      rules={{
+                        required: t("superAdmin.companies.companyNameRequired"),
+                        minLength: {
+                          value: 2,
+                          message: t(
+                            "superAdmin.companies.companyNameMinLength"
+                          ),
+                        },
+                        maxLength: {
+                          value: 100,
+                          message: t(
+                            "superAdmin.companies.companyNameMaxLength"
+                          ),
+                        },
+                        pattern: {
+                          value: /^[a-zA-Z0-9\s\-&.]+$/,
+                          message: t(
+                            "superAdmin.companies.companyNameInvalidChars"
+                          ),
+                        },
+                      }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="Company Name *"
+                          label={`${t("superAdmin.companies.companyName")} *`}
                           mode="outlined"
                           value={value}
                           onChangeText={onChange}
@@ -368,7 +410,6 @@ const EditCompanyScreen = () => {
                           disabled={submitting}
                         />
                       )}
-                      name="company_name"
                     />
                     {errors.company_name && (
                       <Text style={styles.errorText}>
@@ -378,10 +419,27 @@ const EditCompanyScreen = () => {
 
                     <Controller
                       control={control}
-                      rules={{ required: "Registration number is required" }}
+                      name="registration_number"
+                      rules={{
+                        required: t(
+                          "superAdmin.companies.registrationNumberRequired"
+                        ),
+                        minLength: {
+                          value: 5,
+                          message: t(
+                            "superAdmin.companies.registrationNumberMinLength"
+                          ),
+                        },
+                        maxLength: {
+                          value: 30,
+                          message: t(
+                            "superAdmin.companies.registrationNumberMaxLength"
+                          ),
+                        },
+                      }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="Registration Number *"
+                          label={`${t("superAdmin.companies.registrationNumber")} *`}
                           mode="outlined"
                           value={value}
                           onChangeText={onChange}
@@ -391,7 +449,6 @@ const EditCompanyScreen = () => {
                           disabled={submitting}
                         />
                       )}
-                      name="registration_number"
                     />
                     {errors.registration_number && (
                       <Text style={styles.errorText}>
@@ -401,10 +458,33 @@ const EditCompanyScreen = () => {
 
                     <Controller
                       control={control}
-                      rules={{ required: "Industry type is required" }}
+                      name="industry_type"
+                      rules={{
+                        required: t(
+                          "superAdmin.companies.industryTypeRequired"
+                        ),
+                        minLength: {
+                          value: 3,
+                          message: t(
+                            "superAdmin.companies.industryTypeMinLength"
+                          ),
+                        },
+                        maxLength: {
+                          value: 50,
+                          message: t(
+                            "superAdmin.companies.industryTypeMaxLength"
+                          ),
+                        },
+                        pattern: {
+                          value: /^[a-zA-Z\s\-&]{3,50}$/,
+                          message: t(
+                            "superAdmin.companies.industryTypeInvalidChars"
+                          ),
+                        },
+                      }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="Industry Type *"
+                          label={`${t("superAdmin.companies.industryType")} *`}
                           mode="outlined"
                           value={value}
                           onChangeText={onChange}
@@ -414,7 +494,6 @@ const EditCompanyScreen = () => {
                           disabled={submitting}
                         />
                       )}
-                      name="industry_type"
                     />
                     {errors.industry_type && (
                       <Text style={styles.errorText}>
@@ -424,13 +503,26 @@ const EditCompanyScreen = () => {
 
                     <Controller
                       control={control}
-                      rules={{ required: "Contact number is required" }}
+                      name="contact_number"
+                      rules={{
+                        required: t(
+                          "superAdmin.companies.contactNumberRequired"
+                        ),
+                        pattern: {
+                          value: /^\+?[0-9]{8,15}$/,
+                          message: t(
+                            "superAdmin.companies.contactNumberInvalidFormat"
+                          ),
+                        },
+                      }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="Contact Number *"
+                          label={`${t("superAdmin.companies.contactNumber")} *`}
                           mode="outlined"
                           value={value}
-                          onChangeText={onChange}
+                          onChangeText={(text) =>
+                            onChange(text.replace(/[^0-9+]/g, ""))
+                          }
                           onBlur={onBlur}
                           error={!!errors.contact_number}
                           style={styles.input}
@@ -438,7 +530,6 @@ const EditCompanyScreen = () => {
                           disabled={submitting}
                         />
                       )}
-                      name="contact_number"
                     />
                     {errors.contact_number && (
                       <Text style={styles.errorText}>
@@ -448,16 +539,19 @@ const EditCompanyScreen = () => {
 
                     <Controller
                       control={control}
+                      name="contact_email"
                       rules={{
-                        required: "Contact email is required",
+                        required: t(
+                          "superAdmin.companies.contactEmailRequired"
+                        ),
                         pattern: {
                           value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                          message: "Invalid email address",
+                          message: t("superAdmin.companies.invalidEmail"),
                         },
                       }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="Contact Email *"
+                          label={`${t("superAdmin.companies.contactEmail")} *`}
                           mode="outlined"
                           value={value}
                           onChangeText={onChange}
@@ -469,7 +563,6 @@ const EditCompanyScreen = () => {
                           disabled={submitting}
                         />
                       )}
-                      name="contact_email"
                     />
                     {errors.contact_email && (
                       <Text style={styles.errorText}>
@@ -479,10 +572,13 @@ const EditCompanyScreen = () => {
 
                     <Controller
                       control={control}
-                      rules={{ required: "VAT type is required" }}
+                      name="vat_type"
+                      rules={{
+                        required: t("superAdmin.companies.vatTypeRequired"),
+                      }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="VAT Type *"
+                          label={`${t("superAdmin.companies.vatType")} *`}
                           mode="outlined"
                           value={value}
                           onChangeText={onChange}
@@ -490,9 +586,11 @@ const EditCompanyScreen = () => {
                           error={!!errors.vat_type}
                           style={styles.input}
                           disabled={submitting}
+                          placeholder={t(
+                            "superAdmin.companies.vatTypePlaceholder"
+                          )}
                         />
                       )}
-                      name="vat_type"
                     />
                     {errors.vat_type && (
                       <Text style={styles.errorText}>
@@ -702,20 +800,32 @@ const EditCompanyScreen = () => {
                       <View style={styles.halfInput}>
                         <Controller
                           control={control}
-                          rules={{ required: "Postal code is required" }}
+                          name="address_postal_code"
+                          rules={{
+                            required: t(
+                              "superAdmin.companies.postalCodeRequired"
+                            ),
+                            pattern: {
+                              value: /^[A-Z0-9][A-Z0-9\s-]{1,8}[A-Z0-9]$/i,
+                              message: t(
+                                "superAdmin.companies.postalCodeInvalidFormat"
+                              ),
+                            },
+                          }}
                           render={({ field: { onChange, onBlur, value } }) => (
                             <TextInput
-                              label="Postal Code *"
+                              label={`${t("superAdmin.companies.postalCode")} *`}
                               mode="outlined"
                               value={value}
-                              onChangeText={onChange}
+                              onChangeText={(text) =>
+                                onChange(text.replace(/[^A-Za-z0-9\s-]/g, ""))
+                              }
                               onBlur={onBlur}
                               error={!!errors.address_postal_code}
                               style={styles.input}
                               disabled={submitting}
                             />
                           )}
-                          name="address_postal_code"
                         />
                         {errors.address_postal_code && (
                           <Text style={styles.errorText}>

@@ -636,24 +636,40 @@ const EditCompanyAdminScreen = () => {
 
                     <Controller
                       control={control}
+                      name="first_name"
                       rules={{
                         required: t(
                           "superAdmin.companyAdmin.firstNameRequired"
                         ),
+                        minLength: {
+                          value: 2,
+                          message: t("superAdmin.companyAdmin.nameMinLength"),
+                        },
+                        maxLength: {
+                          value: 50,
+                          message: t("superAdmin.companyAdmin.nameMaxLength"),
+                        },
+                        pattern: {
+                          value: /^[a-zA-Z\s\-']+$/,
+                          message: t(
+                            "superAdmin.companyAdmin.nameInvalidChars"
+                          ),
+                        },
                       }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
                           label={`${t("superAdmin.companyAdmin.firstName")} *`}
                           mode="outlined"
                           value={value}
-                          onChangeText={onChange}
+                          onChangeText={(text) =>
+                            onChange(text.replace(/[^a-zA-Z\s\-']/g, ""))
+                          }
                           onBlur={onBlur}
                           error={!!errors.first_name}
                           style={styles.input}
                           disabled={submitting}
                         />
                       )}
-                      name="first_name"
                     />
                     {errors.first_name && (
                       <HelperText type="error">
@@ -663,22 +679,38 @@ const EditCompanyAdminScreen = () => {
 
                     <Controller
                       control={control}
+                      name="last_name"
                       rules={{
                         required: t("superAdmin.companyAdmin.lastNameRequired"),
+                        minLength: {
+                          value: 2,
+                          message: t("superAdmin.companyAdmin.nameMinLength"),
+                        },
+                        maxLength: {
+                          value: 50,
+                          message: t("superAdmin.companyAdmin.nameMaxLength"),
+                        },
+                        pattern: {
+                          value: /^[a-zA-Z\s\-']+$/,
+                          message: t(
+                            "superAdmin.companyAdmin.nameInvalidChars"
+                          ),
+                        },
                       }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
                           label={`${t("superAdmin.companyAdmin.lastName")} *`}
                           mode="outlined"
                           value={value}
-                          onChangeText={onChange}
+                          onChangeText={(text) =>
+                            onChange(text.replace(/[^a-zA-Z\s\-']/g, ""))
+                          }
                           onBlur={onBlur}
                           error={!!errors.last_name}
                           style={styles.input}
                           disabled={submitting}
                         />
                       )}
-                      name="last_name"
                     />
                     {errors.last_name && (
                       <HelperText type="error">
@@ -688,11 +720,25 @@ const EditCompanyAdminScreen = () => {
 
                     <Controller
                       control={control}
+                      name="email"
                       rules={{
                         required: t("superAdmin.companyAdmin.emailRequired"),
                         pattern: {
                           value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                          message: t("superAdmin.companyAdmin.validEmail"),
+                          message: t("superAdmin.companyAdmin.invalidEmail"),
+                        },
+                        validate: (value) => {
+                          const emailParts = value.split("@");
+                          if (
+                            emailParts.length !== 2 ||
+                            !emailParts[1].includes(".") ||
+                            emailParts[1].length < 3
+                          ) {
+                            return t(
+                              "superAdmin.companyAdmin.invalidEmailDomain"
+                            );
+                          }
+                          return true;
                         },
                       }}
                       render={({ field: { onChange, onBlur, value } }) => (
@@ -700,7 +746,7 @@ const EditCompanyAdminScreen = () => {
                           label={`${t("superAdmin.companyAdmin.email")} *`}
                           mode="outlined"
                           value={value}
-                          onChangeText={onChange}
+                          onChangeText={(text) => onChange(text.toLowerCase())}
                           onBlur={onBlur}
                           error={!!errors.email}
                           style={styles.input}
@@ -709,7 +755,6 @@ const EditCompanyAdminScreen = () => {
                           disabled={submitting}
                         />
                       )}
-                      name="email"
                     />
                     {errors.email && (
                       <HelperText type="error">
@@ -743,36 +788,80 @@ const EditCompanyAdminScreen = () => {
                   <View style={styles.cardContent}>
                     <Controller
                       control={control}
+                      name="phone_number"
+                      rules={{
+                        pattern: {
+                          value: /^\+?[0-9]{8,15}$/,
+                          message: t(
+                            "superAdmin.companyAdmin.phoneNumberInvalidFormat"
+                          ),
+                        },
+                      }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
                           label={t("superAdmin.companyAdmin.phoneNumber")}
                           mode="outlined"
                           value={value}
-                          onChangeText={onChange}
+                          onChangeText={(text) =>
+                            onChange(text.replace(/[^0-9+]/g, ""))
+                          }
                           onBlur={onBlur}
+                          error={!!errors.phone_number}
                           style={styles.input}
                           keyboardType="phone-pad"
                           disabled={submitting}
                         />
                       )}
-                      name="phone_number"
                     />
+                    {errors.phone_number && (
+                      <HelperText type="error">
+                        {errors.phone_number.message}
+                      </HelperText>
+                    )}
 
                     <Controller
                       control={control}
+                      name="job_title"
+                      rules={{
+                        minLength: {
+                          value: 2,
+                          message: t(
+                            "superAdmin.companyAdmin.jobTitleMinLength"
+                          ),
+                        },
+                        maxLength: {
+                          value: 50,
+                          message: t(
+                            "superAdmin.companyAdmin.jobTitleMaxLength"
+                          ),
+                        },
+                        pattern: {
+                          value: /^[a-zA-Z\s\-&.]+$/,
+                          message: t(
+                            "superAdmin.companyAdmin.jobTitleInvalidChars"
+                          ),
+                        },
+                      }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
                           label={t("superAdmin.companyAdmin.jobTitle")}
                           mode="outlined"
                           value={value}
-                          onChangeText={onChange}
+                          onChangeText={(text) =>
+                            onChange(text.replace(/[^a-zA-Z\s\-&.]/g, ""))
+                          }
                           onBlur={onBlur}
+                          error={!!errors.job_title}
                           style={styles.input}
                           disabled={submitting}
                         />
                       )}
-                      name="job_title"
                     />
+                    {errors.job_title && (
+                      <HelperText type="error">
+                        {errors.job_title.message}
+                      </HelperText>
+                    )}
 
                     <View style={styles.statusSection}>
                       <Text style={styles.sectionTitle}>
@@ -811,36 +900,34 @@ const EditCompanyAdminScreen = () => {
                     </View>
                   </View>
                 </Surface>
-
-                <View style={styles.bottomBarContent}>
-                  <View style={styles.actionButtons}>
-                    <Button
-                      mode="outlined"
-                      onPress={() => navigation.goBack()}
-                      style={styles.button}
-                      disabled={submitting}
-                    >
-                      {t("common.cancel")}
-                    </Button>
-                    <Button
-                      mode="contained"
-                      onPress={handleSubmit(onSubmit)}
-                      style={[
-                        styles.button,
-                        { backgroundColor: theme.colors.primary },
-                      ]}
-                      loading={submitting}
-                      disabled={submitting || !networkStatus}
-                    >
-                      {t("superAdmin.companyAdmin.updateAdmin")}
-                    </Button>
-                  </View>
-                </View>
               </Animated.View>
             </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      <Surface style={styles.bottomBar}>
+        <View style={styles.bottomBarContent}>
+          <View style={styles.actionButtons}>
+            <Button
+              mode="outlined"
+              onPress={() => navigation.goBack()}
+              style={styles.button}
+              disabled={submitting}
+          >
+            {t("common.cancel")}
+          </Button>
+          <Button
+            mode="contained"
+            onPress={handleSubmit(onSubmit)}
+            style={[styles.button, { backgroundColor: theme.colors.primary }]}
+            loading={submitting}
+            disabled={submitting || !networkStatus}
+          >
+            {t("superAdmin.companyAdmin.updateAdmin")}
+          </Button>
+          </View>
+        </View>
+      </Surface>
 
       <CustomSnackbar
         visible={snackbarVisible}
@@ -995,11 +1082,19 @@ const styles = StyleSheet.create({
     color: "#64748b",
     marginTop: 4,
   },
+  bottomBar: {    
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+    padding: 16,
+  },
   bottomBarContent: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    alignItems: "center",
-    marginTop: 24,
+    gap: 12,
+    maxWidth: 1400,
+    marginHorizontal: "auto",
+    width: "100%",
   },
   actionButtons: {
     flexDirection: "row",

@@ -39,6 +39,7 @@ import { UserStatus } from "../../types";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Animated, { FadeIn } from "react-native-reanimated";
 import CustomSnackbar from "../../components/CustomSnackbar";
+import { useTranslation } from "react-i18next";
 
 type EditSuperAdminRouteParams = {
   adminId: string;
@@ -167,6 +168,7 @@ const EditSuperAdminScreen = () => {
     useRoute<RouteProp<Record<string, EditSuperAdminRouteParams>, string>>();
   const { adminId } = route.params;
   const dimensions = useWindowDimensions();
+  const { t } = useTranslation();
 
   // Calculate responsive breakpoints
   const isLargeScreen = dimensions.width >= 1440;
@@ -626,20 +628,42 @@ const EditSuperAdminScreen = () => {
                   <View style={styles.cardContent}>
                     <Controller
                       control={control}
-                      rules={{ required: "Name is required" }}
+                      name="name"
+                      rules={{
+                        required: t("superAdmin.superAdminUsers.nameRequired"),
+                        minLength: {
+                          value: 2,
+                          message: t(
+                            "superAdmin.superAdminUsers.nameMinLength"
+                          ),
+                        },
+                        maxLength: {
+                          value: 50,
+                          message: t(
+                            "superAdmin.superAdminUsers.nameMaxLength"
+                          ),
+                        },
+                        pattern: {
+                          value: /^[a-zA-Z\s\-']+$/,
+                          message: t(
+                            "superAdmin.superAdminUsers.nameInvalidChars"
+                          ),
+                        },
+                      }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="Name *"
+                          label={`${t("superAdmin.superAdminUsers.name")} *`}
                           mode="outlined"
                           value={value}
-                          onChangeText={onChange}
+                          onChangeText={(text) =>
+                            onChange(text.replace(/[^a-zA-Z\s\-']/g, ""))
+                          }
                           onBlur={onBlur}
                           error={!!errors.name}
                           style={styles.input}
                           disabled={submitting}
                         />
                       )}
-                      name="name"
                     />
                     {errors.name && (
                       <HelperText type="error">
@@ -649,19 +673,33 @@ const EditSuperAdminScreen = () => {
 
                     <Controller
                       control={control}
+                      name="email"
                       rules={{
-                        required: "Email is required",
+                        required: t("superAdmin.superAdminUsers.emailRequired"),
                         pattern: {
                           value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                          message: "Invalid email address",
+                          message: t("superAdmin.superAdminUsers.invalidEmail"),
+                        },
+                        validate: (value) => {
+                          const emailParts = value.split("@");
+                          if (
+                            emailParts.length !== 2 ||
+                            !emailParts[1].includes(".") ||
+                            emailParts[1].length < 3
+                          ) {
+                            return t(
+                              "superAdmin.superAdminUsers.invalidEmailDomain"
+                            );
+                          }
+                          return true;
                         },
                       }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="Email *"
+                          label={`${t("superAdmin.superAdminUsers.email")} *`}
                           mode="outlined"
                           value={value}
-                          onChangeText={onChange}
+                          onChangeText={(text) => onChange(text.toLowerCase())}
                           onBlur={onBlur}
                           error={!!errors.email}
                           style={styles.input}
@@ -670,7 +708,6 @@ const EditSuperAdminScreen = () => {
                           disabled={submitting}
                         />
                       )}
-                      name="email"
                     />
                     {errors.email && (
                       <HelperText type="error">
@@ -680,20 +717,38 @@ const EditSuperAdminScreen = () => {
 
                     <Controller
                       control={control}
+                      name="phone_number"
+                      rules={{
+                        pattern: {
+                          value: /^\+?[0-9]{8,15}$/,
+                          message: t(
+                            "superAdmin.superAdminUsers.phoneNumberInvalidFormat"
+                          ),
+                        },
+                      }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="Phone Number"
+                          label={t(
+                            "superAdmin.superAdminUsers.phoneNumberOptional"
+                          )}
                           mode="outlined"
                           value={value}
-                          onChangeText={onChange}
+                          onChangeText={(text) =>
+                            onChange(text.replace(/[^0-9+]/g, ""))
+                          }
                           onBlur={onBlur}
+                          error={!!errors.phone_number}
                           style={styles.input}
                           keyboardType="phone-pad"
                           disabled={submitting}
                         />
                       )}
-                      name="phone_number"
                     />
+                    {errors.phone_number && (
+                      <HelperText type="error">
+                        {errors.phone_number.message}
+                      </HelperText>
+                    )}
                   </View>
                 </Surface>
 
@@ -737,33 +792,33 @@ const EditSuperAdminScreen = () => {
                     </Text>
                   </View>
                 </Surface>
-
-                <View style={styles.bottomBarContent}>
-                  <Button
-                    mode="outlined"
-                    onPress={() => navigation.goBack()}
-                    style={styles.button}
-                    disabled={submitting}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    mode="contained"
-                    onPress={handleSubmit(onSubmit)}
-                    style={styles.button}
-                    loading={submitting}
-                    disabled={submitting || !networkStatus}
-                    buttonColor={theme.colors.primary}
-                  >
-                    Update Admin
-                  </Button>
-                </View>
               </Animated.View>
             </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-
+      <Surface style={styles.bottomBar}>
+        <View style={styles.bottomBarContent}>
+          <Button
+            mode="outlined"
+            onPress={() => navigation.goBack()}
+            style={styles.button}
+            disabled={submitting}
+          >
+            Cancel
+          </Button>
+          <Button
+            mode="contained"
+            onPress={handleSubmit(onSubmit)}
+            style={styles.button}
+            loading={submitting}
+            disabled={submitting || !networkStatus}
+            buttonColor={theme.colors.primary}
+          >
+            Update Admin
+          </Button>
+        </View>
+      </Surface>
       <CustomSnackbar
         visible={snackbarVisible}
         message={snackbarMessage}
@@ -889,12 +944,19 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins-Regular",
     marginTop: 4,
   },
+  bottomBar: {    
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+    padding: 16,
+  },
   bottomBarContent: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    alignItems: "center",
-    padding: 16,
     gap: 12,
+    maxWidth: 1400,
+    marginHorizontal: "auto",
+    width: "100%",
   },
   button: {
     minWidth: 120,
