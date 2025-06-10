@@ -1,14 +1,6 @@
 import * as Crypto from "expo-crypto";
 import { encode as base64Encode } from "base-64";
 import { t } from "i18next";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { supabase } from "../lib/supabase";
-
-// Add these constants at the top after imports
-export const AUTH_TOKEN_KEY = "auth_token";
-export const USER_DATA_KEY = "user_data";
-export const USER_ROLE_KEY = "user_role";
-export const AUTH_STATE_VERSION = "auth_state_v1";
 
 /**
  * Hashes a password using PBKDF2 via expo-crypto
@@ -188,7 +180,7 @@ export const generateJWT = async (userData: {
     email: userData.email,
     role: userData.role || "user",
     iat: now,
-    exp: now + 60 * 60 * 24, // Token expires in 24 hours
+    exp: now + 60 * 60 * 24 * 7, // Token expires in 7 days (changed from 24 hours)
     iss: "businessmanagementapp",
   };
 
@@ -275,36 +267,4 @@ export const checkUserStatus = async (
     isActive: false,
     message: t("login.userNotFound"),
   };
-};
-
-/**
- * Invalidates all sessions for a user
- */
-export const invalidateAllUserSessions = async (
-  userId: string
-): Promise<void> => {
-  try {
-    // Update the user's token version to invalidate all existing JWTs
-    await supabase
-      .from("users")
-      .update({
-        token_version: "token_version + 1", // Changed from sql template literal
-        last_password_reset: new Date().toISOString(),
-      })
-      .eq("id", userId);
-
-    // Clear local storage
-    await AsyncStorage.multiRemove([
-      AUTH_TOKEN_KEY,
-      USER_DATA_KEY,
-      USER_ROLE_KEY,
-      AUTH_STATE_VERSION,
-    ]);
-
-    // Force clear the supabase session
-    await supabase.auth.signOut();
-  } catch (error) {
-    console.error("Error invalidating sessions:", error);
-    throw error;
-  }
 };
