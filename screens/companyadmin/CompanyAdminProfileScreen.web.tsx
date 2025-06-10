@@ -41,6 +41,7 @@ import CustomSnackbar from "../../components/CustomSnackbar";
 import { t } from "i18next";
 import { initEmailService } from "../../utils/emailService";
 import CustomLanguageSelector from "../../components/CustomLanguageSelector";
+import HelpGuideModal from "../../components/HelpGuideModal";
 
 // Add Shimmer component for loading states
 interface ShimmerProps {
@@ -488,6 +489,7 @@ const CompanyAdminProfileScreen = () => {
     useState(false);
   const [deleteVerificationText, setDeleteVerificationText] = useState("");
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [helpModalVisible, setHelpModalVisible] = useState(false);
 
   // Initialize email service
   useEffect(() => {
@@ -1053,6 +1055,51 @@ ${exportData.activityHistory.activities.join("\n")}
     }
   };
 
+  // Define help guide content
+  const helpGuideSteps = [
+    {
+      title: "Personal Information",
+      icon: "account-edit",
+      description:
+        "Update your personal details including first name, last name, and phone number. Your email address is displayed but cannot be modified for security reasons.",
+    },
+    {
+      title: "Company Information",
+      icon: "domain",
+      description:
+        "View your company details including company name, registration number, and industry type. This information is managed by system administrators.",
+    },
+    {
+      title: "Account Settings",
+      icon: "account-cog",
+      description:
+        "Manage your account settings including password reset, data export, and language preferences. Access advanced settings for additional options.",
+    },
+    {
+      title: "Security Management",
+      icon: "shield-account",
+      description:
+        "Reset your password and manage account security. Password reset links will be sent to your registered email address.",
+    },
+    {
+      title: "Data Management",
+      icon: "database-export",
+      description:
+        "Export your personal data and company information in a secure format. Downloaded data includes profile details and activity history.",
+    },
+  ];
+
+  const helpGuideNote = {
+    title: "Important Notes",
+    content: [
+      "Keep your personal information up to date for accurate communication",
+      "Password reset links are valid for a limited time",
+      "Exported data is provided in a secure, readable format",
+      "Some settings may require additional verification",
+      "Contact support if you need help with account management",
+    ],
+  };
+
   if (loading) {
     return (
       <SafeAreaView
@@ -1248,10 +1295,18 @@ ${exportData.activityHistory.activities.join("\n")}
         subtitle="Manage your account"
         showBackButton={false}
         showHelpButton={true}
-        onHelpPress={() => {
-          navigation.navigate("Help" as never);
-        }}
+        onHelpPress={() => setHelpModalVisible(true)}
         showLogo={false}
+      />
+
+      <HelpGuideModal
+        visible={helpModalVisible}
+        onDismiss={() => setHelpModalVisible(false)}
+        title="Profile Management Guide"
+        description="Learn how to manage your profile settings and account preferences effectively."
+        steps={helpGuideSteps}
+        note={helpGuideNote}
+        buttonLabel="Got it"
       />
 
       <KeyboardAvoidingView
@@ -1308,10 +1363,7 @@ ${exportData.activityHistory.activities.join("\n")}
                   {/* Company Information Card */}
                   <Animated.View entering={FadeIn.delay(200)}>
                     <Surface
-                      style={[
-                        styles.detailsCard,
-                        { marginBottom: 15},
-                      ]}
+                      style={[styles.detailsCard, { marginBottom: 15 }]}
                       elevation={1}
                     >
                       <View style={styles.cardHeader}>
@@ -1354,7 +1406,7 @@ ${exportData.activityHistory.activities.join("\n")}
                       </View>
                     </Surface>
                   </Animated.View>
-                  
+
                   {/* Personal Information Card */}
                   <Animated.View entering={FadeIn.delay(300)}>
                     <Surface style={styles.detailsCard}>
@@ -1618,12 +1670,15 @@ ${exportData.activityHistory.activities.join("\n")}
                       </View>
                     </Surface>
                   </Animated.View>
-                  <Animated.View entering={FadeIn.delay(200)} style={{ marginTop: 16 }}>
+                  <Animated.View
+                    entering={FadeIn.delay(200)}
+                    style={{ marginTop: 16 }}
+                  >
                     <Surface style={styles.detailsCard}>
-                    <View style={styles.cardContent}>
-                      <View style={styles.settingItem}>
-                        <View style={styles.settingItemContent}>
-                          <MaterialCommunityIcons
+                      <View style={styles.cardContent}>
+                        <View style={styles.settingItem}>
+                          <View style={styles.settingItemContent}>
+                            <MaterialCommunityIcons
                               name="translate"
                               size={24}
                               color="rgba(54,105,157,255)"
@@ -1633,7 +1688,7 @@ ${exportData.activityHistory.activities.join("\n")}
                             </Text>
                           </View>
                           <View style={styles.languageSelectorContainer}>
-                          <CustomLanguageSelector compact={true} />
+                            <CustomLanguageSelector compact={true} />
                           </View>
                         </View>
                       </View>

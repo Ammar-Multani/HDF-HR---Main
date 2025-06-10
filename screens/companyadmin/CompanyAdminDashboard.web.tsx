@@ -29,6 +29,7 @@ import Animated, {
   withTiming,
   withSequence,
 } from "react-native-reanimated";
+import HelpGuideModal from "../../components/HelpGuideModal";
 
 const { width } = Dimensions.get("window");
 
@@ -140,6 +141,47 @@ const CompanyAdminDashboard = () => {
     width: Dimensions.get("window").width,
     height: Dimensions.get("window").height,
   });
+
+  const [helpModalVisible, setHelpModalVisible] = useState(false);
+
+  // Define help guide content
+  const helpGuideSteps = [
+    {
+      title: "Overview Statistics",
+      icon: "chart-box",
+      description:
+        "View key metrics including total employees, tasks, and forms. Growth percentages show changes from the previous period.",
+    },
+    {
+      title: "Employee Analytics",
+      icon: "account-group",
+      description:
+        "Track employee onboarding trends with monthly charts and view top performing employees based on form submissions.",
+    },
+    {
+      title: "Task Management",
+      icon: "clipboard-check",
+      description:
+        "Monitor task statuses including pending, completed, and overdue tasks. Keep track of task progress and deadlines.",
+    },
+    {
+      title: "Form Analytics",
+      icon: "file-document",
+      description:
+        "Analyze form submission trends over time, including accident reports, illness reports, and departure forms.",
+    },
+  ];
+
+  const helpGuideNote = {
+    title: "Important Notes",
+    content: [
+      "All statistics are updated in real-time when refreshing",
+      "Growth percentages compare current numbers with previous period",
+      "Charts show data for the last 5 months",
+      "Top employees are ranked by total form submissions",
+      "Task statistics are color-coded by status for easy tracking",
+    ],
+  };
 
   // Add window resize listener
   useEffect(() => {
@@ -805,7 +847,8 @@ const CompanyAdminDashboard = () => {
           userEmail={user?.email || ""}
           isAdmin={true}
           onSignOut={signOut}
-          showHelpButton={false}
+          showHelpButton={true}
+          onHelpPress={() => setHelpModalVisible(true)}
           showLogo={Platform.OS !== "web"}
           title={
             Platform.OS === "web"
@@ -819,6 +862,16 @@ const CompanyAdminDashboard = () => {
               ? "Manage your company data and operations"
               : undefined
           }
+        />
+
+        <HelpGuideModal
+          visible={helpModalVisible}
+          onDismiss={() => setHelpModalVisible(false)}
+          title="Dashboard Guide"
+          description="Learn how to use the dashboard to monitor and manage your company's operations effectively."
+          steps={helpGuideSteps}
+          note={helpGuideNote}
+          buttonLabel="Got it"
         />
 
         <Animated.View style={styles.container} entering={FadeIn.duration(300)}>
@@ -1309,9 +1362,7 @@ const styles = StyleSheet.create({
   gridItem: {
     flex: 1,
   },
-  taskCardsWrapper: {
-    
-  },
+  taskCardsWrapper: {},
   taskCardsGrid: {
     width: "100%",
   },

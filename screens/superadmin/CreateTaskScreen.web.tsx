@@ -538,6 +538,12 @@ const CreateTaskScreen = () => {
                             },
                           ]}
                           style={styles.segmentedButtons}
+                          theme={{
+                            colors: {
+                              secondaryContainer: theme.colors.primaryContainer,
+                              onSecondaryContainer: theme.colors.primary,
+                            },
+                          }}
                         />
                       )}
                       name="priority"

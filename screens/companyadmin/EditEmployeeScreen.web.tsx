@@ -48,6 +48,7 @@ import {
 } from "../../types";
 import CustomSnackbar from "../../components/CustomSnackbar";
 import { t } from "i18next";
+import HelpGuideModal from "../../components/HelpGuideModal";
 
 type EditEmployeeRouteParams = {
   employeeId: string;
@@ -250,6 +251,53 @@ const EditEmployeeScreen = () => {
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [networkStatus, setNetworkStatus] = useState<boolean | null>(true);
+
+  // Add help modal state
+  const [helpModalVisible, setHelpModalVisible] = useState(false);
+
+  // Define help guide content
+  const helpGuideSteps = [
+    {
+      title: "Personal Information",
+      icon: "account",
+      description:
+        "Update basic details like name, phone number, date of birth, gender, nationality, and marital status. These fields help maintain accurate employee records.",
+    },
+    {
+      title: "Employment Details",
+      icon: "briefcase",
+      description:
+        "Modify job-related information including job title, employment type, workload percentage, and employment dates. This section is crucial for tracking employee roles and tenure.",
+    },
+    {
+      title: "Access Level",
+      icon: "shield-account",
+      description:
+        "Control administrative privileges. You can grant or revoke company administrator access, which determines what features and data the employee can access.",
+    },
+    {
+      title: "Address Information",
+      icon: "map-marker",
+      description:
+        "Update the employee's current address details including street address, city, state, postal code, and country.",
+    },
+    {
+      title: "Bank Details",
+      icon: "bank",
+      description:
+        "Manage banking information such as bank name, account number, IBAN, and SWIFT code for payroll purposes.",
+    },
+  ];
+
+  const helpGuideNote = {
+    title: "Important Notes",
+    content: [
+      "Required fields are marked with an asterisk (*)",
+      "Changes are saved only after clicking the 'Update Employee' button",
+      "The email address cannot be modified as it is used for account identification",
+      "Granting admin access requires confirmation and should be done carefully",
+    ],
+  };
 
   const {
     control,
@@ -807,6 +855,13 @@ const EditEmployeeScreen = () => {
                               { value: Gender.OTHER, label: "Other" },
                             ]}
                             style={styles.segmentedButtons}
+                            theme={{
+                              colors: {
+                                secondaryContainer:
+                                  theme.colors.primaryContainer,
+                                onSecondaryContainer: theme.colors.primary,
+                              },
+                            }}
                           />
                         </View>
                       )}
@@ -860,6 +915,13 @@ const EditEmployeeScreen = () => {
                               },
                             ]}
                             style={styles.segmentedButtons}
+                            theme={{
+                              colors: {
+                                secondaryContainer:
+                                  theme.colors.primaryContainer,
+                                onSecondaryContainer: theme.colors.primary,
+                              },
+                            }}
                           />
                         </View>
                       )}
@@ -935,6 +997,13 @@ const EditEmployeeScreen = () => {
                               },
                             ]}
                             style={styles.segmentedButtons}
+                            theme={{
+                              colors: {
+                                secondaryContainer:
+                                  theme.colors.primaryContainer,
+                                onSecondaryContainer: theme.colors.primary,
+                              },
+                            }}
                           />
                         </View>
                       )}
@@ -1483,10 +1552,18 @@ const EditEmployeeScreen = () => {
         title="Edit Employee"
         showBackButton={true}
         showHelpButton={true}
-        onHelpPress={() => {
-          navigation.navigate("Help" as never);
-        }}
+        onHelpPress={() => setHelpModalVisible(true)}
         showLogo={false}
+      />
+
+      <HelpGuideModal
+        visible={helpModalVisible}
+        onDismiss={() => setHelpModalVisible(false)}
+        title="Edit Employee Guide"
+        description="Learn how to update employee information and manage their account settings."
+        steps={helpGuideSteps}
+        note={helpGuideNote}
+        buttonLabel="Got it"
       />
 
       {/* Show offline banner if offline */}

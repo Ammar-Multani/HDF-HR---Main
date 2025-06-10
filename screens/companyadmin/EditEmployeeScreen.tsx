@@ -740,6 +740,12 @@ const EditEmployeeScreen = () => {
                     { value: Gender.OTHER, label: "Other" },
                   ]}
                   style={styles.segmentedButtons}
+                  theme={{
+                    colors: {
+                      secondaryContainer: theme.colors.primaryContainer,
+                      onSecondaryContainer: theme.colors.primary,
+                    },
+                  }}
                 />
               </View>
             )}
@@ -782,6 +788,12 @@ const EditEmployeeScreen = () => {
                     { value: MaritalStatus.WIDOWED, label: "Widowed" },
                   ]}
                   style={styles.segmentedButtons}
+                  theme={{
+                    colors: {
+                      secondaryContainer: theme.colors.primaryContainer,
+                      onSecondaryContainer: theme.colors.primary,
+                    },
+                  }}
                 />
               </View>
             )}
@@ -830,6 +842,12 @@ const EditEmployeeScreen = () => {
                     { value: EmploymentType.TEMPORARY, label: "Temporary" },
                   ]}
                   style={styles.segmentedButtons}
+                  theme={{
+                    colors: {
+                      secondaryContainer: theme.colors.primaryContainer,
+                      onSecondaryContainer: theme.colors.primary,
+                    },
+                  }}
                 />
               </View>
             )}
@@ -993,6 +1011,12 @@ const EditEmployeeScreen = () => {
                     },
                   ]}
                   style={styles.segmentedButtons}
+                  theme={{
+                    colors: {
+                      secondaryContainer: theme.colors.primaryContainer,
+                      onSecondaryContainer: theme.colors.primary,
+                    },
+                  }}
                 />
               </View>
             )}

@@ -46,6 +46,7 @@ import { getFontFamily } from "../../utils/globalStyles";
 import CustomSnackbar from "../../components/CustomSnackbar";
 import { t } from "i18next";
 import { LinearGradient } from "expo-linear-gradient";
+import HelpGuideModal from "../../components/HelpGuideModal";
 
 interface TaskFormData {
   title: string;
@@ -140,69 +141,147 @@ const Shimmer: React.FC<ShimmerProps> = ({ width, height, style = {} }) => {
 // Add FormSkeleton component
 const FormSkeleton = () => {
   return (
-    <View style={styles.container}>
-      <Card style={styles.card}>
-        <Card.Content>
-          <View style={styles.section}>
-            <Text variant="titleLarge" style={styles.sectionTitle}>
-              Basic Information
-            </Text>
-            <View style={styles.inputContainer}>
-              <View style={styles.labelContainer}>
-                <Text style={styles.label}>Title</Text>
-              </View>
-              <Shimmer width={300} height={40} style={{ marginBottom: 16 }} />
-            </View>
-            <View style={styles.inputContainer}>
-              <View style={styles.labelContainer}>
-                <Text style={styles.label}>Description</Text>
-              </View>
-              <Shimmer width={300} height={80} style={{ marginBottom: 16 }} />
-            </View>
+    <SafeAreaView style={styles.container}>
+      <AppHeader
+        title="Create Task"
+        subtitle="Add new task information"
+        showBackButton
+        showHelpButton={true}
+        showLogo={false}
+      />
+
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+      >
+        <View style={styles.headerSection}>
+          <Shimmer width={200} height={32} />
+        </View>
+
+        <View style={styles.gridContainer}>
+          {/* Left Column */}
+          <View style={styles.gridColumn}>
+            <Animated.View entering={FadeIn.delay(100)}>
+              {/* Basic Information Card */}
+              <Surface style={styles.formCard}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.headerLeft}>
+                    <View style={styles.iconContainer}>
+                      <IconButton
+                        icon="clipboard-text"
+                        size={20}
+                        iconColor="#64748b"
+                        style={styles.headerIcon}
+                      />
+                    </View>
+                    <Text style={styles.cardTitle}>Basic Information</Text>
+                  </View>
+                </View>
+
+                <View style={styles.cardContent}>
+                  <View style={styles.inputContainer}>
+                    <Shimmer
+                      width="100%"
+                      height={56}
+                      style={{ marginBottom: 16 }}
+                    />
+                    <Shimmer width="100%" height={120} />
+                  </View>
+                </View>
+              </Surface>
+
+              {/* Task Settings Card */}
+              <Surface style={[styles.formCard, { marginTop: 24 }]}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.headerLeft}>
+                    <View style={styles.iconContainer}>
+                      <IconButton
+                        icon="cog"
+                        size={20}
+                        iconColor="#64748b"
+                        style={styles.headerIcon}
+                      />
+                    </View>
+                    <Text style={styles.cardTitle}>Task Settings</Text>
+                  </View>
+                </View>
+
+                <View style={styles.cardContent}>
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.inputLabel}>Deadline</Text>
+                    <Shimmer
+                      width="100%"
+                      height={48}
+                      style={{ marginBottom: 24 }}
+                    />
+                  </View>
+
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.inputLabel}>Priority</Text>
+                    <Shimmer
+                      width="100%"
+                      height={40}
+                      style={{ marginBottom: 24 }}
+                    />
+                  </View>
+
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.inputLabel}>Reminder Days</Text>
+                    <Shimmer width="100%" height={56} />
+                  </View>
+                </View>
+              </Surface>
+            </Animated.View>
           </View>
 
-          <View style={styles.section}>
-            <Text variant="titleLarge" style={styles.sectionTitle}>
-              Task Settings
-            </Text>
-            <View style={styles.inputContainer}>
-              <View style={styles.labelContainer}>
-                <Text style={styles.label}>Deadline</Text>
-              </View>
-              <Shimmer width={200} height={40} style={{ marginBottom: 16 }} />
-            </View>
-            <View style={styles.inputContainer}>
-              <View style={styles.labelContainer}>
-                <Text style={styles.label}>Priority</Text>
-              </View>
-              <Shimmer width={150} height={40} style={{ marginBottom: 16 }} />
-            </View>
-            <View style={styles.inputContainer}>
-              <View style={styles.labelContainer}>
-                <Text style={styles.label}>Reminder Days</Text>
-              </View>
-              <Shimmer width={100} height={40} style={{ marginBottom: 16 }} />
-            </View>
-          </View>
+          {/* Right Column */}
+          <View style={styles.gridColumn}>
+            <Animated.View entering={FadeIn.delay(200)}>
+              {/* Assign Users Card */}
+              <Surface style={styles.formCard}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.headerLeft}>
+                    <View style={styles.iconContainer}>
+                      <IconButton
+                        icon="account-multiple"
+                        size={20}
+                        iconColor="#64748b"
+                        style={styles.headerIcon}
+                      />
+                    </View>
+                    <Text style={styles.cardTitle}>Assign Users</Text>
+                  </View>
+                </View>
 
-          <View style={styles.section}>
-            <Text variant="titleLarge" style={styles.sectionTitle}>
-              Assign Users
-            </Text>
-            <View style={styles.userList}>
-              {[1, 2, 3].map((i) => (
-                <Shimmer
-                  key={i}
-                  width={200}
-                  height={40}
-                  style={{ marginBottom: 8 }}
-                />
-              ))}
-            </View>
+                <View style={styles.cardContent}>
+                  <Text style={styles.helperText}>
+                    Select one super admin to assign this task to (required)
+                  </Text>
+
+                  <View style={styles.usersContainer}>
+                    {[1, 2, 3, 4].map((i) => (
+                      <Shimmer
+                        key={i}
+                        width={180}
+                        height={32}
+                        style={{ marginBottom: 8, borderRadius: 16 }}
+                      />
+                    ))}
+                  </View>
+                </View>
+              </Surface>
+            </Animated.View>
           </View>
-        </Card.Content>
-      </Card>
-    </View>
+        </View>
+      </ScrollView>
+
+      <Surface style={styles.bottomBar}>
+        <View style={styles.bottomBarContent}>
+          <Shimmer width={120} height={40} style={{ borderRadius: 4 }} />
+          <Shimmer width={120} height={40} style={{ borderRadius: 4 }} />
+        </View>
+      </Surface>
+    </SafeAreaView>
   );
 };
 
@@ -247,6 +326,54 @@ const CompanyAdminCreateTaskScreen = () => {
   });
 
   const deadline = watch("deadline");
+
+  // Add help modal state
+  const [helpModalVisible, setHelpModalVisible] = useState(false);
+
+  // Define help guide content
+  const helpGuideSteps = [
+    {
+      title: "Basic Information",
+      icon: "clipboard-text",
+      description:
+        "Enter the task title and a detailed description. Be specific about what needs to be done to help assignees understand the requirements clearly.",
+    },
+    {
+      title: "Task Settings",
+      icon: "cog",
+      description:
+        "Set the deadline, priority level, and reminder days. The deadline should be a future date, priority affects task visibility, and reminders help keep assignees on track.",
+    },
+    {
+      title: "Priority Levels",
+      icon: "alert-circle",
+      description:
+        "Choose between Low (routine tasks), Medium (important but not urgent), and High (urgent tasks requiring immediate attention) priority levels.",
+    },
+    {
+      title: "Reminders",
+      icon: "bell",
+      description:
+        "Specify how many days before the deadline to send a reminder. This helps ensure tasks are completed on time. Enter a value between 0 and 365 days.",
+    },
+    {
+      title: "User Assignment",
+      icon: "account-multiple",
+      description:
+        "Select one super admin to assign the task to. The assigned user will be responsible for completing the task and receiving notifications.",
+    },
+  ];
+
+  const helpGuideNote = {
+    title: "Important Notes",
+    content: [
+      "Required fields are marked with an asterisk (*)",
+      "Tasks cannot be created without an assigned user",
+      "Deadline must be set to a future date",
+      "Reminders will be sent via email to assigned users",
+      "Only one user can be assigned to a task at a time",
+    ],
+  };
 
   const fetchCompanyId = async () => {
     if (!user) {
@@ -542,10 +669,18 @@ const CompanyAdminCreateTaskScreen = () => {
         subtitle="Add new task information"
         showBackButton
         showHelpButton={true}
-        onHelpPress={() => {
-          navigation.navigate("Help" as never);
-        }}
+        onHelpPress={() => setHelpModalVisible(true)}
         showLogo={false}
+      />
+
+      <HelpGuideModal
+        visible={helpModalVisible}
+        onDismiss={() => setHelpModalVisible(false)}
+        title="Create Task Guide"
+        description="Learn how to create and assign tasks effectively."
+        steps={helpGuideSteps}
+        note={helpGuideNote}
+        buttonLabel="Got it"
       />
 
       <KeyboardAvoidingView
@@ -674,6 +809,12 @@ const CompanyAdminCreateTaskScreen = () => {
                             { value: TaskPriority.HIGH, label: "High" },
                           ]}
                           style={styles.segmentedButtons}
+                          theme={{
+                            colors: {
+                              secondaryContainer: theme.colors.primaryContainer,
+                              onSecondaryContainer: theme.colors.primary,
+                            },
+                          }}
                         />
                       )}
                       name="priority"

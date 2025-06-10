@@ -708,6 +708,12 @@ const CreateEmployeeScreen = () => {
                   { value: Gender.OTHER, label: "Other" },
                 ]}
                 style={styles.segmentedButtons}
+                theme={{
+                  colors: {
+                    secondaryContainer: theme.colors.primaryContainer,
+                    onSecondaryContainer: theme.colors.primary,
+                  },
+                }}
               />
             )}
             name="gender"
@@ -743,6 +749,12 @@ const CreateEmployeeScreen = () => {
                   { value: MaritalStatus.WIDOWED, label: "Widowed" },
                 ]}
                 style={styles.segmentedButtons}
+                theme={{
+                  colors: {
+                    secondaryContainer: theme.colors.primaryContainer,
+                    onSecondaryContainer: theme.colors.primary,
+                  },
+                }}
               />
             )}
             name="marital_status"
@@ -784,6 +796,12 @@ const CreateEmployeeScreen = () => {
                   { value: EmploymentType.TEMPORARY, label: "Temporary" },
                 ]}
                 style={styles.segmentedButtons}
+                theme={{
+                  colors: {
+                    secondaryContainer: theme.colors.primaryContainer,
+                    onSecondaryContainer: theme.colors.primary,
+                  },
+                }}
               />
             )}
             name="employment_type"

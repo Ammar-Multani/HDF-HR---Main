@@ -147,6 +147,12 @@ const EmployeeTasksScreen = () => {
             { value: TaskStatus.COMPLETED, label: "Completed" },
           ]}
           style={styles.segmentedButtons}
+          theme={{
+            colors: {
+              secondaryContainer: theme.colors.primaryContainer,
+              onSecondaryContainer: theme.colors.primary,
+            },
+          }}
         />
       </View>
 

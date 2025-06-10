@@ -34,6 +34,7 @@ import { FormStatus, DocumentType } from "../../types";
 import Text from "../../components/Text";
 import { useAuth } from "../../contexts/AuthContext";
 import Animated, { FadeIn } from "react-native-reanimated";
+import HelpGuideModal from "../../components/HelpGuideModal";
 
 // Add window dimensions hook
 const useWindowDimensions = () => {
@@ -93,6 +94,7 @@ const FormDetailsScreen = () => {
   const [submitting, setSubmitting] = useState(false);
   const [statusMenuVisible, setStatusMenuVisible] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<FormStatus | null>(null);
+  const [helpModalVisible, setHelpModalVisible] = useState(false);
 
   const fetchFormDetails = async () => {
     try {
@@ -493,6 +495,51 @@ const FormDetailsScreen = () => {
     }
   };
 
+  // Define help guide content
+  const helpGuideSteps = [
+    {
+      title: "Form Overview",
+      icon: "file-document-outline",
+      description:
+        "View comprehensive form details including employee information, submission date, and current status. Each form type (Accident, Illness, Departure) has its own specific details section.",
+    },
+    {
+      title: "Status Management",
+      icon: "check-circle",
+      description:
+        "Update form status by clicking the status badge. Choose from options like Pending, In Progress, Approved, or Declined. Each status change is tracked with modification details.",
+    },
+    {
+      title: "Document Access",
+      icon: "file-pdf-box",
+      description:
+        "Access attached documents such as medical certificates or required paperwork by clicking the respective document buttons. Documents open in a new tab for easy viewing.",
+    },
+    {
+      title: "Employee Details",
+      icon: "account-details",
+      description:
+        "Review employee information including name, email, and job title. This section provides quick access to the form submitter's details.",
+    },
+    {
+      title: "Form History",
+      icon: "history",
+      description:
+        "Track form modifications with timestamps and modifier information. The system maintains a record of all status changes and updates.",
+    },
+  ];
+
+  const helpGuideNote = {
+    title: "Important Notes",
+    content: [
+      "Status changes are immediately reflected in the system",
+      "All attached documents are securely stored and accessible",
+      "Form details can be refreshed using the pull-to-refresh gesture",
+      "Different form types have specific required fields and documents",
+      "Status updates may trigger notifications to relevant parties",
+    ],
+  };
+
   if (loading && !refreshing) {
     return <LoadingIndicator />;
   }
@@ -523,10 +570,18 @@ const FormDetailsScreen = () => {
         subtitle="Review form details and update status"
         showBackButton={true}
         showHelpButton={true}
-        onHelpPress={() => {
-          navigation.navigate("Help" as never);
-        }}
+        onHelpPress={() => setHelpModalVisible(true)}
         showLogo={false}
+      />
+
+      <HelpGuideModal
+        visible={helpModalVisible}
+        onDismiss={() => setHelpModalVisible(false)}
+        title="Form Details Guide"
+        description="Learn how to review and manage form submissions effectively using the available tools and features."
+        steps={helpGuideSteps}
+        note={helpGuideNote}
+        buttonLabel="Got it"
       />
 
       <Portal>

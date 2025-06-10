@@ -61,6 +61,7 @@ import {
   FilterDivider,
   PillFilterGroup,
 } from "../../components/FilterSections";
+import HelpGuideModal from "../../components/HelpGuideModal";
 
 // Add navigation type definitions
 type RootStackParamList = {
@@ -535,6 +536,53 @@ const FormSubmissionsScreen = () => {
     status: "all",
     formType: "all",
   });
+
+  const [helpModalVisible, setHelpModalVisible] = useState(false);
+
+  // Define help guide content
+  const helpGuideSteps = [
+    {
+      title: "Form Types",
+      icon: "file-document-multiple",
+      description:
+        "View different types of forms: Accident Reports (Red), Illness Reports (Orange), and Staff Departure Reports (Blue). Each type is color-coded for easy identification.",
+    },
+    {
+      title: "Search & Filter",
+      icon: "magnify",
+      description:
+        "Use the search bar to find forms by employee name or form title. Filter forms by type and status using the filter button. Active filters appear as chips below the search bar.",
+    },
+    {
+      title: "Form Details",
+      icon: "text-box-search",
+      description:
+        "Each form shows key information including employee name, submission date, and current status. Click on any form to view its complete details and history.",
+    },
+    {
+      title: "Status Tracking",
+      icon: "progress-check",
+      description:
+        "Monitor form status through the approval process. Status badges indicate whether forms are Pending, In Review, Approved, or Rejected.",
+    },
+    {
+      title: "Form History",
+      icon: "history",
+      description:
+        "Track form modifications with detailed information about when changes were made and by whom. Last modified dates and modifier names are displayed when available.",
+    },
+  ];
+
+  const helpGuideNote = {
+    title: "Important Notes",
+    content: [
+      "Forms are automatically sorted by submission date",
+      "You can combine multiple filters for precise form management",
+      "Form submissions are organized in pages for easy navigation",
+      "Click 'View Details' to see complete form information",
+      "Status updates are reflected in real-time across the system",
+    ],
+  };
 
   const fetchCompanyId = async () => {
     if (!user) return null;
@@ -1195,9 +1243,7 @@ const FormSubmissionsScreen = () => {
           title="Form Submissions"
           showBackButton={Platform.OS !== "web"}
           showHelpButton={true}
-          onHelpPress={() => {
-            navigation.navigate("Help");
-          }}
+          onHelpPress={() => setHelpModalVisible(true)}
           showLogo={false}
         />
         <View
@@ -1261,10 +1307,18 @@ const FormSubmissionsScreen = () => {
         title="Form Submissions"
         showBackButton={Platform.OS !== "web"}
         showHelpButton={true}
-        onHelpPress={() => {
-          navigation.navigate("Help");
-        }}
+        onHelpPress={() => setHelpModalVisible(true)}
         showLogo={false}
+      />
+
+      <HelpGuideModal
+        visible={helpModalVisible}
+        onDismiss={() => setHelpModalVisible(false)}
+        title="Form Submissions Guide"
+        description="Learn how to effectively manage and track form submissions using the available tools and features."
+        steps={helpGuideSteps}
+        note={helpGuideNote}
+        buttonLabel="Got it"
       />
 
       <View

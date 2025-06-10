@@ -37,6 +37,7 @@ import { TaskPriority, UserRole, TaskStatus } from "../../types";
 import CustomSnackbar from "../../components/CustomSnackbar";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
+import HelpGuideModal from "../../components/HelpGuideModal";
 
 // Add window dimensions hook
 const useWindowDimensions = () => {
@@ -105,6 +106,54 @@ const CompanyAdminEditTaskScreen = () => {
   const [permissionErrorMessage, setPermissionErrorMessage] = useState<
     string | null
   >(null);
+
+  // Add help modal state
+  const [helpModalVisible, setHelpModalVisible] = useState(false);
+
+  // Define help guide content
+  const helpGuideSteps = [
+    {
+      title: "Basic Information",
+      icon: "clipboard-text",
+      description:
+        "Update the task title and description. Make sure the information is clear and specific to help assignees understand what needs to be done.",
+    },
+    {
+      title: "Task Settings",
+      icon: "cog",
+      description:
+        "Modify the deadline, priority level, and reminder settings. The deadline can be extended if needed, and priority can be adjusted based on current urgency.",
+    },
+    {
+      title: "Status Management",
+      icon: "check-circle",
+      description:
+        "Update the task status to reflect its current state. Choose from Open, In Progress, Awaiting Response, Completed, or Overdue to accurately track progress.",
+    },
+    {
+      title: "Priority Levels",
+      icon: "alert-circle",
+      description:
+        "Adjust priority between Low (routine tasks), Medium (important but not urgent), and High (urgent tasks requiring immediate attention) based on current needs.",
+    },
+    {
+      title: "User Assignment",
+      icon: "account-multiple",
+      description:
+        "Reassign the task to a different super admin if needed. The newly assigned user will receive notifications about the task.",
+    },
+  ];
+
+  const helpGuideNote = {
+    title: "Important Notes",
+    content: [
+      "All changes are tracked and logged in the task history",
+      "Status changes will trigger notifications to relevant users",
+      "Deadline extensions will update reminder schedules automatically",
+      "Only one user can be assigned to a task at a time",
+      "Make sure to save changes using the Update Task button",
+    ],
+  };
 
   const {
     control,
@@ -476,7 +525,18 @@ const CompanyAdminEditTaskScreen = () => {
         showBackButton
         showLogo={false}
         showHelpButton={true}
+        onHelpPress={() => setHelpModalVisible(true)}
         absolute={false}
+      />
+
+      <HelpGuideModal
+        visible={helpModalVisible}
+        onDismiss={() => setHelpModalVisible(false)}
+        title="Edit Task Guide"
+        description="Learn how to update and manage existing tasks effectively."
+        steps={helpGuideSteps}
+        note={helpGuideNote}
+        buttonLabel="Got it"
       />
 
       <KeyboardAvoidingView
@@ -630,6 +690,12 @@ const CompanyAdminEditTaskScreen = () => {
                             },
                           ]}
                           style={styles.segmentedButtons}
+                          theme={{
+                            colors: {
+                              secondaryContainer: theme.colors.primaryContainer,
+                              onSecondaryContainer: theme.colors.primary,
+                            },
+                          }}
                         />
                       )}
                       name="priority"

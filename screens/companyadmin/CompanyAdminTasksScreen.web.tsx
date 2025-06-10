@@ -66,6 +66,7 @@ import {
   FilterDivider,
   PillFilterGroup,
 } from "../../components/FilterSections";
+import HelpGuideModal from "../../components/HelpGuideModal";
 
 // Add window dimensions hook
 const useWindowDimensions = () => {
@@ -512,6 +513,9 @@ const CompanyAdminTasksScreen = () => {
     priority: "all",
   });
 
+  // Help guide state
+  const [helpModalVisible, setHelpModalVisible] = useState(false);
+
   // Check network status when screen focuses
   useFocusEffect(
     useCallback(() => {
@@ -655,7 +659,6 @@ const CompanyAdminTasksScreen = () => {
         .eq("active_status", "active")
         .single();
 
-
       if (companyUserError || !companyUserData) {
         console.error("Error fetching company user data:", companyUserError);
         setError("Unable to identify your company admin account");
@@ -729,13 +732,11 @@ const CompanyAdminTasksScreen = () => {
           })
           .range(from, to);
 
-
         // Execute both queries
         const [countResult, tasksResult] = await Promise.all([
           countQuery,
           query,
         ]);
-
 
         if (countResult.error) throw countResult.error;
         if (tasksResult.error) throw tasksResult.error;
@@ -751,13 +752,11 @@ const CompanyAdminTasksScreen = () => {
           ];
           const allUserIds = [...new Set([...creatorIds, ...assigneeIds])];
 
-
           // First check which creators are super admins
           const { data: adminUsers } = await supabase
             .from("admin")
             .select("id, role, name, email")
             .in("id", allUserIds);
-
 
           // Identify super admin creators
           const superAdminIds =
@@ -767,7 +766,6 @@ const CompanyAdminTasksScreen = () => {
                   admin.role === "SUPER_ADMIN" || admin.role === "superadmin"
               )
               .map((admin) => admin.id) || [];
-
 
           // Fetch user details from company_user table
           const { data: userDetails } = await supabase
@@ -981,7 +979,6 @@ const CompanyAdminTasksScreen = () => {
 
   // Update clearFilters to remove sort order
   const clearFilters = useCallback(() => {
-
     // Reset all filter states
     setStatusFilter("all");
     setPriorityFilter("all");
@@ -1044,7 +1041,6 @@ const CompanyAdminTasksScreen = () => {
   // Render active filter indicator without hooks inside
   const renderActiveFilterIndicator = () => {
     if (!hasActiveFilters()) {
-      
       return null;
     }
 
@@ -1105,7 +1101,6 @@ const CompanyAdminTasksScreen = () => {
 
   // Add effect to sync filter states
   useEffect(() => {
-
     const needsSync =
       appliedFilters.status !== statusFilter ||
       appliedFilters.priority !== priorityFilter;
@@ -1420,16 +1415,69 @@ const CompanyAdminTasksScreen = () => {
     );
   };
 
+  // Define help guide content
+  const helpGuideSteps = [
+    {
+      title: "Task Search",
+      icon: "magnify",
+      description:
+        "Use the search bar to find tasks by title or description. The search updates in real-time as you type.",
+    },
+    {
+      title: "Filter & Sort",
+      icon: "filter-variant",
+      description:
+        "Filter tasks by status (Pending, In Progress, Completed) and priority level (Low, Medium, High). Active filters are shown as chips below the search bar.",
+    },
+    {
+      title: "Task Management",
+      icon: "clipboard-text",
+      description:
+        "View comprehensive task details including title, description, assignee, deadline, and status. Click on any task to see its full details and make updates.",
+    },
+    {
+      title: "Priority Levels",
+      icon: "flag",
+      description:
+        "Tasks are color-coded by priority: Blue for Low, Orange for Medium, and Red for High priority. Set priorities based on task urgency and importance.",
+    },
+    {
+      title: "Task Creation",
+      icon: "plus-circle",
+      description:
+        "Click 'Create Task' to add new tasks. Specify title, description, assignee, deadline, priority, and set up optional reminders.",
+    },
+  ];
+
+  const helpGuideNote = {
+    title: "Important Notes",
+    content: [
+      "All tasks are automatically sorted by creation date, with newest first",
+      "Task status updates are reflected in real-time",
+      "You can combine multiple filters for precise task management",
+      "Task deadlines are displayed in a consistent date format",
+      "Network status is monitored to ensure data accuracy",
+    ],
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: "#F5F5F5" }]}>
       <AppHeader
         title="Tasks"
         showBackButton={false}
         showHelpButton={true}
-        onHelpPress={() => {
-          navigation.navigate("Help" as never);
-        }}
+        onHelpPress={() => setHelpModalVisible(true)}
         showLogo={false}
+      />
+
+      <HelpGuideModal
+        visible={helpModalVisible}
+        onDismiss={() => setHelpModalVisible(false)}
+        title="Task Management Guide"
+        description="Learn how to effectively manage and organize your tasks using the available tools and features."
+        steps={helpGuideSteps}
+        note={helpGuideNote}
+        buttonLabel="Got it"
       />
 
       {networkStatus === false && (

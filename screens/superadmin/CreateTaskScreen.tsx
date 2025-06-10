@@ -521,6 +521,12 @@ const CreateTaskScreen = () => {
                   { value: TaskPriority.HIGH, label: "High" },
                 ]}
                 style={styles.segmentedButtons}
+                theme={{
+                  colors: {
+                    secondaryContainer: theme.colors.primaryContainer,
+                    onSecondaryContainer: theme.colors.primary,
+                  },
+                }}
               />
             )}
             name="priority"

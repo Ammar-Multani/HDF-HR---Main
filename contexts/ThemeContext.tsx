@@ -58,7 +58,7 @@ const lightTheme = {
     surfaceVariant: "#F8FAFC", // Subtle surface variation
     surfaceHover: "rgba(38,127,161,0.04)", // Very subtle hover state
     surfaceSelected: "rgba(38,127,161,0.08)", // Subtle selected state
-
+    primaryContainer: "rgba(38,127,161,0.08)", // Subtle container using primary color
     // Status colors
     success: "rgba(10,185,129,255)", // Using logo teal for success
     error: "#EF4444",

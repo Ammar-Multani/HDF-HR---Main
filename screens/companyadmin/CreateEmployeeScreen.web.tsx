@@ -47,6 +47,7 @@ import { sendCompanyAdminInviteEmail } from "../../utils/emailService";
 import { generateWelcomeEmail } from "../../utils/emailTemplates";
 import CustomSnackbar from "../../components/CustomSnackbar";
 import { t } from "i18next";
+import HelpGuideModal from "../../components/HelpGuideModal";
 
 interface EmployeeFormData {
   first_name: string;
@@ -141,6 +142,7 @@ const CreateEmployeeScreen = () => {
   const [errorBannerVisible, setErrorBannerVisible] = useState(false);
   const [errorBannerMessage, setErrorBannerMessage] = useState("");
   const [isOnline, setIsOnline] = useState(true);
+  const [helpModalVisible, setHelpModalVisible] = useState(false);
 
   const {
     control,
@@ -560,6 +562,58 @@ const CreateEmployeeScreen = () => {
     }
   };
 
+  const helpGuideContent = {
+    title: "How to Create an Employee",
+    description:
+      "Follow these steps to create a new employee account. The system will automatically send an invitation email to the employee with their login credentials.",
+    steps: [
+      {
+        title: "Personal Information",
+        icon: "account",
+        description:
+          "Fill in basic details like name, phone, date of birth, gender, nationality, and marital status.",
+      },
+      {
+        title: "Employment Details",
+        icon: "briefcase",
+        description:
+          "Enter job-related information including job title, employment type, workload percentage, and start date.",
+      },
+      {
+        title: "Account Details",
+        icon: "account-key",
+        description:
+          "Set up login credentials. An invitation email will be sent to the provided email address with login instructions.",
+      },
+      {
+        title: "Address Information",
+        icon: "map-marker",
+        description:
+          "Provide complete residential address details for official records.",
+      },
+      {
+        title: "Bank Details",
+        icon: "bank",
+        description:
+          "Enter banking information for salary payments including bank name, account number, IBAN, and SWIFT code.",
+      },
+    ],
+    note: {
+      title: "Important Note",
+      content: [
+        "After submission, an invitation email will be automatically sent to the employee's email address containing:",
+        "Login credentials",
+        "Instructions to access the system",
+        "Password reset instructions",
+        "Please ensure the email address is correct before submitting.",
+      ],
+    },
+  };
+
+  const handleHelpPress = () => {
+    setHelpModalVisible(true);
+  };
+
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -568,10 +622,17 @@ const CreateEmployeeScreen = () => {
         title="Create Employee"
         showBackButton={true}
         showHelpButton={true}
-        onHelpPress={() => {
-          navigation.navigate("Help" as never);
-        }}
+        onHelpPress={handleHelpPress}
         showLogo={false}
+      />
+
+      <HelpGuideModal
+        visible={helpModalVisible}
+        onDismiss={() => setHelpModalVisible(false)}
+        title={helpGuideContent.title}
+        description={helpGuideContent.description}
+        steps={helpGuideContent.steps}
+        note={helpGuideContent.note}
       />
 
       {/* Network status banner */}
@@ -814,6 +875,18 @@ const CreateEmployeeScreen = () => {
                             { value: Gender.OTHER, label: "Other" },
                           ]}
                           style={styles.segmentedButtons}
+                          theme={{
+                            colors: {
+                              secondaryContainer: theme.colors.primaryContainer,
+                              onSecondaryContainer: theme.colors.primary,
+                            },
+                          }}
+                          theme={{
+                            colors: {
+                              secondaryContainer: theme.colors.primaryContainer,
+                              onSecondaryContainer: theme.colors.primary,
+                            },
+                          }}
                         />
                       )}
                       name="gender"
@@ -859,6 +932,12 @@ const CreateEmployeeScreen = () => {
                             { value: MaritalStatus.WIDOWED, label: "Widowed" },
                           ]}
                           style={styles.segmentedButtons}
+                          theme={{
+                            colors: {
+                              secondaryContainer: theme.colors.primaryContainer,
+                              onSecondaryContainer: theme.colors.primary,
+                            },
+                          }}
                         />
                       )}
                       name="marital_status"
@@ -954,6 +1033,12 @@ const CreateEmployeeScreen = () => {
                             },
                           ]}
                           style={styles.segmentedButtons}
+                          theme={{
+                            colors: {
+                              secondaryContainer: theme.colors.primaryContainer,
+                              onSecondaryContainer: theme.colors.primary,
+                            },
+                          }}
                         />
                       )}
                       name="employment_type"
@@ -1149,7 +1234,7 @@ const CreateEmployeeScreen = () => {
                       {t("companyAdmin.employees.inviteEmailHelper")}
                     </Text>
 
-                    <View style={styles.adminToggleContainer}>
+                    {/* <View style={styles.adminToggleContainer}>
                       <Text style={styles.adminToggleLabel}>
                         {t("companyAdmin.employees.grantAdminPrivileges")}
                       </Text>
@@ -1158,7 +1243,7 @@ const CreateEmployeeScreen = () => {
                         onValueChange={handleAdminToggle}
                         disabled={loading}
                       />
-                    </View>
+                    </View> */}
                   </View>
                 </Surface>
 

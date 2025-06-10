@@ -839,6 +839,12 @@ const CreateEmployeeScreen = () => {
                             },
                           ]}
                           style={styles.segmentedButtons}
+                          theme={{
+                            colors: {
+                              secondaryContainer: theme.colors.primaryContainer,
+                              onSecondaryContainer: theme.colors.primary,
+                            },
+                          }}
                         />
                       )}
                       name="gender"
@@ -930,6 +936,12 @@ const CreateEmployeeScreen = () => {
                             },
                           ]}
                           style={styles.segmentedButtons}
+                          theme={{
+                            colors: {
+                              secondaryContainer: theme.colors.primaryContainer,
+                              onSecondaryContainer: theme.colors.primary,
+                            },
+                          }}
                         />
                       )}
                       name="employment_type"

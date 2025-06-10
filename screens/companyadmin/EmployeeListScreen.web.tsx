@@ -57,6 +57,7 @@ import {
   withTiming,
 } from "react-native-reanimated";
 import { getFontFamily } from "../../utils/globalStyles";
+import { formatDate, formatRelativeTime } from "../../utils/dateUtils";
 import Pagination from "../../components/Pagination";
 import FilterModal from "../../components/FilterModal";
 import {
@@ -65,8 +66,9 @@ import {
   FilterDivider,
   PillFilterGroup,
 } from "../../components/FilterSections";
+import HelpGuideModal from "../../components/HelpGuideModal";
 
-// Update the CompanyUser interface to include created_at
+// Update the CompanyUser interface to include optional created_at
 interface ExtendedCompanyUser extends CompanyUser {
   created_at?: string;
 }
@@ -276,9 +278,11 @@ const EmployeeListScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [employees, setEmployees] = useState<CompanyUser[]>([]);
+  const [employees, setEmployees] = useState<ExtendedCompanyUser[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filteredEmployees, setFilteredEmployees] = useState<CompanyUser[]>([]);
+  const [filteredEmployees, setFilteredEmployees] = useState<
+    ExtendedCompanyUser[]
+  >([]);
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [hasMoreData, setHasMoreData] = useState(true);
@@ -389,9 +393,16 @@ const EmployeeListScreen = () => {
       </View>
       <View style={styles.tableCell}>
         <Text style={styles.tableCellText}>
-          {item.created_at
-            ? new Date(item.created_at).toLocaleDateString()
-            : "-"}
+          {item.created_at ? (
+            <Text style={styles.dateText}>
+              {formatDate(item.created_at, {
+                type: "long",
+                locale: "en-US",
+              })}
+            </Text>
+          ) : (
+            "-"
+          )}
         </Text>
       </View>
       <View style={styles.tableCell}>
@@ -650,10 +661,9 @@ const EmployeeListScreen = () => {
     );
   };
 
-  const renderEmployeeItem = ({ item }: { item: CompanyUser }) => (
+  const renderEmployeeItem = ({ item }: { item: ExtendedCompanyUser }) => (
     <TouchableOpacity
       onPress={() => {
-        // @ts-ignore - Handle navigation typing issue
         navigation.navigate("EmployeeDetails", { employeeId: item.id });
       }}
       style={styles.cardContainer}
@@ -690,6 +700,22 @@ const EmployeeListScreen = () => {
                         {item.job_title}
                       </Text>
                     </View>
+                  </View>
+                )}
+                {item.created_at && (
+                  <View style={styles.dateContainer}>
+                    <IconButton
+                      icon="calendar"
+                      size={14}
+                      iconColor="#616161"
+                      style={styles.dateIcon}
+                    />
+                    <Text style={styles.dateText}>
+                      {formatDate(item.created_at, {
+                        type: "long",
+                        locale: "en-US",
+                      })}
+                    </Text>
                   </View>
                 )}
               </View>
@@ -1027,6 +1053,53 @@ const EmployeeListScreen = () => {
     );
   };
 
+  const [helpModalVisible, setHelpModalVisible] = useState(false);
+
+  // Define help guide content
+  const helpGuideSteps = [
+    {
+      title: "Employee Search",
+      icon: "magnify",
+      description:
+        "Use the search bar to find employees by name, email, or job title. Type at least 3 characters for best results.",
+    },
+    {
+      title: "Filter Options",
+      icon: "filter-variant",
+      description:
+        "Filter employees by status (Active/Inactive) and sort by date. The filter badge indicates when filters are active.",
+    },
+    {
+      title: "Employee Information",
+      icon: "account-details",
+      description:
+        "View comprehensive employee details including name, email, job title, and status. Click on any employee to see their full profile.",
+    },
+    {
+      title: "Status Management",
+      icon: "account-check",
+      description:
+        "Track employee status with color-coded indicators. Active employees are ready to use the system, while inactive ones have limited access.",
+    },
+    {
+      title: "Add New Employees",
+      icon: "account-plus",
+      description:
+        "Click the 'Add Employee' button to create new employee accounts. You can invite them via email to set up their profiles.",
+    },
+  ];
+
+  const helpGuideNote = {
+    title: "Important Notes",
+    content: [
+      "Search results update in real-time as you type",
+      "Filters can be combined for more specific results",
+      "Employee list automatically refreshes when changes are made",
+      "Click on employee cards or table rows to view detailed profiles",
+      "Network status is monitored to ensure data accuracy",
+    ],
+  };
+
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -1036,10 +1109,18 @@ const EmployeeListScreen = () => {
         subtitle="Manage your employees"
         showBackButton={false}
         showHelpButton={true}
-        onHelpPress={() => {
-          navigation.navigate("Help");
-        }}
+        onHelpPress={() => setHelpModalVisible(true)}
         showLogo={false}
+      />
+
+      <HelpGuideModal
+        visible={helpModalVisible}
+        onDismiss={() => setHelpModalVisible(false)}
+        title="Employee Management Guide"
+        description="Learn how to effectively manage your employees and use the available tools."
+        steps={helpGuideSteps}
+        note={helpGuideNote}
+        buttonLabel="Got it"
       />
 
       {networkStatus === false && (
@@ -1501,6 +1582,26 @@ const styles = StyleSheet.create({
   },
   activeFilterChip: {
     margin: 4,
+  },
+  dateContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  dateIcon: {
+    margin: 0,
+    marginRight: 4,
+  },
+  dateText: {
+    fontSize: 13,
+    color: "#616161",
+    fontFamily: getFontFamily("normal"),
+  },
+  relativeTimeText: {
+    fontSize: 12,
+    color: "#9e9e9e",
+    fontFamily: getFontFamily("normal"),
+    marginLeft: 4,
   },
 });
 

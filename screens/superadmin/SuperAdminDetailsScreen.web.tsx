@@ -11,6 +11,7 @@ import {
   AppStateStatus,
   Dimensions,
   TouchableOpacity,
+  TextInput,
 } from "react-native";
 import {
   Text,
@@ -44,6 +45,7 @@ import StatusBadge from "../../components/StatusBadge";
 import { UserStatus } from "../../types";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Animated, { FadeIn } from "react-native-reanimated";
+import { useAuth } from "../../contexts/AuthContext";
 
 // Add window dimensions hook
 const useWindowDimensions = () => {
@@ -170,7 +172,7 @@ const SuperAdminDetailsSkeleton = () => {
   );
 };
 
-// Add interface for CustomAlert props
+// Update CustomAlert props interface
 interface CustomAlertProps {
   visible: boolean;
   title: string;
@@ -180,9 +182,26 @@ interface CustomAlertProps {
   confirmText?: string;
   cancelText?: string;
   isDestructive?: boolean;
+  requireConfirmationText?: boolean;
+  confirmationText?: string;
+  onConfirmationTextChange?: (text: string) => void;
 }
 
-// Add CustomAlert component
+// Update AlertConfig interface
+interface AlertConfig {
+  title: string;
+  message: string;
+  confirmText: string;
+  cancelText: string;
+  isDestructive: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+  requireConfirmationText?: boolean;
+  confirmationText?: string;
+  onConfirmationTextChange?: (text: string) => void;
+}
+
+// Update CustomAlert component
 const CustomAlert: React.FC<CustomAlertProps> = ({
   visible,
   title,
@@ -192,14 +211,36 @@ const CustomAlert: React.FC<CustomAlertProps> = ({
   confirmText = "Confirm",
   cancelText = "Cancel",
   isDestructive = false,
+  requireConfirmationText = false,
+  confirmationText = "",
+  onConfirmationTextChange,
 }) => {
   if (!visible) return null;
+
+  const isConfirmEnabled =
+    !requireConfirmationText || confirmationText.toLowerCase() === "deactivate";
 
   return (
     <View style={styles.modalOverlay}>
       <View style={styles.modalContent}>
         <Text style={styles.modalTitle}>{title}</Text>
         <Text style={styles.modalMessage}>{message}</Text>
+
+        {requireConfirmationText && (
+          <View style={styles.confirmationInputContainer}>
+            <Text style={styles.confirmationLabel}>
+              Type "deactivate" to confirm:
+            </Text>
+            <TextInput
+              style={styles.confirmationInput}
+              value={confirmationText}
+              onChangeText={onConfirmationTextChange}
+              placeholder="Type here..."
+              placeholderTextColor="#64748b"
+            />
+          </View>
+        )}
+
         <View style={styles.modalButtons}>
           <TouchableOpacity
             style={[styles.modalButton, styles.modalCancelButton]}
@@ -212,14 +253,17 @@ const CustomAlert: React.FC<CustomAlertProps> = ({
               styles.modalButton,
               styles.modalConfirmButton,
               isDestructive && styles.modalDestructiveButton,
+              !isConfirmEnabled && styles.modalDisabledButton,
             ]}
             onPress={onConfirm}
+            disabled={!isConfirmEnabled}
           >
             <Text
               style={[
                 styles.modalButtonText,
                 styles.modalConfirmText,
                 isDestructive && styles.modalDestructiveText,
+                !isConfirmEnabled && styles.modalDisabledText,
               ]}
             >
               {confirmText}
@@ -231,17 +275,6 @@ const CustomAlert: React.FC<CustomAlertProps> = ({
   );
 };
 
-// Add interface for alert config
-interface AlertConfig {
-  title: string;
-  message: string;
-  confirmText: string;
-  cancelText: string;
-  isDestructive: boolean;
-  onConfirm: () => void;
-  onCancel: () => void;
-}
-
 const SuperAdminDetailsScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation<AdminNavigationProp>();
@@ -249,6 +282,7 @@ const SuperAdminDetailsScreen = () => {
     useRoute<RouteProp<Record<string, SuperAdminDetailsRouteParams>, string>>();
   const { adminId, adminType } = route.params;
   const dimensions = useWindowDimensions();
+  const { user, signOut } = useAuth();
 
   // Calculate responsive breakpoints
   const isLargeScreen = dimensions.width >= 1440;
@@ -270,6 +304,7 @@ const SuperAdminDetailsScreen = () => {
     onConfirm: () => {},
     onCancel: () => {},
   });
+  const [confirmationText, setConfirmationText] = useState("");
 
   // Check network status when screen focuses
   useFocusEffect(
@@ -420,6 +455,15 @@ const SuperAdminDetailsScreen = () => {
 
       // Close the alert modal after successful update
       setShowAlert(false);
+
+      // If the user deactivated themselves, sign them out
+      if (user?.id === admin.id && !newStatus) {
+        await signOut();
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "Login" }],
+        });
+      }
     } catch (error: any) {
       console.error("Error toggling admin status:", error);
       handleError(error);
@@ -437,35 +481,76 @@ const SuperAdminDetailsScreen = () => {
         ? admin.status
         : admin.status === "active";
 
+    // Check if user is trying to deactivate themselves
+    const isSelfDeactivation = user?.id === admin.id && isCurrentlyActive;
+
     if (Platform.OS === "web") {
+      setConfirmationText(""); // Reset confirmation text
       setAlertConfig({
         title: isCurrentlyActive ? "Deactivate Admin" : "Activate Admin",
-        message: `Are you sure you want to ${isCurrentlyActive ? "deactivate" : "activate"} ${admin.name || admin.email}?`,
+        message: isSelfDeactivation
+          ? "Warning: You are about to deactivate your own account. This will log you out immediately. Are you sure you want to continue?"
+          : `Are you sure you want to ${isCurrentlyActive ? "deactivate" : "activate"} ${admin.name || admin.email}?`,
         onConfirm: async () => {
           await performToggleStatus();
         },
-        onCancel: () => setShowAlert(false),
+        onCancel: () => {
+          setConfirmationText("");
+          setShowAlert(false);
+        },
         confirmText: isCurrentlyActive ? "Deactivate" : "Activate",
         cancelText: "Cancel",
         isDestructive: isCurrentlyActive,
+        requireConfirmationText: isCurrentlyActive,
+        confirmationText: confirmationText,
+        onConfirmationTextChange: setConfirmationText,
       });
       setShowAlert(true);
     } else {
-      Alert.alert(
-        isCurrentlyActive ? "Deactivate Admin" : "Activate Admin",
-        `Are you sure you want to ${isCurrentlyActive ? "deactivate" : "activate"} ${admin.name || admin.email}?`,
-        [
-          {
-            text: "Cancel",
-            style: "cancel",
-          },
-          {
-            text: isCurrentlyActive ? "Deactivate" : "Activate",
-            style: isCurrentlyActive ? "destructive" : "default",
-            onPress: performToggleStatus,
-          },
-        ]
-      );
+      // For mobile, we'll use a two-step alert process
+      if (isCurrentlyActive) {
+        Alert.prompt(
+          "Deactivate Admin",
+          'Type "deactivate" to confirm:',
+          [
+            {
+              text: "Cancel",
+              style: "cancel",
+            },
+            {
+              text: "Deactivate",
+              style: "destructive",
+              onPress: (text) => {
+                if (text?.toLowerCase() === "deactivate") {
+                  performToggleStatus();
+                } else {
+                  Alert.alert(
+                    "Error",
+                    "Please type 'deactivate' correctly to proceed."
+                  );
+                }
+              },
+            },
+          ],
+          "plain-text"
+        );
+      } else {
+        Alert.alert(
+          "Activate Admin",
+          `Are you sure you want to activate ${admin.name || admin.email}?`,
+          [
+            {
+              text: "Cancel",
+              style: "cancel",
+            },
+            {
+              text: "Activate",
+              style: "default",
+              onPress: performToggleStatus,
+            },
+          ]
+        );
+      }
     }
   };
 
@@ -821,65 +906,63 @@ const SuperAdminDetailsScreen = () => {
                 </View>
               </Surface>
 
-                <View style={styles.bottomBarContent}>
+              <View style={styles.bottomBarContent}>
+                <View style={styles.actionButtons}>
+                  <Button
+                    mode="contained"
+                    onPress={() =>
+                      navigation.navigate("EditSuperAdmin", {
+                        adminId: admin?.id || "",
+                      })
+                    }
+                    style={styles.button}
+                    disabled={
+                      loadingAction || networkStatus === false || !admin
+                    }
+                    buttonColor={theme.colors.primary}
+                  >
+                    Edit Admin
+                  </Button>
 
-                  <View style={styles.actionButtons}>
-                    <Button
-                      mode="contained"
-                      onPress={() =>
-                        navigation.navigate("EditSuperAdmin", {
-                          adminId: admin?.id || "",
-                        })
-                      }
-                      style={styles.button}
-                      disabled={
-                        loadingAction || networkStatus === false || !admin
-                      }
-                      buttonColor={theme.colors.primary}
-                    >
-                      Edit Admin
-                    </Button>
-
-                    <Button
-                      mode="outlined"
-                      onPress={handleToggleStatus}
-                      style={[
-                        styles.button,
-                        {
-                          borderColor: (
-                            typeof admin?.status === "boolean"
-                              ? admin?.status
-                              : admin?.status === "active"
-                          )
-                            ? theme.colors.error
-                            : theme.colors.primary,
-                        },
-                      ]}
-                      textColor={
-                        (
+                  <Button
+                    mode="outlined"
+                    onPress={handleToggleStatus}
+                    style={[
+                      styles.button,
+                      {
+                        borderColor: (
                           typeof admin?.status === "boolean"
                             ? admin?.status
                             : admin?.status === "active"
                         )
                           ? theme.colors.error
-                          : theme.colors.primary
-                      }
-                      loading={loadingAction}
-                      disabled={
-                        loadingAction || networkStatus === false || !admin
-                      }
-                    >
-                      {(
+                          : theme.colors.primary,
+                      },
+                    ]}
+                    textColor={
+                      (
                         typeof admin?.status === "boolean"
                           ? admin?.status
                           : admin?.status === "active"
                       )
-                        ? "Deactivate Admin"
-                        : "Activate Admin"}
-                    </Button>
-                  </View>
+                        ? theme.colors.error
+                        : theme.colors.primary
+                    }
+                    loading={loadingAction}
+                    disabled={
+                      loadingAction || networkStatus === false || !admin
+                    }
+                  >
+                    {(
+                      typeof admin?.status === "boolean"
+                        ? admin?.status
+                        : admin?.status === "active"
+                    )
+                      ? "Deactivate Admin"
+                      : "Activate Admin"}
+                  </Button>
                 </View>
-
+              </View>
             </Animated.View>
           </View>
         </View>
@@ -894,10 +977,13 @@ const SuperAdminDetailsScreen = () => {
         title={alertConfig.title}
         message={alertConfig.message}
         onConfirm={alertConfig.onConfirm}
-        onCancel={() => setShowAlert(false)}
+        onCancel={alertConfig.onCancel}
         confirmText={alertConfig.confirmText}
         cancelText={alertConfig.cancelText}
         isDestructive={alertConfig.isDestructive}
+        requireConfirmationText={alertConfig.requireConfirmationText}
+        confirmationText={alertConfig.confirmationText}
+        onConfirmationTextChange={alertConfig.onConfirmationTextChange}
       />
       <AppHeader
         title="Admin Details"
@@ -1147,6 +1233,32 @@ const styles = StyleSheet.create({
   },
   modalDestructiveText: {
     color: "#ffffff",
+  },
+  confirmationInputContainer: {
+    marginTop: 16,
+    marginBottom: 24,
+  },
+  confirmationLabel: {
+    fontSize: 14,
+    color: "#64748b",
+    marginBottom: 8,
+    fontFamily: "Poppins-Medium",
+  },
+  confirmationInput: {
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 6,
+    padding: 8,
+    fontSize: 14,
+    color: "#1e293b",
+    backgroundColor: "#f8fafc",
+  },
+  modalDisabledButton: {
+    backgroundColor: "#cbd5e1",
+    opacity: 0.7,
+  },
+  modalDisabledText: {
+    color: "#94a3b8",
   },
 });
 
