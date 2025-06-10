@@ -9,12 +9,14 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "../contexts/AuthContext";
 import { UserRole } from "../types";
 import { Dimensions, Platform, Text } from "react-native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 // Import navigators from separate files
 import { AuthNavigator } from "./AuthNavigator";
 import { SuperAdminNavigator } from "./SuperAdminNavigator";
 import { CompanyAdminNavigator } from "./CompanyAdminNavigator";
 import { EmployeeNavigator } from "./EmployeeNavigator";
+import ResetPasswordScreen from "../screens/auth/ResetPasswordScreen";
 
 // Import linking configuration
 import { linking } from "./linkingConfiguration";
@@ -69,6 +71,8 @@ export const navigateToDashboard = (role: string) => {
     console.error("Navigation error:", error);
   }
 };
+
+const RootStack = createNativeStackNavigator();
 
 // Main Navigator - enhanced with initialAuthState for faster load times
 export const AppNavigator = ({ initialAuthState = null }) => {
@@ -156,6 +160,23 @@ export const AppNavigator = ({ initialAuthState = null }) => {
     return null; // or a loading indicator
   }
 
+  const renderMainContent = () => {
+    if (!user) {
+      return <AuthNavigator />;
+    }
+
+    switch (userRole) {
+      case UserRole.SUPER_ADMIN:
+        return <SuperAdminNavigator />;
+      case UserRole.COMPANY_ADMIN:
+        return <CompanyAdminNavigator />;
+      case UserRole.EMPLOYEE:
+        return <EmployeeNavigator />;
+      default:
+        return <AuthNavigator />;
+    }
+  };
+
   return (
     <NavigationContainer
       ref={navRef}
@@ -164,16 +185,16 @@ export const AppNavigator = ({ initialAuthState = null }) => {
       onStateChange={handleStateChange}
       fallback={<Text>Loading...</Text>}
     >
-      {!user ? (
-        <AuthNavigator />
-      ) : (
-        <>
-          {userRole === UserRole.SUPER_ADMIN && <SuperAdminNavigator />}
-          {userRole === UserRole.COMPANY_ADMIN && <CompanyAdminNavigator />}
-          {userRole === UserRole.EMPLOYEE && <EmployeeNavigator />}
-          {!userRole && <AuthNavigator />}
-        </>
-      )}
+      <RootStack.Navigator screenOptions={{ headerShown: false }}>
+        <RootStack.Screen name="MainContent" component={renderMainContent} />
+        <RootStack.Group screenOptions={{ presentation: "modal" }}>
+          <RootStack.Screen
+            name="ResetPassword"
+            component={ResetPasswordScreen}
+            initialParams={{ token: null }}
+          />
+        </RootStack.Group>
+      </RootStack.Navigator>
     </NavigationContainer>
   );
 };

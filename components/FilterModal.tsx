@@ -57,7 +57,7 @@ const FilterModal: React.FC<FilterModalProps> = ({
   const modalPadding =
     Platform.OS === "web"
       ? isLargeScreen
-        ? 32
+        ? 25  
         : isMediumScreen
           ? 24
           : 16

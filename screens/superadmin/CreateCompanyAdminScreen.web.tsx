@@ -31,6 +31,7 @@ import { useTranslation } from "react-i18next";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { sendCompanyAdminInviteEmail } from "../../utils/emailService";
 import CustomSnackbar from "../../components/CustomSnackbar";
+import CompanySelector from "../../components/CompanySelector";
 
 interface CompanyAdminFormData {
   first_name: string;
@@ -59,6 +60,77 @@ interface CustomAlertProps {
   isDestructive?: boolean;
 }
 
+// Styles for the CustomAlert component
+const alertStyles = StyleSheet.create({
+  modalOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 1000,
+  },
+  modalContent: {
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    padding: 24,
+    width: "90%",
+    maxWidth: 400,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#1e293b",
+    marginBottom: 12,
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: "#64748b",
+    marginBottom: 24,
+    lineHeight: 24,
+  },
+  modalButtons: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+  },
+  modalButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    minWidth: 80,
+    alignItems: "center",
+  },
+  modalCancelButton: {
+    backgroundColor: "#f1f5f9",
+  },
+  modalConfirmButton: {
+    backgroundColor: "#3b82f6",
+  },
+  modalDestructiveButton: {
+    backgroundColor: "#ef4444",
+  },
+  modalButtonText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#64748b",
+  },
+  modalConfirmText: {
+    color: "#ffffff",
+  },
+  modalDestructiveText: {
+    color: "#ffffff",
+  },
+});
+
 const CustomAlert: React.FC<CustomAlertProps> = ({
   visible,
   title,
@@ -72,30 +144,30 @@ const CustomAlert: React.FC<CustomAlertProps> = ({
   if (!visible) return null;
 
   return (
-    <View style={styles.modalOverlay}>
-      <View style={styles.modalContent}>
-        <Text style={styles.modalTitle}>{title}</Text>
-        <Text style={styles.modalMessage}>{message}</Text>
-        <View style={styles.modalButtons}>
+    <View style={alertStyles.modalOverlay}>
+      <View style={alertStyles.modalContent}>
+        <Text style={alertStyles.modalTitle}>{title}</Text>
+        <Text style={alertStyles.modalMessage}>{message}</Text>
+        <View style={alertStyles.modalButtons}>
           <TouchableOpacity
-            style={[styles.modalButton, styles.modalCancelButton]}
+            style={[alertStyles.modalButton, alertStyles.modalCancelButton]}
             onPress={onCancel}
           >
-            <Text style={styles.modalButtonText}>{cancelText}</Text>
+            <Text style={alertStyles.modalButtonText}>{cancelText}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[
-              styles.modalButton,
-              styles.modalConfirmButton,
-              isDestructive && styles.modalDestructiveButton,
+              alertStyles.modalButton,
+              alertStyles.modalConfirmButton,
+              isDestructive && alertStyles.modalDestructiveButton,
             ]}
             onPress={onConfirm}
           >
             <Text
               style={[
-                styles.modalButtonText,
-                styles.modalConfirmText,
-                isDestructive && styles.modalDestructiveText,
+                alertStyles.modalButtonText,
+                alertStyles.modalConfirmText,
+                isDestructive && alertStyles.modalDestructiveText,
               ]}
             >
               {confirmText}
@@ -132,12 +204,8 @@ const CreateCompanyAdminScreen = () => {
     onCancel: () => {},
   });
 
-  // Company selection states
-  const [companies, setCompanies] = useState<Company[]>([]);
+  // Company selection state
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
-  const [menuVisible, setMenuVisible] = useState(false);
-  const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
-  const dropdownRef = React.useRef(null);
 
   const {
     control,
@@ -154,40 +222,6 @@ const CreateCompanyAdminScreen = () => {
       job_title: "",
     },
   });
-
-  // Fetch companies for dropdown
-  useEffect(() => {
-    fetchCompanies();
-  }, []);
-
-  const fetchCompanies = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("company")
-        .select("id, company_name, active")
-        .eq("active", true)
-        .order("company_name");
-
-      if (error) {
-        console.error("Error fetching companies:", error);
-        return;
-      }
-
-      setCompanies(data || []);
-    } catch (error) {
-      console.error("Error fetching companies:", error);
-    }
-  };
-
-  const showMenu = () => {
-    if (dropdownRef.current) {
-      // @ts-ignore - Getting layout measurements
-      dropdownRef.current.measure((x, y, width, height, pageX, pageY) => {
-        setMenuPosition({ x: pageX, y: pageY + height });
-        setMenuVisible(true);
-      });
-    }
-  };
 
   const onSubmit = async (data: CompanyAdminFormData) => {
     try {
@@ -346,17 +380,6 @@ const CreateCompanyAdminScreen = () => {
     }
   };
 
-  // Menu container style with theme
-  const menuContainerStyle = {
-    borderRadius: 12,
-    width: 300,
-    marginTop: 4,
-    elevation: 4,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
-  };
-
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -421,48 +444,14 @@ const CreateCompanyAdminScreen = () => {
                   </View>
 
                   <View style={styles.cardContent}>
-                    <TouchableOpacity
-                      ref={dropdownRef}
-                      style={[
-                        styles.dropdownButton,
-                        selectedCompany && styles.activeDropdownButton,
-                      ]}
-                      onPress={showMenu}
-                    >
-                      <View style={styles.dropdownContent}>
-                        <IconButton
-                          icon="office-building"
-                          size={20}
-                          iconColor={
-                            selectedCompany ? theme.colors.primary : "#757575"
-                          }
-                          style={styles.dropdownLeadingIcon}
-                        />
-                        <Text
-                          style={[
-                            styles.dropdownButtonText,
-                            selectedCompany && {
-                              color: theme.colors.primary,
-                            },
-                          ]}
-                          numberOfLines={1}
-                          ellipsizeMode="tail"
-                        >
-                          {selectedCompany
-                            ? selectedCompany.company_name
-                            : t("superAdmin.companyAdmin.selectCompany") ||
-                              "Select Company"}
-                        </Text>
-                      </View>
-                      <IconButton
-                        icon="chevron-down"
-                        size={20}
-                        style={styles.dropdownIcon}
-                        iconColor={
-                          selectedCompany ? theme.colors.primary : "#757575"
-                        }
-                      />
-                    </TouchableOpacity>
+                    <CompanySelector
+                      selectedCompany={selectedCompany}
+                      onSelect={setSelectedCompany}
+                      required={true}
+                      error={
+                        !selectedCompany ? "Please select a company" : undefined
+                      }
+                    />
                   </View>
                 </Surface>
               </Animated.View>
@@ -593,19 +582,6 @@ const CreateCompanyAdminScreen = () => {
                           value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
                           message: t("superAdmin.companyAdmin.invalidEmail"),
                         },
-                        validate: (value) => {
-                          const emailParts = value.split("@");
-                          if (
-                            emailParts.length !== 2 ||
-                            !emailParts[1].includes(".") ||
-                            emailParts[1].length < 3
-                          ) {
-                            return t(
-                              "superAdmin.companyAdmin.invalidEmailDomain"
-                            );
-                          }
-                          return true;
-                        },
                       }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
@@ -646,19 +622,6 @@ const CreateCompanyAdminScreen = () => {
                             "superAdmin.companyAdmin.passwordComplexityRequirements"
                           ),
                         },
-                        validate: (value) => {
-                          if (value.includes(" ")) {
-                            return t(
-                              "superAdmin.companyAdmin.passwordNoSpaces"
-                            );
-                          }
-                          if (/(.)\1{2,}/.test(value)) {
-                            return t(
-                              "superAdmin.companyAdmin.passwordNoRepeatingChars"
-                            );
-                          }
-                          return true;
-                        },
                       }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
@@ -679,10 +642,6 @@ const CreateCompanyAdminScreen = () => {
                         {errors.password.message}
                       </HelperText>
                     )}
-                    <Text style={styles.helperText}>
-                      {t("superAdmin.companyAdmin.adminInviteHelper") ||
-                        "An invitation email will be sent to the admin with login instructions."}
-                    </Text>
                   </View>
                 </Surface>
               </Animated.View>
@@ -738,6 +697,11 @@ const CreateCompanyAdminScreen = () => {
                         />
                       )}
                     />
+                    {errors.phone_number && (
+                      <HelperText type="error">
+                        {errors.phone_number.message}
+                      </HelperText>
+                    )}
 
                     <Controller
                       control={control}
@@ -777,11 +741,11 @@ const CreateCompanyAdminScreen = () => {
                         />
                       )}
                     />
-
-                    <Text style={styles.helperText}>
-                      {t("superAdmin.companyAdmin.adminInviteHelper") ||
-                        "An invitation email will be sent to the admin with login instructions."}
-                    </Text>
+                    {errors.job_title && (
+                      <HelperText type="error">
+                        {errors.job_title.message}
+                      </HelperText>
+                    )}
                   </View>
                 </Surface>
               </Animated.View>
@@ -790,50 +754,6 @@ const CreateCompanyAdminScreen = () => {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <Menu
-        visible={menuVisible}
-        onDismiss={() => setMenuVisible(false)}
-        anchor={menuPosition}
-        contentStyle={menuContainerStyle}
-      >
-        <View style={styles.menuHeader}>
-          <Text style={styles.menuTitle}>
-            {t("superAdmin.companyAdmin.selectCompany") || "Select Company"}
-          </Text>
-        </View>
-        <Divider />
-        <ScrollView style={{ maxHeight: 400 }}>
-          {companies.map((company) => (
-            <Menu.Item
-              key={company.id}
-              title={company.company_name}
-              onPress={() => {
-                setSelectedCompany(company);
-                setMenuVisible(false);
-              }}
-              style={styles.menuItemStyle}
-              titleStyle={[
-                styles.menuItemText,
-                selectedCompany?.id === company.id && styles.menuItemSelected,
-              ]}
-              leadingIcon="office-building"
-              trailingIcon={
-                selectedCompany?.id === company.id ? "check" : undefined
-              }
-            />
-          ))}
-          {companies.length === 0 && (
-            <Menu.Item
-              title={
-                t("superAdmin.companyAdmin.noCompaniesFound") ||
-                "No companies found"
-              }
-              disabled={true}
-              style={styles.menuItemStyle}
-            />
-          )}
-        </ScrollView>
-      </Menu>
       <Surface style={styles.bottomBar}>
         <View style={styles.bottomBarContent}>
           <View style={styles.actionButtons}>
@@ -865,6 +785,7 @@ const CreateCompanyAdminScreen = () => {
           </View>
         </View>
       </Surface>
+
       <CustomSnackbar
         visible={snackbarVisible}
         message={snackbarMessage}
@@ -897,6 +818,7 @@ const CreateCompanyAdminScreen = () => {
   );
 };
 
+// Main screen styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1005,131 +927,6 @@ const styles = StyleSheet.create({
   },
   button: {
     minWidth: 120,
-  },
-  dropdownButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
-    borderRadius: 12,
-    paddingLeft: 4,
-    paddingRight: 8,
-    paddingVertical: 6,
-    backgroundColor: "#FFFFFF",
-  },
-  dropdownContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  dropdownLeadingIcon: {
-    margin: 0,
-    padding: 0,
-  },
-  dropdownButtonText: {
-    fontFamily: "Poppins-Regular",
-    color: "#424242",
-    flex: 1,
-    fontSize: 14,
-  },
-  dropdownIcon: {
-    margin: 0,
-    padding: 0,
-  },
-  activeDropdownButton: {
-    borderColor: "#1a73e8",
-    backgroundColor: "#F0F7FF",
-  },
-  menuHeader: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: "#F5F5F5",
-  },
-  menuTitle: {
-    fontSize: 14,
-    fontFamily: "Poppins-Medium",
-    color: "#212121",
-  },
-  menuItemStyle: {
-    height: 48,
-    justifyContent: "center",
-  },
-  menuItemText: {
-    fontFamily: "Poppins-Regular",
-    fontSize: 14,
-    color: "#424242",
-  },
-  menuItemSelected: {
-    color: "#1a73e8",
-    fontFamily: "Poppins-Medium",
-  },
-  modalOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 1000,
-  },
-  modalContent: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    padding: 24,
-    width: "90%",
-    maxWidth: 400,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#1e293b",
-    marginBottom: 12,
-  },
-  modalMessage: {
-    fontSize: 16,
-    color: "#64748b",
-    marginBottom: 24,
-    lineHeight: 24,
-  },
-  modalButtons: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 12,
-  },
-  modalButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-    minWidth: 80,
-    alignItems: "center",
-  },
-  modalCancelButton: {
-    backgroundColor: "#f1f5f9",
-  },
-  modalConfirmButton: {
-    backgroundColor: "#3b82f6",
-  },
-  modalDestructiveButton: {
-    backgroundColor: "#ef4444",
-  },
-  modalButtonText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#64748b",
-  },
-  modalConfirmText: {
-    color: "#ffffff",
-  },
-  modalDestructiveText: {
-    color: "#ffffff",
   },
   snackbar: {
     marginBottom: 16,

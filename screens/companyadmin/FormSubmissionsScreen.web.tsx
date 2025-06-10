@@ -30,6 +30,7 @@ import {
   Portal,
   Modal,
   RadioButton,
+  FAB,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -63,13 +64,16 @@ import {
 } from "../../components/FilterSections";
 import HelpGuideModal from "../../components/HelpGuideModal";
 
-// Add navigation type definitions
+// Update navigation type definitions
 type RootStackParamList = {
   FormDetails: {
     formId: string;
     formType: string;
   };
   Help: undefined;
+  CreateEmployeeAccidentReport: undefined;
+  CreateEmployeeIllnessReport: undefined;
+  CreateEmployeeStaffDepartureReport: undefined;
 };
 
 type FormNavigationProp = NavigationProp<RootStackParamList>;
@@ -82,6 +86,7 @@ interface CompanyUser {
 
 interface AccidentReport {
   id: string;
+  form_sequence_id: number;
   employee_id: string;
   status: FormStatus;
   created_at: string;
@@ -93,6 +98,7 @@ interface AccidentReport {
 
 interface IllnessReport {
   id: string;
+  form_sequence_id: number;
   employee_id: string;
   status: FormStatus;
   submission_date: string;
@@ -104,6 +110,7 @@ interface IllnessReport {
 
 interface DepartureReport {
   id: string;
+  form_sequence_id: number;
   employee_id: string;
   status: FormStatus;
   submission_date: string;
@@ -116,6 +123,7 @@ interface DepartureReport {
 // Enhanced FormSubmission interface with additional fields
 interface FormSubmission {
   id: string;
+  form_sequence_id: number;
   type: "accident" | "illness" | "departure";
   title: string;
   employee_name: string;
@@ -142,9 +150,25 @@ const getFormTypeColor = (type: string) => {
   }
 };
 
+// Add getFormattedId helper function
+const getFormattedId = (type: string, sequenceId: number) => {
+  const prefix =
+    type === "accident"
+      ? "ACC"
+      : type === "illness"
+        ? "ILL"
+        : type === "departure"
+          ? "DEP"
+          : "";
+  return `${prefix}-${String(sequenceId).padStart(3, "0")}`;
+};
+
 // Add TableHeader component
 const TableHeader = () => (
   <View style={styles.tableHeader}>
+    <View style={[styles.tableHeaderCell, { flex: 0.7 }]}>
+      <Text style={styles.tableHeaderText}>Form ID</Text>
+    </View>
     <View style={styles.tableHeaderCell}>
       <Text style={styles.tableHeaderText}>Form Type</Text>
     </View>
@@ -182,12 +206,32 @@ const TableRow = ({ item, navigation }: TableRowProps) => (
       pressed && { backgroundColor: "#f8fafc" },
     ]}
   >
+    <View style={[styles.tableCell, { flex: 0.7 }]}>
+      <TouchableOpacity
+        onPress={(e) => {
+          e.stopPropagation();
+          navigation.navigate("FormDetails", {
+            formId: item.id,
+            formType: item.type,
+          });
+        }}
+      >
+        <Text
+          style={[
+            styles.tableCellText,
+            styles.formIdLink,
+            { color: getFormTypeColor(item.type) },
+          ]}
+        >
+          {getFormattedId(item.type, item.form_sequence_id)}
+        </Text>
+      </TouchableOpacity>
+    </View>
     <View style={styles.tableCell}>
       <Text
         style={[
           styles.tableCellText,
           {
-            color: getFormTypeColor(item.type),
             fontFamily: "Poppins-Medium",
           },
         ]}
@@ -538,6 +582,7 @@ const FormSubmissionsScreen = () => {
   });
 
   const [helpModalVisible, setHelpModalVisible] = useState(false);
+  const [fabMenuVisible, setFabMenuVisible] = useState(false);
 
   // Define help guide content
   const helpGuideSteps = [
@@ -627,12 +672,14 @@ const FormSubmissionsScreen = () => {
 
       // Apply search filter
       if (searchQuery.trim() !== "") {
+        const searchLower = searchQuery.toLowerCase();
         filtered = filtered.filter(
           (form) =>
-            form.employee_name
+            form.employee_name.toLowerCase().includes(searchLower) ||
+            form.title.toLowerCase().includes(searchLower) ||
+            getFormattedId(form.type, form.form_sequence_id)
               .toLowerCase()
-              .includes(searchQuery.toLowerCase()) ||
-            form.title.toLowerCase().includes(searchQuery.toLowerCase())
+              .includes(searchLower)
         );
       }
 
@@ -686,6 +733,7 @@ const FormSubmissionsScreen = () => {
         .select(
           `
           id,
+          form_sequence_id,
           employee_id,
           status,
           created_at,
@@ -720,6 +768,7 @@ const FormSubmissionsScreen = () => {
         .select(
           `
           id,
+          form_sequence_id,
           employee_id,
           status,
           submission_date,
@@ -754,6 +803,7 @@ const FormSubmissionsScreen = () => {
         .select(
           `
           id,
+          form_sequence_id,
           employee_id,
           status,
           created_at,
@@ -787,6 +837,7 @@ const FormSubmissionsScreen = () => {
       const processedAccidentReports: FormSubmission[] =
         accidentData?.map((report) => ({
           id: report.id,
+          form_sequence_id: report.form_sequence_id,
           type: "accident",
           title: "Accident Report",
           employee_name: `${report.company_user.first_name} ${report.company_user.last_name}`,
@@ -801,6 +852,7 @@ const FormSubmissionsScreen = () => {
       const processedIllnessReports: FormSubmission[] =
         illnessData?.map((report) => ({
           id: report.id,
+          form_sequence_id: report.form_sequence_id,
           type: "illness",
           title: "Illness Report",
           employee_name: `${report.company_user.first_name} ${report.company_user.last_name}`,
@@ -815,6 +867,7 @@ const FormSubmissionsScreen = () => {
       const processedDepartureReports: FormSubmission[] =
         departureData?.map((report) => ({
           id: report.id,
+          form_sequence_id: report.form_sequence_id,
           type: "departure",
           title: "Staff Departure Report",
           employee_name: `${report.company_user[0].first_name} ${report.company_user[0].last_name}`,
@@ -1160,6 +1213,127 @@ const FormSubmissionsScreen = () => {
     );
   };
 
+  const renderFabMenu = () => (
+    <View style={{ position: "relative" }}>
+      <FAB
+        icon={fabMenuVisible ? "close" : "plus"}
+        label={isLargeScreen ? "Create Form" : undefined}
+        style={[
+          styles.fab,
+          {
+            backgroundColor: theme.colors.primary,
+            position: "relative",
+            margin: 0,
+            marginLeft: 16,
+          },
+        ]}
+        onPress={() => setFabMenuVisible(!fabMenuVisible)}
+        color={theme.colors.surface}
+        mode="flat"
+        theme={{ colors: { accent: theme.colors.surface } }}
+      />
+      {fabMenuVisible && (
+        <Portal>
+          <Pressable
+            style={styles.fabMenuOverlay}
+            onPress={() => setFabMenuVisible(false)}
+          >
+            <View style={[styles.fabMenuContainer]}>
+              <View style={styles.fabMenuHeader}>
+                <Text style={styles.fabMenuHeaderTitle}>Create New Form</Text>
+                <IconButton
+                  icon="close"
+                  size={24}
+                  onPress={() => setFabMenuVisible(false)}
+                />
+              </View>
+              <Divider style={styles.fabMenuDivider} />
+              <View style={styles.fabMenuContent}>
+                <TouchableOpacity
+                  style={[styles.fabMenuItem, { backgroundColor: "#ffebee" }]}
+                  onPress={() => {
+                    setFabMenuVisible(false);
+                    navigation.navigate("CreateEmployeeAccidentReport");
+                  }}
+                >
+                  <View style={styles.fabMenuItemContent}>
+                    <View style={styles.fabMenuItemIcon}>
+                      <IconButton
+                        icon="alert-circle"
+                        size={24}
+                        iconColor="#f44336"
+                      />
+                    </View>
+                    <View style={styles.fabMenuItemText}>
+                      <Text style={styles.fabMenuItemTitle}>
+                        Report Accident
+                      </Text>
+                      <Text style={styles.fabMenuItemDescription}>
+                        Submit a workplace accident report
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.fabMenuItem, { backgroundColor: "#fff3e0" }]}
+                  onPress={() => {
+                    setFabMenuVisible(false);
+                    navigation.navigate("CreateEmployeeIllnessReport");
+                  }}
+                >
+                  <View style={styles.fabMenuItemContent}>
+                    <View style={styles.fabMenuItemIcon}>
+                      <IconButton
+                        icon="medical-bag"
+                        size={24}
+                        iconColor="#ff9800"
+                      />
+                    </View>
+                    <View style={styles.fabMenuItemText}>
+                      <Text style={styles.fabMenuItemTitle}>
+                        Report Illness
+                      </Text>
+                      <Text style={styles.fabMenuItemDescription}>
+                        Submit a health-related report
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.fabMenuItem, { backgroundColor: "#e3f2fd" }]}
+                  onPress={() => {
+                    setFabMenuVisible(false);
+                    navigation.navigate("CreateEmployeeStaffDepartureReport");
+                  }}
+                >
+                  <View style={styles.fabMenuItemContent}>
+                    <View style={styles.fabMenuItemIcon}>
+                      <IconButton
+                        icon="account-arrow-right"
+                        size={24}
+                        iconColor="#2196f3"
+                      />
+                    </View>
+                    <View style={styles.fabMenuItemText}>
+                      <Text style={styles.fabMenuItemTitle}>
+                        Staff Departure
+                      </Text>
+                      <Text style={styles.fabMenuItemDescription}>
+                        Submit a staff departure notice
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Pressable>
+        </Portal>
+      )}
+    </View>
+  );
+
   // Update the content rendering to include pagination
   const renderContent = () => {
     if (filteredForms.length === 0) {
@@ -1333,7 +1507,7 @@ const FormSubmissionsScreen = () => {
       >
         <View style={styles.searchBarContainer}>
           <Searchbar
-            placeholder="Search forms..."
+            placeholder="Search by form ID (e.g., ACC-001), employee name, or form type..."
             onChangeText={setSearchQuery}
             value={searchQuery}
             style={styles.searchbar}
@@ -1363,6 +1537,7 @@ const FormSubmissionsScreen = () => {
             {hasActiveFilters() && <View style={styles.filterBadge} />}
           </View>
         </View>
+        {renderFabMenu()}
       </View>
 
       {renderFilterModal()}
@@ -1415,6 +1590,10 @@ const styles = StyleSheet.create({
   filterButtonContainer: {
     position: "relative",
     marginLeft: 8,
+  },
+  fab: {
+    borderRadius: 17,
+    height: 56,
   },
   filterButton: {
     borderWidth: 1,
@@ -1752,6 +1931,84 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     width: "auto",
     alignSelf: "center",
+  },
+  fabMenuOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    zIndex: 1000,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  fabMenuContainer: {
+    width: 380,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    zIndex: 1001,
+  },
+  fabMenuHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    paddingBottom: 12,
+  },
+  fabMenuHeaderTitle: {
+    fontSize: 20,
+    fontFamily: "Poppins-SemiBold",
+    color: "#333",
+  },
+  fabMenuDivider: {
+    backgroundColor: "#e0e0e0",
+  },
+  fabMenuContent: {
+    padding: 16,
+  },
+  fabMenuItem: {
+    borderRadius: 12,
+    marginVertical: 6,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.05)",
+  },
+  fabMenuItemContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+  },
+  fabMenuItemIcon: {
+    marginRight: 16,
+  },
+  fabMenuItemText: {
+    flex: 1,
+  },
+  fabMenuItemTitle: {
+    fontSize: 16,
+    fontFamily: "Poppins-Medium",
+    color: "#333",
+    marginBottom: 4,
+  },
+  fabMenuItemDescription: {
+    fontSize: 13,
+    fontFamily: "Poppins-Regular",
+    color: "#666",
+    lineHeight: 18,
+  },
+  formIdLink: {
+    cursor: "pointer",
+    fontSize: 14,
+    fontFamily: "Poppins-Medium",
   },
 } as const);
 

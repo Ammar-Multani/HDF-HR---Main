@@ -1801,7 +1801,7 @@ const SuperAdminUsersScreen = () => {
           />
         </FilterSection>
 
-        {selectedTab !== UserListType.SUPER_ADMIN && (
+        {/* {selectedTab !== UserListType.SUPER_ADMIN && (
           <>
             <FilterDivider />
             <FilterSection title="Companies">
@@ -1857,7 +1857,7 @@ const SuperAdminUsersScreen = () => {
               </View>
             </FilterSection>
           </>
-        )}
+        )} */}
       </FilterModal>
     );
   };
@@ -2273,7 +2273,7 @@ const SuperAdminUsersScreen = () => {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      style={[styles.container, ]}
     >
       <AppHeader
         title="All Users"

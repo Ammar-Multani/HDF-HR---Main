@@ -11,7 +11,6 @@ import {
   AppStateStatus,
   Dimensions,
   TouchableOpacity,
-  TextInput,
 } from "react-native";
 import {
   Text,
@@ -172,7 +171,7 @@ const SuperAdminDetailsSkeleton = () => {
   );
 };
 
-// Update CustomAlert props interface
+// Add interface for CustomAlert props
 interface CustomAlertProps {
   visible: boolean;
   title: string;
@@ -182,26 +181,9 @@ interface CustomAlertProps {
   confirmText?: string;
   cancelText?: string;
   isDestructive?: boolean;
-  requireConfirmationText?: boolean;
-  confirmationText?: string;
-  onConfirmationTextChange?: (text: string) => void;
 }
 
-// Update AlertConfig interface
-interface AlertConfig {
-  title: string;
-  message: string;
-  confirmText: string;
-  cancelText: string;
-  isDestructive: boolean;
-  onConfirm: () => void;
-  onCancel: () => void;
-  requireConfirmationText?: boolean;
-  confirmationText?: string;
-  onConfirmationTextChange?: (text: string) => void;
-}
-
-// Update CustomAlert component
+// Add CustomAlert component
 const CustomAlert: React.FC<CustomAlertProps> = ({
   visible,
   title,
@@ -211,36 +193,14 @@ const CustomAlert: React.FC<CustomAlertProps> = ({
   confirmText = "Confirm",
   cancelText = "Cancel",
   isDestructive = false,
-  requireConfirmationText = false,
-  confirmationText = "",
-  onConfirmationTextChange,
 }) => {
   if (!visible) return null;
-
-  const isConfirmEnabled =
-    !requireConfirmationText || confirmationText.toLowerCase() === "deactivate";
 
   return (
     <View style={styles.modalOverlay}>
       <View style={styles.modalContent}>
         <Text style={styles.modalTitle}>{title}</Text>
         <Text style={styles.modalMessage}>{message}</Text>
-
-        {requireConfirmationText && (
-          <View style={styles.confirmationInputContainer}>
-            <Text style={styles.confirmationLabel}>
-              Type "deactivate" to confirm:
-            </Text>
-            <TextInput
-              style={styles.confirmationInput}
-              value={confirmationText}
-              onChangeText={onConfirmationTextChange}
-              placeholder="Type here..."
-              placeholderTextColor="#64748b"
-            />
-          </View>
-        )}
-
         <View style={styles.modalButtons}>
           <TouchableOpacity
             style={[styles.modalButton, styles.modalCancelButton]}
@@ -253,17 +213,14 @@ const CustomAlert: React.FC<CustomAlertProps> = ({
               styles.modalButton,
               styles.modalConfirmButton,
               isDestructive && styles.modalDestructiveButton,
-              !isConfirmEnabled && styles.modalDisabledButton,
             ]}
             onPress={onConfirm}
-            disabled={!isConfirmEnabled}
           >
             <Text
               style={[
                 styles.modalButtonText,
                 styles.modalConfirmText,
                 isDestructive && styles.modalDestructiveText,
-                !isConfirmEnabled && styles.modalDisabledText,
               ]}
             >
               {confirmText}
@@ -274,6 +231,17 @@ const CustomAlert: React.FC<CustomAlertProps> = ({
     </View>
   );
 };
+
+// Add interface for alert config
+interface AlertConfig {
+  title: string;
+  message: string;
+  confirmText: string;
+  cancelText: string;
+  isDestructive: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
 
 const SuperAdminDetailsScreen = () => {
   const theme = useTheme();
@@ -304,7 +272,6 @@ const SuperAdminDetailsScreen = () => {
     onConfirm: () => {},
     onCancel: () => {},
   });
-  const [confirmationText, setConfirmationText] = useState("");
 
   // Check network status when screen focuses
   useFocusEffect(
@@ -485,7 +452,6 @@ const SuperAdminDetailsScreen = () => {
     const isSelfDeactivation = user?.id === admin.id && isCurrentlyActive;
 
     if (Platform.OS === "web") {
-      setConfirmationText(""); // Reset confirmation text
       setAlertConfig({
         title: isCurrentlyActive ? "Deactivate Admin" : "Activate Admin",
         message: isSelfDeactivation
@@ -494,63 +460,30 @@ const SuperAdminDetailsScreen = () => {
         onConfirm: async () => {
           await performToggleStatus();
         },
-        onCancel: () => {
-          setConfirmationText("");
-          setShowAlert(false);
-        },
+        onCancel: () => setShowAlert(false),
         confirmText: isCurrentlyActive ? "Deactivate" : "Activate",
         cancelText: "Cancel",
         isDestructive: isCurrentlyActive,
-        requireConfirmationText: isCurrentlyActive,
-        confirmationText: confirmationText,
-        onConfirmationTextChange: setConfirmationText,
       });
       setShowAlert(true);
     } else {
-      // For mobile, we'll use a two-step alert process
-      if (isCurrentlyActive) {
-        Alert.prompt(
-          "Deactivate Admin",
-          'Type "deactivate" to confirm:',
-          [
-            {
-              text: "Cancel",
-              style: "cancel",
-            },
-            {
-              text: "Deactivate",
-              style: "destructive",
-              onPress: (text) => {
-                if (text?.toLowerCase() === "deactivate") {
-                  performToggleStatus();
-                } else {
-                  Alert.alert(
-                    "Error",
-                    "Please type 'deactivate' correctly to proceed."
-                  );
-                }
-              },
-            },
-          ],
-          "plain-text"
-        );
-      } else {
-        Alert.alert(
-          "Activate Admin",
-          `Are you sure you want to activate ${admin.name || admin.email}?`,
-          [
-            {
-              text: "Cancel",
-              style: "cancel",
-            },
-            {
-              text: "Activate",
-              style: "default",
-              onPress: performToggleStatus,
-            },
-          ]
-        );
-      }
+      Alert.alert(
+        isCurrentlyActive ? "Deactivate Admin" : "Activate Admin",
+        isSelfDeactivation
+          ? "Warning: You are about to deactivate your own account. This will log you out immediately. Are you sure you want to continue?"
+          : `Are you sure you want to ${isCurrentlyActive ? "deactivate" : "activate"} ${admin.name || admin.email}?`,
+        [
+          {
+            text: "Cancel",
+            style: "cancel",
+          },
+          {
+            text: isCurrentlyActive ? "Deactivate" : "Activate",
+            style: isCurrentlyActive ? "destructive" : "default",
+            onPress: performToggleStatus,
+          },
+        ]
+      );
     }
   };
 
@@ -977,13 +910,10 @@ const SuperAdminDetailsScreen = () => {
         title={alertConfig.title}
         message={alertConfig.message}
         onConfirm={alertConfig.onConfirm}
-        onCancel={alertConfig.onCancel}
+        onCancel={() => setShowAlert(false)}
         confirmText={alertConfig.confirmText}
         cancelText={alertConfig.cancelText}
         isDestructive={alertConfig.isDestructive}
-        requireConfirmationText={alertConfig.requireConfirmationText}
-        confirmationText={alertConfig.confirmationText}
-        onConfirmationTextChange={alertConfig.onConfirmationTextChange}
       />
       <AppHeader
         title="Admin Details"
@@ -1233,32 +1163,6 @@ const styles = StyleSheet.create({
   },
   modalDestructiveText: {
     color: "#ffffff",
-  },
-  confirmationInputContainer: {
-    marginTop: 16,
-    marginBottom: 24,
-  },
-  confirmationLabel: {
-    fontSize: 14,
-    color: "#64748b",
-    marginBottom: 8,
-    fontFamily: "Poppins-Medium",
-  },
-  confirmationInput: {
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 6,
-    padding: 8,
-    fontSize: 14,
-    color: "#1e293b",
-    backgroundColor: "#f8fafc",
-  },
-  modalDisabledButton: {
-    backgroundColor: "#cbd5e1",
-    opacity: 0.7,
-  },
-  modalDisabledText: {
-    color: "#94a3b8",
   },
 });
 

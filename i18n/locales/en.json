@@ -84,6 +84,7 @@
   "tasks": {
     "title": "Tasks",
     "company": "Company",
+    "totalTasks": "Total Tasks",
     "createTask": "Create Task",
     "filterOptions": "Filter Options",
     "taskTitle": "Title",
@@ -411,7 +412,7 @@
       "phoneNumberInvalidFormat": "Invalid phone number format. Must be 8-15 digits with optional + prefix"
     },
     "tasks": {
-      "title": "Tasks",
+      "title": "Task",
       "company": "Company",
       "createTask": "Create Task",
       "filterOptions": "Filter Options",
@@ -431,6 +432,7 @@
       "overdue": "Overdue",
       "awaitingResponse": "Awaiting Response",
       "search": "Search tasks...",
+      "searchByTitleOrId": "Search by title or ID",
       "all": "All",
       "due": "Due",
       "noTasksFound": "No Tasks Found",
@@ -455,7 +457,9 @@
       "failedToAddComment": "Failed to add comment",
       "statusUpdated": "Task status updated to {{status}}",
       "failedToUpdateStatus": "Failed to update task status",
+      "totalTasks": "Total Tasks",
       "you": "You",
+      "taskId": "Task ID",
       "superAdmin": "Super Admin",
       "user": "User",
       "superAdminWithName": "Super Admin ({{name}})",
@@ -1194,6 +1198,9 @@
     "editReceipt": "Edit Receipt",
     "createAccidentReport": "Create Accident Report",
     "createIllnessReport": "Create Illness Report",
-    "createStaffDeparture": "Create Staff Departure"
+    "createStaffDeparture": "Create Staff Departure",
+    "createEmployeeStaffDepartureReport": "Create Employee Staff Departure Report",
+    "createEmployeeIllnessReport": "Create Employee Illness Report",
+    "createEmployeeAccidentReport": "Create Employee Accident Report"
   }
 }

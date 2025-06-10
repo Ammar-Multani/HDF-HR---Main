@@ -66,6 +66,7 @@ import Pagination from "../../components/Pagination";
 // Define form interface with the properties needed for our UI
 interface FormItem {
   id: string;
+  form_sequence_id: number;
   type: string;
   title: string;
   status: FormStatus;
@@ -262,7 +263,6 @@ const Shimmer: React.FC<ShimmerProps> = ({ width, height, style }) => {
     </View>
   );
 };
-
 
 // Update FormItemSkeleton component
 const FormItemSkeleton = () => {
@@ -492,6 +492,7 @@ const SuperAdminFormsScreen = () => {
         .select(
           `
           id,
+          form_sequence_id,
           status,
           created_at,
           modified_by,
@@ -528,6 +529,7 @@ const SuperAdminFormsScreen = () => {
         .select(
           `
           id,
+          form_sequence_id,
           status,
           submission_date,
           modified_by,
@@ -564,6 +566,7 @@ const SuperAdminFormsScreen = () => {
         .select(
           `
           id,
+          form_sequence_id,
           status,
           created_at,
           modified_by,
@@ -606,6 +609,7 @@ const SuperAdminFormsScreen = () => {
       // Format and combine all forms
       const formattedAccidents = (accidentData || []).map((report: any) => ({
         id: report.id,
+        form_sequence_id: report.form_sequence_id,
         type: "accident",
         title: t("superAdmin.forms.accidentReport"),
         status: report.status as FormStatus,
@@ -623,6 +627,7 @@ const SuperAdminFormsScreen = () => {
 
       const formattedIllness = (illnessData || []).map((report: any) => ({
         id: report.id,
+        form_sequence_id: report.form_sequence_id,
         type: "illness",
         title: t("superAdmin.forms.illnessReport"),
         status: report.status as FormStatus,
@@ -640,6 +645,7 @@ const SuperAdminFormsScreen = () => {
 
       const formattedDeparture = (departureData || []).map((report: any) => ({
         id: report.id,
+        form_sequence_id: report.form_sequence_id,
         type: "departure",
         title: t("superAdmin.forms.departureReport"),
         status: report.status as FormStatus,
@@ -1002,9 +1008,25 @@ const SuperAdminFormsScreen = () => {
     [t, navigation, getFormTypeColor, getFormTypeName]
   );
 
-  // Add TableHeader component
+  // Add getFormattedId helper function
+  const getFormattedId = (type: string, sequenceId: number) => {
+    const prefix =
+      type === "accident"
+        ? "ACC"
+        : type === "illness"
+          ? "ILL"
+          : type === "departure"
+            ? "DEP"
+            : "";
+    return `${prefix}-${String(sequenceId).padStart(3, "0")}`;
+  };
+
+  // Update TableHeader component
   const TableHeader = () => (
     <View style={styles.tableHeader}>
+      <View style={[styles.tableHeaderCell, { flex: 0.7 }]}>
+        <Text style={styles.tableHeaderText}>Form ID</Text>
+      </View>
       <View style={styles.tableHeaderCell}>
         <Text style={styles.tableHeaderText}>Form Type</Text>
       </View>
@@ -1026,7 +1048,7 @@ const SuperAdminFormsScreen = () => {
     </View>
   );
 
-  // Add TableRow component
+  // Update TableRow component
   const TableRow = ({ item }: { item: FormItem }) => (
     <Pressable
       onPress={() => {
@@ -1040,12 +1062,32 @@ const SuperAdminFormsScreen = () => {
         pressed && { backgroundColor: "#f8fafc" },
       ]}
     >
+      <View style={[styles.tableCell, { flex: 0.7 }]}>
+        <TouchableOpacity
+          onPress={(e) => {
+            e.stopPropagation();
+            navigation.navigate("SuperAdminFormDetailsScreen", {
+              formId: item.id,
+              formType: item.type,
+            });
+          }}
+        >
+          <Text
+            style={[
+              styles.tableCellText,
+              styles.formIdLink,
+              { color: getFormTypeColor(item.type) },
+            ]}
+          >
+            {getFormattedId(item.type, item.form_sequence_id)}
+          </Text>
+        </TouchableOpacity>
+      </View>
       <View style={styles.tableCell}>
         <Text
           style={[
             styles.tableCellText,
             {
-              color: getFormTypeColor(item.type),
               fontFamily: "Poppins-Medium",
             },
           ]}
@@ -1692,6 +1734,11 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     width: "auto",
     alignSelf: "center",
+  },
+  formIdLink: {
+    cursor: "pointer",
+    fontSize: 14,
+    fontFamily: "Poppins-Medium",
   },
 } as const);
 

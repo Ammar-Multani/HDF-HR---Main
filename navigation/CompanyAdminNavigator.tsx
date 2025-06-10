@@ -33,6 +33,9 @@ import FormSubmissionsScreen from "../screens/companyadmin/FormSubmissionsScreen
 import FormDetailsScreen from "../screens/companyadmin/FormDetailsScreen";
 import CompanyAdminProfileScreen from "../screens/companyadmin/CompanyAdminProfileScreen";
 import CompanyAdminEditTaskScreen from "../screens/companyadmin/CompanyAdminEditTaskScreen";
+import CreateEmployeeAccidentReportScreen from "../screens/companyadmin/CreateEmployeeAccidentReportScreen.web";
+import CreateEmployeeIllnessReportScreen from "../screens/companyadmin/CreateEmployeeIllnessReportScreen.web";
+import CreateEmployeeStaffDepartureReportScreen from "../screens/companyadmin/CreateEmployeeStaffDepartureScreen.web";
 
 // Stack navigators
 const CompanyAdminStack = createNativeStackNavigator();
@@ -182,6 +185,23 @@ const WebStackNavigator = () => {
           name="FormDetails"
           component={FormDetailsScreen}
           options={{ title: t("navigation.formDetails") }}
+        />
+        <ContentStack.Screen
+          name="CreateEmployeeAccidentReport"
+          component={CreateEmployeeAccidentReportScreen}
+          options={{ title: t("navigation.createEmployeeAccidentReport") }}
+        />
+        <ContentStack.Screen
+          name="CreateEmployeeIllnessReport"
+          component={CreateEmployeeIllnessReportScreen}
+          options={{ title: t("navigation.createEmployeeIllnessReport") }}
+        />
+        <ContentStack.Screen
+          name="CreateEmployeeStaffDepartureReport"
+          component={CreateEmployeeStaffDepartureReportScreen}
+          options={{
+            title: t("navigation.createEmployeeStaffDepartureReport"),
+          }}
         />
       </ContentStack.Navigator>
     );
@@ -391,6 +411,18 @@ export const CompanyAdminNavigator = () => {
       <CompanyAdminStack.Screen
         name="FormDetails"
         component={FormDetailsScreen}
+      />
+      <CompanyAdminStack.Screen
+        name="CreateEmployeeAccidentReport"
+        component={CreateEmployeeAccidentReportScreen}
+      />
+      <CompanyAdminStack.Screen
+        name="CreateEmployeeIllnessReport"
+        component={CreateEmployeeIllnessReportScreen}
+      />
+      <CompanyAdminStack.Screen
+        name="CreateEmployeeStaffDepartureReport"
+        component={CreateEmployeeStaffDepartureReportScreen}
       />
     </CompanyAdminStack.Navigator>
   );

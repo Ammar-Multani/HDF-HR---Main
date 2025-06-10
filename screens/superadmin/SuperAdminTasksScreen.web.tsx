@@ -65,9 +65,11 @@ import {
   FilterDivider,
   PillFilterGroup,
 } from "../../components/FilterSections";
+import Pagination from "../../components/Pagination";
 
 // Define extended Task type with the properties needed for our UI
 interface ExtendedTask extends Task {
+  task_sequence_id?: number;
   company?: {
     id: string;
     company_name: string;
@@ -307,6 +309,9 @@ const TaskItemSkeleton: React.FC = () => {
 const TableHeaderSkeleton: React.FC = () => {
   return (
     <View style={styles.tableHeaderRow}>
+      <View style={[styles.tableHeaderCell, { flex: 0.5 }]}>
+        <Shimmer width={60} height={20} />
+      </View>
       <View style={styles.tableHeaderCell}>
         <Shimmer width={160} height={20} />
       </View>
@@ -334,6 +339,11 @@ const TableHeader: React.FC = () => {
   const { t } = useTranslation();
   return (
     <View style={styles.tableHeaderRow}>
+      <View style={[styles.tableHeaderCell, { flex: 0.5 }]}>
+        <Text style={styles.tableHeaderText}>
+          {t("superAdmin.tasks.taskId")}
+        </Text>
+      </View>
       <View style={styles.tableHeaderCell}>
         <Text style={styles.tableHeaderText}>
           {t("superAdmin.tasks.title")}
@@ -401,143 +411,9 @@ const TableSkeleton: React.FC = () => {
   );
 };
 
-// Add this before the SuperAdminTasksScreen component
-const Pagination = ({
-  currentPage,
-  totalPages,
-  onPageChange,
-}: {
-  currentPage: number;
-  totalPages: number;
-  onPageChange: (page: number) => void;
-}) => {
-  const theme = useTheme();
-  const { t } = useTranslation();
-  const pageNumbers = [];
-  const maxVisiblePages = 5;
 
-  let startPage = Math.max(0, currentPage - Math.floor(maxVisiblePages / 2));
-  let endPage = Math.min(totalPages - 1, startPage + maxVisiblePages - 1);
 
-  if (endPage - startPage + 1 < maxVisiblePages) {
-    startPage = Math.max(0, endPage - maxVisiblePages + 1);
-  }
 
-  for (let i = startPage; i <= endPage; i++) {
-    pageNumbers.push(i);
-  }
-
-  return (
-    <View style={paginationStyles.container}>
-      <Button
-        mode="text"
-        onPress={() => onPageChange(currentPage - 1)}
-        disabled={currentPage === 0}
-        icon="chevron-left"
-        style={paginationStyles.button}
-      >
-        {t("common.previous")}
-      </Button>
-      <View style={paginationStyles.pageNumbersContainer}>
-        {startPage > 0 && (
-          <>
-            <Button
-              mode="text"
-              onPress={() => onPageChange(0)}
-              style={paginationStyles.pageButton}
-              labelStyle={[
-                paginationStyles.pageButtonText,
-                currentPage === 0 && { color: theme.colors.primary },
-              ]}
-            >
-              1
-            </Button>
-            {startPage > 1 && (
-              <Text style={paginationStyles.ellipsis}>...</Text>
-            )}
-          </>
-        )}
-        {pageNumbers.map((pageNum) => (
-          <Button
-            key={`page-${pageNum}`}
-            mode="text"
-            onPress={() => onPageChange(pageNum)}
-            style={paginationStyles.pageButton}
-            labelStyle={[
-              paginationStyles.pageButtonText,
-              currentPage === pageNum && { color: theme.colors.primary },
-            ]}
-          >
-            {pageNum + 1}
-          </Button>
-        ))}
-        {endPage < totalPages - 1 && (
-          <>
-            {endPage < totalPages - 2 && (
-              <Text style={paginationStyles.ellipsis}>...</Text>
-            )}
-            <Button
-              mode="text"
-              onPress={() => onPageChange(totalPages - 1)}
-              style={paginationStyles.pageButton}
-              labelStyle={[
-                paginationStyles.pageButtonText,
-                currentPage === totalPages - 1 && {
-                  color: theme.colors.primary,
-                },
-              ]}
-            >
-              {totalPages}
-            </Button>
-          </>
-        )}
-      </View>
-      <Button
-        mode="text"
-        onPress={() => onPageChange(currentPage + 1)}
-        disabled={currentPage >= totalPages - 1}
-        icon="chevron-right"
-        contentStyle={{ flexDirection: "row-reverse" }}
-        style={paginationStyles.button}
-      >
-        {t("common.next")}
-      </Button>
-    </View>
-  );
-};
-
-// Add pagination styles separately
-const paginationStyles = StyleSheet.create({
-  container: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 8,
-    borderTopColor: "#e0e0e0",
-    backgroundColor: "#fff",
-    width: "100%",
-  },
-  pageNumbersContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginHorizontal: 8,
-  },
-  button: {
-    marginHorizontal: 4,
-  },
-  pageButton: {
-    minWidth: 40,
-    marginHorizontal: 2,
-  },
-  pageButtonText: {
-    fontSize: 14,
-    color: "#666",
-  },
-  ellipsis: {
-    marginHorizontal: 8,
-    color: "#666",
-  },
-});
 
 const SuperAdminTasksScreen = () => {
   const theme = useTheme();
@@ -617,13 +493,16 @@ const SuperAdminTasksScreen = () => {
 
       // Apply search filter
       if (searchQuery.trim() !== "") {
+        // Use ilike for text search and cast task_sequence_id to text for number search
         filtered = filtered.filter(
           (task) =>
             task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
             (typeof task.description === "string" &&
               task.description
                 .toLowerCase()
-                .includes(searchQuery.toLowerCase()))
+                .includes(searchQuery.toLowerCase())) ||
+            (task.task_sequence_id &&
+              task.task_sequence_id.toString().includes(searchQuery))
         );
       }
 
@@ -668,6 +547,7 @@ const SuperAdminTasksScreen = () => {
           assigned_to,
           created_by,
           reminder_days_before,
+          task_sequence_id,
           company:company_id (
             id, 
             company_name
@@ -684,8 +564,10 @@ const SuperAdminTasksScreen = () => {
         query = query.eq("priority", appliedFilters.priority);
       }
       if (searchQuery.trim() !== "") {
-        // Use full-text search if available or ilike for basic search
-        query = query.ilike("title", `%${searchQuery}%`);
+        // Use ilike for text search and cast task_sequence_id to text for number search
+        query = query.or(
+          `title.ilike.%${searchQuery}%, task_sequence_id.eq.${parseInt(searchQuery) || 0}`
+        );
       }
 
       // Apply sorting - allow multiple sort fields
@@ -710,6 +592,16 @@ const SuperAdminTasksScreen = () => {
         setLoadingMore(false);
         return;
       }
+
+      // Debug log to verify task_sequence_id
+      console.log(
+        "Tasks data with sequence IDs:",
+        data.map((task) => ({
+          id: task.id,
+          task_sequence_id: task.task_sequence_id,
+          title: task.title,
+        }))
+      );
 
       // Update total items count
       if (count !== null) {
@@ -1284,6 +1176,18 @@ const SuperAdminTasksScreen = () => {
         pressed && { backgroundColor: "#f8fafc" },
       ]}
     >
+      <View style={[styles.tableCell, { flex: 0.5 }]}>
+        <TouchableOpacity
+          onPress={(e) => {
+            e.stopPropagation(); // Prevent the row's onPress from firing
+            navigation.navigate("TaskDetails", { taskId: item.id });
+          }}
+        >
+          <Text style={styles.taskIdLink}>
+            {item.task_sequence_id ? `${item.task_sequence_id}` : "-"}
+          </Text>
+        </TouchableOpacity>
+      </View>
       <View style={styles.tableCell}>
         <TooltipText text={item.title} />
       </View>
@@ -1372,15 +1276,50 @@ const SuperAdminTasksScreen = () => {
               }
             />
           </View>
-          {totalPages > 1 && (
-            <View style={styles.paginationWrapper}>
-              <Pagination
-                currentPage={page}
-                totalPages={totalPages}
-                onPageChange={handlePageChange}
-              />
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                marginLeft: 12,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 14,
+                  color: "#666",
+                  fontFamily: "Poppins-Regular",
+                }}
+              >
+                {t("superAdmin.tasks.totalTasks")}:
+              </Text>
+              <Text
+                style={{
+                  fontSize: 14,
+                  color: theme.colors.primary,
+                  fontFamily: "Poppins-Medium",
+                  marginLeft: 4,
+                }}
+              >
+                {totalItems}
+              </Text>
             </View>
-          )}
+            {totalPages > 1 && (
+              <View style={styles.paginationWrapper}>
+                <Pagination
+                  currentPage={page}
+                  totalPages={totalPages}
+                  onPageChange={handlePageChange}
+                />
+              </View>
+            )}
+          </View>
         </>
       );
     }
@@ -1418,7 +1357,7 @@ const SuperAdminTasksScreen = () => {
     const useTableLayout = isLargeScreen || isMediumScreen;
 
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: "#F8F9FA" }]}>
+      <SafeAreaView style={[styles.container]}>
         <AppHeader
           title={t("superAdmin.tasks.title")}
           showBackButton={Platform.OS !== "web"}
@@ -1491,7 +1430,7 @@ const SuperAdminTasksScreen = () => {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: "#F5F5F5" }]}>
+    <SafeAreaView style={[styles.container]}>
       <AppHeader
         title={t("superAdmin.tasks.title")}
         showBackButton={Platform.OS !== "web"}
@@ -1512,7 +1451,7 @@ const SuperAdminTasksScreen = () => {
       >
         <View style={styles.searchBarContainer}>
           <Searchbar
-            placeholder={t("superAdmin.tasks.search")}
+            placeholder={t("superAdmin.tasks.searchByTitleOrId")}
             onChangeText={handleSearch}
             value={searchQuery}
             style={styles.searchbar}
@@ -1562,7 +1501,6 @@ const SuperAdminTasksScreen = () => {
         />
       </View>
 
-      {renderFilterModal()}
 
       <View
         style={[
@@ -1585,7 +1523,6 @@ const SuperAdminTasksScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8F9FA",
   },
   contentContainer: {
     flex: 1,
@@ -1954,14 +1891,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   paginationWrapper: {
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    borderRadius: 16,
-    marginTop: 12,
+    marginTop: 5,
     overflow: "hidden",
     width: "auto",
     alignSelf: "center",
+  },
+  taskIdLink: {
+    color: "#1a73e8",
+    cursor: "pointer",
+    fontSize: 14,
+    fontFamily: "Poppins-Regular",
   },
 } as const);
 

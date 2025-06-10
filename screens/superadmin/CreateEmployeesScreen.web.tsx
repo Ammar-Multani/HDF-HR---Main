@@ -19,7 +19,6 @@ import {
   HelperText,
   Banner,
   Switch,
-  Menu,
   IconButton,
   Divider,
   Surface,
@@ -34,6 +33,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import Animated, { FadeIn } from "react-native-reanimated";
+import CompanySelector from "../../components/CompanySelector";
 import {
   Gender,
   MaritalStatus,
@@ -98,13 +98,7 @@ const CreateEmployeeScreen = () => {
   const isMediumScreen = dimensions.width >= 768 && dimensions.width < 1440;
 
   const [loading, setLoading] = useState(false);
-  // Replace companyId and companyIdLoading with company selection states
-  const [companies, setCompanies] = useState<Company[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
-  const [menuVisible, setMenuVisible] = useState(false);
-  const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
-  const dropdownRef = React.useRef(null);
-
   const [showDobPicker, setShowDobPicker] = useState(false);
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
@@ -170,41 +164,6 @@ const CreateEmployeeScreen = () => {
     const intervalId = setInterval(checkNetworkStatus, 10000);
     return () => clearInterval(intervalId);
   }, []);
-
-  // Replace fetchCompanyId with fetchCompanies
-  // Fetch companies for dropdown
-  useEffect(() => {
-    fetchCompanies();
-  }, []);
-
-  const fetchCompanies = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("company")
-        .select("id, company_name, active")
-        .eq("active", true)
-        .order("company_name");
-
-      if (error) {
-        console.error("Error fetching companies:", error);
-        return;
-      }
-
-      setCompanies(data || []);
-    } catch (error) {
-      console.error("Error fetching companies:", error);
-    }
-  };
-
-  const showMenu = () => {
-    if (dropdownRef.current) {
-      // @ts-ignore - Getting layout measurements
-      dropdownRef.current.measure((x, y, width, height, pageX, pageY) => {
-        setMenuPosition({ x: pageX, y: pageY + height });
-        setMenuVisible(true);
-      });
-    }
-  };
 
   const handleDobChange = (event: any, selectedDate?: Date) => {
     setShowDobPicker(false);
@@ -506,17 +465,6 @@ const CreateEmployeeScreen = () => {
     }
   };
 
-  // Menu container style with theme
-  const menuContainerStyle = {
-    borderRadius: 12,
-    width: 300,
-    marginTop: 4,
-    elevation: 4,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
-  };
-
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -603,47 +551,12 @@ const CreateEmployeeScreen = () => {
                   </View>
 
                   <View style={styles.cardContent}>
-                    <TouchableOpacity
-                      ref={dropdownRef}
-                      style={[
-                        styles.dropdownButton,
-                        selectedCompany && styles.activeDropdownButton,
-                      ]}
-                      onPress={showMenu}
-                    >
-                      <View style={styles.dropdownContent}>
-                        <IconButton
-                          icon="office-building"
-                          size={20}
-                          iconColor={
-                            selectedCompany ? theme.colors.primary : "#757575"
-                          }
-                          style={styles.dropdownLeadingIcon}
-                        />
-                        <Text
-                          style={[
-                            styles.dropdownButtonText,
-                            selectedCompany && {
-                              color: theme.colors.primary,
-                            },
-                          ]}
-                          numberOfLines={1}
-                          ellipsizeMode="tail"
-                        >
-                          {selectedCompany
-                            ? selectedCompany.company_name
-                            : t("superAdmin.employees.selectCompany")}
-                        </Text>
-                      </View>
-                      <IconButton
-                        icon="chevron-down"
-                        size={20}
-                        style={styles.dropdownIcon}
-                        iconColor={
-                          selectedCompany ? theme.colors.primary : "#757575"
-                        }
-                      />
-                    </TouchableOpacity>
+                    <CompanySelector
+                      onSelect={setSelectedCompany}
+                      selectedCompany={selectedCompany}
+                      required={true}
+                      label={t("superAdmin.employees.selectCompany")}
+                    />
                   </View>
                 </Surface>
               </Animated.View>
@@ -1229,7 +1142,7 @@ const CreateEmployeeScreen = () => {
                       {t("superAdmin.employees.inviteEmailHelper")}
                     </Text>
 
-                    {/* <View style={styles.adminToggleContainer}>
+                    <View style={styles.adminToggleContainer}>
                       <Text style={styles.adminToggleLabel}>
                         {t("superAdmin.employees.grantAdminPrivileges")}
                       </Text>
@@ -1238,7 +1151,7 @@ const CreateEmployeeScreen = () => {
                         onValueChange={handleAdminToggle}
                         disabled={loading}
                       />
-                    </View> */}
+                    </View>
                   </View>
                 </Surface>
               </Animated.View>
@@ -1247,48 +1160,6 @@ const CreateEmployeeScreen = () => {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Company Selection Menu */}
-      <Menu
-        visible={menuVisible}
-        onDismiss={() => setMenuVisible(false)}
-        anchor={menuPosition}
-        contentStyle={menuContainerStyle}
-      >
-        <View style={styles.menuHeader}>
-          <Text style={styles.menuTitle}>
-            {t("superAdmin.employees.selectCompany")}
-          </Text>
-        </View>
-        <Divider />
-        <ScrollView style={{ maxHeight: 400 }}>
-          {companies.map((company) => (
-            <Menu.Item
-              key={company.id}
-              title={company.company_name}
-              onPress={() => {
-                setSelectedCompany(company);
-                setMenuVisible(false);
-              }}
-              style={styles.menuItemStyle}
-              titleStyle={[
-                styles.menuItemText,
-                selectedCompany?.id === company.id && styles.menuItemSelected,
-              ]}
-              leadingIcon="office-building"
-              trailingIcon={
-                selectedCompany?.id === company.id ? "check" : undefined
-              }
-            />
-          ))}
-          {companies.length === 0 && (
-            <Menu.Item
-              title={t("superAdmin.employees.noCompaniesFound")}
-              disabled={true}
-              style={styles.menuItemStyle}
-            />
-          )}
-        </ScrollView>
-      </Menu>
       <Surface style={styles.bottomBar}>
         <View style={styles.bottomBarContent}>
           <View style={styles.actionButtons}>
@@ -1462,64 +1333,17 @@ const styles = StyleSheet.create({
     minWidth: 120,
     color: "white",
   },
-  dropdownButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
-    borderRadius: 12,
-    paddingLeft: 4,
-    paddingRight: 8,
-    paddingVertical: 6,
-    backgroundColor: "#FFFFFF",
-  },
-  dropdownContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  dropdownLeadingIcon: {
-    margin: 0,
-    padding: 0,
-  },
-  dropdownButtonText: {
-    fontFamily: "Poppins-Regular",
-    color: "#424242",
-    flex: 1,
-    fontSize: 14,
-  },
-  dropdownIcon: {
-    margin: 0,
-    padding: 0,
-  },
-  activeDropdownButton: {
-    borderColor: "#1a73e8",
-    backgroundColor: "#F0F7FF",
-  },
-  menuHeader: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: "#F5F5F5",
-  },
-  menuTitle: {
-    fontSize: 14,
-    fontFamily: "Poppins-Medium",
-    color: "#212121",
-  },
-  menuItemStyle: {
-    height: 48,
-    justifyContent: "center",
-  },
-  menuItemText: {
-    fontFamily: "Poppins-Regular",
-    fontSize: 14,
-    color: "#424242",
-  },
-  menuItemSelected: {
-    color: "#1a73e8",
-    fontFamily: "Poppins-Medium",
-  },
+  dropdownButton: undefined,
+  dropdownContent: undefined,
+  dropdownLeadingIcon: undefined,
+  dropdownButtonText: undefined,
+  dropdownIcon: undefined,
+  activeDropdownButton: undefined,
+  menuHeader: undefined,
+  menuTitle: undefined,
+  menuItemStyle: undefined,
+  menuItemText: undefined,
+  menuItemSelected: undefined,
   adminToggleContainer: {
     flexDirection: "row",
     alignItems: "center",

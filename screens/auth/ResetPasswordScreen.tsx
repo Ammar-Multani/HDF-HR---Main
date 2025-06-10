@@ -34,6 +34,15 @@ import { createTextStyle } from "../../utils/globalStyles";
 import { useTranslation } from "react-i18next";
 import CustomLanguageSelector from "../../components/CustomLanguageSelector";
 import CustomSnackbar from "../../components/CustomSnackbar";
+import { resetPassword, invalidateAllUserSessions } from "../../utils/auth";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { supabase } from "../../lib/supabase";
+import {
+  AUTH_TOKEN_KEY,
+  USER_DATA_KEY,
+  USER_ROLE_KEY,
+  AUTH_STATE_VERSION,
+} from "../../utils/auth";
 
 const { width, height } = Dimensions.get("window");
 
@@ -128,19 +137,64 @@ const ResetPasswordScreen = () => {
 
     try {
       setIsResetting(true);
+
+      // First verify the token
+      const { data: tokenData, error: tokenError } = await supabase
+        .from("users")
+        .select("id, reset_token_expires")
+        .eq("reset_token", token)
+        .single();
+
+      if (tokenError || !tokenData) {
+        setSnackbarMessage(t("resetPassword.invalidOrExpiredToken"));
+        setSnackbarVisible(true);
+        return;
+      }
+
+      // Check if token is expired
+      if (new Date(tokenData.reset_token_expires) < new Date()) {
+        setSnackbarMessage(t("resetPassword.tokenExpired"));
+        setSnackbarVisible(true);
+        return;
+      }
+
+      // Update password
       const { error } = await resetPassword(password, token);
 
       if (error) {
         setSnackbarMessage(error.message || t("resetPassword.failedReset"));
         setSnackbarVisible(true);
       } else {
-        setSnackbarMessage(t("resetPassword.successMessage"));
-        setSnackbarVisible(true);
+        try {
+          // Invalidate all sessions for this user
+          await invalidateAllUserSessions(tokenData.id);
 
-        // Navigate to login after a delay
-        setTimeout(() => {
-          navigation.navigate("Login" as never);
-        }, 3000);
+          setSnackbarMessage(t("resetPassword.successMessage"));
+          setSnackbarVisible(true);
+
+          // Clear any local auth state
+          await AsyncStorage.multiRemove([
+            AUTH_TOKEN_KEY,
+            USER_DATA_KEY,
+            USER_ROLE_KEY,
+            AUTH_STATE_VERSION,
+          ]);
+
+          // Force navigation to login after a delay
+          setTimeout(() => {
+            navigation.reset({
+              index: 0,
+              routes: [{ name: "Login" as never }],
+            });
+          }, 2000);
+        } catch (invalidateError) {
+          console.error("Error invalidating sessions:", invalidateError);
+          // Still navigate to login even if session invalidation fails
+          navigation.reset({
+            index: 0,
+            routes: [{ name: "Login" as never }],
+          });
+        }
       }
     } catch (err) {
       console.error("Reset password error:", err);
@@ -386,33 +440,33 @@ const ResetPasswordScreen = () => {
       </KeyboardAvoidingView>
 
       <CustomSnackbar
-          visible={snackbarVisible}
-          message={snackbarMessage}
-          onDismiss={() => setSnackbarVisible(false)}
-          type={
-            snackbarMessage?.includes("successful") ||
-            snackbarMessage?.includes("instructions will be sent")
-              ? "success"
-              : snackbarMessage?.includes("rate limit") ||
-                  snackbarMessage?.includes("network")
-                ? "warning"
-                : "error"
-          }
-          duration={20000}
-          action={{
-            label: t("common.ok"),
-            onPress: () => setSnackbarVisible(false),
-          }}
-          style={[
-            styles.snackbar,
-            {
-              width: Platform.OS === "web" ? 700 : undefined,
-              alignSelf: "center",
-              position: Platform.OS === "web" ? "absolute" : undefined,
-              bottom: Platform.OS === "web" ? 24 : undefined,
-            },
-          ]}
-        />
+        visible={snackbarVisible}
+        message={snackbarMessage}
+        onDismiss={() => setSnackbarVisible(false)}
+        type={
+          snackbarMessage?.includes("successful") ||
+          snackbarMessage?.includes("instructions will be sent")
+            ? "success"
+            : snackbarMessage?.includes("rate limit") ||
+                snackbarMessage?.includes("network")
+              ? "warning"
+              : "error"
+        }
+        duration={20000}
+        action={{
+          label: t("common.ok"),
+          onPress: () => setSnackbarVisible(false),
+        }}
+        style={[
+          styles.snackbar,
+          {
+            width: Platform.OS === "web" ? 700 : undefined,
+            alignSelf: "center",
+            position: Platform.OS === "web" ? "absolute" : undefined,
+            bottom: Platform.OS === "web" ? 24 : undefined,
+          },
+        ]}
+      />
     </SafeAreaView>
   );
 };

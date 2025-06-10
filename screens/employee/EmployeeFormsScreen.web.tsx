@@ -57,6 +57,7 @@ import {
 
 interface FormSubmission {
   id: string;
+  form_sequence_id: number;
   type: "accident" | "illness" | "departure";
   title: string;
   status: FormStatus;
@@ -201,9 +202,25 @@ type RootStackParamList = {
 // Define navigation prop type
 type FormNavigationProp = NavigationProp<RootStackParamList>;
 
-// Add TableHeader component
+// Add getFormattedId helper function
+const getFormattedId = (type: string, sequenceId: number) => {
+  const prefix =
+    type === "accident"
+      ? "ACC"
+      : type === "illness"
+        ? "ILL"
+        : type === "departure"
+          ? "DEP"
+          : "";
+  return `${prefix}-${String(sequenceId).padStart(3, "0")}`;
+};
+
+// Update TableHeader component
 const TableHeader = () => (
   <View style={styles.tableHeader}>
+    <View style={[styles.tableHeaderCell, { flex: 0.7 }]}>
+      <Text style={styles.tableHeaderText}>Form ID</Text>
+    </View>
     <View style={styles.tableHeaderCell}>
       <Text style={styles.tableHeaderText}>Form Type</Text>
     </View>
@@ -225,6 +242,7 @@ interface TableRowProps {
   navigation: FormNavigationProp;
 }
 
+// Update TableRow component
 const TableRow = ({ item, navigation }: TableRowProps) => (
   <Pressable
     onPress={() =>
@@ -238,12 +256,32 @@ const TableRow = ({ item, navigation }: TableRowProps) => (
       pressed && { backgroundColor: "#f8fafc" },
     ]}
   >
+    <View style={[styles.tableCell, { flex: 0.7 }]}>
+      <TouchableOpacity
+        onPress={(e) => {
+          e.stopPropagation();
+          navigation.navigate("FormDetails", {
+            formId: item.id,
+            formType: item.type,
+          });
+        }}
+      >
+        <Text
+          style={[
+            styles.tableCellText,
+            styles.formIdLink,
+            { color: getFormTypeColor(item.type) },
+          ]}
+        >
+          {getFormattedId(item.type, item.form_sequence_id)}
+        </Text>
+      </TouchableOpacity>
+    </View>
     <View style={styles.tableCell}>
       <Text
         style={[
           styles.tableCellText,
           {
-            color: getFormTypeColor(item.type),
             fontFamily: "Poppins-Medium",
           },
         ]}
@@ -360,21 +398,21 @@ const EmployeeFormsScreen = () => {
       // Fetch accident reports
       const { data: accidentData, error: accidentError } = await supabase
         .from("accident_report")
-        .select("*")
+        .select("*, form_sequence_id")
         .eq("employee_id", user.id)
         .order("created_at", { ascending: false });
 
       // Fetch illness reports
       const { data: illnessData, error: illnessError } = await supabase
         .from("illness_report")
-        .select("*")
+        .select("*, form_sequence_id")
         .eq("employee_id", user.id)
         .order("submission_date", { ascending: false });
 
       // Fetch staff departure reports
       const { data: departureData, error: departureError } = await supabase
         .from("staff_departure_report")
-        .select("*")
+        .select("*, form_sequence_id")
         .eq("employee_id", user.id)
         .order("created_at", { ascending: false });
 
@@ -390,6 +428,7 @@ const EmployeeFormsScreen = () => {
       // Format accident reports
       const formattedAccidents = (accidentData || []).map((report) => ({
         id: report.id,
+        form_sequence_id: report.form_sequence_id,
         type: "accident" as const,
         title: "Accident Report",
         status: report.status,
@@ -399,6 +438,7 @@ const EmployeeFormsScreen = () => {
       // Format illness reports
       const formattedIllness = (illnessData || []).map((report) => ({
         id: report.id,
+        form_sequence_id: report.form_sequence_id,
         type: "illness" as const,
         title: "Illness Report",
         status: report.status,
@@ -408,6 +448,7 @@ const EmployeeFormsScreen = () => {
       // Format departure reports
       const formattedDeparture = (departureData || []).map((report) => ({
         id: report.id,
+        form_sequence_id: report.form_sequence_id,
         type: "departure" as const,
         title: "Staff Departure Report",
         status: report.status,
@@ -459,8 +500,12 @@ const EmployeeFormsScreen = () => {
 
     // Apply search filter
     if (searchQuery.trim() !== "") {
-      filtered = filtered.filter((form) =>
-        form.title.toLowerCase().includes(searchQuery.toLowerCase())
+      filtered = filtered.filter(
+        (form) =>
+          form.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          getFormattedId(form.type, form.form_sequence_id)
+            .toLowerCase()
+            .includes(searchQuery.toLowerCase())
       );
     }
 
@@ -505,6 +550,7 @@ const EmployeeFormsScreen = () => {
     await fetchForms();
   }, []);
 
+  // Update renderFormItem to include form ID
   const renderFormItem = useCallback(
     ({ item }: { item: FormSubmission }) => (
       <Surface style={[styles.cardSurface, { backgroundColor: "#FFFFFF" }]}>
@@ -519,6 +565,14 @@ const EmployeeFormsScreen = () => {
         >
           <View style={styles.cardHeader}>
             <View style={styles.titleContainer}>
+              <Text
+                style={[
+                  styles.formIdLink,
+                  { color: getFormTypeColor(item.type), marginBottom: 8 },
+                ]}
+              >
+                {getFormattedId(item.type, item.form_sequence_id)}
+              </Text>
               <View style={styles.formTypeContainer}>
                 <Chip
                   icon={getFormTypeIcon(item.type)}
@@ -526,7 +580,7 @@ const EmployeeFormsScreen = () => {
                     styles.formTypeChip,
                     { backgroundColor: `${getFormTypeColor(item.type)}20` },
                   ]}
-                  textStyle={{ color: getFormTypeColor(item.type) }}
+                  textStyle={{ color: "#333" }}
                 >
                   {item.title}
                 </Chip>
@@ -1327,6 +1381,11 @@ const styles = StyleSheet.create({
   },
   statusPillText: {
     fontSize: 11,
+    fontFamily: "Poppins-Medium",
+  },
+  formIdLink: {
+    cursor: "pointer",
+    fontSize: 14,
     fontFamily: "Poppins-Medium",
   },
 } as const);

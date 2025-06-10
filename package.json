@@ -84,6 +84,8 @@
     "@expo/config-plugins": "~9.0.0",
     "@expo/metro-runtime": "~4.0.1",
     "@types/base-64": "^1.0.2",
+    "@types/color": "^4.2.0",
+    "@types/lodash": "^4.17.17",
     "@types/node": "^22.15.29",
     "@types/react": "~18.3.12",
     "@types/react-native-vector-icons": "^6.4.18",

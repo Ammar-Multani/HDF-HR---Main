@@ -63,6 +63,7 @@ import {
   FilterDivider,
   PillFilterGroup,
 } from "../../components/FilterSections";
+import Pagination from "../../components/Pagination";
 
 // Add TooltipText component after imports and before other components
 const TooltipText = ({
@@ -232,77 +233,7 @@ const Shimmer: React.FC<ShimmerProps> = ({ width, height, style }) => {
   );
 };
 
-// Add Pagination component after Shimmer component
-const Pagination = ({
-  currentPage,
-  totalPages,
-  onPageChange,
-}: {
-  currentPage: number;
-  totalPages: number;
-  onPageChange: (page: number) => void;
-}) => {
-  const visiblePages = 5;
-  const getVisiblePageNumbers = () => {
-    const pages = [];
-    const leftOffset = Math.floor(visiblePages / 2);
-    let start = Math.max(0, currentPage - leftOffset);
-    let end = Math.min(totalPages - 1, start + visiblePages - 1);
 
-    // Adjust start if we're near the end
-    start = Math.max(0, Math.min(start, end - visiblePages + 1));
-
-    for (let i = start; i <= end; i++) {
-      pages.push(i);
-    }
-    return pages;
-  };
-
-  return (
-    <View style={styles.paginationContainer}>
-      <IconButton
-        icon="chevron-left"
-        size={24}
-        disabled={currentPage === 0}
-        onPress={() => onPageChange(currentPage - 1)}
-        style={[
-          styles.paginationButton,
-          currentPage === 0 && styles.paginationButtonDisabled,
-        ]}
-      />
-      {getVisiblePageNumbers().map((pageNum) => (
-        <Pressable
-          key={pageNum}
-          onPress={() => onPageChange(pageNum)}
-          style={({ pressed }) => [
-            styles.pageButton,
-            pageNum === currentPage && styles.currentPageButton,
-            pressed && styles.pageButtonPressed,
-          ]}
-        >
-          <Text
-            style={[
-              styles.pageButtonText,
-              pageNum === currentPage && styles.currentPageButtonText,
-            ]}
-          >
-            {pageNum + 1}
-          </Text>
-        </Pressable>
-      ))}
-      <IconButton
-        icon="chevron-right"
-        size={24}
-        disabled={currentPage === totalPages - 1}
-        onPress={() => onPageChange(currentPage + 1)}
-        style={[
-          styles.paginationButton,
-          currentPage === totalPages - 1 && styles.paginationButtonDisabled,
-        ]}
-      />
-    </View>
-  );
-};
 
 // Component for skeleton loading UI
 const CompanyItemSkeleton = () => {
@@ -1192,7 +1123,7 @@ const CompanyListScreen = () => {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      style={[styles.container,]}
     >
       <AppHeader
         showLogo={false}
@@ -1205,7 +1136,7 @@ const CompanyListScreen = () => {
       <View
         style={[
           styles.mainContent,
-          { backgroundColor: theme.colors.surface, flex: 1 },
+          {flex: 1 },
         ]}
       >
         {networkStatus === false && (
@@ -1647,15 +1578,10 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   paginationWrapper: {
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    borderRadius: 16,
-    marginTop: 12,
+    marginTop: 5,
     overflow: "hidden",
     width: "auto",
     alignSelf: "center",
-    padding: 8,
   },
   paginationContainer: {
     flexDirection: "row",

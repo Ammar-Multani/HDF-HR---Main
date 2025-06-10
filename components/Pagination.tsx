@@ -114,8 +114,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     paddingVertical: 8,
-    borderTopColor: "#e0e0e0",
-    backgroundColor: "#fff",
     width: "100%",
   },
   pageNumbersContainer: {
