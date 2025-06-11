@@ -30,6 +30,7 @@ import { sendSuperAdminWelcomeEmail } from "../../utils/emailService";
 import Animated, { FadeIn } from "react-native-reanimated";
 import CustomSnackbar from "../../components/CustomSnackbar";
 import { t } from "i18next";
+import { ActivityType } from "../../types/activity-log";
 
 interface AdminFormData {
   name: string;
@@ -182,6 +183,57 @@ const CreateSuperAdminScreen = () => {
         // If admin creation fails, delete the user
         await supabase.from("users").delete().eq("id", newUser.id);
         throw adminRecordError;
+      }
+
+      // Get creator's details from admin table
+      const { data: creatorDetails, error: creatorError } = await supabase
+        .from("admin")
+        .select("id, name, email")
+        .eq("email", user?.email)
+        .single();
+
+      if (creatorError) {
+        console.error("Error fetching creator details:", creatorError);
+      }
+
+      const creatorName = creatorDetails?.name || user?.email || "";
+
+      // Log the super admin creation activity
+      const activityLogData = {
+        user_id: user?.id,
+        activity_type: ActivityType.CREATE_SUPER_ADMIN,
+        description: `New super admin "${data.name}" (${data.email}) created`,
+        metadata: {
+          created_by: {
+            id: user?.id || "",
+            name: creatorName,
+            email: user?.email || "",
+            role: "superadmin",
+          },
+          admin: {
+            id: newUser.id,
+            name: data.name,
+            email: data.email,
+            role: "superadmin",
+          },
+        },
+        old_value: null,
+        new_value: {
+          name: data.name,
+          email: data.email,
+          phone_number: data.phone_number || "Not provided",
+          role: UserRole.SUPER_ADMIN,
+          created_at: new Date().toISOString(),
+        },
+      };
+
+      const { error: logError } = await supabase
+        .from("activity_logs")
+        .insert([activityLogData]);
+
+      if (logError) {
+        console.error("Error logging activity:", logError);
+        // Don't throw here as the admin was created successfully
       }
 
       // Send welcome email to the super admin

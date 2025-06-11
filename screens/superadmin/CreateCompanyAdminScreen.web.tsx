@@ -32,6 +32,7 @@ import Animated, { FadeIn } from "react-native-reanimated";
 import { sendCompanyAdminInviteEmail } from "../../utils/emailService";
 import CustomSnackbar from "../../components/CustomSnackbar";
 import CompanySelector from "../../components/CompanySelector";
+import { ActivityType } from "../../types/activity-log";
 
 interface CompanyAdminFormData {
   first_name: string;
@@ -339,6 +340,65 @@ const CreateCompanyAdminScreen = () => {
         // If company_user creation fails, delete the user
         await supabase.from("users").delete().eq("id", newUser.id);
         throw new Error(companyUserError.message);
+      }
+
+      // Get creator's details from admin table
+      const { data: creatorDetails, error: creatorError } = await supabase
+        .from("admin")
+        .select("id, name, email")
+        .eq("email", user?.email)
+        .single();
+
+      if (creatorError) {
+        console.error("Error fetching creator details:", creatorError);
+      }
+
+      const creatorName = creatorDetails?.name || user?.email || "";
+
+      // Log the company admin creation activity
+      const activityLogData = {
+        user_id: user?.id,
+        activity_type: ActivityType.CREATE_COMPANY_ADMIN,
+        description: `New company admin "${data.first_name} ${data.last_name}" (${data.email}) created for company "${selectedCompany.company_name}"`,
+        company_id: selectedCompany.id,
+        metadata: {
+          created_by: {
+            id: user?.id || "",
+            name: creatorName,
+            email: user?.email || "",
+            role: "superadmin",
+          },
+          admin: {
+            id: newUser.id,
+            name: `${data.first_name} ${data.last_name}`,
+            email: data.email,
+            role: "admin",
+          },
+          company: {
+            id: selectedCompany.id,
+            name: selectedCompany.company_name,
+          },
+        },
+        old_value: null,
+        new_value: {
+          first_name: data.first_name,
+          last_name: data.last_name,
+          email: data.email,
+          phone_number: data.phone_number || "Not provided",
+          job_title: data.job_title || "Not provided",
+          company_id: selectedCompany.id,
+          role: "admin",
+          created_at: new Date().toISOString(),
+        },
+      };
+
+      const { error: logError } = await supabase
+        .from("activity_logs")
+        .insert([activityLogData]);
+
+      if (logError) {
+        console.error("Error logging activity:", logError);
+        // Don't throw here as the admin was created successfully
       }
 
       // Send invitation email to the company admin

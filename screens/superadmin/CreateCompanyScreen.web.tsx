@@ -28,6 +28,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { sendCompanyAdminInviteEmail } from "../../utils/emailService";
 import CustomSnackbar from "../../components/CustomSnackbar";
+import { ActivityType } from "../../types/activity-log";
 
 interface CompanyFormData {
   company_name: string;
@@ -43,6 +44,8 @@ interface CompanyFormData {
   address_country: string;
   admin_email: string;
   admin_password: string;
+  admin_first_name: string;
+  admin_last_name: string;
   vat_type: string;
   stakeholder_name: string;
   stakeholder_percentage: string;
@@ -107,6 +110,8 @@ const CreateCompanyScreen = () => {
       address_country: "",
       admin_email: "",
       admin_password: "",
+      admin_first_name: "",
+      admin_last_name: "",
       vat_type: "",
       stakeholder_name: "",
       stakeholder_percentage: "",
@@ -365,8 +370,8 @@ const CreateCompanyScreen = () => {
       const companyUserData = {
         id: newUser.id,
         company_id: newCompany.id,
-        first_name: "Company",
-        last_name: "Admin",
+        first_name: data.admin_first_name,
+        last_name: data.admin_last_name,
         email: data.admin_email,
         role: "admin",
         active_status: "active",
@@ -389,6 +394,66 @@ const CreateCompanyScreen = () => {
         await supabase.from("users").delete().eq("id", newUser.id);
         await supabase.from("company").delete().eq("id", newCompany.id);
         throw companyUserError;
+      }
+
+      // Get super admin's name from admin table
+      const { data: adminDetails, error: adminDetailsError } = await supabase
+        .from("admin")
+        .select("id, name, email")
+        .eq("email", user?.email)
+        .single();
+
+      if (adminDetailsError) {
+        console.error("Error fetching admin details:", adminDetailsError);
+      }
+
+      const userDisplayName = adminDetails?.name || user?.email || "";
+
+      // Log the company creation activity
+      const activityLogData = {
+        user_id: user?.id,
+        activity_type: ActivityType.CREATE_COMPANY,
+        description: `New company "${data.company_name}" created with admin ${data.admin_first_name} ${data.admin_last_name} (${data.admin_email})`,
+        company_id: newCompany.id,
+        metadata: {
+          created_by: {
+            id: user?.id || "",
+            name: userDisplayName,
+            email: user?.email || "",
+            role: "superadmin",
+          },
+          company: {
+            id: newCompany.id,
+            name: data.company_name,
+          },
+          company_admin: {
+            id: newUser.id,
+            name: `${data.admin_first_name} ${data.admin_last_name}`,
+            email: data.admin_email,
+            role: "admin",
+          },
+        },
+        old_value: null,
+        new_value: {
+          address: companyData.address,
+          vat_type: data.vat_type,
+          created_at: new Date().toISOString(),
+          company_name: data.company_name,
+          stakeholders: stakeholders,
+          contact_email: data.contact_email,
+          industry_type: data.industry_type,
+          contact_number: data.contact_number,
+          registration_number: data.registration_number,
+        },
+      };
+
+      const { error: logError } = await supabase
+        .from("activity_logs")
+        .insert([activityLogData]);
+
+      if (logError) {
+        console.error("Error logging activity:", logError);
+        // Don't throw error here, as the company was created successfully
       }
 
       // Send invitation email to the admin
@@ -549,7 +614,6 @@ const CreateCompanyScreen = () => {
                             "superAdmin.companies.registrationNumberMaxLength"
                           ),
                         },
-                        
                       }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
@@ -985,6 +1049,86 @@ const CreateCompanyScreen = () => {
                 <Card style={[styles.formCard, { marginTop: 24 }]}>
                   {renderSectionHeader("Company Admin", "account")}
                   <Card.Content style={styles.cardContent}>
+                    <View style={styles.row}>
+                      <View style={styles.halfInput}>
+                        <Controller
+                          control={control}
+                          rules={{
+                            required: t(
+                              "superAdmin.companies.adminFirstNameRequired"
+                            ),
+                            minLength: {
+                              value: 2,
+                              message: t("superAdmin.companies.nameMinLength"),
+                            },
+                            pattern: {
+                              value: /^[a-zA-Z\s-]+$/,
+                              message: t(
+                                "superAdmin.companies.nameInvalidChars"
+                              ),
+                            },
+                          }}
+                          render={({ field: { onChange, onBlur, value } }) => (
+                            <TextInput
+                              label={`${t("superAdmin.companies.adminFirstName")} *`}
+                              mode="outlined"
+                              value={value}
+                              onChangeText={onChange}
+                              onBlur={onBlur}
+                              error={!!errors.admin_first_name}
+                              style={styles.input}
+                              disabled={loading}
+                            />
+                          )}
+                          name="admin_first_name"
+                        />
+                        {errors.admin_first_name && (
+                          <Text style={styles.errorText}>
+                            {errors.admin_first_name.message}
+                          </Text>
+                        )}
+                      </View>
+
+                      <View style={styles.halfInput}>
+                        <Controller
+                          control={control}
+                          rules={{
+                            required: t(
+                              "superAdmin.companies.adminLastNameRequired"
+                            ),
+                            minLength: {
+                              value: 2,
+                              message: t("superAdmin.companies.nameMinLength"),
+                            },
+                            pattern: {
+                              value: /^[a-zA-Z\s-]+$/,
+                              message: t(
+                                "superAdmin.companies.nameInvalidChars"
+                              ),
+                            },
+                          }}
+                          render={({ field: { onChange, onBlur, value } }) => (
+                            <TextInput
+                              label={`${t("superAdmin.companies.adminLastName")} *`}
+                              mode="outlined"
+                              value={value}
+                              onChangeText={onChange}
+                              onBlur={onBlur}
+                              error={!!errors.admin_last_name}
+                              style={styles.input}
+                              disabled={loading}
+                            />
+                          )}
+                          name="admin_last_name"
+                        />
+                        {errors.admin_last_name && (
+                          <Text style={styles.errorText}>
+                            {errors.admin_last_name.message}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+
                     <Controller
                       control={control}
                       rules={{

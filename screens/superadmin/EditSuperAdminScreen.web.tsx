@@ -40,6 +40,8 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Animated, { FadeIn } from "react-native-reanimated";
 import CustomSnackbar from "../../components/CustomSnackbar";
 import { useTranslation } from "react-i18next";
+import { ActivityType } from "../../types/activity-log";
+import { useAuth } from "../../contexts/AuthContext";
 
 type EditSuperAdminRouteParams = {
   adminId: string;
@@ -169,6 +171,7 @@ const EditSuperAdminScreen = () => {
   const { adminId } = route.params;
   const dimensions = useWindowDimensions();
   const { t } = useTranslation();
+  const { user } = useAuth();
 
   // Calculate responsive breakpoints
   const isLargeScreen = dimensions.width >= 1440;
@@ -353,6 +356,18 @@ const EditSuperAdminScreen = () => {
     }
   };
 
+  // Add helper function to compare and track changes
+  const compareAndTrackChange = (
+    oldValue: any,
+    newValue: any,
+    fieldName: string,
+    changes: string[]
+  ) => {
+    if (oldValue !== newValue && newValue !== undefined) {
+      changes.push(`${fieldName}`);
+    }
+  };
+
   // Form submission handler
   const onSubmit = async (data: AdminFormData) => {
     if (!admin) return;
@@ -384,6 +399,26 @@ const EditSuperAdminScreen = () => {
       }
 
       setSubmitting(true);
+
+      // Track changes
+      const changes: string[] = [];
+      compareAndTrackChange(admin.name, data.name, "name", changes);
+      compareAndTrackChange(admin.email, data.email, "email", changes);
+      compareAndTrackChange(
+        admin.phone_number,
+        data.phone_number,
+        "phone number",
+        changes
+      );
+      compareAndTrackChange(admin.status, data.status, "status", changes);
+
+      // If no changes were made, show message and return
+      if (changes.length === 0) {
+        setSnackbarMessage("No changes detected");
+        setSnackbarVisible(true);
+        setSubmitting(false);
+        return;
+      }
 
       // Check if email was changed
       const isEmailChanged = data.email !== admin.email;
@@ -434,6 +469,19 @@ const EditSuperAdminScreen = () => {
         }
       }
 
+      // Get creator's details from admin table
+      const { data: creatorDetails, error: creatorError } = await supabase
+        .from("admin")
+        .select("id, name, email")
+        .eq("email", user?.email)
+        .single();
+
+      if (creatorError) {
+        console.error("Error fetching creator details:", creatorError);
+      }
+
+      const creatorName = creatorDetails?.name || user?.email || "";
+
       // Update admin record with boolean status
       const { error } = await supabase
         .from("admin")
@@ -469,6 +517,48 @@ const EditSuperAdminScreen = () => {
         if (emailError) {
           throw emailError;
         }
+      }
+
+      // Log the activity
+      const activityLogData = {
+        user_id: user?.id,
+        activity_type: "UPDATE_SUPER_ADMIN",
+        description: `Super admin "${admin.name}" was updated`,
+        metadata: {
+          updated_by: {
+            id: user?.id || "",
+            name: creatorName,
+            email: user?.email || "",
+            role: "superadmin",
+          },
+          admin: {
+            id: adminId,
+            name: data.name,
+            email: data.email,
+            role: "superadmin",
+          },
+          changes,
+        },
+        old_value: {
+          name: admin.name,
+          email: admin.email,
+          phone_number: admin.phone_number,
+          status: admin.status,
+        },
+        new_value: {
+          name: data.name,
+          email: data.email,
+          phone_number: data.phone_number,
+          status: data.status,
+        },
+      };
+
+      const { error: logError } = await supabase
+        .from("activity_logs")
+        .insert([activityLogData]);
+
+      if (logError) {
+        console.error("Error logging activity:", logError);
       }
 
       // Clear cache for this admin
@@ -944,7 +1034,7 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins-Regular",
     marginTop: 4,
   },
-  bottomBar: {    
+  bottomBar: {
     backgroundColor: "#FFFFFF",
     borderTopWidth: 1,
     borderTopColor: "#e2e8f0",

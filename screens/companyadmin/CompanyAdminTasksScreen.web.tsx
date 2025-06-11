@@ -1313,10 +1313,10 @@ const CompanyAdminTasksScreen = () => {
         <TooltipText text={format(new Date(item.deadline), "MMM d, yyyy")} />
       </View>
       <View style={styles.tableCell}>
-        <Chip
+      <Chip
           style={{
             borderRadius: 25,
-            backgroundColor: getPriorityColor(item.priority),
+            backgroundColor: getPriorityColor(item.priority) + "20",
           }}
           textStyle={{
             color: getPriorityColor(item.priority),

@@ -1002,6 +1002,45 @@ const SuperAdminTaskDetailsScreen = () => {
                 </View>
 
                 <View style={styles.cardContent}>
+                {/* <View style={styles.statusSection}>
+                    <View style={styles.statusRow}>
+                      <Text style={styles.statusLabel}>Current Status:</Text>
+                      <TouchableOpacity
+                        onPress={handleStatusPress}
+                        disabled={submitting}
+                        style={[
+                          styles.statusBadgeClickable,
+                          {
+                            backgroundColor: getStatusBackgroundColor(
+                              task?.status || TaskStatus.OPEN
+                            ),
+                            opacity: submitting ? 0.7 : 1,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.statusText,
+                            {
+                              color: getStatusTextColor(
+                                task?.status || TaskStatus.OPEN
+                              ),
+                            },
+                          ]}
+                        >
+                          {task?.status.replace(/_/g, " ")}
+                        </Text>
+                        <IconButton
+                          icon={getStatusIcon(task?.status || TaskStatus.OPEN)}
+                          size={16}
+                          style={styles.editStatusIcon}
+                          iconColor={getStatusTextColor(
+                            task?.status || TaskStatus.OPEN
+                          )}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  </View> */}
                   <View style={styles.taskMetaContainer}>
                     <Chip
                       icon="flag"

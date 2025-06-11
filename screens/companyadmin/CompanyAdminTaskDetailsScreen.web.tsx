@@ -781,13 +781,25 @@ const CompanyAdminTaskDetailsScreen = () => {
   const getPriorityColor = (priority: TaskPriority) => {
     switch (priority) {
       case TaskPriority.HIGH:
-        return theme.colors.error;
+        return {
+          solid: theme.colors.error,
+          transparent: "rgba(244, 67, 54, 0.12)", // Light red
+        };
       case TaskPriority.MEDIUM:
-        return "#F59E0B"; // Fixed warning color
+        return {
+          solid: "#F59E0B",
+          transparent: "rgba(245, 158, 11, 0.12)", // Light orange
+        };
       case TaskPriority.LOW:
-        return theme.colors.primary;
+        return {
+          solid: theme.colors.primary,
+          transparent: "rgba(25, 118, 210, 0.12)", // Light blue
+        };
       default:
-        return theme.colors.primary;
+        return {
+          solid: theme.colors.primary,
+          transparent: "rgba(25, 118, 210, 0.12)", // Light blue
+        };
     }
   };
 
@@ -1098,11 +1110,14 @@ const CompanyAdminTaskDetailsScreen = () => {
                       style={[
                         styles.priorityChip,
                         {
-                          backgroundColor: getPriorityColor(task.priority),
-                          borderColor: getPriorityColor(task.priority),
+                          backgroundColor: getPriorityColor(task.priority)
+                            .transparent,
+                          borderColor: getPriorityColor(task.priority).solid,
                         },
                       ]}
-                      textStyle={{ color: getPriorityColor(task.priority) }}
+                      textStyle={{
+                        color: getPriorityColor(task.priority).solid,
+                      }}
                     >
                       {task.priority.charAt(0).toUpperCase() +
                         task.priority.slice(1)}{" "}

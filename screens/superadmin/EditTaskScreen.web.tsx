@@ -37,6 +37,13 @@ import { TaskPriority, UserRole, TaskStatus } from "../../types";
 import { useTranslation } from "react-i18next";
 import Animated, { FadeIn } from "react-native-reanimated";
 import CustomSnackbar from "../../components/CustomSnackbar";
+import {
+  ActivityLog,
+  ActivityType,
+  ActivityLogUser,
+  ActivityLogMetadata,
+  ActivityLogCompany,
+} from "../../types/activity-log";
 
 // Add window dimensions hook
 const useWindowDimensions = () => {
@@ -403,40 +410,54 @@ const EditTaskScreen = () => {
         );
       }
 
-      // Log the activity with detailed change tracking
-      const activityLogData = {
+      // Create standardized user objects
+      const updatedByUser: ActivityLogUser = {
+        id: user.id,
+        name: userDisplayName,
+        email: user.email,
+        role: updatingUser?.role || "superadmin",
+      };
+
+      const assignedToUser: ActivityLogUser | undefined =
+        selectedAssignees.length > 0
+          ? {
+              id: selectedAssignees[0],
+              name:
+                availableUsers.find((u) => u.id === selectedAssignees[0])
+                  ?.name || "Unknown User",
+              email:
+                availableUsers.find((u) => u.id === selectedAssignees[0])
+                  ?.email || "",
+              role:
+                availableUsers.find((u) => u.id === selectedAssignees[0])
+                  ?.role || "",
+            }
+          : undefined;
+
+      const companyInfo: ActivityLogCompany = {
+        id: selectedCompany.id,
+        name: selectedCompany.company_name,
+      };
+
+      // Create standardized metadata
+      const metadata: ActivityLogMetadata = {
+        task_id: taskId,
+        task_title: data.title,
+        status: data.status,
+        priority: data.priority,
+        changes: changes,
+        updated_by: updatedByUser,
+        assigned_to: assignedToUser,
+        company: companyInfo,
+      };
+
+      // Create standardized activity log
+      const activityLogData: ActivityLog = {
         user_id: user.id,
-        activity_type: "UPDATE",
+        activity_type: ActivityType.UPDATE_TASK,
         description: `Task updated by ${userDisplayName} (${user.email}). ${changes.join(". ")}`,
         company_id: selectedCompany.id,
-        metadata: {
-          task_id: taskId,
-          task_title: data.title,
-          status: data.status,
-          priority: data.priority,
-          changes: changes,
-          updated_by: {
-            id: user.id, // Add user ID for navigation
-            name: userDisplayName,
-            email: user.email,
-            role: updatingUser?.role || "superadmin", // Add role for navigation
-          },
-          assigned_to:
-            selectedAssignees.length > 0
-              ? {
-                  id: selectedAssignees[0],
-                  name:
-                    availableUsers.find((u) => u.id === selectedAssignees[0])
-                      ?.name || "Unknown User",
-                  email: availableUsers.find(
-                    (u) => u.id === selectedAssignees[0]
-                  )?.email,
-                  role: availableUsers.find(
-                    (u) => u.id === selectedAssignees[0]
-                  )?.role,
-                }
-              : null,
-        },
+        metadata: metadata,
         old_value: {
           id: taskId,
           title: {

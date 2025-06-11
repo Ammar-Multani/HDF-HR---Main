@@ -38,7 +38,9 @@ import LoadingIndicator from "../../components/LoadingIndicator";
 import { UserStatus } from "../../types";
 import Animated, { FadeIn } from "react-native-reanimated";
 import CustomSnackbar from "../../components/CustomSnackbar";
-import { t } from "i18next";
+import { t, useTranslation } from "i18next";
+import { ActivityType } from "../../types/activity-log";
+import { useAuth } from "../../contexts/AuthContext";
 
 type EditCompanyAdminRouteParams = {
   adminId: string;
@@ -149,6 +151,8 @@ const EditCompanyAdminScreen = () => {
     useRoute<RouteProp<Record<string, EditCompanyAdminRouteParams>, string>>();
   const { adminId } = route.params;
   const dimensions = useWindowDimensions();
+  const { t } = useTranslation();
+  const { user } = useAuth();
 
   // Calculate responsive breakpoints
   const isLargeScreen = dimensions.width >= 1440;
@@ -344,7 +348,19 @@ const EditCompanyAdminScreen = () => {
     }
   };
 
-  // Update form submission to use web alert for confirmations
+  // Add helper function to compare and track changes
+  const compareAndTrackChange = (
+    oldValue: any,
+    newValue: any,
+    fieldName: string,
+    changes: string[]
+  ) => {
+    if (oldValue !== newValue && newValue !== undefined) {
+      changes.push(`${fieldName}`);
+    }
+  };
+
+  // Update form submission to include activity logging
   const onSubmit = async (data: CompanyAdminFormData) => {
     if (!admin) return;
 
@@ -374,6 +390,48 @@ const EditCompanyAdminScreen = () => {
       }
 
       setSubmitting(true);
+
+      // Track changes
+      const changes: string[] = [];
+      compareAndTrackChange(
+        admin.first_name,
+        data.first_name,
+        "first name",
+        changes
+      );
+      compareAndTrackChange(
+        admin.last_name,
+        data.last_name,
+        "last name",
+        changes
+      );
+      compareAndTrackChange(admin.email, data.email, "email", changes);
+      compareAndTrackChange(
+        admin.phone_number,
+        data.phone_number,
+        "phone number",
+        changes
+      );
+      compareAndTrackChange(
+        admin.job_title,
+        data.job_title,
+        "job title",
+        changes
+      );
+      compareAndTrackChange(
+        admin.active_status,
+        data.active_status,
+        "status",
+        changes
+      );
+
+      // If no changes were made, show message and return
+      if (changes.length === 0) {
+        setSnackbarMessage("No changes detected");
+        setSnackbarVisible(true);
+        setSubmitting(false);
+        return;
+      }
 
       // Check if email was changed
       const isEmailChanged = data.email !== admin.email;
@@ -423,13 +481,26 @@ const EditCompanyAdminScreen = () => {
         }
       }
 
+      // Get creator's details from admin table
+      const { data: creatorDetails, error: creatorError } = await supabase
+        .from("admin")
+        .select("id, name, email")
+        .eq("email", user?.email)
+        .single();
+
+      if (creatorError) {
+        console.error("Error fetching creator details:", creatorError);
+      }
+
+      const creatorName = creatorDetails?.name || user?.email || "";
+
       // Prepare update data
       const updateData = {
         first_name: data.first_name,
         last_name: data.last_name,
         phone_number: data.phone_number,
         job_title: data.job_title,
-        active_status: data.active_status, // Store as string
+        active_status: data.active_status,
       };
 
       // Update admin record
@@ -476,6 +547,59 @@ const EditCompanyAdminScreen = () => {
         if (emailError) {
           throw emailError;
         }
+      }
+
+      // Log the activity
+      const activityLogData = {
+        user_id: user?.id,
+        activity_type: ActivityType.UPDATE_COMPANY_ADMIN,
+        description: `Company admin "${data.first_name} ${data.last_name}" was updated`,
+        company_id: admin.company_id,
+        metadata: {
+          updated_by: {
+            id: user?.id || "",
+            name: creatorName,
+            email: user?.email || "",
+            role: "superadmin",
+          },
+          admin: {
+            id: adminId,
+            name: `${data.first_name} ${data.last_name}`,
+            email: data.email,
+            role: "admin",
+          },
+          company: admin.company
+            ? {
+                id: admin.company_id,
+                name: admin.company.company_name,
+              }
+            : undefined,
+          changes,
+        },
+        old_value: {
+          first_name: admin.first_name,
+          last_name: admin.last_name,
+          email: admin.email,
+          phone_number: admin.phone_number,
+          job_title: admin.job_title,
+          active_status: admin.active_status,
+        },
+        new_value: {
+          first_name: data.first_name,
+          last_name: data.last_name,
+          email: data.email,
+          phone_number: data.phone_number,
+          job_title: data.job_title,
+          active_status: data.active_status,
+        },
+      };
+
+      const { error: logError } = await supabase
+        .from("activity_logs")
+        .insert([activityLogData]);
+
+      if (logError) {
+        console.error("Error logging activity:", logError);
       }
 
       // Clear cache for this admin
@@ -913,18 +1037,18 @@ const EditCompanyAdminScreen = () => {
               onPress={() => navigation.goBack()}
               style={styles.button}
               disabled={submitting}
-          >
-            {t("common.cancel")}
-          </Button>
-          <Button
-            mode="contained"
-            onPress={handleSubmit(onSubmit)}
-            style={[styles.button, { backgroundColor: theme.colors.primary }]}
-            loading={submitting}
-            disabled={submitting || !networkStatus}
-          >
-            {t("superAdmin.companyAdmin.updateAdmin")}
-          </Button>
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button
+              mode="contained"
+              onPress={handleSubmit(onSubmit)}
+              style={[styles.button, { backgroundColor: theme.colors.primary }]}
+              loading={submitting}
+              disabled={submitting || !networkStatus}
+            >
+              {t("superAdmin.companyAdmin.updateAdmin")}
+            </Button>
           </View>
         </View>
       </Surface>
@@ -1082,7 +1206,7 @@ const styles = StyleSheet.create({
     color: "#64748b",
     marginTop: 4,
   },
-  bottomBar: {    
+  bottomBar: {
     backgroundColor: "#FFFFFF",
     borderTopWidth: 1,
     borderTopColor: "#e2e8f0",

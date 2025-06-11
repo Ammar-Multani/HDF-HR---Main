@@ -44,6 +44,12 @@ import Animated, {
 } from "react-native-reanimated";
 import CustomSnackbar from "../../components/CustomSnackbar";
 import { initEmailService } from "../../utils/emailService";
+import {
+  ActivityLog,
+  ActivityType,
+  ActivityLogUser,
+} from "../../types/activity-log";
+import { format } from "date-fns";
 
 // Add Shimmer component for loading states
 interface ShimmerProps {
@@ -144,19 +150,6 @@ interface DeleteVerificationModalProps {
 }
 
 // Add interfaces for activity logs and admin data
-interface ActivityLog {
-  id: string;
-  user_id: string;
-  activity_type: string;
-  description: string;
-  metadata: {
-    timestamp: string;
-    action: string;
-    error?: string;
-  };
-  created_at: string;
-}
-
 interface AdminData {
   id: string;
   name: string;
@@ -973,8 +966,9 @@ const SuperAdminProfileScreen = () => {
   const isMediumScreen = dimensions.width >= 768 && dimensions.width < 1440;
 
   // Helper functions
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString();
+  const formatDate = (dateString: string | undefined) => {
+    if (!dateString) return "N/A";
+    return format(new Date(dateString), "MMMM d, yyyy");
   };
 
   const formatActivityLog = (log: ActivityLog) => {
@@ -1051,93 +1045,64 @@ const SuperAdminProfileScreen = () => {
   }, []);
 
   const handleUpdateProfile = async () => {
-    setUpdating(true);
     try {
-      const { data: adminData, error: adminError } = await supabase
-        .from("admin")
-        .select("*")
-        .eq("id", user.id)
-        .single();
+      setUpdating(true);
 
-      if (!adminData || adminError) {
-        console.error("Error fetching admin data:", adminError);
-        setSnackbarMessage("Error updating profile: Admin data not found");
-        setSnackbarVisible(true);
-        setUpdating(false);
-        return;
+      if (!adminData) {
+        throw new Error("Admin data not found");
       }
 
-      const currentAdminData: AdminData = {
-        id: adminData.id,
-        name: adminData.name,
-        email: adminData.email,
-        role: adminData.role || "admin",
-        updated_at: adminData.updated_at,
-        phone_number: adminData.phone_number,
-      };
+      const changes: string[] = [];
+      if (name !== adminData.name) {
+        changes.push(`Name changed from "${adminData.name}" to "${name}"`);
+      }
+      if (phoneNumber !== adminData.phone_number) {
+        changes.push(
+          `Phone number ${phoneNumber ? `updated to ${phoneNumber}` : "removed"}`
+        );
+      }
 
-      // Update the admin data with new values
-      const { error } = await supabase
-        .from("admin")
-        .update({
-          name: name,
-          phone_number: phoneNumber,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", user.id);
-
-      if (error) throw error;
-
-      // Log the activity with the correct structure
-      const activityLogData = {
+      // Create activity log with standardized format
+      const activityLogData: ActivityLog = {
         user_id: user.id,
-        activity_type: "UPDATE_PROFILE",
-        description: `Profile updated by ${currentAdminData.name} (${currentAdminData.email})`,
-        company_id: null, // Super admin profiles are not associated with a company
+        activity_type: ActivityType.UPDATE_PROFILE,
+        description: `Profile updated by ${name || user.email}`,
         metadata: {
-          timestamp: new Date().toISOString(),
-          action: "profile_update",
-          requester: {
+          updated_by: {
             id: user.id,
-            name: currentAdminData.name,
-            email: currentAdminData.email,
-            role: currentAdminData.role,
+            name: name || user.email,
+            email: user.email,
+            role: "superadmin",
           },
+          changes: changes,
         },
         old_value: {
-          id: currentAdminData.id,
-          name: currentAdminData.name,
-          email: currentAdminData.email,
-          role: currentAdminData.role,
-          updated_at: currentAdminData.updated_at,
-          phone_number: currentAdminData.phone_number || null,
+          name: adminData.name,
+          phone_number: adminData.phone_number,
         },
         new_value: {
-          id: currentAdminData.id,
           name: name,
-          email: currentAdminData.email,
-          role: currentAdminData.role,
-          updated_at: new Date().toISOString(),
-          phone_number: phoneNumber || null,
+          phone_number: phoneNumber,
         },
       };
 
+      // Log the activity
       const { error: logError } = await supabase
         .from("activity_logs")
         .insert([activityLogData]);
 
-      if (logError) {
-        console.error("Error logging activity:", logError);
-      }
+      if (logError) throw logError;
 
       setSnackbarMessage(t("superAdmin.profile.updateSuccess"));
       setSnackbarVisible(true);
 
       // Refresh admin data
       fetchAdminData();
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error updating profile:", error);
-      setSnackbarMessage(error.message || t("superAdmin.profile.updateFailed"));
+      setSnackbarMessage(
+        error instanceof Error ? error.message : "An error occurred"
+      );
       setSnackbarVisible(true);
     } finally {
       setUpdating(false);
@@ -1180,161 +1145,67 @@ const SuperAdminProfileScreen = () => {
 
   const handleDeleteAccount = async () => {
     try {
-      if (!user) return;
-
       setDeletingAccount(true);
 
-      // Get current admin data for logging
-      const { data: adminData, error: fetchError } = await supabase
-        .from("admin")
-        .select("name, email, role")
-        .eq("id", user.id)
-        .single();
-
-      if (fetchError) {
-        throw fetchError;
+      if (!adminData || !user?.email) {
+        throw new Error("Required data not found");
       }
 
-      // 1. Log deletion request
-      await supabase.from("activity_logs").insert({
+      const activityLogData: ActivityLog = {
         user_id: user.id,
-        activity_type: "ACCOUNT_DELETION",
-        description: `Account deletion initiated by ${adminData.name} (${adminData.email})`,
+        activity_type: ActivityType.ACCOUNT_DELETION,
+        description: `Account deletion initiated by ${adminData.name || user.email}`,
         metadata: {
-          timestamp: new Date().toISOString(),
-          action: "deletion_started",
-          requested_by: {
+          action: "deletion_initiated",
+          created_by: {
             id: user.id,
-            name: adminData.name,
-            email: adminData.email,
-            role: adminData.role,
-          },
-        },
-      });
-
-      // 2. Export user data for compliance records
-      const [activityLogs] = await Promise.all([
-        supabase.from("activity_logs").select("*").eq("user_id", user.id),
-      ]);
-
-      const complianceRecord = {
-        userData: {
-          id: adminData.id,
-          name: adminData.name,
-          email: adminData.email,
-          role: adminData.role,
-          phone_number: adminData.phone_number,
-        },
-        activityLogs: activityLogs.data,
-        deletionDate: new Date().toISOString(),
-        deletedBy: {
-          id: user.id,
-          name: adminData.name,
-          email: adminData.email,
-          role: adminData.role,
-        },
-      };
-
-      // 3. Store compliance record (you would typically store this in a secure location)
-      console.log("Compliance record created:", complianceRecord);
-
-      // 4. Anonymize personal data in admin table
-      const updateData = {
-        name: "DELETED_USER",
-        email: `deleted_${user.id}@deleted.com`,
-        phone_number: null,
-        deleted_at: new Date().toISOString(),
-        status: null,
-      };
-
-      const { error: adminUpdateError } = await supabase
-        .from("admin")
-        .update(updateData)
-        .eq("id", user.id);
-
-      if (adminUpdateError) throw adminUpdateError;
-
-      // 5. Update user record
-      const { error: userUpdateError } = await supabase
-        .from("users")
-        .update({
-          email: `deleted_${user.id}@deleted.com`,
-          deleted_at: new Date().toISOString(),
-          status: "deleted",
-        })
-        .eq("id", user.id);
-
-      if (userUpdateError) throw userUpdateError;
-
-      // 6. Log successful deletion
-      await supabase.from("activity_logs").insert({
-        user_id: user.id,
-        activity_type: "ACCOUNT_DELETION",
-        description: `Account successfully anonymized and deactivated for ${adminData.name} (${adminData.email})`,
-        metadata: {
-          timestamp: new Date().toISOString(),
-          action: "deletion_completed",
-          requested_by: {
-            id: user.id,
-            name: adminData.name,
-            email: adminData.email,
-            role: adminData.role,
-          },
-          account_info: {
-            id: user.id,
-            name: adminData.name,
-            email: adminData.email,
-            role: adminData.role,
-          },
-          deletion_details: {
-            deletion_date: new Date().toISOString(),
-            compliance_record_created: true,
-            data_anonymized: true,
+            name: adminData.name || user.email,
+            email: user.email,
+            role: "superadmin",
           },
         },
         old_value: {
-          id: user.id,
-          name: adminData.name,
-          email: adminData.email,
-          status: "active",
+          id: adminData.id || "",
+          name: adminData.name || "",
+          email: adminData.email || "",
+          role: adminData.role || "superadmin",
+          phone_number: adminData.phone_number || null,
         },
-        new_value: {
-          id: user.id,
-          name: updateData.name,
-          email: updateData.email,
-          status: "deleted",
-          deleted_at: updateData.deleted_at,
+      };
+
+      const { error: logError } = await supabase
+        .from("activity_logs")
+        .insert([activityLogData]);
+
+      if (logError) throw logError;
+
+      // After deletion is complete, log completion
+      const completionLog: ActivityLog = {
+        user_id: user.id,
+        activity_type: ActivityType.ACCOUNT_DELETION,
+        description: `Account successfully deleted for ${adminData.name || user.email}`,
+        metadata: {
+          action: "deletion_completed",
+          created_by: {
+            id: user.id,
+            name: adminData.name || user.email,
+            email: user.email,
+            role: "superadmin",
+          },
         },
-      });
+      };
+
+      await supabase.from("activity_logs").insert([completionLog]);
 
       setSnackbarMessage(t("superAdmin.profile.accountDeletedSuccess"));
       setSnackbarVisible(true);
 
-      // 7. Sign out the user
+      // Sign out the user
       await signOut();
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error deleting account:", error);
-
-      // Log the error
-      if (user) {
-        await supabase.from("activity_logs").insert({
-          user_id: user.id,
-          activity_type: "ACCOUNT_DELETION_ERROR",
-          description: "Account deletion failed",
-          metadata: {
-            timestamp: new Date().toISOString(),
-            error: error.message || "Unknown error",
-            action: "deletion_failed",
-            requested_by: {
-              id: user.id,
-              email: user.email,
-            },
-          },
-        });
-      }
-
       setSnackbarMessage(
-        error.message || t("superAdmin.profile.accountDeleteFailed")
+        error instanceof Error ? error.message : "An error occurred"
       );
       setSnackbarVisible(true);
     } finally {
@@ -1439,95 +1310,43 @@ const SuperAdminProfileScreen = () => {
 
   const handleResetPassword = async () => {
     try {
-      if (!user?.email) {
-        setSnackbarMessage(
-          t("superAdmin.profile.emailRequired") || "Email is required"
-        );
-        setSnackbarVisible(true);
-        return;
-      }
-
       setResettingPassword(true);
 
-      // Get current admin data for logging
-      const { data: adminData, error: fetchError } = await supabase
-        .from("admin")
-        .select("name, email, role")
-        .eq("id", user.id)
-        .single();
-
-      if (fetchError) {
-        throw fetchError;
+      if (!adminData) {
+        throw new Error("Admin data not found");
       }
 
-      console.log("Initiating password reset for email:", user.email);
-      const { error } = await forgotPassword(user.email);
-
-      if (error) {
-        let errorMessage = error.message || t("forgotPassword.failedReset");
-        let messageType = "error";
-
-        // Handle specific error cases
-        if (error.message?.includes("sender identity")) {
-          errorMessage = t("forgotPassword.emailServiceError");
-        } else if (error.message?.includes("rate limit")) {
-          errorMessage = t("forgotPassword.tooManyAttempts");
-          messageType = "warning";
-        } else if (error.message?.includes("network")) {
-          errorMessage = t("forgotPassword.networkError");
-          messageType = "warning";
-        }
-
-        // Log the error activity
-        await supabase.from("activity_logs").insert({
-          user_id: user.id,
-          activity_type: "PASSWORD_RESET_ERROR",
-          description: `Password reset request failed for ${adminData.name} (${adminData.email})`,
-          metadata: {
-            timestamp: new Date().toISOString(),
-            action: "password_reset_failed",
-            error: errorMessage,
-            requested_by: {
-              id: user.id,
-              name: adminData.name,
-              email: adminData.email,
-              role: adminData.role,
-            },
+      const activityLogData: ActivityLog = {
+        user_id: user.id,
+        activity_type: ActivityType.PASSWORD_RESET,
+        description: `Password reset requested by ${adminData.name || user.email}`,
+        metadata: {
+          action: "reset_requested",
+          created_by: {
+            id: user.id,
+            name: adminData.name || user.email,
+            email: user.email,
+            role: "superadmin",
           },
-        });
+        },
+      };
 
-        console.error("Password reset error:", error);
-        setSnackbarMessage(errorMessage);
-        setSnackbarVisible(true);
-      } else {
-        // Log successful password reset request
-        await supabase.from("activity_logs").insert({
-          user_id: user.id,
-          activity_type: "PASSWORD_RESET_REQUESTED",
-          description: `Password reset requested by ${adminData.name} (${adminData.email})`,
-          metadata: {
-            timestamp: new Date().toISOString(),
-            action: "password_reset_initiated",
-            requested_by: {
-              id: user.id,
-              name: adminData.name,
-              email: adminData.email,
-              role: adminData.role,
-            },
-          },
-        });
+      const { error: logError } = await supabase
+        .from("activity_logs")
+        .insert([activityLogData]);
 
-        console.log("Password reset request successful");
-        setSnackbarMessage(
-          t("forgotPassword.resetInstructions") ||
-            "Password reset instructions have been sent to your email."
-        );
-        setSnackbarVisible(true);
-      }
-    } catch (err) {
-      console.error("Unexpected error during password reset:", err);
+      if (logError) throw logError;
+
+      // Log successful password reset request
       setSnackbarMessage(
-        t("common.unexpectedError") || "An unexpected error occurred"
+        t("forgotPassword.resetInstructions") ||
+          "Password reset instructions have been sent to your email."
+      );
+      setSnackbarVisible(true);
+    } catch (error) {
+      console.error("Error with password reset:", error);
+      setSnackbarMessage(
+        error instanceof Error ? error.message : "An error occurred"
       );
       setSnackbarVisible(true);
     } finally {
@@ -1541,57 +1360,30 @@ const SuperAdminProfileScreen = () => {
     try {
       setExportingData(true);
 
-      if (!user?.id) {
-        throw new Error("User ID not found");
+      if (!adminData) {
+        throw new Error("Admin data not found");
       }
 
-      // Get current admin data for logging
-      const { data: adminData, error: fetchError } = await supabase
-        .from("admin")
-        .select("name, email, role")
-        .eq("id", user.id)
-        .single();
-
-      if (fetchError) {
-        throw fetchError;
-      }
-
-      // First update the users table with current activity
-      const { error: userUpdateError } = await supabase
-        .from("users")
-        .update({
-          updated_at: new Date().toISOString(),
-          last_login: new Date().toISOString(),
-          status: "active",
-        })
-        .eq("id", user.id);
-
-      if (userUpdateError) {
-        throw userUpdateError;
-      }
-
-      // Log the export initiation
-      const { error: logError } = await supabase.from("activity_logs").insert({
+      const activityLogData: ActivityLog = {
         user_id: user.id,
-        activity_type: "DATA_EXPORT",
-        description: `Data export requested by ${adminData.name} (${adminData.email})`,
+        activity_type: ActivityType.DATA_EXPORT,
+        description: `Data export initiated by ${adminData.name || user.email}`,
         metadata: {
-          timestamp: new Date().toISOString(),
           action: "export_initiated",
-          requested_by: {
+          created_by: {
             id: user.id,
-            name: adminData.name,
-            email: adminData.email,
-            role: adminData.role,
+            name: adminData.name || user.email,
+            email: user.email,
+            role: "superadmin",
           },
-          export_type: "user_data",
-          export_version: "1.0",
         },
-      });
+      };
 
-      if (logError) {
-        console.error("Error logging activity:", logError);
-      }
+      const { error: logError } = await supabase
+        .from("activity_logs")
+        .insert([activityLogData]);
+
+      if (logError) throw logError;
 
       // Fetch user data from both users and admin tables, and activity logs
       const [userData, activityLogs] = await Promise.all([
@@ -1691,31 +1483,22 @@ ${exportData.activityHistory.activities.join("\n")}
       window.URL.revokeObjectURL(url);
 
       // Log successful export completion
-      await supabase.from("activity_logs").insert({
+      const completionLog: ActivityLog = {
         user_id: user.id,
-        activity_type: "DATA_EXPORT",
-        description: `Data export completed successfully for ${adminData.name} (${adminData.email})`,
+        activity_type: ActivityType.DATA_EXPORT,
+        description: `Data export completed for ${adminData.name || user.email}`,
         metadata: {
-          timestamp: new Date().toISOString(),
           action: "export_completed",
-          requested_by: {
+          created_by: {
             id: user.id,
-            name: adminData.name,
-            email: adminData.email,
-            role: adminData.role,
-          },
-          export_type: "user_data",
-          export_version: exportData.exportInfo.version,
-          export_summary: {
-            total_activities:
-              exportData.activityHistory.summary.totalActivities,
-            date_range: {
-              first: exportData.activityHistory.summary.firstActivity,
-              last: exportData.activityHistory.summary.lastActivity,
-            },
+            name: adminData.name || user.email,
+            email: user.email,
+            role: "superadmin",
           },
         },
-      });
+      };
+
+      await supabase.from("activity_logs").insert([completionLog]);
 
       setSnackbarMessage(
         t("superAdmin.profile.exportSuccess") ||
@@ -1724,23 +1507,8 @@ ${exportData.activityHistory.activities.join("\n")}
       setSnackbarVisible(true);
     } catch (error) {
       console.error("Error exporting data:", error);
-
-      // Log export error
-      if (user?.id) {
-        await supabase.from("activity_logs").insert({
-          user_id: user.id,
-          activity_type: "DATA_EXPORT_ERROR",
-          description: `Data export failed for user ${user.email}`,
-          metadata: {
-            timestamp: new Date().toISOString(),
-            action: "export_failed",
-            error: error instanceof Error ? error.message : "Unknown error",
-          },
-        });
-      }
-
       setSnackbarMessage(
-        t("superAdmin.profile.exportError") || "Failed to export data"
+        error instanceof Error ? error.message : "An error occurred"
       );
       setSnackbarVisible(true);
     } finally {

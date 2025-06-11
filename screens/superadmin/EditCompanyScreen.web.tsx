@@ -29,6 +29,8 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Animated, { FadeIn } from "react-native-reanimated";
 import CustomSnackbar from "../../components/CustomSnackbar";
 import { t } from "i18next";
+import { ActivityType } from "../../types/activity-log";
+import { useAuth } from "../../contexts/AuthContext";
 
 type EditCompanyRouteParams = {
   companyId: string;
@@ -82,6 +84,7 @@ const EditCompanyScreen = () => {
     useRoute<RouteProp<Record<string, EditCompanyRouteParams>, string>>();
   const { companyId } = route.params;
   const dimensions = useWindowDimensions();
+  const { user } = useAuth();
 
   // Calculate responsive breakpoints
   const isLargeScreen = dimensions.width >= 1440;
@@ -230,6 +233,130 @@ const EditCompanyScreen = () => {
         return;
       }
 
+      // Get super admin's name from admin table
+      const { data: adminDetails, error: adminDetailsError } = await supabase
+        .from("admin")
+        .select("id, name, email")
+        .eq("email", user?.email)
+        .single();
+
+      if (adminDetailsError) {
+        console.error("Error fetching admin details:", adminDetailsError);
+      }
+
+      const userDisplayName = adminDetails?.name || user?.email || "";
+
+      // Track changes for activity log
+      const changes: string[] = [];
+
+      // Helper function to compare values and track changes
+      const compareAndTrackChange = (
+        oldVal: any,
+        newVal: any,
+        fieldName: string
+      ) => {
+        if (oldVal !== undefined && newVal !== undefined && oldVal !== newVal) {
+          changes.push(fieldName);
+        }
+      };
+
+      // Compare each field individually
+      compareAndTrackChange(
+        company?.company_name,
+        data.company_name,
+        "company name"
+      );
+      compareAndTrackChange(
+        company?.registration_number,
+        data.registration_number,
+        "registration number"
+      );
+      compareAndTrackChange(
+        company?.industry_type,
+        data.industry_type,
+        "industry type"
+      );
+      compareAndTrackChange(
+        company?.contact_number,
+        data.contact_number,
+        "contact number"
+      );
+      compareAndTrackChange(
+        company?.contact_email,
+        data.contact_email,
+        "contact email"
+      );
+      compareAndTrackChange(company?.vat_type, data.vat_type, "VAT type");
+
+      // Check address changes more precisely
+      const oldAddress = company?.address || {};
+      const newAddress = {
+        line1: data.address_line1,
+        line2: data.address_line2 || null,
+        city: data.address_city,
+        state: data.address_state,
+        postal_code: data.address_postal_code,
+        country: data.address_country,
+      };
+
+      // Compare each address field
+      const addressChanges: string[] = [];
+      if (oldAddress.line1 !== newAddress.line1)
+        addressChanges.push("street address");
+      if (oldAddress.line2 !== newAddress.line2)
+        addressChanges.push("address line 2");
+      if (oldAddress.city !== newAddress.city) addressChanges.push("city");
+      if (oldAddress.state !== newAddress.state) addressChanges.push("state");
+      if (oldAddress.postal_code !== newAddress.postal_code)
+        addressChanges.push("postal code");
+      if (oldAddress.country !== newAddress.country)
+        addressChanges.push("country");
+
+      if (addressChanges.length > 0) {
+        changes.push(`address (${addressChanges.join(", ")})`);
+      }
+
+      // Compare stakeholders more precisely
+      const oldStakeholders = company?.stakeholders || [];
+      if (stakeholders.length !== oldStakeholders.length) {
+        changes.push("stakeholders list");
+      } else {
+        // Check if any stakeholder details changed
+        const hasStakeholderChanges = stakeholders.some((newStake, index) => {
+          const oldStake = oldStakeholders[index];
+          return (
+            !oldStake ||
+            oldStake.name !== newStake.name ||
+            oldStake.percentage !== newStake.percentage
+          );
+        });
+        if (hasStakeholderChanges) {
+          changes.push("stakeholder details");
+        }
+      }
+
+      // Only proceed with update if there are actual changes
+      if (changes.length === 0) {
+        setSnackbarMessage(
+          t("superAdmin.companies.noChangesDetected") || "No changes detected"
+        );
+        setSnackbarVisible(true);
+        setSubmitting(false);
+        return;
+      }
+
+      // Store old values before update
+      const oldValue = {
+        company_name: company?.company_name,
+        registration_number: company?.registration_number,
+        industry_type: company?.industry_type,
+        contact_number: company?.contact_number,
+        contact_email: company?.contact_email,
+        address: company?.address,
+        stakeholders: company?.stakeholders,
+        vat_type: company?.vat_type,
+      };
+
       // Update company record
       const { error } = await supabase
         .from("company")
@@ -239,14 +366,7 @@ const EditCompanyScreen = () => {
           industry_type: data.industry_type,
           contact_number: data.contact_number,
           contact_email: data.contact_email,
-          address: {
-            line1: data.address_line1,
-            line2: data.address_line2 || null,
-            city: data.address_city,
-            state: data.address_state,
-            postal_code: data.address_postal_code,
-            country: data.address_country,
-          },
+          address: newAddress,
           stakeholders,
           vat_type: data.vat_type,
         })
@@ -254,6 +374,47 @@ const EditCompanyScreen = () => {
 
       if (error) {
         throw error;
+      }
+
+      // Log the company update activity
+      const activityLogData = {
+        user_id: user?.id,
+        activity_type: ActivityType.UPDATE_COMPANY,
+        description: `Company "${data.company_name}" was updated`,
+        company_id: companyId,
+        metadata: {
+          updated_by: {
+            id: user?.id || "",
+            name: userDisplayName,
+            email: user?.email || "",
+            role: "superadmin",
+          },
+          company: {
+            id: companyId,
+            name: data.company_name,
+          },
+          changes: changes,
+        },
+        old_value: oldValue,
+        new_value: {
+          company_name: data.company_name,
+          registration_number: data.registration_number,
+          industry_type: data.industry_type,
+          contact_number: data.contact_number,
+          contact_email: data.contact_email,
+          address: newAddress,
+          stakeholders: stakeholders,
+          vat_type: data.vat_type,
+        },
+      };
+
+      const { error: logError } = await supabase
+        .from("activity_logs")
+        .insert([activityLogData]);
+
+      if (logError) {
+        console.error("Error logging activity:", logError);
+        // Don't throw here as the company was updated successfully
       }
 
       setSnackbarMessage(t("superAdmin.companies.updateSuccess"));
