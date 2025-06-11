@@ -9,7 +9,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "../contexts/AuthContext";
 import { UserRole } from "../types";
 import { Dimensions, Platform, Text } from "react-native";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 // Import navigators from separate files
 import { AuthNavigator } from "./AuthNavigator";
@@ -26,9 +25,6 @@ const NAVIGATE_TO_DASHBOARD_KEY = "NAVIGATE_TO_DASHBOARD";
 
 // Create a navigation ref that can be used outside of the Navigation Provider
 export const navigationRef = createRef();
-
-// Create root stack navigator
-const RootStack = createNativeStackNavigator();
 
 // Add window dimensions hook
 const useWindowDimensions = () => {
@@ -168,35 +164,16 @@ export const AppNavigator = ({ initialAuthState = null }) => {
       onStateChange={handleStateChange}
       fallback={<Text>Loading...</Text>}
     >
-      <RootStack.Navigator screenOptions={{ headerShown: false }}>
-        {!user ? (
-          <RootStack.Screen name="Auth" component={AuthNavigator} />
-        ) : (
-          <>
-            {userRole === UserRole.SUPER_ADMIN && (
-              <RootStack.Screen
-                name="SuperAdmin"
-                component={SuperAdminNavigator}
-              />
-            )}
-            {userRole === UserRole.COMPANY_ADMIN && (
-              <RootStack.Screen
-                name="CompanyAdmin"
-                component={CompanyAdminNavigator}
-              />
-            )}
-            {userRole === UserRole.EMPLOYEE && (
-              <RootStack.Screen name="Employee" component={EmployeeNavigator} />
-            )}
-            {/* Add auth screens for deep linking even when logged in */}
-            <RootStack.Screen
-              name="AuthScreens"
-              component={AuthNavigator}
-              options={{ presentation: "modal" }}
-            />
-          </>
-        )}
-      </RootStack.Navigator>
+      {!user ? (
+        <AuthNavigator />
+      ) : (
+        <>
+          {userRole === UserRole.SUPER_ADMIN && <SuperAdminNavigator />}
+          {userRole === UserRole.COMPANY_ADMIN && <CompanyAdminNavigator />}
+          {userRole === UserRole.EMPLOYEE && <EmployeeNavigator />}
+          {!userRole && <AuthNavigator />}
+        </>
+      )}
     </NavigationContainer>
   );
 };
