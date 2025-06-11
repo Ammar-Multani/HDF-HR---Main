@@ -37,6 +37,11 @@ import Animated, { FadeIn } from "react-native-reanimated";
 import DateTimePicker from "react-native-modal-datetime-picker";
 import CustomSnackbar from "../../components/CustomSnackbar";
 import { t } from "i18next";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+
+type RootStackParamList = {
+  TaskDetails: { taskId: string };
+};
 
 interface TaskFormData {
   title: string;
@@ -48,7 +53,8 @@ interface TaskFormData {
 
 const CreateTaskScreen = () => {
   const theme = useTheme();
-  const navigation = useNavigation();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { user } = useAuth();
 
   const [loading, setLoading] = useState(false);
@@ -244,7 +250,7 @@ const CreateTaskScreen = () => {
       // Get admin's name from admin table
       const { data: adminDetails, error: adminDetailsError } = await supabase
         .from("admin")
-        .select("id, name")
+        .select("id, name, role")
         .eq("email", user.email)
         .single();
 
@@ -254,36 +260,39 @@ const CreateTaskScreen = () => {
 
       const userDisplayName = adminDetails?.name || user.email;
 
-      // Get assigned user's name
+      // Get assigned user's details
       const assignedUser = availableUsers.find(
         (u) => u.id === selectedAssignees[0]
       );
-      const assignedUserName = assignedUser
-        ? assignedUser.name
-        : "Unknown User";
 
-      // Log the activity with task ID
+      // Log the activity with complete user information
       const activityLogData = {
-        user_id: adminData.id, // Super admin's ID
-        activity_type: "CREATE",
-        description: `New task "${data.title}" created by ${userDisplayName} (${user.email}). Assigned to ${assignedUserName}`,
+        user_id: adminData.id,
+        activity_type: "CREATE_TASK",
+        description: `New task "${data.title}" created by ${userDisplayName} (${user.email}). Assigned to ${assignedUser?.name || "Unknown User"}`,
         company_id: selectedCompany.id,
         metadata: {
           task_id: createdTask.id,
           task_title: data.title,
-          assigned_to: {
-            id: selectedAssignees[0],
-            name: assignedUserName,
-            role:
-              availableUsers.find((u) => u.id === selectedAssignees[0])?.role ||
-              "admin",
-          },
+          status: TaskStatus.OPEN,
           priority: data.priority,
+          assigned_to: assignedUser
+            ? {
+                id: assignedUser.id,
+                name: assignedUser.name,
+                email: assignedUser.email,
+                role: assignedUser.role,
+              }
+            : null,
           created_by: {
             id: adminData.id,
             name: userDisplayName,
             email: user.email,
-            role: "superadmin", // Since this is CreateTaskScreen for super admins
+            role: adminDetails?.role || "superadmin",
+          },
+          company: {
+            id: selectedCompany.id,
+            name: selectedCompany.company_name,
           },
         },
         old_value: null,
@@ -293,12 +302,15 @@ const CreateTaskScreen = () => {
           description: data.description,
           deadline: data.deadline.toISOString(),
           priority: data.priority,
-          assigned_to: {
-            id: selectedAssignees[0],
-            name: assignedUserName,
-            role:
-              availableUsers.find((u) => u.id === selectedAssignees[0])?.role ||
-              "admin",
+          status: TaskStatus.OPEN,
+          assigned_to: selectedAssignees[0],
+          company_id: selectedCompany.id,
+          created_at: new Date().toISOString(),
+          created_by: {
+            id: adminData.id,
+            name: userDisplayName,
+            email: user.email,
+            role: adminDetails?.role || "superadmin",
           },
         },
       };
@@ -312,7 +324,7 @@ const CreateTaskScreen = () => {
         // Don't throw error here, as the task was created successfully
       }
 
-      setSnackbarMessage("Task created successfully");
+      setSnackbarMessage(t("superAdmin.tasks.taskCreatedSuccessfully"));
       setSnackbarVisible(true);
 
       // Navigate to task details after a short delay

@@ -161,11 +161,9 @@ interface AdminData {
   id: string;
   name: string;
   email: string;
-  phone_number?: string;
-  created_at: string;
+  role: string;
   updated_at: string;
-  status: boolean;
-  deleted_at?: string;
+  phone_number?: string | null;
 }
 
 // Move styles definition before components
@@ -989,6 +987,7 @@ const SuperAdminProfileScreen = () => {
   const [adminData, setAdminData] = useState<AdminData | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [signOutModalVisible, setSignOutModalVisible] = useState(false);
@@ -1034,6 +1033,7 @@ const SuperAdminProfileScreen = () => {
       setAdminData(data);
       setName(data.name || "");
       setEmail(data.email || "");
+      setPhoneNumber(data.phone_number || "");
     } catch (error) {
       console.error("Error fetching admin data:", error);
     } finally {
@@ -1051,27 +1051,83 @@ const SuperAdminProfileScreen = () => {
   }, []);
 
   const handleUpdateProfile = async () => {
+    setUpdating(true);
     try {
-      if (!user) return;
+      const { data: adminData, error: adminError } = await supabase
+        .from("admin")
+        .select("*")
+        .eq("id", user.id)
+        .single();
 
-      setUpdating(true);
-
-      // Validate inputs
-      if (!name.trim()) {
-        setSnackbarMessage(t("superAdmin.profile.nameRequired"));
+      if (!adminData || adminError) {
+        console.error("Error fetching admin data:", adminError);
+        setSnackbarMessage("Error updating profile: Admin data not found");
         setSnackbarVisible(true);
         setUpdating(false);
         return;
       }
 
-      // Update admin record
+      const currentAdminData: AdminData = {
+        id: adminData.id,
+        name: adminData.name,
+        email: adminData.email,
+        role: adminData.role || "admin",
+        updated_at: adminData.updated_at,
+        phone_number: adminData.phone_number,
+      };
+
+      // Update the admin data with new values
       const { error } = await supabase
         .from("admin")
-        .update({ name })
+        .update({
+          name: name,
+          phone_number: phoneNumber,
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", user.id);
 
-      if (error) {
-        throw error;
+      if (error) throw error;
+
+      // Log the activity with the correct structure
+      const activityLogData = {
+        user_id: user.id,
+        activity_type: "UPDATE_PROFILE",
+        description: `Profile updated by ${currentAdminData.name} (${currentAdminData.email})`,
+        company_id: null, // Super admin profiles are not associated with a company
+        metadata: {
+          timestamp: new Date().toISOString(),
+          action: "profile_update",
+          requester: {
+            id: user.id,
+            name: currentAdminData.name,
+            email: currentAdminData.email,
+            role: currentAdminData.role,
+          },
+        },
+        old_value: {
+          id: currentAdminData.id,
+          name: currentAdminData.name,
+          email: currentAdminData.email,
+          role: currentAdminData.role,
+          updated_at: currentAdminData.updated_at,
+          phone_number: currentAdminData.phone_number || null,
+        },
+        new_value: {
+          id: currentAdminData.id,
+          name: name,
+          email: currentAdminData.email,
+          role: currentAdminData.role,
+          updated_at: new Date().toISOString(),
+          phone_number: phoneNumber || null,
+        },
+      };
+
+      const { error: logError } = await supabase
+        .from("activity_logs")
+        .insert([activityLogData]);
+
+      if (logError) {
+        console.error("Error logging activity:", logError);
       }
 
       setSnackbarMessage(t("superAdmin.profile.updateSuccess"));
@@ -1128,42 +1184,72 @@ const SuperAdminProfileScreen = () => {
 
       setDeletingAccount(true);
 
+      // Get current admin data for logging
+      const { data: adminData, error: fetchError } = await supabase
+        .from("admin")
+        .select("name, email, role")
+        .eq("id", user.id)
+        .single();
+
+      if (fetchError) {
+        throw fetchError;
+      }
+
       // 1. Log deletion request
       await supabase.from("activity_logs").insert({
         user_id: user.id,
-        activity_type: "account_deletion",
-        description: "Account deletion process initiated",
+        activity_type: "ACCOUNT_DELETION",
+        description: `Account deletion initiated by ${adminData.name} (${adminData.email})`,
         metadata: {
           timestamp: new Date().toISOString(),
           action: "deletion_started",
+          requested_by: {
+            id: user.id,
+            name: adminData.name,
+            email: adminData.email,
+            role: adminData.role,
+          },
         },
       });
 
       // 2. Export user data for compliance records
-      const [adminData, activityLogs] = await Promise.all([
-        supabase.from("admin").select("*").eq("id", user.id).single(),
+      const [activityLogs] = await Promise.all([
         supabase.from("activity_logs").select("*").eq("user_id", user.id),
       ]);
 
       const complianceRecord = {
-        userData: adminData.data,
+        userData: {
+          id: adminData.id,
+          name: adminData.name,
+          email: adminData.email,
+          role: adminData.role,
+          phone_number: adminData.phone_number,
+        },
         activityLogs: activityLogs.data,
         deletionDate: new Date().toISOString(),
+        deletedBy: {
+          id: user.id,
+          name: adminData.name,
+          email: adminData.email,
+          role: adminData.role,
+        },
       };
 
       // 3. Store compliance record (you would typically store this in a secure location)
       console.log("Compliance record created:", complianceRecord);
 
       // 4. Anonymize personal data in admin table
+      const updateData = {
+        name: "DELETED_USER",
+        email: `deleted_${user.id}@deleted.com`,
+        phone_number: null,
+        deleted_at: new Date().toISOString(),
+        status: null,
+      };
+
       const { error: adminUpdateError } = await supabase
         .from("admin")
-        .update({
-          name: "DELETED_USER",
-          email: `deleted_${user.id}@deleted.com`,
-          phone_number: null,
-          deleted_at: new Date().toISOString(),
-          status: null,
-        })
+        .update(updateData)
         .eq("id", user.id);
 
       if (adminUpdateError) throw adminUpdateError;
@@ -1183,11 +1269,41 @@ const SuperAdminProfileScreen = () => {
       // 6. Log successful deletion
       await supabase.from("activity_logs").insert({
         user_id: user.id,
-        activity_type: "account_deletion",
-        description: "Account successfully anonymized and deactivated",
+        activity_type: "ACCOUNT_DELETION",
+        description: `Account successfully anonymized and deactivated for ${adminData.name} (${adminData.email})`,
         metadata: {
           timestamp: new Date().toISOString(),
           action: "deletion_completed",
+          requested_by: {
+            id: user.id,
+            name: adminData.name,
+            email: adminData.email,
+            role: adminData.role,
+          },
+          account_info: {
+            id: user.id,
+            name: adminData.name,
+            email: adminData.email,
+            role: adminData.role,
+          },
+          deletion_details: {
+            deletion_date: new Date().toISOString(),
+            compliance_record_created: true,
+            data_anonymized: true,
+          },
+        },
+        old_value: {
+          id: user.id,
+          name: adminData.name,
+          email: adminData.email,
+          status: "active",
+        },
+        new_value: {
+          id: user.id,
+          name: updateData.name,
+          email: updateData.email,
+          status: "deleted",
+          deleted_at: updateData.deleted_at,
         },
       });
 
@@ -1200,16 +1316,22 @@ const SuperAdminProfileScreen = () => {
       console.error("Error deleting account:", error);
 
       // Log the error
-      await supabase.from("activity_logs").insert({
-        user_id: user.id,
-        activity_type: "system_error",
-        description: "Account deletion failed",
-        metadata: {
-          timestamp: new Date().toISOString(),
-          error: error.message,
-          action: "deletion_failed",
-        },
-      });
+      if (user) {
+        await supabase.from("activity_logs").insert({
+          user_id: user.id,
+          activity_type: "ACCOUNT_DELETION_ERROR",
+          description: "Account deletion failed",
+          metadata: {
+            timestamp: new Date().toISOString(),
+            error: error.message || "Unknown error",
+            action: "deletion_failed",
+            requested_by: {
+              id: user.id,
+              email: user.email,
+            },
+          },
+        });
+      }
 
       setSnackbarMessage(
         error.message || t("superAdmin.profile.accountDeleteFailed")
@@ -1326,6 +1448,18 @@ const SuperAdminProfileScreen = () => {
       }
 
       setResettingPassword(true);
+
+      // Get current admin data for logging
+      const { data: adminData, error: fetchError } = await supabase
+        .from("admin")
+        .select("name, email, role")
+        .eq("id", user.id)
+        .single();
+
+      if (fetchError) {
+        throw fetchError;
+      }
+
       console.log("Initiating password reset for email:", user.email);
       const { error } = await forgotPassword(user.email);
 
@@ -1344,10 +1478,45 @@ const SuperAdminProfileScreen = () => {
           messageType = "warning";
         }
 
+        // Log the error activity
+        await supabase.from("activity_logs").insert({
+          user_id: user.id,
+          activity_type: "PASSWORD_RESET_ERROR",
+          description: `Password reset request failed for ${adminData.name} (${adminData.email})`,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            action: "password_reset_failed",
+            error: errorMessage,
+            requested_by: {
+              id: user.id,
+              name: adminData.name,
+              email: adminData.email,
+              role: adminData.role,
+            },
+          },
+        });
+
         console.error("Password reset error:", error);
         setSnackbarMessage(errorMessage);
         setSnackbarVisible(true);
       } else {
+        // Log successful password reset request
+        await supabase.from("activity_logs").insert({
+          user_id: user.id,
+          activity_type: "PASSWORD_RESET_REQUESTED",
+          description: `Password reset requested by ${adminData.name} (${adminData.email})`,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            action: "password_reset_initiated",
+            requested_by: {
+              id: user.id,
+              name: adminData.name,
+              email: adminData.email,
+              role: adminData.role,
+            },
+          },
+        });
+
         console.log("Password reset request successful");
         setSnackbarMessage(
           t("forgotPassword.resetInstructions") ||
@@ -1376,6 +1545,17 @@ const SuperAdminProfileScreen = () => {
         throw new Error("User ID not found");
       }
 
+      // Get current admin data for logging
+      const { data: adminData, error: fetchError } = await supabase
+        .from("admin")
+        .select("name, email, role")
+        .eq("id", user.id)
+        .single();
+
+      if (fetchError) {
+        throw fetchError;
+      }
+
       // First update the users table with current activity
       const { error: userUpdateError } = await supabase
         .from("users")
@@ -1390,14 +1570,22 @@ const SuperAdminProfileScreen = () => {
         throw userUpdateError;
       }
 
-      // Log the export activity
+      // Log the export initiation
       const { error: logError } = await supabase.from("activity_logs").insert({
         user_id: user.id,
-        activity_type: "data_export",
-        description: "User data export requested",
+        activity_type: "DATA_EXPORT",
+        description: `Data export requested by ${adminData.name} (${adminData.email})`,
         metadata: {
           timestamp: new Date().toISOString(),
           action: "export_initiated",
+          requested_by: {
+            id: user.id,
+            name: adminData.name,
+            email: adminData.email,
+            role: adminData.role,
+          },
+          export_type: "user_data",
+          export_version: "1.0",
         },
       });
 
@@ -1406,15 +1594,8 @@ const SuperAdminProfileScreen = () => {
       }
 
       // Fetch user data from both users and admin tables, and activity logs
-      const [userData, adminData, activityLogs] = await Promise.all([
+      const [userData, activityLogs] = await Promise.all([
         supabase.from("users").select("*").eq("id", user.id).single(),
-        supabase
-          .from("admin")
-          .select(
-            "name, email, role, status, created_at, updated_at, phone_number"
-          )
-          .eq("id", user.id)
-          .single(),
         supabase
           .from("activity_logs")
           .select("*")
@@ -1422,7 +1603,7 @@ const SuperAdminProfileScreen = () => {
           .order("created_at", { ascending: false }),
       ]);
 
-      if (!userData.data || !adminData.data) {
+      if (!userData.data || !adminData) {
         throw new Error("User data not found");
       }
 
@@ -1436,10 +1617,10 @@ const SuperAdminProfileScreen = () => {
         userData: {
           profile: {
             id: userData.data.id,
-            name: adminData.data.name,
-            email: adminData.data.email,
-            role: adminData.data.role,
-            phone_number: adminData.data.phone_number || "Not provided",
+            name: adminData.name,
+            email: adminData.email,
+            role: adminData.role,
+            phone_number: adminData.phone_number || "Not provided",
             created_at: formatDate(userData.data.created_at),
             updated_at: formatDate(userData.data.updated_at),
             last_login: userData.data.last_login
@@ -1509,15 +1690,30 @@ ${exportData.activityHistory.activities.join("\n")}
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
-      // Log successful export
+      // Log successful export completion
       await supabase.from("activity_logs").insert({
         user_id: user.id,
-        activity_type: "data_export",
-        description: "Data export completed successfully",
+        activity_type: "DATA_EXPORT",
+        description: `Data export completed successfully for ${adminData.name} (${adminData.email})`,
         metadata: {
           timestamp: new Date().toISOString(),
           action: "export_completed",
-          exportVersion: exportData.exportInfo.version,
+          requested_by: {
+            id: user.id,
+            name: adminData.name,
+            email: adminData.email,
+            role: adminData.role,
+          },
+          export_type: "user_data",
+          export_version: exportData.exportInfo.version,
+          export_summary: {
+            total_activities:
+              exportData.activityHistory.summary.totalActivities,
+            date_range: {
+              first: exportData.activityHistory.summary.firstActivity,
+              last: exportData.activityHistory.summary.lastActivity,
+            },
+          },
         },
       });
 
@@ -1528,6 +1724,21 @@ ${exportData.activityHistory.activities.join("\n")}
       setSnackbarVisible(true);
     } catch (error) {
       console.error("Error exporting data:", error);
+
+      // Log export error
+      if (user?.id) {
+        await supabase.from("activity_logs").insert({
+          user_id: user.id,
+          activity_type: "DATA_EXPORT_ERROR",
+          description: `Data export failed for user ${user.email}`,
+          metadata: {
+            timestamp: new Date().toISOString(),
+            action: "export_failed",
+            error: error instanceof Error ? error.message : "Unknown error",
+          },
+        });
+      }
+
       setSnackbarMessage(
         t("superAdmin.profile.exportError") || "Failed to export data"
       );
@@ -1681,6 +1892,7 @@ ${exportData.activityHistory.activities.join("\n")}
                               height={32}
                               style={{ borderRadius: 8 }}
                             />
+
                             <Shimmer
                               width={150}
                               height={20}
@@ -1757,10 +1969,7 @@ ${exportData.activityHistory.activities.join("\n")}
             {/* Profile Header with Gradient */}
             <Animated.View
               entering={FadeIn.delay(100)}
-              style={[
-                styles.profileSection,
-               
-              ]}
+              style={[styles.profileSection]}
             >
               <Surface
                 style={[
@@ -1857,6 +2066,28 @@ ${exportData.activityHistory.activities.join("\n")}
                           }}
                         />
 
+                        <TextInput
+                          label={
+                            t("superAdmin.profile.phoneNumber") ||
+                            "Phone Number"
+                          }
+                          value={phoneNumber}
+                          onChangeText={(text) =>
+                            setPhoneNumber(text.replace(/[^0-9+]/g, ""))
+                          }
+                          mode="outlined"
+                          style={styles.input}
+                          disabled={updating}
+                          outlineStyle={{ borderRadius: 12 }}
+                          keyboardType="phone-pad"
+                          theme={{
+                            colors: { primary: "rgba(54,105,157,255)" },
+                            fonts: {
+                              regular: { fontFamily: "Poppins-Regular" },
+                            },
+                          }}
+                        />
+
                         <Button
                           mode="contained"
                           onPress={handleUpdateProfile}
@@ -1871,12 +2102,15 @@ ${exportData.activityHistory.activities.join("\n")}
                       </View>
                     </Surface>
                   </Animated.View>
-                  <Animated.View entering={FadeIn.delay(200)} style={{ marginTop: 16 }}>
+                  <Animated.View
+                    entering={FadeIn.delay(200)}
+                    style={{ marginTop: 16 }}
+                  >
                     <Surface style={styles.detailsCard}>
-                    <View style={styles.cardContent}>
-                      <View style={styles.settingItem}>
-                        <View style={styles.settingItemContent}>
-                          <MaterialCommunityIcons
+                      <View style={styles.cardContent}>
+                        <View style={styles.settingItem}>
+                          <View style={styles.settingItemContent}>
+                            <MaterialCommunityIcons
                               name="translate"
                               size={24}
                               color="rgba(54,105,157,255)"
@@ -1886,7 +2120,7 @@ ${exportData.activityHistory.activities.join("\n")}
                             </Text>
                           </View>
                           <View style={styles.languageSelectorContainer}>
-                          <CustomLanguageSelector compact={true} />
+                            <CustomLanguageSelector compact={true} />
                           </View>
                         </View>
                       </View>
@@ -1921,7 +2155,6 @@ ${exportData.activityHistory.activities.join("\n")}
                       </View>
 
                       <View style={styles.cardContent}>
-
                         <TouchableOpacity
                           style={styles.settingItem}
                           onPress={handleResetPasswordClick}

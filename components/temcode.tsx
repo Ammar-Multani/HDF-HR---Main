@@ -39,19 +39,6 @@ interface ActivityLog {
     assigned_to?: {
       id: string;
       name: string;
-      email?: string;
-      role?: string;
-    };
-    added_by?: {
-      name: string;
-      email: string;
-      id?: string;
-      role?: string;
-    };
-    requester?: {
-      id: string;
-      name: string;
-      email: string;
       role?: string;
     };
     changes?: string[];
@@ -60,13 +47,6 @@ interface ActivityLog {
       to: string;
     };
     comment?: string;
-    status?: string;
-    priority?: string;
-    company?: {
-      id: string;
-      name: string;
-    };
-    action?: string;
   };
   old_value?: any;
   new_value?: any;
@@ -173,7 +153,7 @@ const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({
     logHeader: {
       flexDirection: "row",
       alignItems: "center",
-      marginBottom: 2,
+      marginBottom: 4,
     },
     logTypeContainer: {
       flexDirection: "row",
@@ -185,16 +165,14 @@ const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({
       marginLeft: -12,
     },
     logType: {
-      fontSize: 13,
+      fontSize: 14,
       fontFamily: "Poppins-SemiBold",
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
+      textTransform: "capitalize",
     },
     logTime: {
       fontSize: 12,
       color: "#64748B",
       fontFamily: "Poppins-Medium",
-      letterSpacing: 0.2,
     },
     logDescription: {
       fontSize: 14,
@@ -232,40 +210,13 @@ const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({
       flexDirection: "row",
       flexWrap: "wrap",
       alignItems: "center",
-      marginTop: 4,
     },
     clickableContainer: {
-      marginHorizontal: 2,
+      marginHorizontal: 4,
     },
     clickableText: {
       color: theme.colors.primary,
       textDecorationLine: "underline",
-      fontFamily: "Poppins-Medium",
-    },
-    statusText: {
-      fontFamily: "Poppins-Medium",
-      color: "#64748B",
-    },
-    statusHighlight: {
-      color: "#059669",
-      fontFamily: "Poppins-SemiBold",
-    },
-    commentText: {
-      fontStyle: "italic",
-      color: "#6B7280",
-      marginLeft: 4,
-    },
-    successText: {
-      color: "#059669",
-      fontFamily: "Poppins-Medium",
-    },
-    pendingText: {
-      color: "#F59E0B",
-      fontFamily: "Poppins-Medium",
-    },
-    changeText: {
-      color: "#6366F1",
-      fontFamily: "Poppins-Medium",
     },
   });
 
@@ -301,8 +252,6 @@ const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({
         return "account-plus";
       case "REMOVE_USER":
         return "account-minus";
-      case "DATA_EXPORT":
-        return "database-export";
       default:
         return "information";
     }
@@ -325,8 +274,6 @@ const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({
         return "#3B82F6"; // Blue
       case "REMOVE_USER":
         return "#EF4444"; // Red
-      case "DATA_EXPORT":
-        return "#0EA5E9"; // Sky blue
       default:
         return "#6B7280"; // Gray
     }
@@ -361,20 +308,7 @@ const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({
     }
   };
 
-  // Helper function to create a valid user object
-  const createUserObject = (
-    id: string,
-    name: string,
-    email: string,
-    role?: string
-  ) => ({
-    id,
-    name,
-    email,
-    role,
-  });
-
-  // Function to render clickable description
+  // Function to render clickable text with metadata
   const renderClickableDescription = (log: ActivityLog) => {
     const parts: React.ReactNode[] = [];
     let currentIndex = 0;
@@ -393,10 +327,10 @@ const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({
 
     // Helper function to add clickable user
     const addUserPart = (
-      user: { id: string; name: string; role?: string; email?: string },
+      user: { id: string; name: string; role?: string },
       prefix: string = ""
     ) => {
-      if (user?.id || user?.email) {
+      if (user?.id && user?.name) {
         if (prefix) {
           addTextPart(prefix);
         }
@@ -407,7 +341,7 @@ const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({
             style={styles.clickableContainer}
           >
             <Text style={[styles.logDescription, styles.clickableText]}>
-              {user.name || user.email}
+              {user.name}
             </Text>
           </TouchableOpacity>
         );
@@ -416,8 +350,12 @@ const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({
     };
 
     // Helper function to add clickable task
-    const addTaskPart = (taskId: string, taskTitle: string) => {
+    const addTaskPart = (
+      taskId: string,
+      taskTitle: string,
+    ) => {
       if (taskId && taskTitle) {
+
         parts.push(
           <TouchableOpacity
             key={`task-${currentIndex}`}
@@ -429,298 +367,79 @@ const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({
             </Text>
           </TouchableOpacity>
         );
+
         currentIndex++;
       }
     };
 
     // Start building the interactive description
     if (log.metadata) {
-      const {
-        task_id,
-        task_title,
-        created_by,
-        updated_by,
-        assigned_to,
-        added_by,
-        requester,
-      } = log.metadata;
+      const { task_id, task_title, created_by, updated_by, assigned_to } =
+        log.metadata;
 
       switch (log.activity_type.toUpperCase()) {
-        case "DATA_EXPORT":
-          if (action === "export_initiated" && requester) {
-            const userObj = createUserObject(
-              requester.id,
-              requester.name,
-              requester.email,
-              requester.role
-            );
-            addUserPart(userObj);
-            addTextPart(" requested data export");
-          } else if (action === "export_completed" && requester) {
-            const userObj = createUserObject(
-              requester.id,
-              requester.name,
-              requester.email,
-              requester.role
-            );
-            addUserPart(userObj);
-            addTextPart(" completed data export successfully");
-          }
-          currentIndex++;
-          break;
-
-        case "UPDATE_PROFILE":
-          if (requester) {
-            addUserPart(requester);
-            addTextPart(" updated their profile");
-            if (log.old_value && log.new_value) {
-              const changes: string[] = [];
-              if (log.old_value.phone_number !== log.new_value.phone_number) {
-                changes.push(
-                  log.new_value.phone_number
-                    ? `Phone number updated to ${log.new_value.phone_number}`
-                    : "Phone number removed"
-                );
-              }
-              if (changes.length > 0) {
-                addTextPart(": ");
-                changes.forEach((change, idx) => {
-                  parts.push(
-                    <Text
-                      key={`change-${currentIndex}-${idx}`}
-                      style={[styles.logDescription, styles.changeText]}
-                    >
-                      {change}
-                    </Text>
-                  );
-                  if (idx < changes.length - 1) {
-                    addTextPart(", ");
-                  }
-                });
-              }
-            }
-          } else {
-            addTextPart(log.description);
-          }
-          break;
-
-        case "PROFILE_UPDATE":
-          const updatingUser =
-            log.metadata?.updated_by || log.metadata?.created_by;
-          if (updatingUser) {
-            addUserPart(updatingUser);
-            addTextPart(" updated their profile");
-            const metadata = log.metadata || {};
-            const changes = metadata.changes;
-            if (changes && Array.isArray(changes) && changes.length > 0) {
-              addTextPart(": ");
-              changes.forEach((change: string, idx: number) => {
-                parts.push(
-                  <Text
-                    key={`change-${currentIndex}-${idx}`}
-                    style={[styles.logDescription, styles.changeText]}
-                  >
-                    {change}
-                  </Text>
-                );
-                if (idx < changes.length - 1) {
-                  addTextPart(", ");
-                }
-              });
-            }
-          } else {
-            addTextPart(log.description);
-          }
-          break;
-
-        case "PASSWORD_RESET_REQUESTED":
-          if (added_by) {
-            addUserPart(added_by);
-            addTextPart(" requested a password reset");
-          } else {
-            addTextPart(log.description);
-          }
-          break;
-
-        case "ACCOUNT_DELETION":
-          if (
-            log.metadata?.action === "deletion_started" &&
-            log.metadata.requested_by
-          ) {
-            addUserPart(log.metadata.requested_by);
-            addTextPart(" initiated account deletion");
-          } else if (
-            log.metadata?.action === "deletion_completed" &&
-            log.metadata.requested_by
-          ) {
-            addUserPart(log.metadata.requested_by);
-            addTextPart(" completed account deletion");
-          } else {
-            addTextPart(log.description);
-          }
-          break;
-
-        case "UPDATE":
-          if (added_by) {
-            addUserPart(added_by);
-            addTextPart(" updated task ");
-            if (task_id && task_title) {
-              addTaskPart(task_id, task_title);
-            }
-            if (
-              log.metadata?.changes &&
-              Array.isArray(log.metadata.changes) &&
-              log.metadata.changes.length > 0
-            ) {
-              addTextPart(": ");
-              log.metadata.changes.forEach((change: string, idx: number) => {
-                parts.push(
-                  <Text
-                    key={`change-${currentIndex}-${idx}`}
-                    style={[styles.logDescription, styles.changeText]}
-                  >
-                    {change}
-                  </Text>
-                );
-                if (idx < log.metadata.changes.length - 1) {
-                  addTextPart(", ");
-                }
-              });
-              currentIndex++;
-            }
-          } else {
-            addTextPart(log.description);
-          }
-          break;
-
-        case "ADD_COMMENT":
-          if (added_by) {
-            addTextPart("Comment added by ");
-            const userObj = {
-              id: added_by.id || log.user_id,
-              name: added_by.name,
-              role: added_by.role,
-            };
-            addUserPart(userObj);
-            if (log.metadata.comment) {
-              addTextPart(": ");
-              parts.push(
-                <Text
-                  key={`comment-${currentIndex}`}
-                  style={[styles.logDescription, styles.commentText]}
-                >
-                  "{log.metadata.comment}"
-                </Text>
-              );
-              currentIndex++;
-            }
-            if (task_id && task_title) {
-              addTextPart(" on task ");
-              addTaskPart(task_id, task_title);
-            }
-          } else {
-            addTextPart(log.description);
-          }
-          break;
-
         case "CREATE_TASK":
-          if (created_by) {
-            addTextPart("New task ");
-            if (task_id && task_title) {
-              addTaskPart(task_id, task_title);
-            }
-            addTextPart(" created by ");
-            addUserPart(created_by);
-            if (assigned_to) {
-              addTextPart(". Assigned to ");
-              addUserPart(assigned_to);
-            }
-          } else {
-            addTextPart(log.description);
-          }
+          addUserPart(created_by!);
+          addTextPart(" created task ");
+          addTaskPart(task_id!, task_title!);
           break;
 
         case "UPDATE_TASK":
-          if (added_by) {
-            addUserPart(added_by);
-            addTextPart(" updated task ");
-            if (task_id && task_title) {
-              addTaskPart(task_id, task_title);
-            }
-            const metadata = log.metadata || {};
-            const changes = metadata.changes;
-            if (changes && Array.isArray(changes) && changes.length > 0) {
-              addTextPart(": ");
-              changes.forEach((change: string, idx: number) => {
-                parts.push(
-                  <Text
-                    key={`change-${currentIndex}-${idx}`}
-                    style={[styles.logDescription, styles.changeText]}
-                  >
-                    {change}
-                  </Text>
-                );
-                if (idx < changes.length - 1) {
-                  addTextPart(", ");
-                }
-              });
-            }
-          } else {
-            addTextPart(log.description);
+          addUserPart(updated_by!);
+          addTextPart(" updated task ");
+          addTaskPart(task_id!, task_title!);
+          if (log.metadata.changes && log.metadata.changes.length > 0) {
+            addTextPart(`: ${log.metadata.changes.join(", ")}`);
           }
           break;
 
         case "UPDATE_STATUS":
-          addUserPart(added_by!);
+          addUserPart(updated_by!);
           addTextPart(" updated status of task ");
           addTaskPart(task_id!, task_title!);
           if (log.metadata.status_change) {
-            const { from, to } = log.metadata.status_change;
-            addTextPart(` from `);
-            parts.push(
-              <Text
-                key={`status-from-${currentIndex}`}
-                style={[styles.logDescription, styles.statusText]}
-              >
-                {from.toLowerCase()}
-              </Text>
+            addTextPart(
+              ` from ${log.metadata.status_change.from} to ${log.metadata.status_change.to}`
             );
-            currentIndex++;
-            addTextPart(` to `);
-            parts.push(
-              <Text
-                key={`status-to-${currentIndex}`}
-                style={[
-                  styles.logDescription,
-                  styles.statusText,
-                  styles.statusHighlight,
-                ]}
-              >
-                {to.toLowerCase()}
-              </Text>
-            );
-            currentIndex++;
+          }
+          break;
+
+        case "ADD_COMMENT":
+          addUserPart(created_by!);
+          addTextPart(" commented on task ");
+          addTaskPart(task_id!, task_title!);
+          if (log.metadata.comment) {
+            addTextPart(`: ${log.metadata.comment}`);
           }
           break;
 
         case "ASSIGN_USER":
-          addUserPart(added_by!);
+          addUserPart(updated_by!);
           addTextPart(" assigned ");
-          addUserPart(log.metadata?.assigned_to!);
+          addUserPart(assigned_to!);
           addTextPart(" to task ");
           addTaskPart(task_id!, task_title!);
           break;
 
         case "REMOVE_USER":
-          addUserPart(added_by!);
+          addUserPart(updated_by!);
           addTextPart(" removed ");
-          addUserPart(log.metadata?.assigned_to!);
+          addUserPart(assigned_to!);
           addTextPart(" from task ");
           addTaskPart(task_id!, task_title!);
           break;
 
         default:
-          addTextPart(log.description);
+          // For any unhandled activity types, try to extract task information if available
+          if (task_id && task_title) {
+            addTextPart(log.description.split(task_title)[0]);
+            addTaskPart(task_id, task_title, '"', '"');
+            if (log.description.split(task_title)[1]) {
+              addTextPart(log.description.split(task_title)[1]);
+            }
+          } else {
+            addTextPart(log.description);
+          }
       }
     } else {
       addTextPart(log.description);

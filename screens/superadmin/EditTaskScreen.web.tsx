@@ -412,47 +412,60 @@ const EditTaskScreen = () => {
         metadata: {
           task_id: taskId,
           task_title: data.title,
-          assigned_to: {
-            id: selectedAssignees[0],
-            name:
-              availableUsers.find((u) => u.id === selectedAssignees[0])?.name ||
-              "Unknown User",
-          },
-          priority: data.priority,
           status: data.status,
+          priority: data.priority,
           changes: changes,
           updated_by: {
+            id: user.id, // Add user ID for navigation
             name: userDisplayName,
             email: user.email,
+            role: updatingUser?.role || "superadmin", // Add role for navigation
           },
+          assigned_to:
+            selectedAssignees.length > 0
+              ? {
+                  id: selectedAssignees[0],
+                  name:
+                    availableUsers.find((u) => u.id === selectedAssignees[0])
+                      ?.name || "Unknown User",
+                  email: availableUsers.find(
+                    (u) => u.id === selectedAssignees[0]
+                  )?.email,
+                  role: availableUsers.find(
+                    (u) => u.id === selectedAssignees[0]
+                  )?.role,
+                }
+              : null,
         },
         old_value: {
           id: taskId,
           title: {
-            previous: originalTask.title,
             changed: originalTask.title !== data.title,
+            previous: originalTask.title,
           },
           description: {
-            previous: originalTask.description,
             changed: originalTask.description !== data.description,
+            previous: originalTask.description,
           },
+          status: originalTask.status,
           deadline: originalTask.deadline,
           priority: originalTask.priority,
-          status: originalTask.status,
+          assigned_to: originalTask.assigned_to,
         },
         new_value: {
           id: taskId,
           title: {
-            current: data.title,
             changed: originalTask.title !== data.title,
+            current: data.title,
           },
           description: {
-            current: data.description,
             changed: originalTask.description !== data.description,
+            current: data.description,
           },
+          status: data.status,
           deadline: data.deadline.toISOString(),
           priority: data.priority,
-          status: data.status,
+          assigned_to: selectedAssignees[0],
         },
       };
 

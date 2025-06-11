@@ -393,6 +393,18 @@ const SuperAdminTaskDetailsScreen = () => {
     try {
       setSubmittingComment(true);
 
+      // First fetch the admin's details
+      const { data: adminData, error: adminError } = await supabase
+        .from("admin")
+        .select("name, email")
+        .eq("id", user.id)
+        .single();
+
+      if (adminError) {
+        console.error("Error fetching admin details:", adminError);
+        throw adminError;
+      }
+
       const commentData = {
         task_id: taskId,
         sender_id: user.id,
@@ -408,19 +420,19 @@ const SuperAdminTaskDetailsScreen = () => {
         throw error;
       }
 
-      // Log the activity
+      // Log the activity with proper admin name
       const activityLogData = {
         user_id: user.id,
         activity_type: "ADD_COMMENT",
-        description: `New comment added by ${user.email} on task "${task.title}"`,
+        description: `New comment added by ${adminData.name} on task "${task.title}"`,
         company_id: task.company_id,
         metadata: {
           task_id: taskId,
           task_title: task.title,
           comment: newComment.trim(),
           added_by: {
-            name: user.email,
-            email: user.email,
+            name: adminData.name,
+            email: adminData.email,
           },
         },
         old_value: null,
@@ -437,6 +449,7 @@ const SuperAdminTaskDetailsScreen = () => {
 
       if (logError) {
         console.error("Error logging activity:", logError);
+        throw logError;
       }
 
       // Refresh comments
@@ -507,74 +520,121 @@ const SuperAdminTaskDetailsScreen = () => {
       setSubmitting(true);
       setSelectedStatus(newStatus);
 
+      // Get user's complete details from appropriate table
+      let userDisplayName = user.email;
+      let userRole = "user";
+
+      // Check admin table first
+      const { data: adminData, error: adminError } = await supabase
+        .from("admin")
+        .select("id, name, email, role")
+        .eq("id", user.id)
+        .single();
+
+      if (adminData) {
+        userDisplayName = adminData.name;
+        userRole = adminData.role;
+      } else {
+        // Check company_user table
+        const { data: userData, error: userError } = await supabase
+          .from("company_user")
+          .select("id, first_name, last_name, email, role")
+          .eq("id", user.id)
+          .single();
+
+        if (userData) {
+          userDisplayName = `${userData.first_name} ${userData.last_name}`;
+          userRole = userData.role;
+        }
+      }
+
+      // Get assigned user's complete details
+      const assignedUserDetails =
+        assignedUsers.length > 0 ? assignedUsers[0] : null;
+
+      // Update task
       const updateData = {
         status: newStatus,
         modified_by: user.id,
         updated_at: new Date().toISOString(),
       };
 
-      const { error } = await supabase
+      const { error: updateError } = await supabase
         .from("tasks")
         .update(updateData)
         .eq("id", task.id);
 
-      if (error) {
-        throw error;
+      if (updateError) {
+        throw updateError;
       }
 
-      // Get user's name from appropriate table
-      let userDisplayName = user.email;
-      try {
-        // Check admin table first
-        const { data: adminData } = await supabase
-          .from("admin")
-          .select("name")
-          .eq("id", user.id)
-          .single();
-
-        if (adminData) {
-          userDisplayName = adminData.name;
-        } else {
-          // Check company_user table
-          const { data: userData } = await supabase
-            .from("company_user")
-            .select("first_name, last_name")
-            .eq("id", user.id)
-            .single();
-
-          if (userData) {
-            userDisplayName = `${userData.first_name} ${userData.last_name}`;
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching user details:", error);
-      }
-
-      // Log the activity
+      // Log the activity with the correct structure
       const activityLogData = {
         user_id: user.id,
-        activity_type: "UPDATE_STATUS",
-        description: `Task status updated by ${userDisplayName} (${user.email}). Status changed from "${getTranslatedStatus(task.status)}" to "${getTranslatedStatus(newStatus)}"`,
+        activity_type: "UPDATE_TASK_STATUS",
+        description: `Task status updated from ${task.status} to ${newStatus} by ${userDisplayName} (${user.email})`,
         company_id: task.company_id,
         metadata: {
-          task_id: taskId,
+          status: newStatus,
+          task_id: task.id,
           task_title: task.title,
-          updated_by: {
+          priority: task.priority,
+          company: task.company
+            ? {
+                id: task.company.id,
+                name: task.company.company_name,
+              }
+            : null,
+          created_by: {
+            id: user.id,
             name: userDisplayName,
             email: user.email,
+            role: userRole,
           },
-          status_change: {
-            from: task.status,
-            to: newStatus,
-          },
+          assigned_to: assignedUserDetails
+            ? {
+                id: assignedUserDetails.id,
+                name: `${assignedUserDetails.first_name} ${assignedUserDetails.last_name}`,
+                email: assignedUserDetails.email,
+                role: assignedUserDetails.role,
+              }
+            : null,
         },
         old_value: {
-          id: taskId,
+          id: task.id,
+          title: task.title,
           status: task.status,
+          deadline: task.deadline,
+          priority: task.priority,
+          company_id: task.company_id,
+          updated_at: task.updated_at || task.created_at,
+          modified_by: task.modified_by
+            ? {
+                id: task.modified_by,
+                name: task.modifier_name || "Unknown",
+                email: user.email, // We might want to fetch the previous modifier's email
+                role: userRole, // We might want to fetch the previous modifier's role
+              }
+            : null,
+          assigned_to: task.assigned_to,
+          description: task.description,
         },
         new_value: {
-          id: taskId,
+          id: task.id,
+          title: task.title,
           status: newStatus,
+          deadline: task.deadline,
+          priority: task.priority,
+          company_id: task.company_id,
+          updated_at: updateData.updated_at,
+          modified_by: {
+            id: user.id,
+            name: userDisplayName,
+            email: user.email,
+            role: userRole,
+          },
+          assigned_to: assignedUserDetails?.id || null,
+          description: task.description,
         },
       };
 
@@ -584,6 +644,7 @@ const SuperAdminTaskDetailsScreen = () => {
 
       if (logError) {
         console.error("Error logging activity:", logError);
+        throw logError;
       }
 
       // Update local state
@@ -594,15 +655,16 @@ const SuperAdminTaskDetailsScreen = () => {
         modified_at: updateData.updated_at,
         modifier_name: userDisplayName,
       });
+
+      setStatusMenuVisible(false);
+      setSubmitting(false);
     } catch (error: any) {
       console.error("Error updating task status:", error);
       Alert.alert(
         t("common.error"),
         error.message || t("superAdmin.tasks.failedToUpdateStatus")
       );
-    } finally {
       setSubmitting(false);
-      setStatusMenuVisible(false);
     }
   };
 
@@ -1552,6 +1614,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   companyChip: {
+    alignSelf: "flex-start",
     height: 32,
     minWidth: 120,
     paddingHorizontal: 12,
