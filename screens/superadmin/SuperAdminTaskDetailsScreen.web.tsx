@@ -39,6 +39,8 @@ import {
 } from "../../types";
 import { useTranslation } from "react-i18next";
 import Animated, { FadeIn } from "react-native-reanimated";
+import { TaskActivityLogger } from "../../components/TaskActivityLogger";
+import { NavigationProp } from "@react-navigation/native";
 
 type TaskDetailsRouteParams = {
   taskId: string;
@@ -93,9 +95,28 @@ const useWindowDimensions = () => {
   return dimensions;
 };
 
+// Define types at the top level
+type RootStackParamList = {
+  EditTask: { taskId: string; returnToDetails: boolean };
+};
+
+interface ActivityMetadata {
+  status_change?: {
+    from: TaskStatus;
+    to: TaskStatus;
+  };
+  [key: string]: any;
+}
+
+interface UserInfo extends ActivityMetadata {
+  id?: string;
+  name?: string;
+  email?: string;
+}
+
 const SuperAdminTaskDetailsScreen = () => {
   const theme = useTheme();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const route =
     useRoute<RouteProp<Record<string, TaskDetailsRouteParams>, string>>();
   const { taskId } = route.params;
@@ -387,35 +408,6 @@ const SuperAdminTaskDetailsScreen = () => {
         throw error;
       }
 
-      // Log the activity
-      const activityLogData = {
-        user_id: user.id,
-        activity_type: "ADD_COMMENT",
-        description: `New comment added by ${user.email} on task "${task.title}"`,
-        company_id: task.company_id,
-        metadata: {
-          task_title: task.title,
-          comment: newComment.trim(),
-          added_by: {
-            name: user.email,
-            email: user.email,
-          },
-        },
-        old_value: null,
-        new_value: {
-          comment: newComment.trim(),
-          added_at: new Date().toISOString(),
-        },
-      };
-
-      const { error: logError } = await supabase
-        .from("activity_logs")
-        .insert([activityLogData]);
-
-      if (logError) {
-        console.error("Error logging activity:", logError);
-      }
-
       // Refresh comments
       const { data: commentsData, error: commentsError } = await supabase
         .from("task_comments")
@@ -534,6 +526,7 @@ const SuperAdminTaskDetailsScreen = () => {
         description: `Task status updated by ${userDisplayName} (${user.email}). Status changed from "${getTranslatedStatus(task.status)}" to "${getTranslatedStatus(newStatus)}"`,
         company_id: task.company_id,
         metadata: {
+          task_id: taskId,
           task_title: task.title,
           updated_by: {
             name: userDisplayName,
@@ -545,9 +538,11 @@ const SuperAdminTaskDetailsScreen = () => {
           },
         },
         old_value: {
+          id: taskId,
           status: task.status,
         },
         new_value: {
+          id: taskId,
           status: newStatus,
         },
       };
@@ -746,459 +741,504 @@ const SuperAdminTaskDetailsScreen = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: "#F8F9FA" }]}>
-      <AppHeader
-        title={t("superAdmin.tasks.taskDetails")}
-        subtitle={t("superAdmin.tasks.reviewTaskDetails")}
-        showLogo={false}
-        showTitle={true}
-        showHelpButton={true}
-        showBackButton={true}
-        absolute={false}
-      />
+      <TaskActivityLogger>
+        {(logActivity) => (
+          <>
+            <AppHeader
+              title={t("superAdmin.tasks.taskDetails")}
+              subtitle={t("superAdmin.tasks.reviewTaskDetails")}
+              showLogo={false}
+              showTitle={true}
+              showHelpButton={true}
+              showBackButton={true}
+              absolute={false}
+            />
 
-      <Portal>
-        <Modal
-          visible={statusMenuVisible}
-          onDismiss={() => setStatusMenuVisible(false)}
-          contentContainerStyle={[
-            styles.modalContainer,
-            {
-              width: isLargeScreen ? 480 : isMediumScreen ? 420 : "90%",
-              alignSelf: "center",
-            },
-          ]}
-        >
-          <Surface style={styles.modalSurface}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {t("superAdmin.tasks.updateStatus")}
-              </Text>
-              <IconButton
-                icon="close"
-                onPress={() => setStatusMenuVisible(false)}
-              />
-            </View>
-            <Divider />
-
-            <ScrollView style={{ maxHeight: 400 }}>
-              {Object.values(TaskStatus).map((status) => (
-                <TouchableOpacity
-                  key={status}
-                  style={[
-                    styles.statusOption,
-                    task &&
-                      task.status === status && {
-                        backgroundColor: getStatusBackgroundColor(status),
-                      },
-                  ]}
-                  onPress={() => {
-                    handleUpdateStatus(status);
-                  }}
-                  disabled={submitting}
-                >
-                  <View style={styles.statusOptionContent}>
-                    <View
-                      style={[
-                        styles.statusIconContainer,
-                        { backgroundColor: getStatusBackgroundColor(status) },
-                      ]}
-                    >
-                      <IconButton
-                        icon={getStatusIcon(status)}
-                        size={20}
-                        iconColor={getStatusTextColor(status)}
-                        style={{ margin: 0 }}
-                      />
-                    </View>
-                    <View style={styles.statusTextContainer}>
-                      <Text
-                        style={[
-                          styles.statusText,
-                          { color: getStatusTextColor(status) },
-                        ]}
-                      >
-                        {getTranslatedStatus(status)}
-                      </Text>
-                      <Text style={styles.statusDescription}>
-                        {status === TaskStatus.COMPLETED &&
-                          t("superAdmin.tasks.markAsCompleted")}
-                        {status === TaskStatus.OVERDUE &&
-                          t("superAdmin.tasks.markAsOverdue")}
-                        {status === TaskStatus.IN_PROGRESS &&
-                          t("superAdmin.tasks.markAsInProgress")}
-                        {status === TaskStatus.AWAITING_RESPONSE &&
-                          t("superAdmin.tasks.markAsAwaitingResponse")}
-                        {status === TaskStatus.OPEN &&
-                          t("superAdmin.tasks.markAsOpen")}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {task && task.status === status && (
-                    <IconButton
-                      icon="check"
-                      size={20}
-                      iconColor={getStatusTextColor(status)}
-                    />
-                  )}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </Surface>
-        </Modal>
-      </Portal>
-
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[
-          styles.scrollContent,
-          {
-            maxWidth: isLargeScreen ? 1400 : isMediumScreen ? 1100 : "100%",
-            paddingHorizontal: isLargeScreen ? 48 : isMediumScreen ? 32 : 16,
-          },
-        ]}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        <View style={styles.headerSection}>
-          <Text style={styles.pageTitle}>{task.title}</Text>
-          <View style={styles.buttonContainer}>
-            {canEditTask() && (
-              <Button
-                mode="contained"
-                onPress={() => {
-                  // @ts-ignore - Navigation typing can be complex
-                  navigation.navigate("EditTask", { taskId: task.id });
-                }}
-                style={styles.button}
-                icon="pencil"
-                buttonColor={theme.colors.primary}
+            <Portal>
+              <Modal
+                visible={statusMenuVisible}
+                onDismiss={() => setStatusMenuVisible(false)}
+                contentContainerStyle={[
+                  styles.modalContainer,
+                  {
+                    width: isLargeScreen ? 480 : isMediumScreen ? 420 : "90%",
+                    alignSelf: "center",
+                  },
+                ]}
               >
-                {t("superAdmin.tasks.editTask")}
-              </Button>
-            )}
-          </View>
-        </View>
-
-        <View style={styles.gridContainer}>
-          <View style={styles.gridColumn}>
-            <Animated.View entering={FadeIn.delay(100)}>
-              {/* Task Details Card */}
-              <Surface style={styles.detailsCard}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.simpleCardHeader}>
-                    <IconButton
-                      icon="clipboard-text"
-                      size={22}
-                      iconColor={theme.colors.primary}
-                    />
-                    <Text style={styles.simpleCardHeaderTitle}>
-                      {task.title}
+                <Surface style={styles.modalSurface}>
+                  <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>
+                      {t("superAdmin.tasks.updateStatus")}
                     </Text>
+                    <IconButton
+                      icon="close"
+                      onPress={() => setStatusMenuVisible(false)}
+                    />
                   </View>
-                </View>
+                  <Divider />
 
-                <View style={styles.cardContent}>
-                  <View style={styles.taskMetaContainer}>
-                    <Chip
-                      icon="flag"
-                      style={[
-                        styles.priorityChip,
-                        {
-                          backgroundColor:
-                            getPriorityColor(task.priority) + "20",
-                          borderColor: getPriorityColor(task.priority),
-                        },
-                      ]}
-                      textStyle={{ color: getPriorityColor(task.priority) }}
-                    >
-                      {getTranslatedPriority(task.priority)}{" "}
-                      {t("superAdmin.tasks.priority")}
-                    </Chip>
-
-                    {task.company_id && (
-                      <Chip
-                        icon="office-building"
+                  <ScrollView style={{ maxHeight: 400 }}>
+                    {Object.values(TaskStatus).map((status) => (
+                      <TouchableOpacity
+                        key={status}
                         style={[
-                          styles.companyChip,
-                          {
-                            backgroundColor:
-                              theme.colors.border,
-                          },
+                          styles.statusOption,
+                          task &&
+                            task.status === status && {
+                              backgroundColor: getStatusBackgroundColor(status),
+                            },
                         ]}
-                        mode="flat"
+                        onPress={async () => {
+                          if (task) {
+                            await handleUpdateStatus(status);
+                            await logActivity(
+                              "UPDATE_STATUS",
+                              taskId,
+                              task.title,
+                              task.company_id || "",
+                              {
+                                status_change: {
+                                  from: task.status,
+                                  to: status,
+                                },
+                              } as UserInfo,
+                              { status: task.status },
+                              { status }
+                            );
+                          }
+                        }}
+                        disabled={submitting}
                       >
-                        {companies.find((c) => c.id === task.company_id)
-                          ?.company_name ||
-                          t("superAdmin.tasks.companyNotFound")}
-                      </Chip>
-                    )}
-                  </View>
-
-                  <Divider style={styles.sectionDivider} />
-
-                  <Text style={styles.sectionSubtitle}>
-                    {t("superAdmin.tasks.description")}
-                  </Text>
-                  <Text style={styles.description}>{task.description}</Text>
-
-                  <Divider style={styles.sectionDivider} />
-
-                  <Text style={styles.sectionSubtitle}>
-                    {t("superAdmin.tasks.details")}
-                  </Text>
-
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>
-                      {t("superAdmin.tasks.deadline")}:
-                    </Text>
-                    <Text style={styles.detailValue}>
-                      {format(new Date(task.deadline), "MMMM d, yyyy")}
-                    </Text>
-                  </View>
-
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>
-                      {t("superAdmin.tasks.created")}:
-                    </Text>
-                    <Text style={styles.detailValue}>
-                      {format(new Date(task.created_at), "MMMM d, yyyy")}
-                    </Text>
-                  </View>
-
-                  <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>
-                      {t("superAdmin.tasks.reminder")}:
-                    </Text>
-                    <Text style={styles.detailValue}>
-                      {t("superAdmin.tasks.daysBeforeDeadline", {
-                        days: task.reminder_days_before,
-                      })}
-                    </Text>
-                  </View>
-
-                  {task.modified_by && task.modified_at && (
-                    <>
-                      <Divider style={styles.sectionDivider} />
-
-                      <Text style={styles.sectionSubtitle}>
-                        {t("superAdmin.tasks.lastModification")}
-                      </Text>
-
-                      <View style={styles.detailRow}>
-                        <Text style={styles.detailLabel}>
-                          {t("superAdmin.tasks.modifiedAt")}:
-                        </Text>
-                        <Text style={styles.detailValue}>
-                          {format(
-                            new Date(task.modified_at),
-                            "MMMM d, yyyy HH:mm"
-                          )}
-                        </Text>
-                      </View>
-
-                      {task.modifier_name && (
-                        <View style={styles.detailRow}>
-                          <Text style={styles.detailLabel}>
-                            {t("superAdmin.tasks.modifiedBy")}:
-                          </Text>
-                          <Text style={styles.detailValue}>
-                            {task.modifier_name}
-                          </Text>
-                        </View>
-                      )}
-                    </>
-                  )}
-                </View>
-              </Surface>
-
-              {/* Assigned Users Card */}
-              <Surface style={[styles.detailsCard, { marginTop: 24 }]}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.simpleCardHeader}>
-                    <IconButton
-                      icon="account-group"
-                      size={22}
-                      iconColor={theme.colors.primary}
-                    />
-                    <Text style={styles.simpleCardHeaderTitle}>
-                      {t("superAdmin.tasks.assignedUsers")}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.cardContent}>
-                  {assignedUsers.length > 0 ? (
-                    <View style={styles.assignedUsersGrid}>
-                      {assignedUsers.map((user) => {
-                        const roleColors = getUserRoleBadgeColor(user.role);
-                        return (
-                          <Surface key={user.id} style={styles.userCard}>
-                            {/* <View style={styles.userCardHeader}>
-                              <IconButton
-                                icon="account-circle"
-                                size={24}
-                                iconColor={roleColors.text}
-                              />
-                              <View
-                                style={[
-                                  styles.roleBadge,
-                                  {
-                                    backgroundColor: roleColors.background,
-                                    borderColor: roleColors.border,
-                                  },
-                                ]}
-                              >
-                                <Text
-                                  style={[
-                                    styles.roleText,
-                                    { color: roleColors.text },
-                                  ]}
-                                >
-                                  {user.role === "SUPER_ADMIN"
-                                    ? t("superAdmin.tasks.superAdmin")
-                                    : user.role === "COMPANY_ADMIN"
-                                      ? t("superAdmin.tasks.companyAdmin")
-                                      : t("superAdmin.tasks.user")}
-                                </Text>
-                              </View>
-                            </View> */}
-
-                            <Text style={styles.userName}>
-                              {user.first_name} {user.last_name}
-                            </Text>
-                            <Text style={styles.userEmail}>{user.email}</Text>
-
-                            {user.company_name && (
-                              <View style={styles.userCompanyContainer}>
-                                <IconButton
-                                  icon="office-building"
-                                  size={16}
-                                  iconColor="#64748B"
-                                  style={styles.companyIcon}
-                                />
-                                <Text style={styles.userCompany}>
-                                  {user.company_name}
-                                </Text>
-                              </View>
-                            )}
-                          </Surface>
-                        );
-                      })}
-                    </View>
-                  ) : (
-                    <Text style={styles.noUsersText}>
-                      {t("superAdmin.tasks.noUsersAssigned")}
-                    </Text>
-                  )}
-                </View>
-              </Surface>
-            </Animated.View>
-          </View>
-
-          <View style={styles.gridColumn}>
-            <Animated.View entering={FadeIn.delay(200)}>
-              {/* Comments Card */}
-              <Surface style={styles.detailsCard}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.headerLeft}>
-                    <View style={styles.iconContainer}>
-                      <IconButton
-                        icon="comment-text-multiple"
-                        size={20}
-                        iconColor="#64748b"
-                        style={styles.headerIcon}
-                      />
-                    </View>
-                    <Text style={styles.cardTitle}>
-                      {t("superAdmin.tasks.comments")}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.cardContent}>
-                  {comments.length > 0 ? (
-                    comments.map((comment) => {
-                      const isCurrentUser = comment.sender_id === user?.id;
-                      const commentColor = getCommentColorByRole(comment);
-                      const commentBgColor = getCommentBgColor(comment);
-
-                      return (
-                        <View
-                          key={comment.id}
-                          style={[
-                            styles.commentContainer,
-                            isCurrentUser
-                              ? styles.currentUserComment
-                              : styles.otherUserComment,
-                          ]}
-                        >
+                        <View style={styles.statusOptionContent}>
                           <View
                             style={[
-                              styles.commentBubble,
+                              styles.statusIconContainer,
                               {
-                                backgroundColor: commentBgColor,
-                                borderColor: commentColor + "30",
+                                backgroundColor:
+                                  getStatusBackgroundColor(status),
                               },
                             ]}
                           >
-                            <View style={styles.commentHeader}>
-                              <Text
-                                style={[
-                                  styles.commentUser,
-                                  { color: commentColor },
-                                ]}
-                              >
-                                {getUserRoleLabel(comment)}
-                              </Text>
-                              <Text style={styles.commentDate}>
-                                {format(
-                                  new Date(comment.created_at),
-                                  "MMM d, yyyy h:mm a"
-                                )}
-                              </Text>
-                            </View>
-                            <Text style={styles.commentText}>
-                              {comment.message}
+                            <IconButton
+                              icon={getStatusIcon(status)}
+                              size={20}
+                              iconColor={getStatusTextColor(status)}
+                              style={{ margin: 0 }}
+                            />
+                          </View>
+                          <View style={styles.statusTextContainer}>
+                            <Text
+                              style={[
+                                styles.statusText,
+                                { color: getStatusTextColor(status) },
+                              ]}
+                            >
+                              {getTranslatedStatus(status)}
+                            </Text>
+                            <Text style={styles.statusDescription}>
+                              {status === TaskStatus.COMPLETED &&
+                                t("superAdmin.tasks.markAsCompleted")}
+                              {status === TaskStatus.OVERDUE &&
+                                t("superAdmin.tasks.markAsOverdue")}
+                              {status === TaskStatus.IN_PROGRESS &&
+                                t("superAdmin.tasks.markAsInProgress")}
+                              {status === TaskStatus.AWAITING_RESPONSE &&
+                                t("superAdmin.tasks.markAsAwaitingResponse")}
+                              {status === TaskStatus.OPEN &&
+                                t("superAdmin.tasks.markAsOpen")}
                             </Text>
                           </View>
                         </View>
-                      );
-                    })
-                  ) : (
-                    <Text style={styles.noCommentsText}>
-                      {t("superAdmin.tasks.noCommentsYet")}
-                    </Text>
-                  )}
 
-                  <View style={styles.addCommentContainer}>
-                    <TextInput
-                      label={t("superAdmin.tasks.addComment")}
-                      value={newComment}
-                      onChangeText={setNewComment}
-                      mode="outlined"
-                      multiline
-                      style={styles.commentInput}
-                      disabled={submittingComment}
-                    />
+                        {task && task.status === status && (
+                          <IconButton
+                            icon="check"
+                            size={20}
+                            iconColor={getStatusTextColor(status)}
+                          />
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </Surface>
+              </Modal>
+            </Portal>
+
+            <ScrollView
+              style={styles.scrollView}
+              contentContainerStyle={[
+                styles.scrollContent,
+                {
+                  maxWidth: isLargeScreen
+                    ? 1400
+                    : isMediumScreen
+                      ? 1100
+                      : "100%",
+                  paddingHorizontal: isLargeScreen
+                    ? 48
+                    : isMediumScreen
+                      ? 32
+                      : 16,
+                },
+              ]}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+              }
+            >
+              <View style={styles.headerSection}>
+                <Text style={styles.pageTitle}>{task.title}</Text>
+                <View style={styles.buttonContainer}>
+                  {canEditTask() && (
                     <Button
                       mode="contained"
-                      onPress={handleAddComment}
-                      style={styles.addCommentButton}
-                      loading={submittingComment}
-                      disabled={submittingComment || !newComment.trim()}
+                      onPress={() => {
+                        navigation.navigate("EditTask", {
+                          taskId: task.id,
+                          returnToDetails: true,
+                        });
+                      }}
+                      style={styles.button}
+                      icon="pencil"
                       buttonColor={theme.colors.primary}
                     >
-                      {t("superAdmin.tasks.addComment")}
+                      {t("superAdmin.tasks.editTask")}
                     </Button>
-                  </View>
+                  )}
                 </View>
-              </Surface>
-            </Animated.View>
-          </View>
-        </View>
-      </ScrollView>
+              </View>
+
+              <View style={styles.gridContainer}>
+                <View style={styles.gridColumn}>
+                  <Animated.View entering={FadeIn.delay(100)}>
+                    {/* Task Details Card */}
+                    <Surface style={styles.detailsCard}>
+                      <View style={styles.cardHeader}>
+                        <View style={styles.simpleCardHeader}>
+                          <IconButton
+                            icon="clipboard-text"
+                            size={22}
+                            iconColor={theme.colors.primary}
+                          />
+                          <Text style={styles.simpleCardHeaderTitle}>
+                            {task.title}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.cardContent}>
+                        <View style={styles.taskMetaContainer}>
+                          <Chip
+                            icon="flag"
+                            style={[
+                              styles.priorityChip,
+                              {
+                                backgroundColor:
+                                  getPriorityColor(task.priority) + "20",
+                                borderColor: getPriorityColor(task.priority),
+                              },
+                            ]}
+                            textStyle={{
+                              color: getPriorityColor(task.priority),
+                            }}
+                          >
+                            {getTranslatedPriority(task.priority)}{" "}
+                            {t("superAdmin.tasks.priority")}
+                          </Chip>
+
+                          {task.company_id && (
+                            <Chip
+                              icon="office-building"
+                              style={[
+                                styles.companyChip,
+                                {
+                                  backgroundColor: "#f1f5f9",
+                                },
+                              ]}
+                              mode="flat"
+                            >
+                              {companies.find((c) => c.id === task.company_id)
+                                ?.company_name ||
+                                t("superAdmin.tasks.companyNotFound")}
+                            </Chip>
+                          )}
+                        </View>
+
+                        <Divider style={styles.sectionDivider} />
+
+                        <Text style={styles.sectionSubtitle}>
+                          {t("superAdmin.tasks.description")}
+                        </Text>
+                        <Text style={styles.description}>
+                          {task.description}
+                        </Text>
+
+                        <Divider style={styles.sectionDivider} />
+
+                        <Text style={styles.sectionSubtitle}>
+                          {t("superAdmin.tasks.details")}
+                        </Text>
+
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>
+                            {t("superAdmin.tasks.deadline")}:
+                          </Text>
+                          <Text style={styles.detailValue}>
+                            {format(new Date(task.deadline), "MMMM d, yyyy")}
+                          </Text>
+                        </View>
+
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>
+                            {t("superAdmin.tasks.created")}:
+                          </Text>
+                          <Text style={styles.detailValue}>
+                            {format(new Date(task.created_at), "MMMM d, yyyy")}
+                          </Text>
+                        </View>
+
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>
+                            {t("superAdmin.tasks.reminder")}:
+                          </Text>
+                          <Text style={styles.detailValue}>
+                            {t("superAdmin.tasks.daysBeforeDeadline", {
+                              days: task.reminder_days_before,
+                            })}
+                          </Text>
+                        </View>
+
+                        {task.modified_by && task.modified_at && (
+                          <>
+                            <Divider style={styles.sectionDivider} />
+
+                            <Text style={styles.sectionSubtitle}>
+                              {t("superAdmin.tasks.lastModification")}
+                            </Text>
+
+                            <View style={styles.detailRow}>
+                              <Text style={styles.detailLabel}>
+                                {t("superAdmin.tasks.modifiedAt")}:
+                              </Text>
+                              <Text style={styles.detailValue}>
+                                {format(
+                                  new Date(task.modified_at),
+                                  "MMMM d, yyyy HH:mm"
+                                )}
+                              </Text>
+                            </View>
+
+                            {task.modifier_name && (
+                              <View style={styles.detailRow}>
+                                <Text style={styles.detailLabel}>
+                                  {t("superAdmin.tasks.modifiedBy")}:
+                                </Text>
+                                <Text style={styles.detailValue}>
+                                  {task.modifier_name}
+                                </Text>
+                              </View>
+                            )}
+                          </>
+                        )}
+                      </View>
+                    </Surface>
+
+                    {/* Assigned Users Card */}
+                    <Surface style={[styles.detailsCard, { marginTop: 24 }]}>
+                      <View style={styles.cardHeader}>
+                        <View style={styles.simpleCardHeader}>
+                          <IconButton
+                            icon="account-group"
+                            size={22}
+                            iconColor={theme.colors.primary}
+                          />
+                          <Text style={styles.simpleCardHeaderTitle}>
+                            {t("superAdmin.tasks.assignedUsers")}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.cardContent}>
+                        {assignedUsers.length > 0 ? (
+                          <View style={styles.assignedUsersGrid}>
+                            {assignedUsers.map((user) => {
+                              const roleColors = getUserRoleBadgeColor(
+                                user.role
+                              );
+                              return (
+                                <Surface key={user.id} style={styles.userCard}>
+                                  {/* <View style={styles.userCardHeader}>
+                                    <IconButton
+                                      icon="account-circle"
+                                      size={24}
+                                      iconColor={roleColors.text}
+                                    />
+                                    <View
+                                      style={[
+                                        styles.roleBadge,
+                                        {
+                                          backgroundColor: roleColors.background,
+                                          borderColor: roleColors.border,
+                                        },
+                                      ]}
+                                    >
+                                      <Text
+                                        style={[
+                                          styles.roleText,
+                                          { color: roleColors.text },
+                                        ]}
+                                      >
+                                        {user.role === "SUPER_ADMIN"
+                                          ? t("superAdmin.tasks.superAdmin")
+                                          : user.role === "COMPANY_ADMIN"
+                                            ? t("superAdmin.tasks.companyAdmin")
+                                            : t("superAdmin.tasks.user")}
+                                      </Text>
+                                    </View>
+                                  </View> */}
+
+                                  <Text style={styles.userName}>
+                                    {user.first_name} {user.last_name}
+                                  </Text>
+                                  <Text style={styles.userEmail}>
+                                    {user.email}
+                                  </Text>
+
+                                  {user.company_name && (
+                                    <View style={styles.userCompanyContainer}>
+                                      <IconButton
+                                        icon="office-building"
+                                        size={16}
+                                        iconColor="#64748B"
+                                        style={styles.companyIcon}
+                                      />
+                                      <Text style={styles.userCompany}>
+                                        {user.company_name}
+                                      </Text>
+                                    </View>
+                                  )}
+                                </Surface>
+                              );
+                            })}
+                          </View>
+                        ) : (
+                          <Text style={styles.noUsersText}>
+                            {t("superAdmin.tasks.noUsersAssigned")}
+                          </Text>
+                        )}
+                      </View>
+                    </Surface>
+                  </Animated.View>
+                </View>
+
+                <View style={styles.gridColumn}>
+                  <Animated.View entering={FadeIn.delay(200)}>
+                    {/* Comments Card */}
+                    <Surface style={styles.detailsCard}>
+                      <View style={styles.cardHeader}>
+                        <View style={styles.headerLeft}>
+                          <View style={styles.iconContainer}>
+                            <IconButton
+                              icon="comment-text-multiple"
+                              size={20}
+                              iconColor="#64748b"
+                              style={styles.headerIcon}
+                            />
+                          </View>
+                          <Text style={styles.cardTitle}>
+                            {t("superAdmin.tasks.comments")}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.cardContent}>
+                        {comments.length > 0 ? (
+                          <ScrollView>
+                            {comments.map((comment) => {
+                              const isCurrentUser =
+                                comment.sender_id === user?.id;
+                              const commentColor =
+                                getCommentColorByRole(comment);
+                              const commentBgColor = getCommentBgColor(comment);
+                              return (
+                                <View
+                                  key={comment.id}
+                                  style={[
+                                    styles.commentContainer,
+                                    isCurrentUser
+                                      ? styles.currentUserComment
+                                      : styles.otherUserComment,
+                                  ]}
+                                >
+                                  <View
+                                    style={[
+                                      styles.commentBubble,
+                                      {
+                                        backgroundColor: commentBgColor,
+                                        borderColor: commentColor + "30",
+                                      },
+                                    ]}
+                                  >
+                                    <View style={styles.commentHeader}>
+                                      <Text
+                                        style={[
+                                          styles.commentUser,
+                                          { color: commentColor },
+                                        ]}
+                                      >
+                                        {getUserRoleLabel(comment)}
+                                      </Text>
+                                      <Text style={styles.commentDate}>
+                                        {format(
+                                          new Date(comment.created_at),
+                                          "MMM d, yyyy h:mm a"
+                                        )}
+                                      </Text>
+                                    </View>
+                                    <Text style={styles.commentText}>
+                                      {comment.message}
+                                    </Text>
+                                  </View>
+                                </View>
+                              );
+                            })}
+                          </ScrollView>
+                        ) : (
+                          <Text style={styles.noCommentsText}>
+                            {t("superAdmin.tasks.noComments")}
+                          </Text>
+                        )}
+
+                        <View style={styles.addCommentContainer}>
+                          <TextInput
+                            label={t("superAdmin.tasks.addComment")}
+                            value={newComment}
+                            onChangeText={setNewComment}
+                            mode="outlined"
+                            multiline
+                            style={styles.commentInput}
+                            disabled={submittingComment}
+                          />
+                          <Button
+                            mode="contained"
+                            onPress={handleAddComment}
+                            style={styles.addCommentButton}
+                            loading={submittingComment}
+                            disabled={submittingComment || !newComment.trim()}
+                            buttonColor={theme.colors.primary}
+                          >
+                            {t("superAdmin.tasks.addComment")}
+                          </Button>
+                        </View>
+                      </View>
+                    </Surface>
+                  </Animated.View>
+                </View>
+              </View>
+            </ScrollView>
+          </>
+        )}
+      </TaskActivityLogger>
     </SafeAreaView>
   );
 };
@@ -1319,7 +1359,7 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     marginTop: 16,
     height: 32,
-    width: "fit-content",
+    width: "auto",
     paddingHorizontal: 12,
   },
   sectionDivider: {
@@ -1368,7 +1408,7 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins-Regular",
   },
   commentContainer: {
-    marginBottom: 20,
+    width: Platform.OS === "web" ? "100%" : undefined,
     maxWidth: "100%",
   },
   currentUserComment: {
@@ -1512,7 +1552,7 @@ const styles = StyleSheet.create({
   },
   companyChip: {
     height: 32,
-    width: "fit-content",
+    width: "auto",
     paddingHorizontal: 12,
   },
   assignedUsersGrid: {

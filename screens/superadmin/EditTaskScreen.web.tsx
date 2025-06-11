@@ -37,6 +37,8 @@ import { TaskPriority, UserRole, TaskStatus } from "../../types";
 import { useTranslation } from "react-i18next";
 import Animated, { FadeIn } from "react-native-reanimated";
 import CustomSnackbar from "../../components/CustomSnackbar";
+import { TaskActivityLogger } from "../../components/TaskActivityLogger";
+import { getTaskChanges } from "../../utils/activityLogger";
 
 // Add window dimensions hook
 const useWindowDimensions = () => {
@@ -370,7 +372,7 @@ const EditTaskScreen = () => {
         deadline: data.deadline.toISOString(),
         priority: data.priority,
         status: data.status,
-        assigned_to: selectedAssignees.length > 0 ? selectedAssignees[0] : null, // Only use the first assignee's UUID
+        assigned_to: selectedAssignees.length > 0 ? selectedAssignees[0] : null,
         modified_by: user.id,
         updated_at: new Date().toISOString(),
         reminder_days_before: reminderDays,
@@ -386,83 +388,65 @@ const EditTaskScreen = () => {
         throw error;
       }
 
-      // Get user's full name from available users
-      const updatingUser = allUsers.find((u) => u.email === user.email);
-      const userDisplayName = updatingUser ? updatingUser.name : user.email;
+      // Get assigned user's name
+      const assignedUser = availableUsers.find(
+        (u) => u.id === selectedAssignees[0]
+      );
+      const assignedUserName = assignedUser
+        ? assignedUser.name
+        : "Unknown User";
 
-      // Prepare change details for title and description
-      const changes = [];
-      if (originalTask.title !== data.title) {
-        changes.push(
-          `Title changed from "${originalTask.title}" to "${data.title}"`
-        );
-      }
-      if (originalTask.description !== data.description) {
-        changes.push(
-          `Description changed from "${originalTask.description}" to "${data.description}"`
-        );
-      }
+      // Track changes using our utility function
+      const changes = getTaskChanges(originalTask, {
+        ...taskData,
+        assigned_to: {
+          id: selectedAssignees[0],
+          name: assignedUserName,
+        },
+      });
 
-      // Log the activity with detailed change tracking
-      const activityLogData = {
-        user_id: user.id,
-        activity_type: "UPDATE",
-        description: `Task updated by ${userDisplayName} (${user.email}). ${changes.join(". ")}`,
-        company_id: selectedCompany.id,
-        metadata: {
-          task_title: data.title,
-          assigned_to: selectedAssignees[0],
+      // Log the activity using our new system
+      await logActivity(
+        "UPDATE",
+        taskId,
+        data.title,
+        selectedCompany.id,
+        {
+          assigned_to: {
+            id: selectedAssignees[0],
+            name: assignedUserName,
+          },
           priority: data.priority,
           status: data.status,
           changes: changes,
-          updated_by: {
-            name: userDisplayName,
-            email: user.email,
-          },
         },
-        old_value: {
-          title: {
-            previous: originalTask.title,
-            changed: originalTask.title !== data.title,
-          },
-          description: {
-            previous: originalTask.description,
-            changed: originalTask.description !== data.description,
-          },
+        {
+          title: originalTask.title,
+          description: originalTask.description,
           deadline: originalTask.deadline,
           priority: originalTask.priority,
           status: originalTask.status,
+          assigned_to: originalTask.assigned_to,
         },
-        new_value: {
-          title: {
-            current: data.title,
-            changed: originalTask.title !== data.title,
-          },
-          description: {
-            current: data.description,
-            changed: originalTask.description !== data.description,
-          },
+        {
+          title: data.title,
+          description: data.description,
           deadline: data.deadline.toISOString(),
           priority: data.priority,
           status: data.status,
-        },
-      };
-
-      const { error: logError } = await supabase
-        .from("activity_logs")
-        .insert([activityLogData]);
-
-      if (logError) {
-        console.error("Error logging activity:", logError);
-        // Don't throw error here, as the task was updated successfully
-      }
+          assigned_to: {
+            id: selectedAssignees[0],
+            name: assignedUserName,
+          },
+        }
+      );
 
       setSnackbarMessage(t("superAdmin.tasks.taskUpdatedSuccessfully"));
       setSnackbarVisible(true);
 
-      // Navigate back after a short delay
+      // Navigate to task details after a short delay
       setTimeout(() => {
-        navigation.goBack();
+        navigation.navigate("TaskDetails", { taskId: taskId });
       }, 1500);
     } catch (error: any) {
       console.error("Error updating task:", error);
@@ -602,482 +586,663 @@ const EditTaskScreen = () => {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: "#F8F9FA" }]}>
-      <AppHeader
-        title={t("superAdmin.tasks.editTask")}
-        subtitle={t("superAdmin.tasks.updateTaskDetails")}
-        showBackButton
-        showLogo={false}
-        showHelpButton={true}
-        absolute={false}
-      />
+      <TaskActivityLogger>
+        {(logActivity) => (
+          <>
+            <AppHeader
+              title={t("superAdmin.tasks.editTask")}
+              subtitle={t("superAdmin.tasks.updateTaskDetails")}
+              showBackButton
+              showLogo={false}
+              showHelpButton={true}
+              absolute={false}
+            />
 
-      <Portal>
-        <Modal
-          visible={statusMenuVisible}
-          onDismiss={() => setStatusMenuVisible(false)}
-          contentContainerStyle={[
-            styles.modalContainer,
-            {
-              width: isLargeScreen ? 480 : isMediumScreen ? 420 : "90%",
-              alignSelf: "center",
-            },
-          ]}
-        >
-          <Surface style={styles.modalSurface}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {t("superAdmin.tasks.updateStatus")}
-              </Text>
-              <IconButton
-                icon="close"
-                onPress={() => setStatusMenuVisible(false)}
-              />
-            </View>
-            <Divider />
-
-            <ScrollView style={{ maxHeight: 400 }}>
-              {Object.values(TaskStatus).map((status) => {
-                const currentStatus = watch("status");
-                return (
-                  <TouchableOpacity
-                    key={status}
-                    style={[
-                      styles.statusOption,
-                      currentStatus === status && {
-                        backgroundColor: getStatusBackgroundColor(status),
-                      },
-                    ]}
-                    onPress={() => handleStatusChange(status)}
-                    disabled={submitting}
-                  >
-                    <View style={styles.statusOptionContent}>
-                      <View
-                        style={[
-                          styles.statusIconContainer,
-                          { backgroundColor: getStatusBackgroundColor(status) },
-                        ]}
-                      >
-                        <IconButton
-                          icon={getStatusIcon(status)}
-                          size={20}
-                          iconColor={getStatusTextColor(status)}
-                          style={{ margin: 0 }}
-                        />
-                      </View>
-                      <View style={styles.statusTextContainer}>
-                        <Text
-                          style={[
-                            styles.statusText,
-                            { color: getStatusTextColor(status) },
-                          ]}
-                        >
-                          {getTranslatedStatus(status)}
-                        </Text>
-                        <Text style={styles.statusDescription}>
-                          {status === TaskStatus.COMPLETED &&
-                            t("superAdmin.tasks.markAsCompleted")}
-                          {status === TaskStatus.OVERDUE &&
-                            t("superAdmin.tasks.markAsOverdue")}
-                          {status === TaskStatus.IN_PROGRESS &&
-                            t("superAdmin.tasks.markAsInProgress")}
-                          {status === TaskStatus.AWAITING_RESPONSE &&
-                            t("superAdmin.tasks.markAsAwaitingResponse")}
-                          {status === TaskStatus.OPEN &&
-                            t("superAdmin.tasks.markAsOpen")}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {currentStatus === status && (
-                      <IconButton
-                        icon="check"
-                        size={20}
-                        iconColor={getStatusTextColor(status)}
-                      />
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </Surface>
-        </Modal>
-      </Portal>
-
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.keyboardAvoidingView}
-      >
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={[
-            styles.scrollContent,
-            {
-              maxWidth: isLargeScreen ? 1400 : isMediumScreen ? 1100 : "100%",
-              paddingHorizontal: isLargeScreen ? 48 : isMediumScreen ? 32 : 16,
-            },
-          ]}
-        >
-          <View style={styles.headerSection}>
-            <Text style={styles.pageTitle}>
-              {t("superAdmin.tasks.editTask")}
-            </Text>
-          </View>
-
-          <View style={styles.gridContainer}>
-            <View style={styles.gridColumn}>
-              <Animated.View entering={FadeIn.delay(100)}>
-                {/* Basic Information Card */}
-                <Surface style={styles.formCard}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.headerLeft}>
-                      <View style={styles.iconContainer}>
-                        <IconButton
-                          icon="clipboard-text"
-                          size={20}
-                          iconColor="#64748b"
-                          style={styles.headerIcon}
-                        />
-                      </View>
-                      <Text style={styles.cardTitle}>Basic Information</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.cardContent}>
-                    <Text style={styles.inputLabel}>
-                      {t("superAdmin.tasks.selectCompany")} *
+            <Portal>
+              <Modal
+                visible={statusMenuVisible}
+                onDismiss={() => setStatusMenuVisible(false)}
+                contentContainerStyle={[
+                  styles.modalContainer,
+                  {
+                    width: isLargeScreen ? 480 : isMediumScreen ? 420 : "90%",
+                    alignSelf: "center",
+                  },
+                ]}
+              >
+                <Surface style={styles.modalSurface}>
+                  <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>
+                      {t("superAdmin.tasks.updateStatus")}
                     </Text>
-                    <View style={styles.companySelector}>
-                      <Button
-                        mode="outlined"
-                        onPress={() => setMenuVisible(true)}
-                        style={styles.companyButton}
-                        disabled={submitting}
-                      >
-                        {selectedCompany
-                          ? selectedCompany.company_name
-                          : t("superAdmin.tasks.selectCompany")}
-                      </Button>
-                      <Menu
-                        visible={menuVisible}
-                        onDismiss={() => setMenuVisible(false)}
-                        anchor={{ x: 0, y: 0 }}
-                      >
-                        {companies.map((company) => (
-                          <Menu.Item
-                            key={company.id}
-                            title={company.company_name}
-                            onPress={() => {
-                              setSelectedCompany(company);
-                              setMenuVisible(false);
-                            }}
-                          />
-                        ))}
-                      </Menu>
-                    </View>
-
-                    <Controller
-                      control={control}
-                      rules={{ required: t("superAdmin.tasks.titleRequired") }}
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <TextInput
-                          label={t("superAdmin.tasks.title") + " *"}
-                          mode="outlined"
-                          value={value}
-                          onChangeText={onChange}
-                          onBlur={onBlur}
-                          error={!!errors.title}
-                          style={styles.input}
-                          disabled={submitting}
-                        />
-                      )}
-                      name="title"
+                    <IconButton
+                      icon="close"
+                      onPress={() => setStatusMenuVisible(false)}
                     />
-                    {errors.title && (
-                      <Text style={styles.errorText}>
-                        {errors.title.message}
-                      </Text>
-                    )}
-
-                    <Controller
-                      control={control}
-                      rules={{
-                        required: t("superAdmin.tasks.descriptionRequired"),
-                      }}
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <TextInput
-                          label={t("superAdmin.tasks.description") + " *"}
-                          mode="outlined"
-                          value={value}
-                          onChangeText={onChange}
-                          onBlur={onBlur}
-                          error={!!errors.description}
-                          style={styles.input}
-                          multiline
-                          numberOfLines={4}
-                          disabled={submitting}
-                        />
-                      )}
-                      name="description"
-                    />
-                    {errors.description && (
-                      <Text style={styles.errorText}>
-                        {errors.description.message}
-                      </Text>
-                    )}
-
-                    <Text style={styles.inputLabel}>
-                      {t("superAdmin.tasks.deadline")} *
-                    </Text>
-                    <Button
-                      mode="outlined"
-                      onPress={() => setShowDatePicker(true)}
-                      style={styles.dateButton}
-                      icon="calendar"
-                      disabled={submitting}
-                    >
-                      {format(deadline, "MMMM d, yyyy")}
-                    </Button>
-
-                    {showDatePicker && (
-                      <DateTimePicker
-                        value={deadline}
-                        mode="date"
-                        display="default"
-                        onChange={handleDateChange}
-                        minimumDate={new Date()}
-                      />
-                    )}
                   </View>
-                </Surface>
+                  <Divider />
 
-                {/* Task Settings Card */}
-                <Surface style={[styles.formCard, { marginTop: 24 }]}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.headerLeft}>
-                      <View style={styles.iconContainer}>
-                        <IconButton
-                          icon="cog"
-                          size={20}
-                          iconColor="#64748b"
-                          style={styles.headerIcon}
-                        />
-                      </View>
-                      <Text style={styles.cardTitle}>Task Settings</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.cardContent}>
-                    <Text style={styles.inputLabel}>
-                      {t("superAdmin.tasks.priority")} *
-                    </Text>
-                    <Controller
-                      control={control}
-                      render={({ field: { onChange, value } }) => (
-                        <SegmentedButtons
-                          value={value}
-                          onValueChange={onChange}
-                          buttons={[
-                            {
-                              value: TaskPriority.LOW,
-                              label: t("superAdmin.tasks.low"),
-                            },
-                            {
-                              value: TaskPriority.MEDIUM,
-                              label: t("superAdmin.tasks.medium"),
-                            },
-                            {
-                              value: TaskPriority.HIGH,
-                              label: t("superAdmin.tasks.high"),
-                            },
-                          ]}
-                          style={styles.segmentedButtons}
-                          theme={{
-                            colors: {
-                              secondaryContainer: theme.colors.primaryContainer,
-                              onSecondaryContainer: theme.colors.primary,
-                            },
-                          }}
-                        />
-                      )}
-                      name="priority"
-                    />
-
-                    <Text style={styles.inputLabel}>
-                      {t("superAdmin.tasks.status")} *
-                    </Text>
-                    <Controller
-                      control={control}
-                      render={({ field: { value } }) => (
+                  <ScrollView style={{ maxHeight: 400 }}>
+                    {Object.values(TaskStatus).map((status) => {
+                      const currentStatus = watch("status");
+                      return (
                         <TouchableOpacity
-                          onPress={() => setStatusMenuVisible(true)}
-                          disabled={submitting}
+                          key={status}
                           style={[
-                            styles.statusSelector,
-                            {
-                              backgroundColor: getStatusBackgroundColor(value),
+                            styles.statusOption,
+                            currentStatus === status && {
+                              backgroundColor: getStatusBackgroundColor(status),
                             },
                           ]}
+                          onPress={() => handleStatusChange(status)}
+                          disabled={submitting}
                         >
-                          <Text
-                            style={[
-                              styles.statusText,
-                              { color: getStatusTextColor(value) },
-                            ]}
-                          >
-                            {getTranslatedStatus(value)}
-                          </Text>
-                          <IconButton
-                            icon={getStatusIcon(value)}
-                            size={20}
-                            style={styles.statusIcon}
-                            iconColor={getStatusTextColor(value)}
-                          />
+                          <View style={styles.statusOptionContent}>
+                            <View
+                              style={[
+                                styles.statusIconContainer,
+                                {
+                                  backgroundColor:
+                                    getStatusBackgroundColor(status),
+                                },
+                              ]}
+                            >
+                              <IconButton
+                                icon={getStatusIcon(status)}
+                                size={20}
+                                iconColor={getStatusTextColor(status)}
+                                style={{ margin: 0 }}
+                              />
+                            </View>
+                            <View style={styles.statusTextContainer}>
+                              <Text
+                                style={[
+                                  styles.statusText,
+                                  { color: getStatusTextColor(status) },
+                                ]}
+                              >
+                                {getTranslatedStatus(status)}
+                              </Text>
+                              <Text style={styles.statusDescription}>
+                                {status === TaskStatus.COMPLETED &&
+                                  t("superAdmin.tasks.markAsCompleted")}
+                                {status === TaskStatus.OVERDUE &&
+                                  t("superAdmin.tasks.markAsOverdue")}
+                                {status === TaskStatus.IN_PROGRESS &&
+                                  t("superAdmin.tasks.markAsInProgress")}
+                                {status === TaskStatus.AWAITING_RESPONSE &&
+                                  t("superAdmin.tasks.markAsAwaitingResponse")}
+                                {status === TaskStatus.OPEN &&
+                                  t("superAdmin.tasks.markAsOpen")}
+                              </Text>
+                            </View>
+                          </View>
+
+                          {currentStatus === status && (
+                            <IconButton
+                              icon="check"
+                              size={20}
+                              iconColor={getStatusTextColor(status)}
+                            />
+                          )}
                         </TouchableOpacity>
-                      )}
-                      name="status"
-                    />
-
-                    <Controller
-                      control={control}
-                      rules={{
-                        required: t("superAdmin.tasks.reminderDaysRequired"),
-                        validate: (value) =>
-                          !isNaN(parseInt(value)) &&
-                          parseInt(value) >= 0 &&
-                          parseInt(value) <= 365
-                            ? true
-                            : t("superAdmin.tasks.reminderDaysRange"),
-                      }}
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <TextInput
-                          label={t("superAdmin.tasks.reminderDays") + " *"}
-                          mode="outlined"
-                          value={value}
-                          onChangeText={onChange}
-                          onBlur={onBlur}
-                          error={!!errors.reminder_days_before}
-                          style={styles.input}
-                          keyboardType="numeric"
-                          disabled={submitting}
-                        />
-                      )}
-                      name="reminder_days_before"
-                    />
-                    {errors.reminder_days_before && (
-                      <Text style={styles.errorText}>
-                        {errors.reminder_days_before.message}
-                      </Text>
-                    )}
-                  </View>
+                      );
+                    })}
+                  </ScrollView>
                 </Surface>
-              </Animated.View>
-            </View>
+              </Modal>
+            </Portal>
 
-            <View style={styles.gridColumn}>
-              <Animated.View entering={FadeIn.delay(200)}>
-                {/* Assigned Users Card */}
-                <Surface style={styles.formCard}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.headerLeft}>
-                      <View style={styles.iconContainer}>
-                        <IconButton
-                          icon="account-group"
-                          size={20}
-                          iconColor="#64748b"
-                          style={styles.headerIcon}
-                        />
-                      </View>
-                      <Text style={styles.cardTitle}>
-                        {t("superAdmin.tasks.assignUsers")}
-                      </Text>
-                    </View>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : "height"}
+              style={styles.keyboardAvoidingView}
+            >
+              <ScrollView
+                style={styles.scrollView}
+                contentContainerStyle={[
+                  styles.scrollContent,
+                  {
+                    maxWidth: isLargeScreen
+                      ? 1400
+                      : isMediumScreen
+                        ? 1100
+                        : "100%",
+                    paddingHorizontal: isLargeScreen
+                      ? 48
+                      : isMediumScreen
+                        ? 32
+                        : 16,
+                  },
+                ]}
+              >
+                <View style={styles.headerSection}>
+                  <Text style={styles.pageTitle}>
+                    {t("superAdmin.tasks.editTask")}
+                  </Text>
+                </View>
+
+                <View style={styles.gridContainer}>
+                  <View style={styles.gridColumn}>
+                    <Animated.View entering={FadeIn.delay(100)}>
+                      {/* Basic Information Card */}
+                      <Surface style={styles.formCard}>
+                        <View style={styles.cardHeader}>
+                          <View style={styles.headerLeft}>
+                            <View style={styles.iconContainer}>
+                              <IconButton
+                                icon="clipboard-text"
+                                size={20}
+                                iconColor="#64748b"
+                                style={styles.headerIcon}
+                              />
+                            </View>
+                            <Text style={styles.cardTitle}>
+                              Basic Information
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.cardContent}>
+                          <Text style={styles.inputLabel}>
+                            {t("superAdmin.tasks.selectCompany")} *
+                          </Text>
+                          <View style={styles.companySelector}>
+                            <Button
+                              mode="outlined"
+                              onPress={() => setMenuVisible(true)}
+                              style={styles.companyButton}
+                              disabled={submitting}
+                            >
+                              {selectedCompany
+                                ? selectedCompany.company_name
+                                : t("superAdmin.tasks.selectCompany")}
+                            </Button>
+                            <Menu
+                              visible={menuVisible}
+                              onDismiss={() => setMenuVisible(false)}
+                              anchor={{ x: 0, y: 0 }}
+                            >
+                              {companies.map((company) => (
+                                <Menu.Item
+                                  key={company.id}
+                                  title={company.company_name}
+                                  onPress={() => {
+                                    setSelectedCompany(company);
+                                    setMenuVisible(false);
+                                  }}
+                                />
+                              ))}
+                            </Menu>
+                          </View>
+
+                          <Controller
+                            control={control}
+                            rules={{
+                              required: t("superAdmin.tasks.titleRequired"),
+                            }}
+                            render={({
+                              field: { onChange, onBlur, value },
+                            }) => (
+                              <TextInput
+                                label={t("superAdmin.tasks.title") + " *"}
+                                mode="outlined"
+                                value={value}
+                                onChangeText={onChange}
+                                onBlur={onBlur}
+                                error={!!errors.title}
+                                style={styles.input}
+                                disabled={submitting}
+                              />
+                            )}
+                            name="title"
+                          />
+                          {errors.title && (
+                            <Text style={styles.errorText}>
+                              {errors.title.message}
+                            </Text>
+                          )}
+
+                          <Controller
+                            control={control}
+                            rules={{
+                              required: t(
+                                "superAdmin.tasks.descriptionRequired"
+                              ),
+                            }}
+                            render={({
+                              field: { onChange, onBlur, value },
+                            }) => (
+                              <TextInput
+                                label={t("superAdmin.tasks.description") + " *"}
+                                mode="outlined"
+                                value={value}
+                                onChangeText={onChange}
+                                onBlur={onBlur}
+                                error={!!errors.description}
+                                style={styles.input}
+                                multiline
+                                numberOfLines={4}
+                                disabled={submitting}
+                              />
+                            )}
+                            name="description"
+                          />
+                          {errors.description && (
+                            <Text style={styles.errorText}>
+                              {errors.description.message}
+                            </Text>
+                          )}
+
+                          <Text style={styles.inputLabel}>
+                            {t("superAdmin.tasks.deadline")} *
+                          </Text>
+                          <Button
+                            mode="outlined"
+                            onPress={() => setShowDatePicker(true)}
+                            style={styles.dateButton}
+                            icon="calendar"
+                            disabled={submitting}
+                          >
+                            {format(deadline, "MMMM d, yyyy")}
+                          </Button>
+
+                          {showDatePicker && (
+                            <DateTimePicker
+                              value={deadline}
+                              mode="date"
+                              display="default"
+                              onChange={handleDateChange}
+                              minimumDate={new Date()}
+                            />
+                          )}
+                        </View>
+                      </Surface>
+
+                      {/* Task Settings Card */}
+                      <Surface style={[styles.formCard, { marginTop: 24 }]}>
+                        <View style={styles.cardHeader}>
+                          <View style={styles.headerLeft}>
+                            <View style={styles.iconContainer}>
+                              <IconButton
+                                icon="cog"
+                                size={20}
+                                iconColor="#64748b"
+                                style={styles.headerIcon}
+                              />
+                            </View>
+                            <Text style={styles.cardTitle}>Task Settings</Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.cardContent}>
+                          <Text style={styles.inputLabel}>
+                            {t("superAdmin.tasks.priority")} *
+                          </Text>
+                          <Controller
+                            control={control}
+                            render={({ field: { onChange, value } }) => (
+                              <SegmentedButtons
+                                value={value}
+                                onValueChange={onChange}
+                                buttons={[
+                                  {
+                                    value: TaskPriority.LOW,
+                                    label: t("superAdmin.tasks.low"),
+                                  },
+                                  {
+                                    value: TaskPriority.MEDIUM,
+                                    label: t("superAdmin.tasks.medium"),
+                                  },
+                                  {
+                                    value: TaskPriority.HIGH,
+                                    label: t("superAdmin.tasks.high"),
+                                  },
+                                ]}
+                                style={styles.segmentedButtons}
+                                theme={{
+                                  colors: {
+                                    secondaryContainer:
+                                      theme.colors.primaryContainer,
+                                    onSecondaryContainer: theme.colors.primary,
+                                  },
+                                }}
+                              />
+                            )}
+                            name="priority"
+                          />
+
+                          <Text style={styles.inputLabel}>
+                            {t("superAdmin.tasks.status")} *
+                          </Text>
+                          <Controller
+                            control={control}
+                            render={({ field: { value } }) => (
+                              <TouchableOpacity
+                                onPress={() => setStatusMenuVisible(true)}
+                                disabled={submitting}
+                                style={[
+                                  styles.statusSelector,
+                                  {
+                                    backgroundColor:
+                                      getStatusBackgroundColor(value),
+                                  },
+                                ]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.statusText,
+                                    { color: getStatusTextColor(value) },
+                                  ]}
+                                >
+                                  {getTranslatedStatus(value)}
+                                </Text>
+                                <IconButton
+                                  icon={getStatusIcon(value)}
+                                  size={20}
+                                  style={styles.statusIcon}
+                                  iconColor={getStatusTextColor(value)}
+                                />
+                              </TouchableOpacity>
+                            )}
+                            name="status"
+                          />
+
+                          <Controller
+                            control={control}
+                            rules={{
+                              required: t(
+                                "superAdmin.tasks.reminderDaysRequired"
+                              ),
+                              validate: (value) =>
+                                !isNaN(parseInt(value)) &&
+                                parseInt(value) >= 0 &&
+                                parseInt(value) <= 365
+                                  ? true
+                                  : t("superAdmin.tasks.reminderDaysRange"),
+                            }}
+                            render={({
+                              field: { onChange, onBlur, value },
+                            }) => (
+                              <TextInput
+                                label={
+                                  t("superAdmin.tasks.reminderDays") + " *"
+                                }
+                                mode="outlined"
+                                value={value}
+                                onChangeText={onChange}
+                                onBlur={onBlur}
+                                error={!!errors.reminder_days_before}
+                                style={styles.input}
+                                keyboardType="numeric"
+                                disabled={submitting}
+                              />
+                            )}
+                            name="reminder_days_before"
+                          />
+                          {errors.reminder_days_before && (
+                            <Text style={styles.errorText}>
+                              {errors.reminder_days_before.message}
+                            </Text>
+                          )}
+                        </View>
+                      </Surface>
+                    </Animated.View>
                   </View>
 
-                  <View style={styles.cardContent}>
-                    <Text style={styles.helperText}>
-                      {t(
-                        "superAdmin.tasks.selectOneAdminToAssign",
-                        "Select one admin to assign this task to"
-                      )}
-                    </Text>
+                  <View style={styles.gridColumn}>
+                    <Animated.View entering={FadeIn.delay(200)}>
+                      {/* Assigned Users Card */}
+                      <Surface style={styles.formCard}>
+                        <View style={styles.cardHeader}>
+                          <View style={styles.headerLeft}>
+                            <View style={styles.iconContainer}>
+                              <IconButton
+                                icon="account-group"
+                                size={20}
+                                iconColor="#64748b"
+                                style={styles.headerIcon}
+                              />
+                            </View>
+                            <Text style={styles.cardTitle}>
+                              {t("superAdmin.tasks.assignUsers")}
+                            </Text>
+                          </View>
+                        </View>
 
-                    <View style={styles.usersContainer}>
-                      {availableUsers.map((user) => (
-                        <Chip
-                          key={`assignee-${user.id}`}
-                          selected={selectedAssignees.includes(user.id)}
-                          onPress={() => toggleAssignee(user.id)}
-                          style={styles.userChip}
-                          showSelectedCheck
-                          mode="outlined"
-                          disabled={submitting}
-                        >
-                          {user.name} (
-                          {user.role === UserRole.SUPER_ADMIN
-                            ? t("superAdmin.tasks.superAdmin")
-                            : t("superAdmin.tasks.companyAdmin")}
-                          )
-                        </Chip>
-                      ))}
-                    </View>
+                        <View style={styles.cardContent}>
+                          <Text style={styles.helperText}>
+                            {t(
+                              "superAdmin.tasks.selectOneAdminToAssign",
+                              "Select one admin to assign this task to"
+                            )}
+                          </Text>
+
+                          <View style={styles.usersContainer}>
+                            {availableUsers.map((user) => (
+                              <Chip
+                                key={`assignee-${user.id}`}
+                                selected={selectedAssignees.includes(user.id)}
+                                onPress={() => toggleAssignee(user.id)}
+                                style={styles.userChip}
+                                showSelectedCheck
+                                mode="outlined"
+                                disabled={submitting}
+                              >
+                                {user.name} (
+                                {user.role === UserRole.SUPER_ADMIN
+                                  ? t("superAdmin.tasks.superAdmin")
+                                  : t("superAdmin.tasks.companyAdmin")}
+                                )
+                              </Chip>
+                            ))}
+                          </View>
+                        </View>
+                      </Surface>
+                    </Animated.View>
                   </View>
-                </Surface>
-              </Animated.View>
-            </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+                </View>
+              </ScrollView>
+            </KeyboardAvoidingView>
 
-      <CustomSnackbar
-        visible={snackbarVisible}
-        message={snackbarMessage}
-        onDismiss={() => setSnackbarVisible(false)}
-        type={
-          snackbarMessage?.includes("successful") ||
-          snackbarMessage?.includes("instructions will be sent")
-            ? "success"
-            : snackbarMessage?.includes("rate limit") ||
-                snackbarMessage?.includes("network")
-              ? "warning"
-              : "error"
-        }
-        duration={6000}
-        action={{
-          label: t("common.ok"),
-          onPress: () => setSnackbarVisible(false),
-        }}
-        style={[
-          styles.snackbar,
-          {
-            width: Platform.OS === "web" ? 700 : undefined,
-            alignSelf: "center",
-            position: Platform.OS === "web" ? "absolute" : undefined,
-            bottom: Platform.OS === "web" ? 24 : undefined,
-          },
-        ]}
-      />
-      <Surface style={styles.bottomBar}>
-        <View style={styles.bottomBarContent}>
-          <Button
-            mode="outlined"
-            onPress={() => navigation.goBack()}
-            style={styles.button}
-            disabled={submitting}
-          >
-            {t("common.cancel")}
-          </Button>
-          <Button
-            mode="contained"
-            onPress={handleSubmit(onSubmit)}
-            style={styles.button}
-            loading={submitting}
-            disabled={submitting}
-            buttonColor={theme.colors.primary}
-          >
-            {t("superAdmin.tasks.updateTask")}
-          </Button>
-        </View>
-      </Surface>
+            <CustomSnackbar
+              visible={snackbarVisible}
+              message={snackbarMessage}
+              onDismiss={() => setSnackbarVisible(false)}
+              type={
+                snackbarMessage?.includes("successful") ||
+                snackbarMessage?.includes("instructions will be sent")
+                  ? "success"
+                  : snackbarMessage?.includes("rate limit") ||
+                      snackbarMessage?.includes("network")
+                    ? "warning"
+                    : "error"
+              }
+              duration={6000}
+              action={{
+                label: t("common.ok"),
+                onPress: () => setSnackbarVisible(false),
+              }}
+              style={[
+                styles.snackbar,
+                {
+                  width: Platform.OS === "web" ? 700 : undefined,
+                  alignSelf: "center",
+                  position: Platform.OS === "web" ? "absolute" : undefined,
+                  bottom: Platform.OS === "web" ? 24 : undefined,
+                },
+              ]}
+            />
+            <Surface style={styles.bottomBar}>
+              <View style={styles.bottomBarContent}>
+                <Button
+                  mode="outlined"
+                  onPress={() => navigation.goBack()}
+                  style={styles.button}
+                  disabled={submitting}
+                >
+                  {t("common.cancel")}
+                </Button>
+                <Button
+                  mode="contained"
+                  onPress={async () => {
+                    try {
+                      if (!user) {
+                        setSnackbarMessage(
+                          t("superAdmin.tasks.userNotAuthenticated")
+                        );
+                        setSnackbarVisible(true);
+                        return;
+                      }
+
+                      if (!canEdit) {
+                        setSnackbarMessage(
+                          t("superAdmin.tasks.noPermissionToEdit")
+                        );
+                        setSnackbarVisible(true);
+                        return;
+                      }
+
+                      if (selectedAssignees.length === 0) {
+                        setSnackbarMessage(
+                          t("superAdmin.tasks.assignToAtLeastOneUser")
+                        );
+                        setSnackbarVisible(true);
+                        return;
+                      }
+
+                      if (!selectedCompany) {
+                        setSnackbarMessage(t("superAdmin.tasks.selectCompany"));
+                        setSnackbarVisible(true);
+                        return;
+                      }
+
+                      setSubmitting(true);
+
+                      const reminderDays = parseInt(data.reminder_days_before);
+                      if (
+                        isNaN(reminderDays) ||
+                        reminderDays < 0 ||
+                        reminderDays > 365
+                      ) {
+                        setSnackbarMessage(
+                          t("superAdmin.tasks.invalidReminderDays")
+                        );
+                        setSnackbarVisible(true);
+                        setSubmitting(false);
+                        return;
+                      }
+
+                      // Update task with a single UUID for assigned_to
+                      const taskData = {
+                        title: data.title,
+                        description: data.description,
+                        deadline: data.deadline.toISOString(),
+                        priority: data.priority,
+                        status: data.status,
+                        assigned_to:
+                          selectedAssignees.length > 0
+                            ? selectedAssignees[0]
+                            : null,
+                        modified_by: user.id,
+                        updated_at: new Date().toISOString(),
+                        reminder_days_before: reminderDays,
+                        company_id: selectedCompany.id,
+                      };
+
+                      const { error } = await supabase
+                        .from("tasks")
+                        .update(taskData)
+                        .eq("id", taskId);
+
+                      if (error) {
+                        throw error;
+                      }
+
+                      // Get assigned user's name
+                      const assignedUser = availableUsers.find(
+                        (u) => u.id === selectedAssignees[0]
+                      );
+                      const assignedUserName = assignedUser
+                        ? assignedUser.name
+                        : "Unknown User";
+
+                      // Track changes using our utility function
+                      const changes = getTaskChanges(originalTask, {
+                        ...taskData,
+                        assigned_to: {
+                          id: selectedAssignees[0],
+                          name: assignedUserName,
+                        },
+                      });
+
+                      // Log the activity using our new system
+                      await logActivity(
+                        "UPDATE",
+                        taskId,
+                        data.title,
+                        selectedCompany.id,
+                        {
+                          assigned_to: {
+                            id: selectedAssignees[0],
+                            name: assignedUserName,
+                          },
+                          priority: data.priority,
+                          status: data.status,
+                          changes: changes,
+                        },
+                        {
+                          title: originalTask.title,
+                          description: originalTask.description,
+                          deadline: originalTask.deadline,
+                          priority: originalTask.priority,
+                          status: originalTask.status,
+                          assigned_to: originalTask.assigned_to,
+                        },
+                        {
+                          title: data.title,
+                          description: data.description,
+                          deadline: data.deadline.toISOString(),
+                          priority: data.priority,
+                          status: data.status,
+                          assigned_to: {
+                            id: selectedAssignees[0],
+                            name: assignedUserName,
+                          },
+                        }
+                      );
+
+                      setSnackbarMessage(
+                        t("superAdmin.tasks.taskUpdatedSuccessfully")
+                      );
+                      setSnackbarVisible(true);
+
+                      // Navigate to task details after a short delay
+                      setTimeout(() => {
+                        navigation.navigate("TaskDetails", { taskId: taskId });
+                      }, 1500);
+                    } catch (error: any) {
+                      console.error("Error updating task:", error);
+                      setSnackbarMessage(
+                        error.message ||
+                          t("superAdmin.tasks.failedToUpdateTask")
+                      );
+                      setSnackbarVisible(true);
+                    } finally {
+                      setSubmitting(false);
+                    }
+                  }}
+                  style={styles.button}
+                  loading={submitting}
+                  disabled={submitting}
+                  buttonColor={theme.colors.primary}
+                >
+                  {t("superAdmin.tasks.updateTask")}
+                </Button>
+              </View>
+            </Surface>
+          </>
+        )}
+      </TaskActivityLogger>
     </SafeAreaView>
   );
 };

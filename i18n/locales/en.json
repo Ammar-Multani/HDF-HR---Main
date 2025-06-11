@@ -38,7 +38,16 @@
       "time": "{{date, HH:mm}}",
       "dateTime": "{{date, MMMM d, yyyy HH:mm}}",
       "timezone": "UTC"
-    }
+    },
+    "searchActivities": "Search activities...",
+    "clearAll": "Clear All",
+    "clearFilters": "Clear Filters",
+    "all": "All",
+    "today": "Today",
+    "last7Days": "Last 7 Days",
+    "last30Days": "Last 30 Days",
+    "custom": "Custom",
+    "apply": "Apply"
   },
   "login": {
     "welcomeBack": "Welcome Back",
@@ -891,6 +900,22 @@
         "countryRequired": "Country is required",
         "countryInvalidChars": "Country can only contain letters, spaces, hyphens, and apostrophes"
       }
+    },
+    "activityLogs": {
+      "title": "Activity Logs",
+      "subtitle": "Track all system activities and changes",
+      "noLogs": "No activity logs found",
+      "filters": {
+        "all": "All Activities",
+        "taskCreation": "Task Creation",
+        "taskUpdates": "Task Updates",
+        "statusChanges": "Status Changes",
+        "comments": "Comments",
+        "userAssignment": "User Assignment"
+      },
+      "customDateRange": "Custom Date Range",
+      "startDate": "Start Date",
+      "endDate": "End Date"
     }
   },
   "companyAdmin": {

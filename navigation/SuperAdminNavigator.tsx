@@ -586,7 +586,7 @@ export const SuperAdminNavigator = () => {
         component={EditReceiptScreen}
       />
       <SuperAdminStack.Screen
-        name="ActivityLog"
+        name="ActivityLogs"
         component={ActivityLogsScreen}
       />
     </SuperAdminStack.Navigator>

@@ -1,5 +1,5 @@
 import React from "react";
-import { View, StyleSheet, ScrollView } from "react-native";
+import { View, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
 import {
   Text,
   Surface,
@@ -10,6 +10,7 @@ import {
 } from "react-native-paper";
 import { format, isToday, isYesterday } from "date-fns";
 import { t } from "i18next";
+import { useNavigation } from "@react-navigation/native";
 
 interface ActivityLog {
   id: string;
@@ -18,17 +19,23 @@ interface ActivityLog {
   created_at: string;
   metadata?: {
     task_title?: string;
+    task_id?: string;
     created_by?: {
       name: string;
       email: string;
+      id: string;
+      role?: string;
     };
     updated_by?: {
       name: string;
       email: string;
+      id: string;
+      role?: string;
     };
     assigned_to?: {
       id: string;
       name: string;
+      role?: string;
     };
     changes?: string[];
     status_change?: {
@@ -45,10 +52,21 @@ interface ActivityLog {
 
 interface ActivityLogTimelineProps {
   logs: ActivityLog[];
+  showViewAll?: boolean;
+  showHeader?: boolean;
+  title?: string;
+  containerStyle?: any;
 }
 
-const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({ logs }) => {
+const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({
+  logs,
+  showViewAll = true,
+  showHeader = true,
+  title,
+  containerStyle,
+}) => {
   const theme = useTheme();
+  const navigation = useNavigation();
 
   // Group logs by date
   const groupedLogs = logs.reduce(
@@ -109,40 +127,137 @@ const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({ logs }) => {
     }
   };
 
-  // Format metadata for display
-  const formatMetadata = (log: ActivityLog) => {
-    if (!log.metadata) return null;
+  // Function to handle navigation to task details
+  const handleTaskPress = (taskId: string) => {
+    // @ts-ignore - Navigation typing can be complex
+    navigation.navigate("TaskDetails", { taskId });
+  };
 
-    const metadata: { [key: string]: string } = {};
+  // Function to handle navigation to user details
+  const handleUserPress = (userId: string, userRole?: string) => {
+    if (userRole?.toLowerCase().includes("superadmin")) {
+      // @ts-ignore - Navigation typing can be complex
+      navigation.navigate("EditSuperAdmin", { adminId: userId });
+    } else if (userRole?.toLowerCase().includes("admin")) {
+      // @ts-ignore - Navigation typing can be complex
+      navigation.navigate("EditCompanyAdmin", { adminId: userId });
+    } else {
+      // @ts-ignore - Navigation typing can be complex
+      navigation.navigate("EditEmployee", { employeeId: userId });
+    }
+  };
 
-    if (log.metadata.task_title) {
-      metadata["Task"] = log.metadata.task_title;
+  // Function to render clickable text with metadata
+  const renderClickableDescription = (log: ActivityLog) => {
+    const parts: React.ReactNode[] = [];
+    let currentIndex = 0;
+
+    // Helper function to add non-clickable text
+    const addTextPart = (text: string) => {
+      if (text) {
+        parts.push(
+          <Text key={`text-${currentIndex}`} style={styles.logDescription}>
+            {text}
+          </Text>
+        );
+        currentIndex++;
+      }
+    };
+
+    // Helper function to add clickable user
+    const addUserPart = (
+      user: { id: string; name: string; role?: string },
+      prefix: string = ""
+    ) => {
+      if (user?.id && user?.name) {
+        parts.push(
+          <TouchableOpacity
+            key={`user-${currentIndex}`}
+            onPress={() => handleUserPress(user.id, user.role)}
+          >
+            <Text style={[styles.logDescription, styles.clickableText]}>
+              {prefix}
+              {user.name}
+            </Text>
+          </TouchableOpacity>
+        );
+        currentIndex++;
+      }
+    };
+
+    // Helper function to add clickable task
+    const addTaskPart = (
+      taskId: string,
+      taskTitle: string,
+      prefix: string = ""
+    ) => {
+      if (taskId && taskTitle) {
+        parts.push(
+          <TouchableOpacity
+            key={`task-${currentIndex}`}
+            onPress={() => handleTaskPress(taskId)}
+          >
+            <Text style={[styles.logDescription, styles.clickableText]}>
+              {prefix}"{taskTitle}"
+            </Text>
+          </TouchableOpacity>
+        );
+        currentIndex++;
+      }
+    };
+
+    // Start building the interactive description
+    if (log.metadata) {
+      const { task_id, task_title, created_by, updated_by, assigned_to } =
+        log.metadata;
+
+      switch (log.activity_type.toUpperCase()) {
+        case "CREATE_TASK":
+          addUserPart(created_by!, "");
+          addTextPart(" created task ");
+          addTaskPart(task_id!, task_title!, "");
+          break;
+
+        case "UPDATE_TASK":
+          addUserPart(updated_by!, "");
+          addTextPart(" updated task ");
+          addTaskPart(task_id!, task_title!, "");
+          break;
+
+        case "UPDATE_STATUS":
+          addUserPart(updated_by!, "");
+          addTextPart(" updated status of task ");
+          addTaskPart(task_id!, task_title!, "");
+          addTextPart(
+            ` from "${log.metadata.status_change?.from}" to "${log.metadata.status_change?.to}"`
+          );
+          break;
+
+        case "ADD_COMMENT":
+          addUserPart(created_by!, "");
+          addTextPart(" commented on task ");
+          addTaskPart(task_id!, task_title!, "");
+          if (log.metadata.comment) {
+            addTextPart(`: "${log.metadata.comment}"`);
+          }
+          break;
+
+        case "ASSIGN_USER":
+          addUserPart(updated_by!, "");
+          addTextPart(" assigned ");
+          addUserPart(assigned_to!, "");
+          addTextPart(" to task ");
+          addTaskPart(task_id!, task_title!, "");
+          break;
+
+        default:
+          addTextPart(log.description);
+      }
+    } else {
+      addTextPart(log.description);
     }
 
-
-    if (log.metadata.changes) {
-      metadata["Changes"] = log.metadata.changes.join(", ");
-    }
-
-    if (log.metadata.status_change) {
-      metadata["Status Change"] =
-        `${log.metadata.status_change.from} → ${log.metadata.status_change.to}`;
-    }
-
-    if (log.metadata.comment) {
-      metadata["Comment"] = log.metadata.comment;
-    }
-
-    if (log.metadata.assigned_to) {
-      metadata["Assigned To"] = log.metadata.assigned_to.name;
-    }
-
-    const actor = log.metadata.created_by || log.metadata.updated_by;
-    if (actor) {
-      metadata["By"] = `${actor.name} (${actor.email})`;
-    }
-
-    return Object.entries(metadata);
+    return <View style={styles.logDescriptionContainer}>{parts}</View>;
   };
 
   // Format date for display
@@ -158,33 +273,42 @@ const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({ logs }) => {
   };
 
   return (
-    <Surface style={styles.container}>
-      <View style={styles.header}>
-        <IconButton
-          icon="clock-outline"
-          size={24}
-          iconColor={theme.colors.primary}
-        />
-        <Text style={styles.headerTitle}>
-          {t("superAdmin.dashboard.latestActivities")}
-        </Text>
-        <View style={styles.viewAllButtonContainer}>
-          <Button
-            mode="outlined"
-          onPress={() => {
-            // @ts-ignore - Navigation typing can be complex
-            navigation.navigate("ActivityLogsScreen" as never);
-          }}
-          icon="chevron-right"
-          style={styles.viewAllButton}
-          labelStyle={styles.viewAllButtonLabel}
-        >
-            {t("superAdmin.dashboard.viewAll")}
-          </Button>
-        </View>
-      </View>
-      <Divider />
-      <ScrollView style={styles.scrollView}>
+    <Surface style={[styles.container, containerStyle]}>
+      {showHeader && (
+        <>
+          <View style={styles.header}>
+            <IconButton
+              icon="clock-outline"
+              size={24}
+              iconColor={theme.colors.primary}
+            />
+            <Text style={styles.headerTitle}>
+              {title || t("superAdmin.dashboard.latestActivities")}
+            </Text>
+            {showViewAll && (
+              <View style={styles.viewAllButtonContainer}>
+                <Button
+                  mode="outlined"
+                  onPress={() => {
+                    // @ts-ignore - Navigation typing can be complex
+                    navigation.navigate("ActivityLogs" as never);
+                  }}
+                  icon="chevron-right"
+                  style={styles.viewAllButton}
+                  labelStyle={styles.viewAllButtonLabel}
+                >
+                  {t("superAdmin.dashboard.viewAll")}
+                </Button>
+              </View>
+            )}
+          </View>
+          <Divider />
+        </>
+      )}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollViewContent}
+      >
         {Object.entries(groupedLogs)
           .sort(
             ([dateA], [dateB]) =>
@@ -244,12 +368,8 @@ const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({ logs }) => {
                             {log.activity_type.replace(/_/g, " ")}
                           </Text>
                         </View>
-
                       </View>
-                      <Text style={styles.logDescription}>
-                        {log.description}
-                      </Text>
-                    
+                      {renderClickableDescription(log)}
                     </View>
                   </View>
                 ))}
@@ -284,7 +404,9 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 20,
   },
-
+  scrollViewContent: {
+    padding: 20,
+  },
   viewAllButton: {
     borderColor: "#E2E8F0",
     borderRadius: 16,
@@ -347,7 +469,7 @@ const styles = StyleSheet.create({
   logIcon: {
     margin: 0,
     marginRight: 4,
-    marginLeft:-12,
+    marginLeft: -12,
   },
   logType: {
     fontSize: 14,
@@ -389,6 +511,15 @@ const styles = StyleSheet.create({
   viewAllButtonContainer: {
     flex: 1,
     alignItems: "flex-end",
+  },
+  logDescriptionContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+  },
+  clickableText: {
+    color: "#2563EB", // Link blue color
+    textDecorationLine: "underline",
   },
 });
 

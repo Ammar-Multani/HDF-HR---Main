@@ -37,6 +37,7 @@ import Animated, { FadeIn } from "react-native-reanimated";
 import DateTimePicker from "react-native-modal-datetime-picker";
 import CustomSnackbar from "../../components/CustomSnackbar";
 import { t } from "i18next";
+import { TaskActivityLogger } from "../../components/TaskActivityLogger";
 
 interface TaskFormData {
   title: string;
@@ -262,26 +263,21 @@ const CreateTaskScreen = () => {
         ? assignedUser.name
         : "Unknown User";
 
-      // Log the activity
-      const activityLogData = {
-        user_id: adminData.id, // Super admin's ID
-        activity_type: "CREATE",
-        description: `New task "${data.title}" created by ${userDisplayName} (${user.email}). Assigned to ${assignedUserName}`,
-        company_id: selectedCompany.id,
-        metadata: {
-          task_title: data.title,
+      // Log the activity using our new system
+      await logActivity(
+        "CREATE",
+        createdTask.id,
+        data.title,
+        selectedCompany.id,
+        {
           assigned_to: {
             id: selectedAssignees[0],
             name: assignedUserName,
           },
           priority: data.priority,
-          created_by: {
-            name: userDisplayName,
-            email: user.email,
-          },
         },
-        old_value: null,
-        new_value: {
+        null,
+        {
           title: data.title,
           description: data.description,
           deadline: data.deadline.toISOString(),
@@ -290,24 +286,15 @@ const CreateTaskScreen = () => {
             id: selectedAssignees[0],
             name: assignedUserName,
           },
-        },
-      };
-
-      const { error: logError } = await supabase
-        .from("activity_logs")
-        .insert([activityLogData]);
-
-      if (logError) {
-        console.error("Error logging activity:", logError);
-        // Don't throw error here, as the task was created successfully
-      }
+        }
+      );
 
       setSnackbarMessage("Task created successfully");
       setSnackbarVisible(true);
 
-      // Navigate back after a short delay
+      // Navigate to task details after a short delay
       setTimeout(() => {
-        navigation.goBack();
+        navigation.navigate("TaskDetails", { taskId: createdTask.id });
       }, 1500);
     } catch (error: any) {
       console.error("Error creating task:", error);
@@ -336,428 +323,450 @@ const CreateTaskScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <AppHeader
-        title={t("superAdmin.tasks.createTask")}
-        subtitle={t("superAdmin.tasks.updateTaskDetails")}
-        showBackButton
-        showLogo={false}
-      />
+      <TaskActivityLogger>
+        {(logActivity) => (
+          <>
+            <AppHeader
+              title={t("superAdmin.tasks.createTask")}
+              subtitle={t("superAdmin.tasks.updateTaskDetails")}
+              showBackButton
+              showLogo={false}
+            />
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.keyboardAvoidingView}
-      >
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-        >
-          <View style={styles.headerSection}>
-            <Text style={styles.pageTitle}>
-              {t("superAdmin.tasks.createTask")}
-            </Text>
-          </View>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : "height"}
+              style={styles.keyboardAvoidingView}
+            >
+              <ScrollView
+                style={styles.scrollView}
+                contentContainerStyle={styles.scrollContent}
+              >
+                <View style={styles.headerSection}>
+                  <Text style={styles.pageTitle}>
+                    {t("superAdmin.tasks.createTask")}
+                  </Text>
+                </View>
 
-          <View style={styles.gridContainer}>
-            <View style={styles.gridColumn}>
-              <Animated.View entering={FadeIn.delay(100)}>
-                {/* Basic Information */}
-                <Surface style={styles.formCard}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.headerLeft}>
-                      <View style={styles.iconContainer}>
-                        <IconButton
-                          icon="clipboard-text"
-                          size={20}
-                          iconColor="#64748b"
-                          style={styles.headerIcon}
-                        />
-                      </View>
-                      <Text style={styles.cardTitle}>
-                        {t("superAdmin.tasks.details")}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.cardContent}>
-                    <Text style={styles.inputLabel}>
-                      {t("superAdmin.tasks.selectCompany")} *
-                    </Text>
-                    <Button
-                      mode="outlined"
-                      onPress={() => setMenuVisible(true)}
-                      style={styles.companyButton}
-                      icon="office-building"
-                    >
-                      {selectedCompany
-                        ? selectedCompany.company_name
-                        : t("superAdmin.tasks.selectCompany")}
-                    </Button>
-
-                    <Controller
-                      control={control}
-                      rules={{ required: t("superAdmin.tasks.titleRequired") }}
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <>
-                          <TextInput
-                            label={`${t("superAdmin.tasks.taskTitle")} *`}
-                            mode="outlined"
-                            value={value}
-                            onChangeText={onChange}
-                            onBlur={onBlur}
-                            error={!!errors.title}
-                            style={styles.input}
-                            disabled={loading}
-                          />
-                          {errors.title && (
-                            <Text style={styles.errorText}>
-                              {errors.title.message}
+                <View style={styles.gridContainer}>
+                  <View style={styles.gridColumn}>
+                    <Animated.View entering={FadeIn.delay(100)}>
+                      {/* Basic Information */}
+                      <Surface style={styles.formCard}>
+                        <View style={styles.cardHeader}>
+                          <View style={styles.headerLeft}>
+                            <View style={styles.iconContainer}>
+                              <IconButton
+                                icon="clipboard-text"
+                                size={20}
+                                iconColor="#64748b"
+                                style={styles.headerIcon}
+                              />
+                            </View>
+                            <Text style={styles.cardTitle}>
+                              {t("superAdmin.tasks.details")}
                             </Text>
-                          )}
-                        </>
-                      )}
-                      name="title"
-                    />
+                          </View>
+                        </View>
 
-                    <Controller
-                      control={control}
-                      rules={{
-                        required: t("superAdmin.tasks.descriptionRequired"),
-                      }}
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <>
-                          <TextInput
-                            label={`${t("superAdmin.tasks.description")} *`}
+                        <View style={styles.cardContent}>
+                          <Text style={styles.inputLabel}>
+                            {t("superAdmin.tasks.selectCompany")} *
+                          </Text>
+                          <Button
                             mode="outlined"
-                            value={value}
-                            onChangeText={onChange}
-                            onBlur={onBlur}
-                            error={!!errors.description}
-                            style={styles.input}
-                            multiline
-                            numberOfLines={4}
-                            disabled={loading}
-                          />
-                          {errors.description && (
-                            <Text style={styles.errorText}>
-                              {errors.description.message}
-                            </Text>
-                          )}
-                        </>
-                      )}
-                      name="description"
-                    />
-                  </View>
-                </Surface>
+                            onPress={() => setMenuVisible(true)}
+                            style={styles.companyButton}
+                            icon="office-building"
+                          >
+                            {selectedCompany
+                              ? selectedCompany.company_name
+                              : t("superAdmin.tasks.selectCompany")}
+                          </Button>
 
-                {/* Task Settings */}
-                <Surface style={[styles.formCard, { marginTop: 24 }]}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.headerLeft}>
-                      <View style={styles.iconContainer}>
-                        <IconButton
-                          icon="cog"
-                          size={20}
-                          iconColor="#64748b"
-                          style={styles.headerIcon}
-                        />
-                      </View>
-                      <Text style={styles.cardTitle}>
-                        {t("superAdmin.tasks.taskDetails")}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.cardContent}>
-                    <Text style={styles.inputLabel}>
-                      {t("superAdmin.tasks.deadline")} *
-                    </Text>
-                    {Platform.OS === "web" ? (
-                      <View style={styles.webDateInputContainer}>
-                        <input
-                          type="date"
-                          value={format(deadline, "yyyy-MM-dd")}
-                          onChange={handleDateChange}
-                          style={{
-                            width: "100%",
-                            padding: "10px",
-                            fontSize: "16px",
-                            borderRadius: "4px",
-                            border: "1px solid #e2e8f0",
-                            outline: "none",
-                          }}
-                          min={format(new Date(), "yyyy-MM-dd")}
-                        />
-                      </View>
-                    ) : (
-                      <>
-                        <Button
-                          mode="outlined"
-                          onPress={() => setShowDatePicker(true)}
-                          style={styles.dateButton}
-                          icon="calendar"
-                        >
-                          {format(deadline, "MMMM d, yyyy")}
-                        </Button>
-
-                        {showDatePicker && (
-                          <DateTimePickerModal
-                            isVisible={showDatePicker}
-                            mode="date"
-                            onConfirm={(date) => {
-                              setValue("deadline", date);
-                              setShowDatePicker(false);
+                          <Controller
+                            control={control}
+                            rules={{
+                              required: t("superAdmin.tasks.titleRequired"),
                             }}
-                            onCancel={() => setShowDatePicker(false)}
-                            minimumDate={new Date()}
+                            render={({
+                              field: { onChange, onBlur, value },
+                            }) => (
+                              <>
+                                <TextInput
+                                  label={`${t("superAdmin.tasks.taskTitle")} *`}
+                                  mode="outlined"
+                                  value={value}
+                                  onChangeText={onChange}
+                                  onBlur={onBlur}
+                                  error={!!errors.title}
+                                  style={styles.input}
+                                  disabled={loading}
+                                />
+                                {errors.title && (
+                                  <Text style={styles.errorText}>
+                                    {errors.title.message}
+                                  </Text>
+                                )}
+                              </>
+                            )}
+                            name="title"
+                          />
+
+                          <Controller
+                            control={control}
+                            rules={{
+                              required: t(
+                                "superAdmin.tasks.descriptionRequired"
+                              ),
+                            }}
+                            render={({
+                              field: { onChange, onBlur, value },
+                            }) => (
+                              <>
+                                <TextInput
+                                  label={`${t("superAdmin.tasks.description")} *`}
+                                  mode="outlined"
+                                  value={value}
+                                  onChangeText={onChange}
+                                  onBlur={onBlur}
+                                  error={!!errors.description}
+                                  style={styles.input}
+                                  multiline
+                                  numberOfLines={4}
+                                  disabled={loading}
+                                />
+                                {errors.description && (
+                                  <Text style={styles.errorText}>
+                                    {errors.description.message}
+                                  </Text>
+                                )}
+                              </>
+                            )}
+                            name="description"
+                          />
+                        </View>
+                      </Surface>
+
+                      {/* Task Settings */}
+                      <Surface style={[styles.formCard, { marginTop: 24 }]}>
+                        <View style={styles.cardHeader}>
+                          <View style={styles.headerLeft}>
+                            <View style={styles.iconContainer}>
+                              <IconButton
+                                icon="cog"
+                                size={20}
+                                iconColor="#64748b"
+                                style={styles.headerIcon}
+                              />
+                            </View>
+                            <Text style={styles.cardTitle}>
+                              {t("superAdmin.tasks.taskDetails")}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.cardContent}>
+                          <Text style={styles.inputLabel}>
+                            {t("superAdmin.tasks.deadline")} *
+                          </Text>
+                          {Platform.OS === "web" ? (
+                            <View style={styles.webDateInputContainer}>
+                              <input
+                                type="date"
+                                value={format(deadline, "yyyy-MM-dd")}
+                                onChange={handleDateChange}
+                                style={{
+                                  width: "100%",
+                                  padding: "10px",
+                                  fontSize: "16px",
+                                  borderRadius: "4px",
+                                  border: "1px solid #e2e8f0",
+                                  outline: "none",
+                                }}
+                                min={format(new Date(), "yyyy-MM-dd")}
+                              />
+                            </View>
+                          ) : (
+                            <>
+                              <Button
+                                mode="outlined"
+                                onPress={() => setShowDatePicker(true)}
+                                style={styles.dateButton}
+                                icon="calendar"
+                              >
+                                {format(deadline, "MMMM d, yyyy")}
+                              </Button>
+
+                              {showDatePicker && (
+                                <DateTimePickerModal
+                                  isVisible={showDatePicker}
+                                  mode="date"
+                                  onConfirm={(date) => {
+                                    setValue("deadline", date);
+                                    setShowDatePicker(false);
+                                  }}
+                                  onCancel={() => setShowDatePicker(false)}
+                                  minimumDate={new Date()}
+                                />
+                              )}
+                            </>
+                          )}
+
+                          <Text style={styles.inputLabel}>
+                            {t("superAdmin.tasks.priority")} *
+                          </Text>
+                          <Controller
+                            control={control}
+                            render={({ field: { onChange, value } }) => (
+                              <SegmentedButtons
+                                value={value}
+                                onValueChange={onChange}
+                                buttons={[
+                                  {
+                                    value: TaskPriority.LOW,
+                                    label: t("superAdmin.tasks.low"),
+                                  },
+                                  {
+                                    value: TaskPriority.MEDIUM,
+                                    label: t("superAdmin.tasks.medium"),
+                                  },
+                                  {
+                                    value: TaskPriority.HIGH,
+                                    label: t("superAdmin.tasks.high"),
+                                  },
+                                ]}
+                                style={styles.segmentedButtons}
+                                theme={{
+                                  colors: {
+                                    secondaryContainer:
+                                      theme.colors.primaryContainer,
+                                    onSecondaryContainer: theme.colors.primary,
+                                  },
+                                }}
+                              />
+                            )}
+                            name="priority"
+                          />
+
+                          <Controller
+                            control={control}
+                            rules={{
+                              required: t(
+                                "superAdmin.tasks.reminderDaysRequired"
+                              ),
+                              validate: (value) =>
+                                !isNaN(parseInt(value)) &&
+                                parseInt(value) >= 0 &&
+                                parseInt(value) <= 365
+                                  ? true
+                                  : t("superAdmin.tasks.reminderDaysRange"),
+                            }}
+                            render={({
+                              field: { onChange, onBlur, value },
+                            }) => (
+                              <>
+                                <TextInput
+                                  label={`${t("superAdmin.tasks.reminderDays")} *`}
+                                  mode="outlined"
+                                  value={value}
+                                  onChangeText={onChange}
+                                  onBlur={onBlur}
+                                  error={!!errors.reminder_days_before}
+                                  style={styles.input}
+                                  keyboardType="numeric"
+                                  disabled={loading}
+                                />
+                                {errors.reminder_days_before && (
+                                  <Text style={styles.errorText}>
+                                    {errors.reminder_days_before.message}
+                                  </Text>
+                                )}
+                              </>
+                            )}
+                            name="reminder_days_before"
+                          />
+                        </View>
+                      </Surface>
+                    </Animated.View>
+                  </View>
+
+                  <View style={styles.gridColumn}>
+                    <Animated.View entering={FadeIn.delay(200)}>
+                      {/* Assign Users */}
+                      <Surface style={styles.formCard}>
+                        <View style={styles.cardHeader}>
+                          <View style={styles.headerLeft}>
+                            <View style={styles.iconContainer}>
+                              <IconButton
+                                icon="account-multiple"
+                                size={20}
+                                iconColor="#64748b"
+                                style={styles.headerIcon}
+                              />
+                            </View>
+                            <Text style={styles.cardTitle}>
+                              {t("superAdmin.tasks.assignUsers")}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.cardContent}>
+                          <Text style={styles.helperText}>
+                            {t("superAdmin.tasks.selectAdminsToAssign")}
+                          </Text>
+
+                          <View style={styles.usersContainer}>
+                            {availableUsers.map((user) => (
+                              <Chip
+                                key={`assignee-${user.id}`}
+                                selected={selectedAssignees.includes(user.id)}
+                                onPress={() => toggleAssignee(user.id)}
+                                style={styles.userChip}
+                                showSelectedCheck
+                                mode="outlined"
+                              >
+                                {user.name} (
+                                {user.role === UserRole.SUPER_ADMIN
+                                  ? t("superAdmin.tasks.superAdmin")
+                                  : t("superAdmin.tasks.companyAdmin")}
+                                )
+                              </Chip>
+                            ))}
+                          </View>
+                        </View>
+                      </Surface>
+                    </Animated.View>
+                  </View>
+                </View>
+              </ScrollView>
+
+              <Surface style={styles.bottomBar}>
+                <View style={styles.bottomBarContent}>
+                  <Button
+                    mode="outlined"
+                    onPress={() => navigation.goBack()}
+                    style={[styles.button, styles.cancelButton]}
+                    disabled={loading}
+                  >
+                    {t("common.cancel")}
+                  </Button>
+                  <Button
+                    mode="contained"
+                    onPress={handleSubmit(onSubmit)}
+                    style={[styles.button, styles.saveButton]}
+                    loading={loading}
+                    disabled={loading}
+                  >
+                    {t("superAdmin.tasks.createTask")}
+                  </Button>
+                </View>
+              </Surface>
+            </KeyboardAvoidingView>
+
+            {/* Company Selection Modal */}
+            <Portal>
+              <Modal
+                visible={menuVisible}
+                onDismiss={() => setMenuVisible(false)}
+                contentContainerStyle={styles.modalContainer}
+              >
+                <Surface style={styles.modalSurface}>
+                  <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>
+                      {t("superAdmin.tasks.selectCompany")}
+                    </Text>
+                    <IconButton
+                      icon="close"
+                      onPress={() => setMenuVisible(false)}
+                    />
+                  </View>
+                  <Divider />
+
+                  <ScrollView style={styles.companyOptionsContainer}>
+                    {companies.map((company) => (
+                      <TouchableOpacity
+                        key={company.id}
+                        style={[
+                          styles.companyOption,
+                          selectedCompany?.id === company.id &&
+                            styles.selectedCompanyOption,
+                        ]}
+                        onPress={() => {
+                          setSelectedCompany(company);
+                          setMenuVisible(false);
+                        }}
+                      >
+                        <View style={styles.companyOptionContent}>
+                          <View style={styles.companyIconContainer}>
+                            <IconButton
+                              icon="office-building"
+                              size={20}
+                              iconColor={
+                                selectedCompany?.id === company.id
+                                  ? theme.colors.primary
+                                  : "#64748b"
+                              }
+                              style={{ margin: 0 }}
+                            />
+                          </View>
+                          <View style={styles.companyTextContainer}>
+                            <Text
+                              style={[
+                                styles.companyName,
+                                selectedCompany?.id === company.id && {
+                                  color: theme.colors.primary,
+                                },
+                              ]}
+                            >
+                              {company.company_name}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {selectedCompany?.id === company.id && (
+                          <IconButton
+                            icon="check"
+                            size={20}
+                            iconColor={theme.colors.primary}
                           />
                         )}
-                      </>
-                    )}
-
-                    <Text style={styles.inputLabel}>
-                      {t("superAdmin.tasks.priority")} *
-                    </Text>
-                    <Controller
-                      control={control}
-                      render={({ field: { onChange, value } }) => (
-                        <SegmentedButtons
-                          value={value}
-                          onValueChange={onChange}
-                          buttons={[
-                            {
-                              value: TaskPriority.LOW,
-                              label: t("superAdmin.tasks.low"),
-                            },
-                            {
-                              value: TaskPriority.MEDIUM,
-                              label: t("superAdmin.tasks.medium"),
-                            },
-                            {
-                              value: TaskPriority.HIGH,
-                              label: t("superAdmin.tasks.high"),
-                            },
-                          ]}
-                          style={styles.segmentedButtons}
-                          theme={{
-                            colors: {
-                              secondaryContainer: theme.colors.primaryContainer,
-                              onSecondaryContainer: theme.colors.primary,
-                            },
-                          }}
-                        />
-                      )}
-                      name="priority"
-                    />
-
-                    <Controller
-                      control={control}
-                      rules={{
-                        required: t("superAdmin.tasks.reminderDaysRequired"),
-                        validate: (value) =>
-                          !isNaN(parseInt(value)) &&
-                          parseInt(value) >= 0 &&
-                          parseInt(value) <= 365
-                            ? true
-                            : t("superAdmin.tasks.reminderDaysRange"),
-                      }}
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <>
-                          <TextInput
-                            label={`${t("superAdmin.tasks.reminderDays")} *`}
-                            mode="outlined"
-                            value={value}
-                            onChangeText={onChange}
-                            onBlur={onBlur}
-                            error={!!errors.reminder_days_before}
-                            style={styles.input}
-                            keyboardType="numeric"
-                            disabled={loading}
-                          />
-                          {errors.reminder_days_before && (
-                            <Text style={styles.errorText}>
-                              {errors.reminder_days_before.message}
-                            </Text>
-                          )}
-                        </>
-                      )}
-                      name="reminder_days_before"
-                    />
-                  </View>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
                 </Surface>
-              </Animated.View>
-            </View>
-
-            <View style={styles.gridColumn}>
-              <Animated.View entering={FadeIn.delay(200)}>
-                {/* Assign Users */}
-                <Surface style={styles.formCard}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.headerLeft}>
-                      <View style={styles.iconContainer}>
-                        <IconButton
-                          icon="account-multiple"
-                          size={20}
-                          iconColor="#64748b"
-                          style={styles.headerIcon}
-                        />
-                      </View>
-                      <Text style={styles.cardTitle}>
-                        {t("superAdmin.tasks.assignUsers")}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.cardContent}>
-                    <Text style={styles.helperText}>
-                      {t("superAdmin.tasks.selectAdminsToAssign")}
-                    </Text>
-
-                    <View style={styles.usersContainer}>
-                      {availableUsers.map((user) => (
-                        <Chip
-                          key={`assignee-${user.id}`}
-                          selected={selectedAssignees.includes(user.id)}
-                          onPress={() => toggleAssignee(user.id)}
-                          style={styles.userChip}
-                          showSelectedCheck
-                          mode="outlined"
-                        >
-                          {user.name} (
-                          {user.role === UserRole.SUPER_ADMIN
-                            ? t("superAdmin.tasks.superAdmin")
-                            : t("superAdmin.tasks.companyAdmin")}
-                          )
-                        </Chip>
-                      ))}
-                    </View>
-                  </View>
-                </Surface>
-              </Animated.View>
-            </View>
-          </View>
-        </ScrollView>
-
-        <Surface style={styles.bottomBar}>
-          <View style={styles.bottomBarContent}>
-            <Button
-              mode="outlined"
-              onPress={() => navigation.goBack()}
-              style={[styles.button, styles.cancelButton]}
-              disabled={loading}
-            >
-              {t("common.cancel")}
-            </Button>
-            <Button
-              mode="contained"
-              onPress={handleSubmit(onSubmit)}
-              style={[styles.button, styles.saveButton]}
-              loading={loading}
-              disabled={loading}
-            >
-              {t("superAdmin.tasks.createTask")}
-            </Button>
-          </View>
-        </Surface>
-      </KeyboardAvoidingView>
-
-      {/* Company Selection Modal */}
-      <Portal>
-        <Modal
-          visible={menuVisible}
-          onDismiss={() => setMenuVisible(false)}
-          contentContainerStyle={styles.modalContainer}
-        >
-          <Surface style={styles.modalSurface}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {t("superAdmin.tasks.selectCompany")}
-              </Text>
-              <IconButton icon="close" onPress={() => setMenuVisible(false)} />
-            </View>
-            <Divider />
-
-            <ScrollView style={styles.companyOptionsContainer}>
-              {companies.map((company) => (
-                <TouchableOpacity
-                  key={company.id}
-                  style={[
-                    styles.companyOption,
-                    selectedCompany?.id === company.id &&
-                      styles.selectedCompanyOption,
-                  ]}
-                  onPress={() => {
-                    setSelectedCompany(company);
-                    setMenuVisible(false);
-                  }}
-                >
-                  <View style={styles.companyOptionContent}>
-                    <View style={styles.companyIconContainer}>
-                      <IconButton
-                        icon="office-building"
-                        size={20}
-                        iconColor={
-                          selectedCompany?.id === company.id
-                            ? theme.colors.primary
-                            : "#64748b"
-                        }
-                        style={{ margin: 0 }}
-                      />
-                    </View>
-                    <View style={styles.companyTextContainer}>
-                      <Text
-                        style={[
-                          styles.companyName,
-                          selectedCompany?.id === company.id && {
-                            color: theme.colors.primary,
-                          },
-                        ]}
-                      >
-                        {company.company_name}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {selectedCompany?.id === company.id && (
-                    <IconButton
-                      icon="check"
-                      size={20}
-                      iconColor={theme.colors.primary}
-                    />
-                  )}
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </Surface>
-        </Modal>
-      </Portal>
-      <CustomSnackbar
-        visible={snackbarVisible}
-        message={snackbarMessage}
-        onDismiss={() => setSnackbarVisible(false)}
-        type={
-          snackbarMessage?.includes("successful") ||
-          snackbarMessage?.includes("instructions will be sent")
-            ? "success"
-            : snackbarMessage?.includes("rate limit") ||
-                snackbarMessage?.includes("network")
-              ? "warning"
-              : "error"
-        }
-        duration={6000}
-        action={{
-          label: t("common.ok"),
-          onPress: () => setSnackbarVisible(false),
-        }}
-        style={[
-          styles.snackbar,
-          {
-            width: Platform.OS === "web" ? 700 : undefined,
-            alignSelf: "center",
-            position: Platform.OS === "web" ? "absolute" : undefined,
-            bottom: Platform.OS === "web" ? 24 : undefined,
-          },
-        ]}
-      />
+              </Modal>
+            </Portal>
+            <CustomSnackbar
+              visible={snackbarVisible}
+              message={snackbarMessage}
+              onDismiss={() => setSnackbarVisible(false)}
+              type={
+                snackbarMessage?.includes("successful") ||
+                snackbarMessage?.includes("instructions will be sent")
+                  ? "success"
+                  : snackbarMessage?.includes("rate limit") ||
+                      snackbarMessage?.includes("network")
+                    ? "warning"
+                    : "error"
+              }
+              duration={6000}
+              action={{
+                label: t("common.ok"),
+                onPress: () => setSnackbarVisible(false),
+              }}
+              style={[
+                styles.snackbar,
+                {
+                  width: Platform.OS === "web" ? 700 : undefined,
+                  alignSelf: "center",
+                  position: Platform.OS === "web" ? "absolute" : undefined,
+                  bottom: Platform.OS === "web" ? 24 : undefined,
+                },
+              ]}
+            />
+          </>
+        )}
+      </TaskActivityLogger>
     </SafeAreaView>
   );
 };
