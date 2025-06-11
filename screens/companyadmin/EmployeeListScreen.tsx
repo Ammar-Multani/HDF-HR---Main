@@ -872,7 +872,7 @@ const EmployeeListScreen = () => {
                       style={[
                         styles.filterChip,
                         jobTitleFilter.includes(title) && {
-                          backgroundColor: theme.colors.primary + "20",
+                          backgroundColor: theme.colors.primary,
                           borderColor: theme.colors.primary,
                         },
                       ]}

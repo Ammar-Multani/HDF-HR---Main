@@ -774,7 +774,7 @@ const SuperAdminTaskDetailsScreen = () => {
               style={[
                 styles.priorityChip,
                 {
-                  backgroundColor: getPriorityColor(task.priority) + "20",
+                  backgroundColor: getPriorityColor(task.priority),
                   borderColor: getPriorityColor(task.priority),
                 },
               ]}

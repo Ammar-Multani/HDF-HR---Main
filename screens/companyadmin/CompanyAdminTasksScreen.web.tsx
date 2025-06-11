@@ -1259,7 +1259,7 @@ const CompanyAdminTasksScreen = () => {
               height: 30,
               borderRadius: 25,
               borderWidth: 1,
-              backgroundColor: getPriorityColor(item.priority) + "20",
+              backgroundColor: getPriorityColor(item.priority),
               borderColor: getPriorityColor(item.priority),
             }}
             textStyle={{
@@ -1316,7 +1316,7 @@ const CompanyAdminTasksScreen = () => {
         <Chip
           style={{
             borderRadius: 25,
-            backgroundColor: getPriorityColor(item.priority) + "20",
+            backgroundColor: getPriorityColor(item.priority),
           }}
           textStyle={{
             color: getPriorityColor(item.priority),

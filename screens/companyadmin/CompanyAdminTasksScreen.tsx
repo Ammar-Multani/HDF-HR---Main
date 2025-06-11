@@ -941,7 +941,7 @@ const CompanyAdminTasksScreen = () => {
           style={{
             flexDirection: "row",
             justifyContent: "space-between",
-            alignItems: "flex-start"
+            alignItems: "flex-start",
           }}
         >
           <View style={{ flex: 1, marginRight: 8 }}>
@@ -1009,7 +1009,7 @@ const CompanyAdminTasksScreen = () => {
               height: 30,
               borderRadius: 25,
               borderWidth: 1,
-              backgroundColor: getPriorityColor(item.priority) + "20",
+              backgroundColor: getPriorityColor(item.priority),
               borderColor: getPriorityColor(item.priority),
             }}
             textStyle={{

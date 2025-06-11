@@ -10,7 +10,11 @@ import {
 } from "react-native-paper";
 import { format, isToday, isYesterday } from "date-fns";
 import { t } from "i18next";
-import { useNavigation } from "@react-navigation/native";
+import {
+  useNavigation,
+  NavigationProp,
+  ParamListBase,
+} from "@react-navigation/native";
 
 interface ActivityLog {
   id: string;
@@ -66,7 +70,155 @@ const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({
   containerStyle,
 }) => {
   const theme = useTheme();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
+
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      borderRadius: 16,
+      overflow: "hidden",
+      elevation: 1,
+      borderWidth: 1,
+      borderColor: "#E2E8F0",
+    },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      padding: 16,
+      gap: 12,
+    },
+    headerTitle: {
+      fontSize: 20,
+      fontFamily: "Poppins-SemiBold",
+      color: "#1E293B",
+      letterSpacing: 0.15,
+    },
+    scrollView: {
+      flex: 1,
+      padding: 20,
+    },
+    scrollViewContent: {
+      padding: 20,
+    },
+    viewAllButton: {
+      borderColor: "#E2E8F0",
+      borderRadius: 16,
+    },
+    viewAllButtonLabel: {
+      fontSize: 14,
+      fontFamily: "Poppins-Medium",
+    },
+    dateGroup: {
+      marginBottom: 24,
+    },
+    dateHeader: {
+      fontSize: 14,
+      fontFamily: "Poppins-Medium",
+      color: "#64748B",
+      marginBottom: 16,
+    },
+    logItem: {
+      flexDirection: "row",
+    },
+    timelineConnector: {
+      width: 24,
+      alignItems: "center",
+      marginRight: 16,
+    },
+    dot: {
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+      marginTop: 6,
+    },
+    line: {
+      width: 2,
+      flex: 1,
+      marginTop: 4,
+      marginBottom: -6,
+    },
+    logContent: {
+      flex: 1,
+      padding: 12,
+      alignItems: "flex-start",
+      justifyContent: "flex-start",
+      marginTop: -7,
+      marginBottom: 10,
+    },
+    logTimeContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+    },
+    logHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 4,
+    },
+    logTypeContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    logIcon: {
+      margin: 0,
+      marginRight: 4,
+      marginLeft: -12,
+    },
+    logType: {
+      fontSize: 14,
+      fontFamily: "Poppins-SemiBold",
+      textTransform: "capitalize",
+    },
+    logTime: {
+      fontSize: 12,
+      color: "#64748B",
+      fontFamily: "Poppins-Medium",
+    },
+    logDescription: {
+      fontSize: 14,
+      color: "#334155",
+      lineHeight: 22,
+      fontFamily: "Poppins-Regular",
+    },
+    metadataContainer: {
+      marginTop: 12,
+      padding: 12,
+      backgroundColor: "#F8FAFC",
+      borderRadius: 8,
+    },
+    metadataItem: {
+      flexDirection: "row",
+      marginBottom: 4,
+    },
+    metadataLabel: {
+      fontSize: 12,
+      color: "#64748B",
+      fontFamily: "Poppins-Medium",
+      marginRight: 8,
+    },
+    metadataValue: {
+      fontSize: 12,
+      color: "#334155",
+      fontFamily: "Poppins-Regular",
+      flex: 1,
+    },
+    viewAllButtonContainer: {
+      flex: 1,
+      alignItems: "flex-end",
+    },
+    logDescriptionContainer: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      alignItems: "center",
+    },
+    clickableContainer: {
+      marginHorizontal: 4,
+    },
+    clickableText: {
+      color: theme.colors.primary,
+      textDecorationLine: "underline",
+    },
+  });
 
   // Group logs by date
   const groupedLogs = logs.reduce(
@@ -129,21 +281,30 @@ const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({
 
   // Function to handle navigation to task details
   const handleTaskPress = (taskId: string) => {
-    // @ts-ignore - Navigation typing can be complex
     navigation.navigate("TaskDetails", { taskId });
   };
 
   // Function to handle navigation to user details
   const handleUserPress = (userId: string, userRole?: string) => {
-    if (userRole?.toLowerCase().includes("superadmin")) {
-      // @ts-ignore - Navigation typing can be complex
-      navigation.navigate("EditSuperAdmin", { adminId: userId });
-    } else if (userRole?.toLowerCase().includes("admin")) {
-      // @ts-ignore - Navigation typing can be complex
-      navigation.navigate("EditCompanyAdmin", { adminId: userId });
+    if (!userId) return;
+
+    const role = userRole?.toLowerCase() || "";
+
+    if (role.includes("superadmin")) {
+      navigation.navigate("SuperAdminDetails", {
+        adminId: userId,
+        adminType: "superadmin",
+      });
+    } else if (role.includes("admin")) {
+      navigation.navigate("CompanyAdminDetails", {
+        adminId: userId,
+        adminType: "admin",
+      });
     } else {
-      // @ts-ignore - Navigation typing can be complex
-      navigation.navigate("EditEmployee", { employeeId: userId });
+      navigation.navigate("EmployeeDetails", {
+        employeeId: userId,
+        companyId: "", // This will be handled by the employee details screen
+      });
     }
   };
 
@@ -170,13 +331,16 @@ const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({
       prefix: string = ""
     ) => {
       if (user?.id && user?.name) {
+        if (prefix) {
+          addTextPart(prefix);
+        }
         parts.push(
           <TouchableOpacity
             key={`user-${currentIndex}`}
             onPress={() => handleUserPress(user.id, user.role)}
+            style={styles.clickableContainer}
           >
             <Text style={[styles.logDescription, styles.clickableText]}>
-              {prefix}
               {user.name}
             </Text>
           </TouchableOpacity>
@@ -189,19 +353,21 @@ const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({
     const addTaskPart = (
       taskId: string,
       taskTitle: string,
-      prefix: string = ""
     ) => {
       if (taskId && taskTitle) {
+
         parts.push(
           <TouchableOpacity
             key={`task-${currentIndex}`}
             onPress={() => handleTaskPress(taskId)}
+            style={styles.clickableContainer}
           >
             <Text style={[styles.logDescription, styles.clickableText]}>
-              {prefix}"{taskTitle}"
+              {taskTitle}
             </Text>
           </TouchableOpacity>
         );
+
         currentIndex++;
       }
     };
@@ -213,45 +379,67 @@ const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({
 
       switch (log.activity_type.toUpperCase()) {
         case "CREATE_TASK":
-          addUserPart(created_by!, "");
+          addUserPart(created_by!);
           addTextPart(" created task ");
-          addTaskPart(task_id!, task_title!, "");
+          addTaskPart(task_id!, task_title!);
           break;
 
         case "UPDATE_TASK":
-          addUserPart(updated_by!, "");
+          addUserPart(updated_by!);
           addTextPart(" updated task ");
-          addTaskPart(task_id!, task_title!, "");
+          addTaskPart(task_id!, task_title!);
+          if (log.metadata.changes && log.metadata.changes.length > 0) {
+            addTextPart(`: ${log.metadata.changes.join(", ")}`);
+          }
           break;
 
         case "UPDATE_STATUS":
-          addUserPart(updated_by!, "");
+          addUserPart(updated_by!);
           addTextPart(" updated status of task ");
-          addTaskPart(task_id!, task_title!, "");
-          addTextPart(
-            ` from "${log.metadata.status_change?.from}" to "${log.metadata.status_change?.to}"`
-          );
+          addTaskPart(task_id!, task_title!);
+          if (log.metadata.status_change) {
+            addTextPart(
+              ` from ${log.metadata.status_change.from} to ${log.metadata.status_change.to}`
+            );
+          }
           break;
 
         case "ADD_COMMENT":
-          addUserPart(created_by!, "");
+          addUserPart(created_by!);
           addTextPart(" commented on task ");
-          addTaskPart(task_id!, task_title!, "");
+          addTaskPart(task_id!, task_title!);
           if (log.metadata.comment) {
-            addTextPart(`: "${log.metadata.comment}"`);
+            addTextPart(`: ${log.metadata.comment}`);
           }
           break;
 
         case "ASSIGN_USER":
-          addUserPart(updated_by!, "");
+          addUserPart(updated_by!);
           addTextPart(" assigned ");
-          addUserPart(assigned_to!, "");
+          addUserPart(assigned_to!);
           addTextPart(" to task ");
-          addTaskPart(task_id!, task_title!, "");
+          addTaskPart(task_id!, task_title!);
+          break;
+
+        case "REMOVE_USER":
+          addUserPart(updated_by!);
+          addTextPart(" removed ");
+          addUserPart(assigned_to!);
+          addTextPart(" from task ");
+          addTaskPart(task_id!, task_title!);
           break;
 
         default:
-          addTextPart(log.description);
+          // For any unhandled activity types, try to extract task information if available
+          if (task_id && task_title) {
+            addTextPart(log.description.split(task_title)[0]);
+            addTaskPart(task_id, task_title, '"', '"');
+            if (log.description.split(task_title)[1]) {
+              addTextPart(log.description.split(task_title)[1]);
+            }
+          } else {
+            addTextPart(log.description);
+          }
       }
     } else {
       addTextPart(log.description);
@@ -290,7 +478,6 @@ const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({
                 <Button
                   mode="outlined"
                   onPress={() => {
-                    // @ts-ignore - Navigation typing can be complex
                     navigation.navigate("ActivityLogs" as never);
                   }}
                   icon="chevron-right"
@@ -379,148 +566,5 @@ const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({
     </Surface>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    borderRadius: 16,
-    overflow: "hidden",
-    elevation: 1,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    gap: 12,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontFamily: "Poppins-SemiBold",
-    color: "#1E293B",
-  },
-  scrollView: {
-    flex: 1,
-    padding: 20,
-  },
-  scrollViewContent: {
-    padding: 20,
-  },
-  viewAllButton: {
-    borderColor: "#E2E8F0",
-    borderRadius: 16,
-  },
-  viewAllButtonLabel: {
-    fontSize: 14,
-    fontFamily: "Poppins-Medium",
-  },
-  dateGroup: {
-    marginBottom: 24,
-  },
-  dateHeader: {
-    fontSize: 14,
-    fontFamily: "Poppins-Medium",
-    color: "#64748B",
-    marginBottom: 16,
-  },
-  logItem: {
-    flexDirection: "row",
-  },
-  timelineConnector: {
-    width: 24,
-    alignItems: "center",
-    marginRight: 16,
-  },
-  dot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginTop: 6,
-  },
-  line: {
-    width: 2,
-    flex: 1,
-    marginTop: 4,
-    marginBottom: -6,
-  },
-  logContent: {
-    flex: 1,
-    padding: 12,
-    alignItems: "flex-start",
-    justifyContent: "flex-start",
-    marginTop: -7,
-    marginBottom: 10,
-  },
-  logTimeContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  logHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  logTypeContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  logIcon: {
-    margin: 0,
-    marginRight: 4,
-    marginLeft: -12,
-  },
-  logType: {
-    fontSize: 14,
-    fontFamily: "Poppins-SemiBold",
-  },
-  logTime: {
-    fontSize: 12,
-    color: "#64748B",
-    fontFamily: "Poppins-Regular",
-  },
-  logDescription: {
-    fontSize: 14,
-    color: "#334155",
-    lineHeight: 20,
-    fontFamily: "Poppins-Regular",
-  },
-  metadataContainer: {
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: "#F8FAFC",
-    borderRadius: 8,
-  },
-  metadataItem: {
-    flexDirection: "row",
-    marginBottom: 4,
-  },
-  metadataLabel: {
-    fontSize: 12,
-    color: "#64748B",
-    fontFamily: "Poppins-Medium",
-    marginRight: 8,
-  },
-  metadataValue: {
-    fontSize: 12,
-    color: "#334155",
-    fontFamily: "Poppins-Regular",
-    flex: 1,
-  },
-  viewAllButtonContainer: {
-    flex: 1,
-    alignItems: "flex-end",
-  },
-  logDescriptionContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-  },
-  clickableText: {
-    color: "#2563EB", // Link blue color
-    textDecorationLine: "underline",
-  },
-});
 
 export default ActivityLogTimeline;

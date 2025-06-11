@@ -13,9 +13,18 @@ import {
   prefetchCommonData,
   clearAllCache,
   resetCacheMetrics,
+  CACHE_PREFIX,
 } from "./lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFonts } from "expo-font";
+
+// Navigation state key
+const NAVIGATION_STATE_KEY = "@navigation_state";
+
+// Types for deep linking
+interface DeepLinkEvent {
+  url: string;
+}
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
@@ -28,11 +37,17 @@ const LAST_CACHE_RESET_KEY = "last_cache_reset";
 const ONE_DAY_MS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 const CACHE_METRICS_RESET_DAYS = 3; // Reset metrics every 3 days
 const AUTH_CHECK_KEY = "auth_check"; // Key for auth pre-check
+const LOADING_TIMEOUT = 10000; // 10 seconds timeout for loading state
+const INITIAL_LOAD_KEY = "initial_load_complete"; // Key to track initial load
 
 export default function App() {
   const [appIsReady, setAppIsReady] = useState(false);
   const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
   const [preAuthCheck, setPreAuthCheck] = useState<boolean | null>(null);
+  const [loadingTimeout, setLoadingTimeout] = useState<NodeJS.Timeout | null>(
+    null
+  );
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   // Load fonts
   const [fontsLoaded] = useFonts({
@@ -43,6 +58,55 @@ export default function App() {
     "Poppins-Light": require("./assets/fonts/Poppins-Light.ttf"),
     "Poppins-Italic": require("./assets/fonts/Poppins-Italic.ttf"),
   });
+
+  // Check if this is initial load
+  useEffect(() => {
+    AsyncStorage.getItem(INITIAL_LOAD_KEY).then((value) => {
+      if (value) {
+        setIsInitialLoad(false);
+      }
+    });
+  }, []);
+
+  // Reset cache if loading takes too long - ONLY during initial load
+  useEffect(() => {
+    if (!appIsReady && !loadingTimeout && isInitialLoad) {
+      const timeout = setTimeout(async () => {
+        console.warn("Initial loading timeout - clearing cache...");
+        try {
+          // Clear all caches
+          await clearAllCache();
+          // Clear navigation state
+          await AsyncStorage.removeItem(NAVIGATION_STATE_KEY);
+          // Clear auth check
+          await AsyncStorage.removeItem(AUTH_CHECK_KEY);
+          // Force reload the page
+          if (Platform.OS === "web") {
+            window.location.reload();
+          }
+        } catch (error) {
+          console.error("Error clearing cache on timeout:", error);
+        }
+      }, LOADING_TIMEOUT);
+
+      setLoadingTimeout(timeout);
+    }
+
+    return () => {
+      if (loadingTimeout) {
+        clearTimeout(loadingTimeout);
+      }
+    };
+  }, [appIsReady, loadingTimeout, isInitialLoad]);
+
+  // Mark initial load as complete when app becomes ready
+  useEffect(() => {
+    if (appIsReady && isInitialLoad) {
+      AsyncStorage.setItem(INITIAL_LOAD_KEY, "true").then(() => {
+        setIsInitialLoad(false);
+      });
+    }
+  }, [appIsReady, isInitialLoad]);
 
   // Fast pre-check for auth state to speed up app loading
   useEffect(() => {
@@ -95,16 +159,34 @@ export default function App() {
       const lastResetStr = await AsyncStorage.getItem(LAST_CACHE_RESET_KEY);
       const now = Date.now();
 
-      if (
-        !lastResetStr ||
-        now - parseInt(lastResetStr) > CACHE_METRICS_RESET_DAYS * ONE_DAY_MS
-      ) {
+      // Only perform maintenance if it hasn't been done in the last day
+      // (reduced from 3 days to 1 day but made less aggressive)
+      if (!lastResetStr || now - parseInt(lastResetStr) > ONE_DAY_MS) {
         console.log("Performing periodic cache maintenance...");
 
-        // Reset cache performance metrics periodically
-        await resetCacheMetrics();
+        // Instead of resetting metrics, just clean up old entries
+        const cacheKeys = await AsyncStorage.getAllKeys();
+        const oldCacheKeys = cacheKeys.filter((key) => {
+          return key.startsWith(CACHE_PREFIX) && key !== AUTH_CHECK_KEY;
+        });
 
-        // Store the timestamp of this reset
+        // Only remove entries older than 1 day
+        for (const key of oldCacheKeys) {
+          try {
+            const value = await AsyncStorage.getItem(key);
+            if (value) {
+              const { timestamp } = JSON.parse(value);
+              if (now - timestamp > ONE_DAY_MS) {
+                await AsyncStorage.removeItem(key);
+              }
+            }
+          } catch (err) {
+            // Ignore individual key errors
+            console.warn(`Error processing cache key ${key}:`, err);
+          }
+        }
+
+        // Store the timestamp of this maintenance
         await AsyncStorage.setItem(LAST_CACHE_RESET_KEY, now.toString());
       }
     } catch (error) {
@@ -151,18 +233,28 @@ export default function App() {
 
   // Set up AppState listener for background/foreground transitions
   useEffect(() => {
+    let lastActiveTime = Date.now();
+
     // Handle app state changes
     const handleAppStateChange = async (nextAppState: AppStateStatus) => {
       if (nextAppState === "active") {
-        // App came to foreground - good time to prefetch data
-        try {
-          // Prefetch common data after a slight delay to avoid interfering with UI
-          setTimeout(async () => {
-            await prefetchCommonData();
-          }, 2000);
-        } catch (error) {
-          console.warn("Background prefetch error:", error);
+        // Only prefetch if app was in background for more than 5 minutes
+        const now = Date.now();
+        const backgroundTime = now - lastActiveTime;
+        const STALE_DATA_THRESHOLD = 5 * 60 * 1000; // 5 minutes
+
+        if (backgroundTime > STALE_DATA_THRESHOLD) {
+          try {
+            // Prefetch common data after a slight delay to avoid interfering with UI
+            setTimeout(async () => {
+              await prefetchCommonData();
+            }, 2000);
+          } catch (error) {
+            console.warn("Background prefetch error:", error);
+          }
         }
+      } else if (nextAppState === "background") {
+        lastActiveTime = Date.now();
       }
     };
 
@@ -172,15 +264,21 @@ export default function App() {
       handleAppStateChange
     );
 
-    // Initial prefetch after delay - only if authenticated
+    // Initial prefetch after delay - only if authenticated and hasn't been done before
     if (preAuthCheck) {
-      setTimeout(async () => {
-        try {
-          await prefetchCommonData();
-        } catch (error) {
-          console.warn("Initial prefetch error:", error);
+      const key = "initial_prefetch_done";
+      AsyncStorage.getItem(key).then((done) => {
+        if (!done) {
+          setTimeout(async () => {
+            try {
+              await prefetchCommonData();
+              await AsyncStorage.setItem(key, "true");
+            } catch (error) {
+              console.warn("Initial prefetch error:", error);
+            }
+          }, 5000);
         }
-      }, 5000);
+      });
     }
 
     // Clean up
@@ -202,7 +300,7 @@ export default function App() {
   }, [appIsReady, hasCheckedAuth, fontsLoaded]);
 
   // Function to handle deep links
-  const handleDeepLink = useCallback(async (event) => {
+  const handleDeepLink = useCallback(async (event: DeepLinkEvent) => {
     const url = event.url;
     console.log("Deep link received:", url);
 
@@ -210,8 +308,8 @@ export default function App() {
     if (url.includes("reset-password")) {
       try {
         // Parse the URL
-        const { queryParams } = Linking.parse(url);
-        console.log("Reset password params:", queryParams);
+        const parsed = Linking.parse(url);
+        const queryParams = parsed.queryParams ?? {};
 
         // If token exists in URL, navigate to reset password screen
         if (queryParams.token) {
@@ -259,7 +357,7 @@ export default function App() {
     <SafeAreaProvider>
       <ThemeProvider>
         <LanguageProvider>
-          <AuthProvider initialAuthState={preAuthCheck}>
+          <AuthProvider>
             <StatusBar style="auto" />
             <AppNavigator />
           </AuthProvider>

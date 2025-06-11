@@ -450,7 +450,7 @@ const SuperAdminUsersScreen = () => {
 
     return (
       <Chip
-        style={{ backgroundColor: color + "20" }}
+        style={{ backgroundColor: color }}
         textStyle={{ color: color, fontFamily: "Poppins-Medium" }}
       >
         {displayText}
@@ -915,7 +915,6 @@ const SuperAdminUsersScreen = () => {
                 </View>
               </RadioButton.Group>
             </View>
-
 
             {/* Company section - only for Company Admin and Employee tabs */}
             {selectedTab !== UserListType.SUPER_ADMIN && (
@@ -1495,7 +1494,7 @@ const SuperAdminUsersScreen = () => {
           {/* Employee Option */}
           <TouchableOpacity
             style={[
-              styles.enhancedMenuItem, 
+              styles.enhancedMenuItem,
               { borderBottomWidth: 0, paddingBottom: 5 },
               selectedTab === UserListType.EMPLOYEE && styles.selectedMenuItem,
             ]}
@@ -1628,11 +1627,7 @@ const SuperAdminUsersScreen = () => {
           activeOpacity={0.7}
         >
           <View style={styles.userTypeDropdownContent}>
-            <View
-              style={[
-                styles.iconContainer,
-              ]}
-            >
+            <View style={[styles.iconContainer]}>
               <IconButton
                 icon={userTypeInfo.icon}
                 size={22}
@@ -1678,7 +1673,12 @@ const SuperAdminUsersScreen = () => {
         subtitle="Manage all system users"
       />
 
-      <View style={[styles.mainContent, { backgroundColor: theme.colors.backgroundSecondary }]}>
+      <View
+        style={[
+          styles.mainContent,
+          { backgroundColor: theme.colors.backgroundSecondary },
+        ]}
+      >
         <View style={styles.searchContainer}>
           <Searchbar
             placeholder="Search users..."
@@ -2162,7 +2162,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     margin: 16,
     right: 0,
-    bottom: Platform.OS === 'web' ? 0 : 80,
+    bottom: Platform.OS === "web" ? 0 : 80,
     borderRadius: 28,
   },
   avatarContainer: {
@@ -2343,7 +2343,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
-    paddingHorizontal:10,
+    paddingHorizontal: 10,
   },
   userTypeDropdownContent: {
     flexDirection: "row",

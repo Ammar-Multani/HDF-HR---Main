@@ -24,9 +24,7 @@ const DashboardCard = ({
     <TouchableOpacity onPress={onPress} style={styles.cardContainer}>
       <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
         <Card.Content style={styles.content}>
-          <View
-            style={[styles.iconContainer, { backgroundColor: color + "20" }]}
-          >
+          <View style={[styles.iconContainer, { backgroundColor: color }]}>
             <MaterialCommunityIcons name={icon} size={24} color={color} />
           </View>
           <View style={styles.textContainer}>
