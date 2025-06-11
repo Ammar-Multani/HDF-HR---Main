@@ -24,6 +24,7 @@ import {
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { format } from "date-fns";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
@@ -39,6 +40,26 @@ import {
 } from "../../types";
 import { useTranslation } from "react-i18next";
 import Animated, { FadeIn } from "react-native-reanimated";
+
+type RootStackParamList = {
+  EditTask: { taskId: string; returnToDetails: boolean };
+};
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
+// Helper function to convert hex to rgb
+const hexToRgb = (hex: string): string => {
+  // Remove the hash if it exists
+  hex = hex.replace("#", "");
+
+  // Parse the hex values
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+
+  // Return the RGB values as a string
+  return `${r}, ${g}, ${b}`;
+};
 
 type TaskDetailsRouteParams = {
   taskId: string;
@@ -95,7 +116,7 @@ const useWindowDimensions = () => {
 
 const SuperAdminTaskDetailsScreen = () => {
   const theme = useTheme();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp>();
   const route =
     useRoute<RouteProp<Record<string, TaskDetailsRouteParams>, string>>();
   const { taskId } = route.params;
@@ -642,13 +663,25 @@ const SuperAdminTaskDetailsScreen = () => {
   const getPriorityColor = (priority: TaskPriority) => {
     switch (priority) {
       case TaskPriority.HIGH:
-        return theme.colors.error;
+        return {
+          solid: theme.colors.error,
+          transparent: "rgba(244, 67, 54, 0.12)", // Light red
+        };
       case TaskPriority.MEDIUM:
-        return "#F59E0B"; // Fixed warning color
+        return {
+          solid: "#F59E0B",
+          transparent: "rgba(245, 158, 11, 0.12)", // Light orange
+        };
       case TaskPriority.LOW:
-        return theme.colors.primary;
+        return {
+          solid: theme.colors.primary,
+          transparent: "rgba(25, 118, 210, 0.12)", // Light blue
+        };
       default:
-        return theme.colors.primary;
+        return {
+          solid: theme.colors.primary,
+          transparent: "rgba(25, 118, 210, 0.12)", // Light blue
+        };
     }
   };
 
@@ -913,12 +946,14 @@ const SuperAdminTaskDetailsScreen = () => {
                       style={[
                         styles.priorityChip,
                         {
-                          backgroundColor:
-                            getPriorityColor(task.priority)  ,
-                          borderColor: getPriorityColor(task.priority),
+                          backgroundColor: getPriorityColor(task.priority)
+                            .transparent,
+                          borderColor: getPriorityColor(task.priority).solid,
                         },
                       ]}
-                      textStyle={{ color: getPriorityColor(task.priority) }}
+                      textStyle={{
+                        color: getPriorityColor(task.priority).solid,
+                      }}
                     >
                       {getTranslatedPriority(task.priority)}{" "}
                       {t("superAdmin.tasks.priority")}
@@ -930,7 +965,7 @@ const SuperAdminTaskDetailsScreen = () => {
                         style={[
                           styles.companyChip,
                           {
-                            backgroundColor: theme.colors.border,
+                            backgroundColor: "#F1F5F9",
                           },
                         ]}
                         mode="flat"
@@ -1325,7 +1360,7 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     marginTop: 16,
     height: 32,
-    width: "fit-content",
+    minWidth: 120,
     paddingHorizontal: 12,
   },
   sectionDivider: {
@@ -1518,7 +1553,7 @@ const styles = StyleSheet.create({
   },
   companyChip: {
     height: 32,
-    width: "fit-content",
+    minWidth: 120,
     paddingHorizontal: 12,
   },
   assignedUsersGrid: {

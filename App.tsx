@@ -204,20 +204,8 @@ export default function App() {
         }
 
         // Different preparation based on auth state
-        // If user is authenticated, we can begin prefetching data immediately
+        // If user is authenticated, just do minimal preparation
         if (preAuthCheck) {
-          await Promise.all([
-            performCacheMaintenance(),
-            new Promise((resolve) => {
-              // Delay prefetch slightly to prioritize UI rendering
-              setTimeout(() => {
-                prefetchCommonData().catch(console.warn);
-                resolve(null);
-              }, 2000);
-            }),
-          ]);
-        } else {
-          // If not authenticated, just do minimal preparation
           await performCacheMaintenance();
         }
       } catch (e) {
@@ -238,19 +226,16 @@ export default function App() {
     // Handle app state changes
     const handleAppStateChange = async (nextAppState: AppStateStatus) => {
       if (nextAppState === "active") {
-        // Only prefetch if app was in background for more than 5 minutes
+        // Only update if app was in background for more than 5 minutes
         const now = Date.now();
         const backgroundTime = now - lastActiveTime;
         const STALE_DATA_THRESHOLD = 5 * 60 * 1000; // 5 minutes
 
         if (backgroundTime > STALE_DATA_THRESHOLD) {
           try {
-            // Prefetch common data after a slight delay to avoid interfering with UI
-            setTimeout(async () => {
-              await prefetchCommonData();
-            }, 2000);
+            await performCacheMaintenance();
           } catch (error) {
-            console.warn("Background prefetch error:", error);
+            console.warn("Background maintenance error:", error);
           }
         }
       } else if (nextAppState === "background") {
@@ -264,38 +249,16 @@ export default function App() {
       handleAppStateChange
     );
 
-    // Initial prefetch after delay - only if authenticated and hasn't been done before
-    if (preAuthCheck) {
-      const key = "initial_prefetch_done";
-      AsyncStorage.getItem(key).then((done) => {
-        if (!done) {
-          setTimeout(async () => {
-            try {
-              await prefetchCommonData();
-              await AsyncStorage.setItem(key, "true");
-            } catch (error) {
-              console.warn("Initial prefetch error:", error);
-            }
-          }, 5000);
-        }
-      });
-    }
-
     // Clean up
     return () => {
       subscription.remove();
     };
-  }, [preAuthCheck]);
+  }, []);
 
   // Hide splash screen once the app is ready
   useEffect(() => {
     if (appIsReady && hasCheckedAuth && fontsLoaded) {
-      const hideSplash = async () => {
-        // Wait a moment to ensure auth context has initialized
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        await SplashScreen.hideAsync();
-      };
-      hideSplash();
+      SplashScreen.hideAsync().catch(console.warn);
     }
   }, [appIsReady, hasCheckedAuth, fontsLoaded]);
 

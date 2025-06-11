@@ -1226,6 +1226,7 @@
     "createStaffDeparture": "Create Staff Departure",
     "createEmployeeStaffDepartureReport": "Create Employee Staff Departure Report",
     "createEmployeeIllnessReport": "Create Employee Illness Report",
-    "createEmployeeAccidentReport": "Create Employee Accident Report"
+    "createEmployeeAccidentReport": "Create Employee Accident Report",
+    "activityLog": "Activity Logs"
   }
 }
