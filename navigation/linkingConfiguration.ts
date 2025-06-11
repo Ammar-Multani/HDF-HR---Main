@@ -7,21 +7,35 @@ export const linking = {
     "https://hdfhr.netlify.app", // Your Netlify domain
   ],
   config: {
-    initialRouteName: "Login",
     screens: {
-      // Auth screens
-      Login: "",
-      Register: "register",
-      ForgotPassword: "forgot-password",
-      ResetPassword: {
-        path: "reset-password",
-        parse: {
-          token: (token: string) => token,
+      Auth: {
+        screens: {
+          Login: "",
+          Register: "register",
+          ForgotPassword: "forgot-password",
+          ResetPassword: {
+            path: "reset-password",
+            parse: {
+              token: (token: string) => token,
+            },
+          },
         },
       },
-
+      AuthScreens: {
+        screens: {
+          Login: "auth",
+          Register: "auth/register",
+          ForgotPassword: "auth/forgot-password",
+          ResetPassword: {
+            path: "auth/reset-password",
+            parse: {
+              token: (token: string) => token,
+            },
+          },
+        },
+      },
       // Super Admin screens
-      SuperAdminTabs: {
+      SuperAdmin: {
         path: "admin",
         screens: {
           Dashboard: "",
@@ -41,7 +55,7 @@ export const linking = {
       },
 
       // Company Admin screens
-      CompanyAdminTabs: {
+      CompanyAdmin: {
         path: "company",
         screens: {
           Dashboard: "",
@@ -59,7 +73,7 @@ export const linking = {
       },
 
       // Employee screens
-      EmployeeTabs: {
+      Employee: {
         path: "employee",
         screens: {
           Dashboard: "",
@@ -70,4 +84,4 @@ export const linking = {
       },
     },
   },
-}; 
+};
