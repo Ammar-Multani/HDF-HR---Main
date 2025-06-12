@@ -31,7 +31,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import { FormStatus } from "../../types";
-import { pickAndUploadDocument } from "../../utils/documentPicker";
+import * as DocumentPicker from "expo-document-picker";
 import Animated, { FadeIn } from "react-native-reanimated";
 import CustomSnackbar from "../../components/CustomSnackbar";
 import { t } from "i18next";
@@ -70,9 +70,11 @@ interface Employee {
 }
 
 interface IllnessReportFormData {
+  id?: string;
   date_of_onset_leave: Date;
   leave_description: string;
   medical_certificate?: string;
+  document_id?: string;
 }
 
 const CreateIllnessReportScreen = () => {
@@ -147,23 +149,74 @@ const CreateIllnessReportScreen = () => {
   };
 
   const handlePickDocument = async () => {
+    if (!selectedEmployee) {
+      setSnackbarMessage("Please select an employee first");
+      setSnackbarVisible(true);
+      return;
+    }
+
     try {
       setUploadingDocument(true);
-      const documentUrl = await pickAndUploadDocument(
-        "illness-documents",
-        `${user?.id}`,
-        { type: ["application/pdf", "image/*"] }
+
+      // Use document picker
+      const result = await DocumentPicker.getDocumentAsync({
+        type: [
+          "application/pdf",
+          "image/*",
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) {
+        return;
+      }
+
+      const file = result.assets[0];
+      const currentReportId = watch("id");
+
+      // Create FormData
+      const formData = new FormData();
+      formData.append("file", {
+        uri: file.uri,
+        type: file.mimeType,
+        name: file.name,
+      } as any);
+      formData.append("companyId", companyId as string);
+      formData.append("employeeId", selectedEmployee.id);
+      formData.append("uploadedBy", user?.id as string);
+      formData.append("reportType", "illness_report");
+
+      if (currentReportId) {
+        formData.append("reportId", currentReportId);
+      }
+
+      // Call Supabase Edge Function
+      const uploadResponse = await supabase.functions.invoke(
+        "onedrive-upload",
+        {
+          body: formData,
+        }
       );
 
-      if (documentUrl) {
-        setValue("medical_certificate", documentUrl);
-        // Extract file name from URL
-        const fileName = documentUrl.split("/").pop() || "Document uploaded";
-        setDocumentName(fileName);
+      if (uploadResponse.error) {
+        throw new Error(uploadResponse.error.message);
       }
-    } catch (error) {
+
+      const { data } = uploadResponse;
+
+      // Update form with file path and document ID
+      setValue("medical_certificate", data.filePath);
+      setValue("document_id", data.document.id);
+      setDocumentName(file.name);
+
+      setSnackbarMessage("Medical certificate uploaded successfully");
+      setSnackbarVisible(true);
+    } catch (error: any) {
       console.error("Error picking document:", error);
-      setSnackbarMessage("Failed to upload document. Please try again.");
+      setSnackbarMessage(
+        error.message || "Failed to upload document. Please try again."
+      );
       setSnackbarVisible(true);
     } finally {
       setUploadingDocument(false);
@@ -186,14 +239,13 @@ const CreateIllnessReportScreen = () => {
 
       setLoading(true);
 
-      // Create illness report - make medical_certificate optional
+      // Create illness report
       const { error } = await supabase.from("illness_report").insert([
         {
           employee_id: selectedEmployee.id,
           company_id: companyId,
           date_of_onset_leave: data.date_of_onset_leave.toISOString(),
           leave_description: data.leave_description,
-          // Allow medical_certificate to be null or empty string
           medical_certificate: data.medical_certificate || null,
           status: FormStatus.PENDING,
           submitted_by: user?.id,
@@ -434,7 +486,6 @@ const CreateIllnessReportScreen = () => {
                 </Surface>
               </Animated.View>
             </View>
-
 
             <View style={styles.gridColumn}>
               <Animated.View entering={FadeIn.delay(300)}>
