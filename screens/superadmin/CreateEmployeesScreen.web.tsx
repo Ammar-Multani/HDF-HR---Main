@@ -42,6 +42,7 @@ import {
   UserRole,
   UserStatus,
 } from "../../types";
+import { ActivityType } from "../../types/activity-log";
 import { hashPassword, generateResetToken } from "../../utils/auth";
 import { sendCompanyAdminInviteEmail } from "../../utils/emailService";
 import { generateWelcomeEmail } from "../../utils/emailTemplates";
@@ -379,6 +380,74 @@ const CreateEmployeeScreen = () => {
         throw new Error(
           `Failed to create employee: ${employeeError.message || "Unknown database error"}`
         );
+      }
+
+      // Get creator's details from admin table
+      const { data: creatorDetails, error: creatorError } = await supabase
+        .from("admin")
+        .select("id, name, email")
+        .eq("email", user?.email)
+        .single();
+
+      if (creatorError) {
+        console.error("Error fetching creator details:", creatorError);
+      }
+
+      const creatorName = creatorDetails?.name || user?.email || "";
+
+      // Log the employee creation activity
+      const activityLogData = {
+        user_id: user?.id,
+        activity_type: data.is_admin
+          ? ActivityType.CREATE_COMPANY_ADMIN
+          : ActivityType.CREATE_EMPLOYEE,
+        description: `New ${data.is_admin ? "company admin" : "employee"} "${data.first_name} ${data.last_name}" (${data.email}) created for company "${selectedCompany.company_name}"`,
+        company_id: selectedCompany.id,
+        metadata: {
+          created_by: {
+            id: user?.id || "",
+            name: creatorName,
+            email: user?.email || "",
+            role: "superadmin",
+          },
+          [data.is_admin ? "admin" : "employee"]: {
+            id: newUser.id,
+            name: `${data.first_name} ${data.last_name}`,
+            email: data.email,
+            role: data.is_admin ? "admin" : "employee",
+          },
+          company: {
+            id: selectedCompany.id,
+            name: selectedCompany.company_name,
+          },
+        },
+        old_value: null,
+        new_value: {
+          first_name: data.first_name,
+          last_name: data.last_name,
+          email: data.email,
+          phone_number: data.phone_number || "Not provided",
+          job_title: data.job_title || "Not provided",
+          company_id: selectedCompany.id,
+          role: data.is_admin ? "admin" : "employee",
+          employment_type: data.employment_type,
+          workload_percentage: data.workload_percentage,
+          date_of_birth: data.date_of_birth.toISOString(),
+          nationality: data.nationality,
+          gender: data.gender,
+          marital_status: data.marital_status,
+          employment_start_date: data.employment_start_date.toISOString(),
+          created_at: new Date().toISOString(),
+        },
+      };
+
+      const { error: logError } = await supabase
+        .from("activity_logs")
+        .insert([activityLogData]);
+
+      if (logError) {
+        console.error("Error logging activity:", logError);
+        // Don't throw here as the employee was created successfully
       }
 
       // Send welcome email based on role
@@ -1333,17 +1402,6 @@ const styles = StyleSheet.create({
     minWidth: 120,
     color: "white",
   },
-  dropdownButton: undefined,
-  dropdownContent: undefined,
-  dropdownLeadingIcon: undefined,
-  dropdownButtonText: undefined,
-  dropdownIcon: undefined,
-  activeDropdownButton: undefined,
-  menuHeader: undefined,
-  menuTitle: undefined,
-  menuItemStyle: undefined,
-  menuItemText: undefined,
-  menuItemSelected: undefined,
   adminToggleContainer: {
     flexDirection: "row",
     alignItems: "center",

@@ -38,9 +38,10 @@ import LoadingIndicator from "../../components/LoadingIndicator";
 import { UserStatus } from "../../types";
 import Animated, { FadeIn } from "react-native-reanimated";
 import CustomSnackbar from "../../components/CustomSnackbar";
-import { t, useTranslation } from "i18next";
+import { t } from "i18next";
 import { ActivityType } from "../../types/activity-log";
 import { useAuth } from "../../contexts/AuthContext";
+import { useTranslation } from "react-i18next";
 
 type EditCompanyAdminRouteParams = {
   adminId: string;
@@ -553,7 +554,7 @@ const EditCompanyAdminScreen = () => {
       const activityLogData = {
         user_id: user?.id,
         activity_type: ActivityType.UPDATE_COMPANY_ADMIN,
-        description: `Company admin "${data.first_name} ${data.last_name}" was updated`,
+        description: `Company admin "${data.first_name} ${data.last_name}" (${data.email}) was updated${admin.company ? ` in company "${admin.company.company_name}"` : ""}. Changes: ${changes.join(", ")}`,
         company_id: admin.company_id,
         metadata: {
           updated_by: {

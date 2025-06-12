@@ -3366,11 +3366,7 @@ const styles = StyleSheet.create({
     borderColor: "#1a73e8",
   },
   paginationWrapper: {
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    borderRadius: 16,
-    marginTop: 12,
+    marginTop: 5,
     overflow: "hidden",
     width: "auto",
     alignSelf: "center",

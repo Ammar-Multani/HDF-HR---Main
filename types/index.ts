@@ -5,6 +5,9 @@ export enum UserRole {
   EMPLOYEE = "employee",
 }
 
+// Export ActivityType from activity-log.ts
+export { ActivityType } from "./activity-log";
+
 // User status
 export enum UserStatus {
   ACTIVE = "active",

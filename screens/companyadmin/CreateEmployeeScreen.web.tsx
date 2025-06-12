@@ -41,6 +41,7 @@ import {
   EmploymentType,
   UserRole,
   UserStatus,
+  ActivityType,
 } from "../../types";
 import { hashPassword, generateResetToken } from "../../utils/auth";
 import { sendCompanyAdminInviteEmail } from "../../utils/emailService";
@@ -476,6 +477,87 @@ const CreateEmployeeScreen = () => {
         throw new Error(
           `Failed to create employee: ${employeeError.message || "Unknown database error"}`
         );
+      }
+
+      // Fetch creator's information
+      const { data: creatorData, error: creatorError } = await supabase
+        .from("company_user")
+        .select("first_name, last_name")
+        .eq("id", user.id)
+        .single();
+
+      if (creatorError) {
+        console.error("Error fetching creator data:", creatorError);
+      }
+
+      // Log the activity
+      const activityLogData = {
+        user_id: user.id,
+        activity_type: data.is_admin
+          ? ActivityType.CREATE_COMPANY_ADMIN
+          : "CREATE_EMPLOYEE",
+        description: `${data.is_admin ? "Company admin" : "Employee"} "${data.first_name} ${data.last_name}" (${data.email}) was created in company "${companyName}"`,
+        company_id: companyId,
+        metadata: {
+          created_by: {
+            id: user.id,
+            name: creatorData
+              ? `${creatorData.first_name} ${creatorData.last_name}`
+              : user.email, // Fallback to email if name not found
+            email: user.email,
+            role: "admin",
+          },
+          employee: {
+            id: newUser.id,
+            name: `${data.first_name} ${data.last_name}`,
+            email: data.email,
+            role: data.is_admin ? "admin" : "employee",
+          },
+          company: {
+            id: companyId,
+            name: companyName,
+          },
+        },
+        old_value: null,
+        new_value: {
+          first_name: data.first_name,
+          last_name: data.last_name,
+          email: data.email,
+          phone_number: data.phone_number,
+          job_title: data.job_title,
+          role: data.is_admin ? "admin" : "employee",
+          employment_type: data.employment_type,
+          workload_percentage: data.workload_percentage,
+          employment_start_date: data.employment_start_date.toISOString(),
+          date_of_birth: data.date_of_birth.toISOString(),
+          nationality: data.nationality,
+          marital_status: data.marital_status,
+          gender: data.gender,
+          address: {
+            line1: data.address_line1,
+            line2: data.address_line2 || null,
+            city: data.address_city,
+            state: data.address_state,
+            postal_code: data.address_postal_code,
+            country: data.address_country,
+          },
+          bank_details: {
+            bank_name: data.bank_name,
+            account_number: data.account_number,
+            iban: data.iban,
+            swift_code: data.swift_code,
+          },
+          created_at: new Date().toISOString(),
+        },
+      };
+
+      const { error: logError } = await supabase
+        .from("activity_logs")
+        .insert([activityLogData]);
+
+      if (logError) {
+        console.error("Error logging activity:", logError);
+        // Don't throw here as the employee was created successfully
       }
 
       console.log(`Employee created with email: ${data.email}`);

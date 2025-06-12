@@ -93,24 +93,21 @@ const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({
       marginRight: 16,
     },
     dot: {
-      width: 12,
-      height: 12,
+      width: 11,
+      height: 11,
       borderRadius: 6,
-      marginTop: 6,
+      borderWidth: 1.5,
     },
     line: {
       width: 2,
       flex: 1,
-      marginTop: 4,
-      marginBottom: -6,
     },
     logContent: {
       flex: 1,
-      padding: 12,
+      paddingHorizontal: 12,
+      paddingBottom: 28,
       alignItems: "flex-start",
       justifyContent: "flex-start",
-      marginTop: -7,
-      marginBottom: 10,
     },
     logTimeContainer: {
       flexDirection: "row",
@@ -263,6 +260,14 @@ const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({
         return "account-plus";
       case "UPDATE_COMPANY_ADMIN":
         return "account-edit";
+      case "CREATE_EMPLOYEE":
+        return "account-plus-outline";
+      case "UPDATE_EMPLOYEE":
+        return "account-edit-outline";
+      case "CREATE_RECEIPT":
+        return "receipt";
+      case "UPDATE_RECEIPT":
+        return "playlist-edit";
       default:
         return "information";
     }
@@ -276,12 +281,16 @@ const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({
       case "CREATE_COMPANY":
       case "CREATE_SUPER_ADMIN":
       case "CREATE_COMPANY_ADMIN":
+      case "CREATE_EMPLOYEE":
+      case "CREATE_RECEIPT":
         return "#10B981"; // Green
       case "UPDATE":
       case "UPDATE_TASK":
       case "UPDATE_COMPANY":
       case "UPDATE_SUPER_ADMIN":
       case "UPDATE_COMPANY_ADMIN":
+      case "UPDATE_EMPLOYEE":
+      case "UPDATE_RECEIPT":
         return "#6366F1"; // Indigo
       case "UPDATE_STATUS":
         return "#F59E0B"; // Amber
@@ -444,6 +453,7 @@ const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({
         added_by,
         company,
         company_admin,
+        employee,
       } = log.metadata;
 
       switch (log.activity_type.toUpperCase()) {
@@ -1007,6 +1017,127 @@ const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({
           }
           break;
 
+        case ActivityType.CREATE_EMPLOYEE:
+          if (created_by) {
+            const userObj = {
+              ...created_by,
+              name: created_by.name || created_by.email,
+            };
+            addUserPart(userObj);
+            addTextPart(" created new employee ");
+            if (employee) {
+              const employeeObj = {
+                ...employee,
+                name: employee.name || employee.email,
+              };
+              addUserPart(employeeObj);
+            }
+            if (company) {
+              addTextPart(" in company ");
+              addCompanyPart(company);
+            }
+          } else {
+            addTextPart(log.description);
+          }
+          break;
+
+        case ActivityType.CREATE_RECEIPT:
+          if (log.metadata?.created_by) {
+            const userObj = {
+              ...log.metadata.created_by,
+              name:
+                log.metadata.created_by.name || log.metadata.created_by.email,
+            };
+            addUserPart(userObj);
+            addTextPart(" created receipt ");
+            addTextPart(`"${log.new_value?.receipt_number}"`);
+            if (log.metadata?.company) {
+              addTextPart(" in company ");
+              addCompanyPart(log.metadata.company);
+            }
+          } else {
+            addTextPart(log.description);
+          }
+          break;
+
+        case ActivityType.UPDATE_RECEIPT:
+          if (log.metadata?.created_by) {
+            const userObj = {
+              ...log.metadata.created_by,
+              name:
+                log.metadata.created_by.name || log.metadata.created_by.email,
+            };
+            addUserPart(userObj);
+            addTextPart(" updated receipt ");
+            addTextPart(`"${log.new_value?.receipt_number}"`);
+            if (log.metadata?.company) {
+              addTextPart(" in company ");
+              addCompanyPart(log.metadata.company);
+            }
+            const changes = log.metadata?.changes;
+            if (changes && Array.isArray(changes) && changes.length > 0) {
+              addTextPart(". Changes: ");
+              changes.forEach((change: string, idx: number) => {
+                parts.push(
+                  <Text
+                    key={`change-${currentIndex}-${idx}`}
+                    style={[styles.logDescription, styles.changeText]}
+                  >
+                    {change}
+                  </Text>
+                );
+                if (idx < changes.length - 1) {
+                  addTextPart(", ");
+                }
+              });
+              currentIndex++;
+            }
+          } else {
+            addTextPart(log.description);
+          }
+          break;
+
+        case "UPDATE_EMPLOYEE":
+          if (log.metadata?.created_by && log.metadata?.employee) {
+            const userObj = {
+              ...log.metadata.created_by,
+              name:
+                log.metadata.created_by.name || log.metadata.created_by.email,
+            };
+            addUserPart(userObj);
+            addTextPart(" updated employee ");
+            const employeeObj = {
+              ...log.metadata.employee,
+              name: log.metadata.employee.name || log.metadata.employee.email,
+            };
+            addUserPart(employeeObj);
+            if (log.metadata?.company) {
+              addTextPart(" in company ");
+              addCompanyPart(log.metadata.company);
+            }
+            const changes = log.metadata?.changes;
+            if (changes && Array.isArray(changes) && changes.length > 0) {
+              addTextPart(". Changes: ");
+              changes.forEach((change: string, idx: number) => {
+                parts.push(
+                  <Text
+                    key={`change-${currentIndex}-${idx}`}
+                    style={[styles.logDescription, styles.changeText]}
+                  >
+                    {change}
+                  </Text>
+                );
+                if (idx < changes.length - 1) {
+                  addTextPart(", ");
+                }
+              });
+              currentIndex++;
+            }
+          } else {
+            addTextPart(log.description);
+          }
+          break;
+
         default:
           addTextPart(log.description);
       }
@@ -1122,9 +1253,7 @@ const ActivityLogTimeline: React.FC<ActivityLogTimelineProps> = ({
                         style={[
                           styles.dot,
                           {
-                            backgroundColor: getActivityColor(
-                              log.activity_type
-                            ),
+                            borderColor: getActivityColor(log.activity_type),
                           },
                         ]}
                       />

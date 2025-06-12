@@ -45,10 +45,12 @@ import {
   EmploymentType,
   CompanyUser,
   UserRole,
+  ActivityType,
 } from "../../types";
 import CustomSnackbar from "../../components/CustomSnackbar";
 import { t } from "i18next";
 import HelpGuideModal from "../../components/HelpGuideModal";
+import { useAuth } from "../../contexts/AuthContext";
 
 type EditEmployeeRouteParams = {
   employeeId: string;
@@ -235,6 +237,7 @@ const EditEmployeeScreen = () => {
     useRoute<RouteProp<Record<string, EditEmployeeRouteParams>, string>>();
   const { employeeId } = route.params;
   const dimensions = useWindowDimensions();
+  const { user } = useAuth();
 
   // Calculate responsive breakpoints
   const isLargeScreen = dimensions.width >= 1440;
@@ -397,6 +400,8 @@ const EditEmployeeScreen = () => {
     checkNetworkStatus();
   }, [checkNetworkStatus]);
 
+  const [companyName, setCompanyName] = useState<string>("");
+
   const fetchEmployeeDetails = useCallback(async () => {
     try {
       setLoading(true);
@@ -412,7 +417,14 @@ const EditEmployeeScreen = () => {
       const fetchData = async () => {
         const { data, error } = await supabase
           .from("company_user")
-          .select("*")
+          .select(
+            `
+            *,
+            company:company_id (
+              company_name
+            )
+          `
+          )
           .eq("id", employeeId)
           .single();
 
@@ -448,6 +460,8 @@ const EditEmployeeScreen = () => {
       }
 
       setEmployee(result.data);
+      // Set company name from the joined data
+      setCompanyName(result.data.company?.company_name || "");
 
       // Set form values
       setValue("first_name", result.data.first_name || "");
@@ -584,6 +598,13 @@ const EditEmployeeScreen = () => {
 
   const onSubmit = async (data: EmployeeFormData) => {
     try {
+      // Check if user is authenticated
+      if (!user) {
+        setSnackbarMessage("You must be logged in to update an employee");
+        setSnackbarVisible(true);
+        return;
+      }
+
       // First check network connection
       const isOnline = await checkNetworkStatus();
       if (!isOnline) {
@@ -638,7 +659,7 @@ const EditEmployeeScreen = () => {
             hasEndDate && data.employment_end_date
               ? data.employment_end_date.toISOString()
               : null,
-          employment_type: isEmployeeType, // Store as boolean instead of enum string
+          employment_type: isEmployeeType,
           workload_percentage: workloadPercentage,
           job_title: data.job_title,
           education: data.education,
@@ -662,6 +683,131 @@ const EditEmployeeScreen = () => {
 
       if (error) {
         throw error;
+      }
+
+      // Fetch creator's information
+      const { data: creatorData, error: creatorError } = await supabase
+        .from("company_user")
+        .select("first_name, last_name")
+        .eq("id", user.id)
+        .single();
+
+      if (creatorError) {
+        console.error("Error fetching creator data:", creatorError);
+      }
+
+      // Prepare changes array for activity log
+      const changes: string[] = [];
+      if (employee.first_name !== data.first_name) changes.push("first name");
+      if (employee.last_name !== data.last_name) changes.push("last name");
+      if (employee.phone_number !== data.phone_number)
+        changes.push("phone number");
+      if (employee.nationality !== data.nationality)
+        changes.push("nationality");
+      if (employee.marital_status !== data.marital_status)
+        changes.push("marital status");
+      if (employee.gender !== data.gender) changes.push("gender");
+      if (employee.job_title !== data.job_title) changes.push("job title");
+      if (employee.workload_percentage !== workloadPercentage)
+        changes.push("workload percentage");
+      if (employee.education !== data.education) changes.push("education");
+
+      // Check if role changed
+      const roleChanged =
+        (employee.role === UserRole.COMPANY_ADMIN) !== data.is_admin;
+      if (roleChanged) changes.push("admin privileges");
+
+      // Log the activity
+      const activityLogData = {
+        user_id: user.id,
+        activity_type: roleChanged
+          ? data.is_admin
+            ? ActivityType.UPDATE_COMPANY_ADMIN
+            : ActivityType.UPDATE_EMPLOYEE
+          : ActivityType.UPDATE_EMPLOYEE,
+        description: `Employee "${data.first_name} ${data.last_name}" (${employee.email}) was updated`,
+        company_id: employee.company_id,
+        metadata: {
+          created_by: {
+            id: user.id,
+            name: creatorData
+              ? `${creatorData.first_name} ${creatorData.last_name}`
+              : user.email,
+            email: user.email,
+            role: "admin",
+          },
+          employee: {
+            id: employeeId,
+            name: `${data.first_name} ${data.last_name}`,
+            email: employee.email,
+            role: data.is_admin ? "admin" : "employee",
+          },
+          company: {
+            id: employee.company_id,
+            name: companyName,
+          },
+          changes: changes,
+        },
+        old_value: {
+          first_name: employee.first_name,
+          last_name: employee.last_name,
+          phone_number: employee.phone_number,
+          date_of_birth: employee.date_of_birth,
+          nationality: employee.nationality,
+          marital_status: employee.marital_status,
+          gender: employee.gender,
+          role: employee.role,
+          employment_start_date: employee.employment_start_date,
+          employment_end_date: employee.employment_end_date,
+          employment_type: employee.employment_type,
+          workload_percentage: employee.workload_percentage,
+          job_title: employee.job_title,
+          education: employee.education,
+          address: employee.address,
+          bank_details: employee.bank_details,
+        },
+        new_value: {
+          first_name: data.first_name,
+          last_name: data.last_name,
+          phone_number: data.phone_number,
+          date_of_birth: data.date_of_birth.toISOString(),
+          nationality: data.nationality,
+          marital_status: data.marital_status,
+          gender: data.gender,
+          role: data.is_admin ? UserRole.COMPANY_ADMIN : UserRole.EMPLOYEE,
+          employment_start_date: data.employment_start_date.toISOString(),
+          employment_end_date:
+            hasEndDate && data.employment_end_date
+              ? data.employment_end_date.toISOString()
+              : null,
+          employment_type: isEmployeeType,
+          workload_percentage: workloadPercentage,
+          job_title: data.job_title,
+          education: data.education,
+          address: {
+            line1: data.address_line1,
+            line2: data.address_line2 || null,
+            city: data.address_city,
+            state: data.address_state,
+            postal_code: data.address_postal_code,
+            country: data.address_country,
+          },
+          bank_details: {
+            bank_name: data.bank_name,
+            account_number: data.account_number,
+            iban: data.iban,
+            swift_code: data.swift_code,
+          },
+        },
+      };
+
+      const { error: logError } = await supabase
+        .from("activity_logs")
+        .insert([activityLogData]);
+
+      if (logError) {
+        console.error("Error logging activity:", logError);
+        // Don't throw here as the employee was updated successfully
       }
 
       // Clear cache for this employee
@@ -1448,35 +1594,6 @@ const EditEmployeeScreen = () => {
                     )}
                   </View>
                 </Surface>
-
-                <View style={styles.bottomBarContent}>
-                  <View style={styles.actionButtons}>
-                    <Button
-                      mode="outlined"
-                      onPress={() => navigation.goBack()}
-                      style={styles.button}
-                      disabled={submitting}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      mode="contained"
-                      onPress={handleSubmit(onSubmit)}
-                      style={[
-                        styles.button,
-                        {
-                          backgroundColor: submitting
-                            ? theme.colors.disabled
-                            : theme.colors.primary,
-                        },
-                      ]}
-                      loading={submitting}
-                      disabled={submitting || networkStatus === false}
-                    >
-                      Update Employee
-                    </Button>
-                  </View>
-                </View>
               </Animated.View>
             </View>
           </View>
@@ -1599,7 +1716,36 @@ const EditEmployeeScreen = () => {
       )}
 
       {renderContent()}
-
+      <Surface style={styles.bottomBar}>
+        <View style={styles.bottomBarContent}>
+          <View style={styles.actionButtons}>
+            <Button
+              mode="outlined"
+              onPress={() => navigation.goBack()}
+              style={styles.button}
+              disabled={submitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              mode="contained"
+              onPress={handleSubmit(onSubmit)}
+              style={[
+                styles.button,
+                {
+                  backgroundColor: submitting
+                    ? theme.colors.surfaceDisabled
+                    : theme.colors.primary,
+                },
+              ]}
+              loading={submitting}
+              disabled={submitting || networkStatus === false}
+            >
+              Update Employee
+            </Button>
+          </View>
+        </View>
+      </Surface>
       <CustomSnackbar
         visible={snackbarVisible}
         message={snackbarMessage}
@@ -1645,6 +1791,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingVertical: 32,
+    paddingBottom: 100,
     alignSelf: "center",
     width: "100%",
   },
@@ -1739,8 +1886,28 @@ const styles = StyleSheet.create({
   segmentedButtons: {
     marginBottom: 16,
   },
+  bottomBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+    padding: 16,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: -2,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 4,
+  },
   bottomBarContent: {
-    marginTop: 24,
+    maxWidth: 1280,
+    width: "100%",
+    alignSelf: "center",
     flexDirection: "row",
     justifyContent: "flex-end",
     gap: 12,
@@ -1790,6 +1957,12 @@ const styles = StyleSheet.create({
     },
     shadowOpacity: 0.27,
     shadowRadius: 4.65,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontFamily: getFontFamily("600"),
+    color: "#1e293b",
+    marginBottom: 16,
   },
 });
 

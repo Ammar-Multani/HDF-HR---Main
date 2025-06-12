@@ -61,51 +61,70 @@ export default function App() {
 
   // Check if this is initial load
   useEffect(() => {
-    AsyncStorage.getItem(INITIAL_LOAD_KEY).then((value) => {
-      if (value) {
-        setIsInitialLoad(false);
+    const checkInitialLoad = async () => {
+      try {
+        const value = await AsyncStorage.getItem(INITIAL_LOAD_KEY);
+        setIsInitialLoad(!value);
+      } catch (error) {
+        console.error("Error checking initial load:", error);
+        setIsInitialLoad(true);
       }
-    });
+    };
+    checkInitialLoad();
   }, []);
 
   // Reset cache if loading takes too long - ONLY during initial load
   useEffect(() => {
-    if (!appIsReady && !loadingTimeout && isInitialLoad) {
-      const timeout = setTimeout(async () => {
-        console.warn("Initial loading timeout - clearing cache...");
-        try {
-          // Clear all caches
-          await clearAllCache();
-          // Clear navigation state
-          await AsyncStorage.removeItem(NAVIGATION_STATE_KEY);
-          // Clear auth check
-          await AsyncStorage.removeItem(AUTH_CHECK_KEY);
-          // Force reload the page
-          if (Platform.OS === "web") {
-            window.location.reload();
-          }
-        } catch (error) {
-          console.error("Error clearing cache on timeout:", error);
-        }
-      }, LOADING_TIMEOUT);
+    let timeoutId: NodeJS.Timeout | null = null;
 
-      setLoadingTimeout(timeout);
-    }
+    const setupTimeout = async () => {
+      if (!appIsReady && isInitialLoad) {
+        // Double check if it's really initial load before setting timeout
+        const value = await AsyncStorage.getItem(INITIAL_LOAD_KEY);
+        if (!value) {
+          timeoutId = setTimeout(async () => {
+            console.warn("Initial loading timeout - clearing cache...");
+            try {
+              await clearAllCache();
+              await AsyncStorage.removeItem(NAVIGATION_STATE_KEY);
+              await AsyncStorage.removeItem(AUTH_CHECK_KEY);
+              if (Platform.OS === "web") {
+                window.location.reload();
+              }
+            } catch (error) {
+              console.error("Error clearing cache on timeout:", error);
+            }
+          }, LOADING_TIMEOUT);
+          setLoadingTimeout(timeoutId);
+        }
+      }
+    };
+
+    setupTimeout();
 
     return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
       if (loadingTimeout) {
         clearTimeout(loadingTimeout);
       }
     };
-  }, [appIsReady, loadingTimeout, isInitialLoad]);
+  }, [appIsReady, isInitialLoad]);
 
   // Mark initial load as complete when app becomes ready
   useEffect(() => {
-    if (appIsReady && isInitialLoad) {
-      AsyncStorage.setItem(INITIAL_LOAD_KEY, "true").then(() => {
-        setIsInitialLoad(false);
-      });
-    }
+    const markInitialLoadComplete = async () => {
+      if (appIsReady && isInitialLoad) {
+        try {
+          await AsyncStorage.setItem(INITIAL_LOAD_KEY, "true");
+          setIsInitialLoad(false);
+        } catch (error) {
+          console.error("Error marking initial load complete:", error);
+        }
+      }
+    };
+    markInitialLoadComplete();
   }, [appIsReady, isInitialLoad]);
 
   // Fast pre-check for auth state to speed up app loading

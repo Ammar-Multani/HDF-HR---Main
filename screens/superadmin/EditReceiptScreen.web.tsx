@@ -31,6 +31,8 @@ import { supabase } from "../../lib/supabase";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import Animated, { FadeIn } from "react-native-reanimated";
+import { useAuth } from "../../contexts/AuthContext";
+import { ActivityType } from "../../types/activity-log";
 
 // Add window dimensions hook
 const useWindowDimensions = () => {
@@ -95,6 +97,7 @@ const EditReceiptScreen = () => {
   const route = useRoute<EditReceiptRouteProp>();
   const { receiptId } = route.params;
   const dimensions = useWindowDimensions();
+  const { user } = useAuth();
 
   // Calculate responsive breakpoints
   const isLargeScreen = dimensions.width >= 1440;
@@ -246,6 +249,28 @@ const EditReceiptScreen = () => {
     try {
       setSaving(true);
 
+      // Get the current admin user
+      const { data: adminUser, error: adminError } = await supabase
+        .from("admin")
+        .select("id, name, email, role, status")
+        .eq("email", user?.email)
+        .single();
+
+      console.log("Admin query result:", { adminUser, adminError });
+
+      if (!adminUser || adminUser.role !== "superadmin" || !adminUser.status) {
+        console.error("User validation failed:", {
+          exists: !!adminUser,
+          role: adminUser?.role,
+          status: adminUser?.status,
+        });
+        Alert.alert(
+          "Error",
+          "Could not verify super admin credentials. Please ensure you are logged in with the correct permissions."
+        );
+        return;
+      }
+
       const updatedReceipt = {
         receipt_number: formData.receipt_number,
         date: format(formData.date, "yyyy-MM-dd"),
@@ -258,12 +283,84 @@ const EditReceiptScreen = () => {
         line_items: formData.line_items,
       };
 
+      // Get the current company name
+      const { data: companyData } = await supabase
+        .from("company")
+        .select("company_name")
+        .eq("id", formData.company_id)
+        .single();
+
+      // Track changes
+      const changes: string[] = [];
+      if (receipt) {
+        if (receipt.receipt_number !== updatedReceipt.receipt_number) {
+          changes.push("receipt number");
+        }
+        if (receipt.date !== updatedReceipt.date) {
+          changes.push("date");
+        }
+        if (receipt.merchant_name !== updatedReceipt.merchant_name) {
+          changes.push("merchant name");
+        }
+        if (receipt.merchant_address !== updatedReceipt.merchant_address) {
+          changes.push("merchant address");
+        }
+        if (receipt.total_amount !== updatedReceipt.total_amount) {
+          changes.push("total amount");
+        }
+        if (receipt.tax_amount !== updatedReceipt.tax_amount) {
+          changes.push("tax amount");
+        }
+        if (receipt.payment_method !== updatedReceipt.payment_method) {
+          changes.push("payment method");
+        }
+        if (
+          JSON.stringify(receipt.line_items) !==
+          JSON.stringify(updatedReceipt.line_items)
+        ) {
+          changes.push("line items");
+        }
+      }
+
       const { error } = await supabase
         .from("receipts")
         .update(updatedReceipt)
         .eq("id", receiptId);
 
       if (error) throw error;
+
+      // Log the activity
+      const activityLogData = {
+        user_id: adminUser.id,
+        activity_type: ActivityType.UPDATE_RECEIPT,
+        description: `Receipt "${updatedReceipt.receipt_number}" was updated${companyData ? ` in company "${companyData.company_name}"` : ""}${changes.length > 0 ? `. Changes: ${changes.join(", ")}` : ""}`,
+        company_id: formData.company_id,
+        metadata: {
+          created_by: {
+            id: adminUser.id,
+            name: adminUser.name,
+            email: adminUser.email,
+            role: adminUser.role,
+          },
+          company: companyData
+            ? {
+                id: formData.company_id,
+                name: companyData.company_name,
+              }
+            : undefined,
+          changes,
+        },
+        old_value: receipt,
+        new_value: updatedReceipt,
+      };
+
+      const { error: activityLogError } = await supabase
+        .from("activity_logs")
+        .insert([activityLogData]);
+
+      if (activityLogError) {
+        console.error("Error logging activity:", activityLogError);
+      }
 
       Alert.alert("Success", "Receipt updated successfully", [
         {

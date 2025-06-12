@@ -43,6 +43,7 @@ import Animated, { FadeIn } from "react-native-reanimated";
 import Constants from "expo-constants";
 import CustomSnackbar from "../../components/CustomSnackbar";
 import { t } from "i18next";
+import { ActivityType } from "../../types/activity-log";
 
 // Add window dimensions hook
 const useWindowDimensions = () => {
@@ -583,16 +584,25 @@ const CreateReceiptScreen = () => {
       }));
 
       // Find a super admin to use as created_by
+      console.log("Current user:", user);
+
       const { data: adminUser, error: adminError } = await supabase
         .from("admin")
-        .select("id")
-        .eq("status", true) // Assuming active admins have status=true
-        .limit(1)
+        .select("id, name, email, role, status")
+        .eq("email", user.email)
         .single();
 
-      if (adminError || !adminUser) {
-        console.error("Error finding admin user:", adminError);
-        setSnackbarMessage("Cannot create receipt: No active admin found");
+      console.log("Admin query result:", { adminUser, adminError });
+
+      if (!adminUser || adminUser.role !== "superadmin" || !adminUser.status) {
+        console.error("User validation failed:", {
+          exists: !!adminUser,
+          role: adminUser?.role,
+          status: adminUser?.status,
+        });
+        setSnackbarMessage(
+          "Error: Could not verify super admin credentials. Please ensure you are logged in with the correct permissions."
+        );
         setSnackbarVisible(true);
         setLoading(false);
         return;
@@ -623,6 +633,35 @@ const CreateReceiptScreen = () => {
 
       if (error) {
         throw error;
+      }
+
+      // Log the receipt creation activity
+      const activityLogData = {
+        user_id: adminUser.id,
+        activity_type: ActivityType.CREATE_RECEIPT,
+        description: `Receipt "${data.receipt_number}" was created for company "${selectedCompany.company_name}" by ${adminUser.name}`,
+        company_id: selectedCompany.id,
+        metadata: {
+          created_by: {
+            id: adminUser.id,
+            name: adminUser.name,
+            email: adminUser.email,
+            role: "admin",
+          },
+          company: {
+            id: selectedCompany.id,
+            name: selectedCompany.company_name,
+          },
+        },
+        new_value: receiptData,
+      };
+
+      const { error: activityLogError } = await supabase
+        .from("activity_logs")
+        .insert([activityLogData]);
+
+      if (activityLogError) {
+        console.error("Error logging activity:", activityLogError);
       }
 
       setSnackbarMessage("Receipt created successfully");

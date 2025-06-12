@@ -23,6 +23,7 @@ export interface ActivityLogMetadata {
   assigned_to?: ActivityLogUser;
   added_by?: ActivityLogUser;
   admin?: ActivityLogUser;
+  employee?: ActivityLogUser;
 
   // Company information
   company?: ActivityLogCompany;
@@ -64,4 +65,8 @@ export enum ActivityType {
   UPDATE_SUPER_ADMIN = "UPDATE_SUPER_ADMIN",
   CREATE_COMPANY_ADMIN = "CREATE_COMPANY_ADMIN",
   UPDATE_COMPANY_ADMIN = "UPDATE_COMPANY_ADMIN",
+  CREATE_EMPLOYEE = "CREATE_EMPLOYEE",
+  UPDATE_EMPLOYEE = "UPDATE_EMPLOYEE",
+  CREATE_RECEIPT = "CREATE_RECEIPT",
+  UPDATE_RECEIPT = "UPDATE_RECEIPT",
 }
