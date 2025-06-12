@@ -33,7 +33,7 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
-import { TaskPriority, UserRole, TaskStatus } from "../../types";
+import { TaskPriority, UserRole, TaskStatus, ActivityType } from "../../types";
 import CustomSnackbar from "../../components/CustomSnackbar";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
@@ -370,6 +370,62 @@ const CompanyAdminEditTaskScreen = () => {
         return;
       }
 
+      // Get current company admin's details
+      const { data: adminData, error: adminError } = await supabase
+        .from("company_user")
+        .select("id, first_name, last_name, email, role, company_id")
+        .eq("email", user.email)
+        .eq("role", "admin")
+        .single();
+
+      if (adminError || !adminData) {
+        console.error("Error fetching admin data:", adminError);
+        setSnackbarMessage("Error: Could not verify admin credentials");
+        setSnackbarVisible(true);
+        setSubmitting(false);
+        return;
+      }
+
+      // Track changes
+      const changes: string[] = [];
+      if (originalTask.title !== data.title) {
+        changes.push(
+          `Title changed from "${originalTask.title}" to "${data.title}"`
+        );
+      }
+      if (originalTask.description !== data.description) {
+        changes.push(`Description updated`);
+      }
+      if (originalTask.deadline !== data.deadline.toISOString()) {
+        changes.push(
+          `Deadline updated to ${format(data.deadline, "MMMM d, yyyy")}`
+        );
+      }
+      if (originalTask.priority !== data.priority) {
+        changes.push(
+          `Priority changed from ${originalTask.priority} to ${data.priority}`
+        );
+      }
+      if (originalTask.status !== data.status) {
+        changes.push(
+          `Status changed from ${originalTask.status} to ${data.status}`
+        );
+      }
+      if (originalTask.reminder_days_before !== reminderDays) {
+        changes.push(
+          `Reminder days changed from ${originalTask.reminder_days_before} to ${reminderDays}`
+        );
+      }
+      if (originalTask.assigned_to !== selectedAssignees[0]) {
+        const oldAssignee =
+          availableUsers.find((u) => u.id === originalTask.assigned_to)?.name ||
+          "Unknown";
+        const newAssignee =
+          availableUsers.find((u) => u.id === selectedAssignees[0])?.name ||
+          "Unknown";
+        changes.push(`Assignee changed from ${oldAssignee} to ${newAssignee}`);
+      }
+
       // Update task with a single UUID for assigned_to
       const taskData = {
         title: data.title,
@@ -377,19 +433,94 @@ const CompanyAdminEditTaskScreen = () => {
         deadline: data.deadline.toISOString(),
         priority: data.priority,
         status: data.status,
-        assigned_to: selectedAssignees.length > 0 ? selectedAssignees[0] : null, // Only use the first assignee's UUID
-        modified_by: user.id,
+        assigned_to: selectedAssignees.length > 0 ? selectedAssignees[0] : null,
+        modified_by: adminData.id,
         updated_at: new Date().toISOString(),
         reminder_days_before: reminderDays,
       };
 
-      const { error } = await supabase
+      const { error: updateError } = await supabase
         .from("tasks")
         .update(taskData)
         .eq("id", taskId);
 
-      if (error) {
-        throw error;
+      if (updateError) {
+        throw updateError;
+      }
+
+      // Get assigned user's details
+      const assignedUser = availableUsers.find(
+        (u) => u.id === selectedAssignees[0]
+      );
+
+      // Create activity log
+      const activityLogData = {
+        user_id: adminData.id,
+        activity_type: ActivityType.UPDATE_TASK,
+        description: `Task "${data.title}" updated by ${adminData.first_name} ${adminData.last_name} (${user.email})`,
+        company_id: adminData.company_id,
+        metadata: {
+          task_id: taskId,
+          task_title: data.title,
+          status: data.status,
+          priority: data.priority,
+          changes: changes,
+          assigned_to: assignedUser
+            ? {
+                id: assignedUser.id,
+                name: assignedUser.name,
+                email: assignedUser.email,
+                role: assignedUser.role,
+              }
+            : null,
+          created_by: {
+            id: adminData.id,
+            name: `${adminData.first_name} ${adminData.last_name}`,
+            email: user.email,
+            role: adminData.role,
+          },
+          company: {
+            id: adminData.company_id,
+            name: "", // Company name will be available in the UI context
+          },
+        },
+        old_value: {
+          id: taskId,
+          title: originalTask.title,
+          description: originalTask.description,
+          deadline: originalTask.deadline,
+          priority: originalTask.priority,
+          status: originalTask.status,
+          assigned_to: originalTask.assigned_to,
+          reminder_days_before: originalTask.reminder_days_before,
+          updated_at: originalTask.updated_at,
+        },
+        new_value: {
+          id: taskId,
+          title: data.title,
+          description: data.description,
+          deadline: data.deadline.toISOString(),
+          priority: data.priority,
+          status: data.status,
+          assigned_to: selectedAssignees[0],
+          reminder_days_before: reminderDays,
+          updated_at: new Date().toISOString(),
+          modified_by: {
+            id: adminData.id,
+            name: `${adminData.first_name} ${adminData.last_name}`,
+            email: user.email,
+            role: adminData.role,
+          },
+        },
+      };
+
+      const { error: logError } = await supabase
+        .from("activity_logs")
+        .insert([activityLogData]);
+
+      if (logError) {
+        console.error("Error logging activity:", logError);
+        // Don't throw error here, as the task was updated successfully
       }
 
       setSnackbarMessage("Task updated successfully");

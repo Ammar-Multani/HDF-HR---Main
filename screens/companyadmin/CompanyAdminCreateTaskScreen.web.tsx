@@ -32,7 +32,7 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
-import { TaskPriority, UserRole, TaskStatus } from "../../types";
+import { TaskPriority, UserRole, TaskStatus, ActivityType } from "../../types";
 import Animated, {
   FadeIn,
   useAnimatedStyle,
@@ -181,11 +181,11 @@ const FormSkeleton = () => {
                 <View style={styles.cardContent}>
                   <View style={styles.inputContainer}>
                     <Shimmer
-                      width="100%"
+                      width={300}
                       height={56}
                       style={{ marginBottom: 16 }}
                     />
-                    <Shimmer width="100%" height={120} />
+                    <Shimmer width={300} height={120} />
                   </View>
                 </View>
               </Surface>
@@ -210,7 +210,7 @@ const FormSkeleton = () => {
                   <View style={styles.inputContainer}>
                     <Text style={styles.inputLabel}>Deadline</Text>
                     <Shimmer
-                      width="100%"
+                      width={300}
                       height={48}
                       style={{ marginBottom: 24 }}
                     />
@@ -219,7 +219,7 @@ const FormSkeleton = () => {
                   <View style={styles.inputContainer}>
                     <Text style={styles.inputLabel}>Priority</Text>
                     <Shimmer
-                      width="100%"
+                      width={300}
                       height={40}
                       style={{ marginBottom: 24 }}
                     />
@@ -227,7 +227,7 @@ const FormSkeleton = () => {
 
                   <View style={styles.inputContainer}>
                     <Text style={styles.inputLabel}>Reminder Days</Text>
-                    <Shimmer width="100%" height={56} />
+                    <Shimmer width={300} height={56} />
                   </View>
                 </View>
               </Surface>
@@ -501,21 +501,9 @@ const CompanyAdminCreateTaskScreen = () => {
   const onSubmit = async (data: TaskFormData) => {
     try {
       if (!user) {
-        setSnackbarMessage("User information not available");
+        setSnackbarMessage("User not authenticated");
         setSnackbarVisible(true);
         return;
-      }
-
-      // Ensure we have the company ID
-      let currentCompanyId = companyId;
-      if (!currentCompanyId) {
-        currentCompanyId = await fetchCompanyId();
-        if (!currentCompanyId) {
-          setSnackbarMessage("Company information not available");
-          setSnackbarVisible(true);
-          return;
-        }
-        setCompanyId(currentCompanyId);
       }
 
       if (selectedAssignees.length === 0) {
@@ -536,28 +524,109 @@ const CompanyAdminCreateTaskScreen = () => {
         return;
       }
 
+      // Get current company admin's details
+      const { data: adminData, error: adminError } = await supabase
+        .from("company_user")
+        .select("id, first_name, last_name, email, role, company_id")
+        .eq("email", user.email)
+        .eq("role", "admin")
+        .single();
+
+      if (adminError || !adminData) {
+        console.error("Error fetching admin data:", adminError);
+        setSnackbarMessage("Error: Could not verify admin credentials");
+        setSnackbarVisible(true);
+        setLoading(false);
+        return;
+      }
+
       // Create task
-      const { data: taskData, error } = await supabase
+      const taskData = {
+        title: data.title,
+        description: data.description,
+        deadline: data.deadline.toISOString(),
+        priority: data.priority,
+        status: TaskStatus.OPEN,
+        assigned_to: selectedAssignees[0],
+        created_by: adminData.id,
+        company_id: adminData.company_id,
+        reminder_days_before: reminderDays,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data: createdTask, error: createError } = await supabase
         .from("tasks")
-        .insert([
-          {
-            title: data.title,
-            description: data.description,
-            deadline: data.deadline.toISOString(),
-            priority: data.priority,
-            status: TaskStatus.OPEN,
-            assigned_to:
-              selectedAssignees.length > 0 ? selectedAssignees[0] : null,
-            created_by: user.id,
-            company_id: currentCompanyId,
-            reminder_days_before: reminderDays,
-          },
-        ])
+        .insert([taskData])
         .select()
         .single();
 
-      if (error) {
-        throw error;
+      if (createError) {
+        throw createError;
+      }
+
+      // Get assigned user's details
+      const assignedUser = availableUsers.find(
+        (u) => u.id === selectedAssignees[0]
+      );
+
+      // Create activity log
+      const activityLogData = {
+        user_id: adminData.id,
+        activity_type: ActivityType.CREATE_TASK,
+        description: `New task "${data.title}" created by ${adminData.first_name} ${adminData.last_name} (${user.email}). Assigned to ${assignedUser?.name || "Unknown User"}`,
+        company_id: adminData.company_id,
+        metadata: {
+          task_id: createdTask.id,
+          task_title: data.title,
+          status: TaskStatus.OPEN,
+          priority: data.priority,
+          assigned_to: assignedUser
+            ? {
+                id: assignedUser.id,
+                name: assignedUser.name,
+                email: assignedUser.email,
+                role: assignedUser.role,
+              }
+            : null,
+          created_by: {
+            id: adminData.id,
+            name: `${adminData.first_name} ${adminData.last_name}`,
+            email: user.email,
+            role: adminData.role,
+          },
+          company: {
+            id: adminData.company_id,
+            name: "", // Company name will be available in the UI context
+          },
+        },
+        old_value: null,
+        new_value: {
+          id: createdTask.id,
+          title: data.title,
+          description: data.description,
+          deadline: data.deadline.toISOString(),
+          priority: data.priority,
+          status: TaskStatus.OPEN,
+          assigned_to: selectedAssignees[0],
+          company_id: adminData.company_id,
+          created_at: new Date().toISOString(),
+          created_by: {
+            id: adminData.id,
+            name: `${adminData.first_name} ${adminData.last_name}`,
+            email: user.email,
+            role: adminData.role,
+          },
+        },
+      };
+
+      const { error: logError } = await supabase
+        .from("activity_logs")
+        .insert([activityLogData]);
+
+      if (logError) {
+        console.error("Error logging activity:", logError);
+        // Don't throw error here, as the task was created successfully
       }
 
       setSnackbarMessage("Task created successfully");
