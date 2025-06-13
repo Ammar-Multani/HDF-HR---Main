@@ -9,6 +9,7 @@ import {
   Alert,
   TouchableOpacity,
   Dimensions,
+  ImageStyle,
 } from "react-native";
 import {
   Text,
@@ -44,6 +45,7 @@ import Constants from "expo-constants";
 import CustomSnackbar from "../../components/CustomSnackbar";
 import { t } from "i18next";
 import { ActivityType } from "../../types/activity-log";
+import CompanySelector from "../../components/CompanySelector";
 
 // Add window dimensions hook
 const useWindowDimensions = () => {
@@ -216,7 +218,6 @@ const CreateReceiptScreen = () => {
   const isMediumScreen = dimensions.width >= 768 && dimensions.width < 1440;
 
   const [loading, setLoading] = useState(false);
-  const [loadingCompanies, setLoadingCompanies] = useState(true);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTransactionDatePicker, setShowTransactionDatePicker] =
     useState(false);
@@ -225,9 +226,7 @@ const CreateReceiptScreen = () => {
   >("receipt");
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
-  const [companies, setCompanies] = useState<any[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<any>(null);
-  const [showCompanyModal, setShowCompanyModal] = useState(false);
   const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
   const [receiptImage, setReceiptImage] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -259,7 +258,7 @@ const CreateReceiptScreen = () => {
       merchant_name: "",
       total_amount: "",
       tax_amount: "",
-      payment_method: "Credit Card",
+      payment_method: undefined,
       merchant_address: "",
       language_hint: "",
       subtotal_amount: "",
@@ -276,31 +275,6 @@ const CreateReceiptScreen = () => {
 
   const transaction_date = watch("transaction_date");
   const payment_method = watch("payment_method");
-
-  const fetchCompanies = async () => {
-    try {
-      setLoadingCompanies(true);
-      const { data, error } = await supabase
-        .from("company")
-        .select("id, company_name, active")
-        .eq("active", true);
-
-      if (error) {
-        console.error("Error fetching companies:", error);
-        return;
-      }
-
-      setCompanies(data || []);
-    } catch (error) {
-      console.error("Error fetching companies:", error);
-    } finally {
-      setLoadingCompanies(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchCompanies();
-  }, []);
 
   const processReceiptWithOCR = async (imageUri: string) => {
     try {
@@ -1052,6 +1026,59 @@ const CreateReceiptScreen = () => {
     }
   };
 
+  const handlePreviewClick = () => {
+    console.log("Opening preview modal...");
+    setShowPreviewModal(true);
+  };
+
+  const renderPreview = () => {
+    if (!receiptImage && fileType !== "pdf") return null;
+
+    return (
+      <View style={styles.imagePreviewContainer}>
+        <TouchableOpacity
+          style={styles.previewTouchable}
+          onPress={handlePreviewClick}
+          activeOpacity={0.8}
+        >
+          {fileType === "pdf" ? (
+            <View style={styles.pdfPreview}>
+              <IconButton icon="file-pdf-box" size={48} />
+              <Text style={styles.pdfPreviewText}>PDF Document</Text>
+              <Text style={styles.previewHint}>Click to preview</Text>
+            </View>
+          ) : receiptImage ? (
+            <>
+              <Image
+                source={{ uri: receiptImage }}
+                style={styles.imagePreview}
+                resizeMode="contain"
+              />
+              <View style={styles.previewOverlay}>
+                <IconButton icon="magnify-plus" size={32} iconColor="#FFFFFF" />
+                <Text style={styles.previewHint}>Click to expand</Text>
+              </View>
+            </>
+          ) : null}
+        </TouchableOpacity>
+        <IconButton
+          icon="delete"
+          size={24}
+          style={styles.deleteImageButton}
+          onPress={() => setShowDeleteConfirmModal(true)}
+          iconColor="#ef4444"
+          disabled={isProcessingOCR}
+        />
+        {isProcessingOCR && (
+          <View style={styles.ocrLoadingOverlay}>
+            <ActivityIndicator size="large" />
+            <Text style={styles.ocrLoadingText}>Processing Receipt...</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   const renderPreviewModal = () => {
     if (!receiptImage) return null;
 
@@ -1063,49 +1090,68 @@ const CreateReceiptScreen = () => {
           contentContainerStyle={[
             styles.previewModal,
             {
-              width: isLargeScreen ? "90%" : "95%",
-              height: isLargeScreen ? "90%" : "95%",
-              maxWidth: 1200,
-              maxHeight: 800,
+              backgroundColor: "white",
+              margin: 0,
+              padding: 0,
+              width: "100%",
+              height: "100%",
+              maxWidth: "100%",
+              maxHeight: "100%",
             },
           ]}
         >
-          <View style={styles.previewModalHeader}>
-            <Text style={styles.previewModalTitle}>Receipt Preview</Text>
-            <IconButton
-              icon="close"
-              size={24}
-              onPress={() => setShowPreviewModal(false)}
-            />
-          </View>
-          <View style={styles.previewModalContent}>
-            {fileType === "pdf" ? (
-              Platform.OS === "web" ? (
-                <iframe
-                  src={receiptImage}
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    border: "none",
-                  }}
-                  title="PDF Preview"
+          <Surface style={styles.previewModalContainer}>
+            <View style={styles.previewModalHeader}>
+              <View style={styles.previewModalHeaderLeft}>
+                <IconButton
+                  icon={fileType === "pdf" ? "file-pdf-box" : "image"}
+                  size={24}
+                  iconColor="#64748b"
                 />
+                <Text style={styles.previewModalTitle}>
+                  {fileType === "pdf" ? "PDF Preview" : "Receipt Image"}
+                </Text>
+              </View>
+              <View style={styles.previewModalActions}>
+                <IconButton
+                  icon="close"
+                  size={24}
+                  onPress={() => setShowPreviewModal(false)}
+                />
+              </View>
+            </View>
+            <View style={styles.previewModalContent}>
+              {fileType === "pdf" ? (
+                Platform.OS === "web" ? (
+                  <iframe
+                    src={receiptImage}
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      border: "none",
+                      backgroundColor: "#f8fafc",
+                    }}
+                    title="PDF Preview"
+                  />
+                ) : (
+                  <View style={styles.pdfPreviewPlaceholder}>
+                    <IconButton icon="file-pdf-box" size={64} />
+                    <Text style={styles.pdfPreviewText}>
+                      PDF preview is not available on mobile devices
+                    </Text>
+                  </View>
+                )
               ) : (
-                <View style={styles.pdfPreviewPlaceholder}>
-                  <IconButton icon="file-pdf-box" size={64} />
-                  <Text style={styles.pdfPreviewText}>
-                    PDF preview is not available on mobile devices
-                  </Text>
+                <View style={styles.imagePreviewWrapper}>
+                  <Image
+                    source={{ uri: receiptImage }}
+                    style={styles.previewModalImage}
+                    resizeMode="contain"
+                  />
                 </View>
-              )
-            ) : (
-              <Image
-                source={{ uri: receiptImage }}
-                style={styles.previewModalImage}
-                resizeMode="contain"
-              />
-            )}
-          </View>
+              )}
+            </View>
+          </Surface>
         </Modal>
       </Portal>
     );
@@ -1191,76 +1237,15 @@ const CreateReceiptScreen = () => {
     );
   };
 
-  // Update the renderPreview function to include the delete button
-  const renderPreview = () => {
-    if (!receiptImage && fileType !== "pdf") return null;
-
-    return (
-      <View style={styles.imagePreviewContainer}>
-        <TouchableOpacity
-          style={styles.previewTouchable}
-          onPress={() => setShowPreviewModal(true)}
-        >
-          {fileType === "pdf" ? (
-            <View style={styles.pdfPreview}>
-              <IconButton icon="file-pdf-box" size={48} />
-              <Text style={styles.pdfPreviewText}>PDF Document</Text>
-              <Text style={styles.previewHint}>Click to preview</Text>
-            </View>
-          ) : receiptImage ? (
-            <>
-              <Image
-                source={{ uri: receiptImage }}
-                style={styles.imagePreview}
-                resizeMode="contain"
-              />
-              <View style={styles.previewOverlay}>
-                <IconButton icon="magnify-plus" size={32} iconColor="#FFFFFF" />
-                <Text style={styles.previewHint}>Click to expand</Text>
-              </View>
-            </>
-          ) : null}
-        </TouchableOpacity>
-        <IconButton
-          icon="delete"
-          size={24}
-          style={styles.deleteImageButton}
-          onPress={() => setShowDeleteConfirmModal(true)}
-          iconColor="#ef4444"
-          disabled={isProcessingOCR}
-        />
-        {isProcessingOCR && (
-          <View style={styles.ocrLoadingOverlay}>
-            <ActivityIndicator size="large" />
-            <Text style={styles.ocrLoadingText}>Processing Receipt...</Text>
-          </View>
-        )}
-      </View>
-    );
-  };
-
-  // Update renderUploadSection to include the confirmation modal
+  // Update the renderUploadSection to include the confirmation modal
   const renderUploadSection = () => {
     const isWebPlatform = Platform.OS === "web";
     const isMobileWeb = isWebPlatform && dimensions.width < 768;
 
     return (
-      <Surface style={[styles.formCard]}>
-        <View style={styles.cardHeader}>
-          <View style={styles.headerLeft}>
-            <View style={styles.iconContainer}>
-              <IconButton
-                icon="file-upload"
-                size={20}
-                iconColor="#64748b"
-                style={styles.headerIcon}
-              />
-            </View>
-            <Text style={styles.cardTitle}>Upload Receipt</Text>
-          </View>
-        </View>
+      <View>
 
-        <View style={styles.cardContent}>
+        <View >
           <View style={styles.imageButtonsContainer}>
             {!isWebPlatform || isMobileWeb ? (
               <>
@@ -1269,7 +1254,7 @@ const CreateReceiptScreen = () => {
                   icon="camera"
                   onPress={takePhoto}
                   style={[styles.imageButton, { marginRight: 8 }]}
-                  disabled={isProcessingOCR}
+                  disabled={isProcessingOCR || !selectedCompany}
                 >
                   Take Photo
                 </Button>
@@ -1278,7 +1263,7 @@ const CreateReceiptScreen = () => {
                   icon="image"
                   onPress={pickImage}
                   style={styles.imageButton}
-                  disabled={isProcessingOCR}
+                  disabled={isProcessingOCR || !selectedCompany}
                 >
                   Gallery
                 </Button>
@@ -1289,7 +1274,7 @@ const CreateReceiptScreen = () => {
                 icon="file-upload"
                 onPress={pickDocument}
                 style={styles.uploadButton}
-                disabled={isProcessingOCR}
+                disabled={isProcessingOCR || !selectedCompany}
               >
                 Upload Image/PDF
               </Button>
@@ -1300,8 +1285,38 @@ const CreateReceiptScreen = () => {
         </View>
         {renderDeleteConfirmModal()}
         {renderPreviewModal()}
-      </Surface>
+      </View>
     );
+  };
+
+  // Update the step card content to use CompanySelector
+  const renderStepOne = () => (
+    <Animated.View entering={FadeIn.delay(200)}>
+      <Surface style={[styles.formCard, styles.stepCard]}>
+        <View style={styles.stepHeader}>
+          <View style={styles.stepNumberContainer}>
+            <Text style={styles.stepNumber}>1</Text>
+          </View>
+          <Text style={styles.stepTitle}>Select Company</Text>
+        </View>
+        <View style={styles.cardContent}>
+          <Text style={styles.stepDescription}>
+            Choose the company this receipt belongs to
+          </Text>
+          <CompanySelector
+            onSelect={(company) => setSelectedCompany(company)}
+            selectedCompany={selectedCompany}
+            required
+            label="Select Company"
+          />
+        </View>
+      </Surface>
+    </Animated.View>
+  );
+
+  // Update the payment method button text
+  const getPaymentMethodButtonText = () => {
+    return payment_method || "Select Payment Method";
   };
 
   return (
@@ -1337,33 +1352,9 @@ const CreateReceiptScreen = () => {
           </View>
           <View style={styles.gridContainer}>
             <View style={styles.gridColumn}>
-              <Animated.View entering={FadeIn.delay(200)}>
-                {/* Company Section */}
-                <Surface style={[styles.formCard, styles.stepCard]}>
-                  <View style={styles.stepHeader}>
-                    <View style={styles.stepNumberContainer}>
-                      <Text style={styles.stepNumber}>1</Text>
-                    </View>
-                    <Text style={styles.stepTitle}>Select Company</Text>
-                  </View>
-                  <View style={styles.cardContent}>
-                    <Text style={styles.stepDescription}>
-                      Choose the company this receipt belongs to
-                    </Text>
-                    <Button
-                      mode="outlined"
-                      onPress={() => setShowCompanyModal(true)}
-                      style={styles.selectButton}
-                      icon="office-building"
-                    >
-                      {selectedCompany
-                        ? selectedCompany.company_name
-                        : "Select Company"}
-                    </Button>
-                  </View>
-                </Surface>
-              </Animated.View>
+              {renderStepOne()}
               <Animated.View entering={FadeIn.delay(100)}>
+
                 {/* Basic Information */}
                 <Surface style={styles.formCard}>
                   <View style={styles.cardHeader}>
@@ -1593,41 +1584,7 @@ const CreateReceiptScreen = () => {
                       Upload a receipt image or PDF for automatic data
                       extraction
                     </Text>
-                    <View style={styles.imageButtonsContainer}>
-                      {Platform.OS === "web" && dimensions.width >= 768 ? (
-                        <Button
-                          mode="outlined"
-                          icon="file-upload"
-                          onPress={pickDocument}
-                          style={styles.uploadButton}
-                          disabled={isProcessingOCR || !selectedCompany}
-                        >
-                          Upload Image/PDF
-                        </Button>
-                      ) : (
-                        <>
-                          <Button
-                            mode="outlined"
-                            icon="camera"
-                            onPress={takePhoto}
-                            style={[styles.imageButton, { marginRight: 8 }]}
-                            disabled={isProcessingOCR || !selectedCompany}
-                          >
-                            Take Photo
-                          </Button>
-                          <Button
-                            mode="outlined"
-                            icon="image"
-                            onPress={pickImage}
-                            style={styles.imageButton}
-                            disabled={isProcessingOCR || !selectedCompany}
-                          >
-                            Gallery
-                          </Button>
-                        </>
-                      )}
-                    </View>
-                    {renderPreview()}
+                    {renderUploadSection()}
                   </View>
                 </Surface>
               </Animated.View>
@@ -1644,9 +1601,7 @@ const CreateReceiptScreen = () => {
                           style={styles.headerIcon}
                         />
                       </View>
-                      <Text style={styles.cardTitle}>
-                        Receipt Line Items
-                      </Text>
+                      <Text style={styles.cardTitle}>Receipt Line Items</Text>
                     </View>
                   </View>
 
@@ -1913,15 +1868,13 @@ const CreateReceiptScreen = () => {
                       style={styles.selectButton}
                       icon="credit-card"
                     >
-                      {payment_method || "Select Payment Method"}
+                      {getPaymentMethodButtonText()}
                     </Button>
                   </View>
                 </Surface>
               </Animated.View>
             </View>
           </View>
-
-
         </ScrollView>
 
         <Surface style={styles.bottomBar}>
@@ -1950,42 +1903,6 @@ const CreateReceiptScreen = () => {
           </View>
         </Surface>
       </KeyboardAvoidingView>
-
-      {/* Company Selection Modal */}
-      <Portal>
-        <Modal
-          visible={showCompanyModal}
-          onDismiss={() => setShowCompanyModal(false)}
-          contentContainerStyle={[
-            styles.modal,
-            {
-              width: isLargeScreen ? 480 : isMediumScreen ? 420 : "90%",
-              alignSelf: "center",
-            },
-          ]}
-        >
-          <Text style={styles.modalTitle}>Select Company</Text>
-          <ScrollView style={{ maxHeight: 400 }}>
-            {companies.map((company) => (
-              <React.Fragment key={company.id}>
-                <List.Item
-                  title={company.company_name}
-                  onPress={() => {
-                    setSelectedCompany(company);
-                    setShowCompanyModal(false);
-                  }}
-                  right={(props) =>
-                    selectedCompany?.id === company.id ? (
-                      <List.Icon {...props} icon="check" />
-                    ) : null
-                  }
-                />
-                <Divider />
-              </React.Fragment>
-            ))}
-          </ScrollView>
-        </Modal>
-      </Portal>
 
       {/* Payment Method Modal */}
       <Portal>
@@ -2308,7 +2225,8 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 200,
     borderRadius: 4,
-  },
+    objectFit: "contain",
+  } as ImageStyle,
   deleteImageButton: {
     position: "absolute",
     top: 0,
@@ -2405,10 +2323,15 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   previewModal: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    alignSelf: "center",
-    overflow: "hidden",
+    margin: 0,
+    padding: 0,
+  },
+  previewModalContainer: {
+    flex: 1,
+    backgroundColor: "white",
+    width: "100%",
+    height: "100%",
+    borderRadius: 0,
   },
   previewModalHeader: {
     flexDirection: "row",
@@ -2417,24 +2340,46 @@ const styles = StyleSheet.create({
     padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#e2e8f0",
+    backgroundColor: "white",
+    zIndex: 1,
+  },
+  previewModalHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   previewModalTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "600",
     color: "#1e293b",
     fontFamily: "Poppins-SemiBold",
   },
+  previewModalActions: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
   previewModalContent: {
     flex: 1,
     backgroundColor: "#f8fafc",
+    position: "relative",
+  },
+  imagePreviewWrapper: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
   },
   previewModalImage: {
     width: "100%",
     height: "100%",
-  },
+    maxWidth: 1200,
+    maxHeight: "90%",
+    objectFit: "contain",
+  } as ImageStyle,
   previewTouchable: {
     width: "100%",
     position: "relative",
+    cursor: Platform.OS === "web" ? ("pointer" as const) : undefined,
   },
   previewOverlay: {
     position: "absolute",
@@ -2515,6 +2460,7 @@ if (Platform.OS === "web") {
   styleSheet.textContent = `
     .previewTouchable:hover .previewOverlay {
       opacity: 1 !important;
+      transition: opacity 0.2s ease;
     }
   `;
   document.head.appendChild(styleSheet);
