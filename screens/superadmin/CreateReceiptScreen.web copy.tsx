@@ -106,12 +106,14 @@ const PAYMENT_METHODS = [
   "Other",
 ];
 
-interface DateChangeEvent extends Event {
+interface DateChangeEvent {
   type?: string;
   nativeEvent?: {
     timestamp?: number;
   };
-  target?: HTMLInputElement;
+  target?: {
+    value: string;
+  };
 }
 
 interface TaggunLocation {
@@ -611,54 +613,14 @@ const CreateReceiptScreen = () => {
           setValue("merchant_address", String(processedData.merchant.address));
         }
 
-        // Extract VAT number with improved pattern matching
-        const extractVatNumber = (text: string) => {
-          const vatPatterns = [
-            /(?:MWST|USt|VAT|UID)[-.]?(?:Nr\.?|Nummer)?[:\s]*(CHE-?[\d.-]+)/i,
-            /(?:MWST|USt|VAT|UID)[-.]?(?:Nr\.?|Nummer)?[:\s]*([\d.-]{6,})/i,
-            /(CHE-?[\d.-]+)/i,
-          ];
-
-          for (const pattern of vatPatterns) {
-            const match = text?.match(pattern);
-            if (match?.[1]) {
-              return match[1].trim();
-            }
-          }
-
-          return ocrData.merchantTaxId?.data
-            ? String(ocrData.merchantTaxId.data)
-            : "";
-        };
-
-        // Extract merchant VAT number
-        if (ocrData.text?.text) {
-          const vatNumber = extractVatNumber(ocrData.text.text);
-          setValue("merchant_vat", vatNumber);
-        }
-
-        // Format VAT details for display with improved formatting
+        // Format VAT details for display
         if (processedData.vatDetails.length > 0) {
           const vatDetailsText = processedData.vatDetails
-            .map((vat) => {
-              const baseAmount =
-                typeof vat.base === "number"
-                  ? vat.base.toFixed(2)
-                  : parseFloat(vat.base).toFixed(2);
-              const rate =
-                typeof vat.rate === "number"
-                  ? vat.rate
-                  : parseFloat(String(vat.rate));
-              const vatAmount = (parseFloat(baseAmount) * (rate / 100)).toFixed(
-                2
-              );
-              const totalAmount = (
-                parseFloat(baseAmount) + parseFloat(vatAmount)
-              ).toFixed(2);
-              const category = vat.category ? `${vat.category} ` : "";
-              return `${category}MwSt ${rate.toFixed(1)}%\nBasis: CHF ${baseAmount}\nMwSt: CHF ${vatAmount}\nTotal: CHF ${totalAmount}`;
-            })
-            .join("\n\n");
+            .map(
+              (vat) =>
+                `${vat.category}: ${vat.rate}% on ${vat.base} CHF = ${vat.amount} CHF`
+            )
+            .join("\n");
           setValue("vat_details", vatDetailsText);
         }
 
@@ -1127,11 +1089,7 @@ const CreateReceiptScreen = () => {
     setValue("merchant_phone", "");
     setValue("merchant_website", "");
     setValue("vat_details", "");
-    setValue("language_hint", "");
     setLineItems([]);
-    // Show success message
-    setSnackbarMessage("Receipt and auto-filled fields have been cleared");
-    setSnackbarVisible(true);
   };
 
   const handleDeleteReceipt = () => {
@@ -1141,7 +1099,7 @@ const CreateReceiptScreen = () => {
     setShowDeleteConfirmModal(false);
   };
 
-  // Update the renderDeleteConfirmModal function
+  // Add confirmation modal component
   const renderDeleteConfirmModal = () => {
     return (
       <Portal>
@@ -1165,8 +1123,8 @@ const CreateReceiptScreen = () => {
             />
             <Text style={styles.confirmModalTitle}>Delete Receipt?</Text>
             <Text style={styles.confirmModalText}>
-              This will remove the uploaded receipt image and clear all
-              automatically filled fields. This action cannot be undone.
+              This will remove the uploaded receipt and clear all automatically
+              filled fields. This action cannot be undone.
             </Text>
             <View style={styles.confirmModalButtons}>
               <Button
@@ -1191,7 +1149,7 @@ const CreateReceiptScreen = () => {
     );
   };
 
-  // Update the renderPreview function to include the delete button
+  // Update the renderPreview function to use the confirmation modal
   const renderPreview = () => {
     if (!receiptImage && fileType !== "pdf") return null;
 
@@ -1226,7 +1184,6 @@ const CreateReceiptScreen = () => {
           size={24}
           style={styles.deleteImageButton}
           onPress={() => setShowDeleteConfirmModal(true)}
-          iconColor="#ef4444"
           disabled={isProcessingOCR}
         />
         {isProcessingOCR && (
@@ -1262,14 +1219,24 @@ const CreateReceiptScreen = () => {
 
         <View style={styles.cardContent}>
           <View style={styles.imageButtonsContainer}>
-            {!isWebPlatform || isMobileWeb ? (
+            {Platform.OS === "web" && dimensions.width >= 768 ? (
+              <Button
+                mode="outlined"
+                icon="file-upload"
+                onPress={pickDocument}
+                style={styles.uploadButton}
+                disabled={isProcessingOCR || !selectedCompany}
+              >
+                Upload Image/PDF
+              </Button>
+            ) : (
               <>
                 <Button
                   mode="outlined"
                   icon="camera"
                   onPress={takePhoto}
                   style={[styles.imageButton, { marginRight: 8 }]}
-                  disabled={isProcessingOCR}
+                  disabled={isProcessingOCR || !selectedCompany}
                 >
                   Take Photo
                 </Button>
@@ -1278,21 +1245,11 @@ const CreateReceiptScreen = () => {
                   icon="image"
                   onPress={pickImage}
                   style={styles.imageButton}
-                  disabled={isProcessingOCR}
+                  disabled={isProcessingOCR || !selectedCompany}
                 >
                   Gallery
                 </Button>
               </>
-            ) : (
-              <Button
-                mode="outlined"
-                icon="file-upload"
-                onPress={pickDocument}
-                style={styles.uploadButton}
-                disabled={isProcessingOCR}
-              >
-                Upload Image/PDF
-              </Button>
             )}
           </View>
 
@@ -1324,7 +1281,7 @@ const CreateReceiptScreen = () => {
           contentContainerStyle={[
             styles.scrollContent,
             {
-              maxWidth: isLargeScreen ? 1700 : isMediumScreen ? 1100 : "100%",
+              maxWidth: isLargeScreen ? 1400 : isMediumScreen ? 1100 : "100%",
               paddingHorizontal: isLargeScreen ? 48 : isMediumScreen ? 32 : 16,
             },
           ]}
@@ -1335,620 +1292,415 @@ const CreateReceiptScreen = () => {
               Follow the steps below to add a new receipt
             </Text>
           </View>
-          <View style={styles.gridContainer}>
-            <View style={styles.gridColumn}>
-              <Animated.View entering={FadeIn.delay(200)}>
-                {/* Company Section */}
-                <Surface style={[styles.formCard, styles.stepCard]}>
-                  <View style={styles.stepHeader}>
-                    <View style={styles.stepNumberContainer}>
-                      <Text style={styles.stepNumber}>1</Text>
-                    </View>
-                    <Text style={styles.stepTitle}>Select Company</Text>
-                  </View>
-                  <View style={styles.cardContent}>
-                    <Text style={styles.stepDescription}>
-                      Choose the company this receipt belongs to
-                    </Text>
+
+          {/* Step 1: Select Company */}
+          <Animated.View entering={FadeIn.delay(100)}>
+            <Surface style={[styles.formCard, styles.stepCard]}>
+              <View style={styles.stepHeader}>
+                <View style={styles.stepNumberContainer}>
+                  <Text style={styles.stepNumber}>1</Text>
+                </View>
+                <Text style={styles.stepTitle}>Select Company</Text>
+              </View>
+              <View style={styles.cardContent}>
+                <Text style={styles.stepDescription}>
+                  Choose the company this receipt belongs to
+                </Text>
+                <Button
+                  mode="outlined"
+                  onPress={() => setShowCompanyModal(true)}
+                  style={styles.selectButton}
+                  icon="office-building"
+                >
+                  {selectedCompany
+                    ? selectedCompany.company_name
+                    : "Select Company"}
+                </Button>
+              </View>
+            </Surface>
+          </Animated.View>
+
+          {/* Step 2: Upload Receipt */}
+          <Animated.View
+            entering={FadeIn.delay(200)}
+            style={styles.stepContainer}
+          >
+            <Surface style={[styles.formCard, styles.stepCard]}>
+              <View style={styles.stepHeader}>
+                <View style={styles.stepNumberContainer}>
+                  <Text style={styles.stepNumber}>2</Text>
+                </View>
+                <Text style={styles.stepTitle}>Upload Receipt</Text>
+              </View>
+              <View style={styles.cardContent}>
+                <Text style={styles.stepDescription}>
+                  Upload a receipt image or PDF for automatic data extraction
+                </Text>
+                <View style={styles.imageButtonsContainer}>
+                  {Platform.OS === "web" && dimensions.width >= 768 ? (
                     <Button
                       mode="outlined"
-                      onPress={() => setShowCompanyModal(true)}
-                      style={styles.selectButton}
-                      icon="office-building"
+                      icon="file-upload"
+                      onPress={pickDocument}
+                      style={styles.uploadButton}
+                      disabled={isProcessingOCR || !selectedCompany}
                     >
-                      {selectedCompany
-                        ? selectedCompany.company_name
-                        : "Select Company"}
+                      Upload Image/PDF
                     </Button>
-                  </View>
-                </Surface>
-              </Animated.View>
-              <Animated.View entering={FadeIn.delay(100)}>
-                {/* Basic Information */}
-                <Surface style={styles.formCard}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.headerLeft}>
-                      <View style={styles.iconContainer}>
-                        <IconButton
-                          icon="receipt"
-                          size={20}
-                          iconColor="#64748b"
-                          style={styles.headerIcon}
-                        />
-                      </View>
-                      <Text style={styles.cardTitle}>
-                        Basic Receipt Information
+                  ) : (
+                    <>
+                      <Button
+                        mode="outlined"
+                        icon="camera"
+                        onPress={takePhoto}
+                        style={[styles.imageButton, { marginRight: 8 }]}
+                        disabled={isProcessingOCR || !selectedCompany}
+                      >
+                        Take Photo
+                      </Button>
+                      <Button
+                        mode="outlined"
+                        icon="image"
+                        onPress={pickImage}
+                        style={styles.imageButton}
+                        disabled={isProcessingOCR || !selectedCompany}
+                      >
+                        Gallery
+                      </Button>
+                    </>
+                  )}
+                </View>
+                {renderPreview()}
+              </View>
+            </Surface>
+          </Animated.View>
+
+          {/* Step 3: Receipt Details */}
+          <Animated.View
+            entering={FadeIn.delay(300)}
+            style={styles.stepContainer}
+          >
+            <Surface style={[styles.formCard, styles.stepCard]}>
+              <View style={styles.stepHeader}>
+                <View style={styles.stepNumberContainer}>
+                  <Text style={styles.stepNumber}>3</Text>
+                </View>
+                <Text style={styles.stepTitle}>Receipt Details</Text>
+              </View>
+              <View style={styles.cardContent}>
+                <Text style={styles.stepDescription}>
+                  Review and complete the receipt information
+                </Text>
+
+                <View style={styles.detailsGrid}>
+                  {/* Basic Information Section */}
+                  <Surface style={styles.detailsCard}>
+                    <View style={styles.detailsCardHeader}>
+                      <IconButton icon="information" size={20} />
+                      <Text style={styles.detailsCardTitle}>
+                        Basic Information
                       </Text>
                     </View>
-                  </View>
-
-                  <View style={styles.cardContent}>
-                    <Controller
-                      control={control}
-                      rules={{ required: "Receipt number is required" }}
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <>
-                          <TextInput
-                            label="Receipt Number *"
-                            mode="outlined"
-                            value={value}
-                            onChangeText={onChange}
-                            onBlur={onBlur}
-                            error={!!errors.receipt_number}
-                            style={styles.input}
-                            disabled={loading}
-                            placeholder="e.g., WF-2024-01-15-1234"
-                          />
-                          <HelperText
-                            type="error"
-                            visible={!!errors.receipt_number}
-                          >
-                            {errors.receipt_number?.message}
-                          </HelperText>
-                        </>
-                      )}
-                      name="receipt_number"
-                    />
-
-                    {Platform.OS === "web" ? (
-                      <View style={styles.dateInputWrapper}>
-                        <Text style={styles.inputLabel}>
-                          Transaction Date *
-                        </Text>
-                        <View style={styles.webDateInputContainer}>
-                          <input
-                            type="date"
-                            value={format(transaction_date, "yyyy-MM-dd")}
-                            onChange={(e) => handleDateChange(e, "transaction")}
-                            style={{
-                              width: "100%",
-                              padding: "12px",
-                              fontSize: "14px",
-                              borderRadius: "8px",
-                              border: "1px solid #e2e8f0",
-                              outline: "none",
-                              backgroundColor: "#f8fafc",
-                              transition: "all 0.2s ease",
-                              cursor: "pointer",
-                            }}
-                          />
-                        </View>
-                      </View>
-                    ) : (
-                      <>
-                        <Text style={styles.inputLabel}>
-                          Transaction Date *
-                        </Text>
-                        <Button
-                          mode="outlined"
-                          onPress={() => {
-                            setDatePickerType("transaction");
-                            setShowTransactionDatePicker(true);
-                          }}
-                          style={styles.dateButton}
-                          icon="calendar"
-                        >
-                          {format(transaction_date, "MMMM d, yyyy")}
-                        </Button>
-
-                        {showTransactionDatePicker && (
-                          <DateTimePicker
-                            value={transaction_date}
-                            mode="date"
-                            display="default"
-                            onChange={(e) => handleDateChange(e, "transaction")}
-                          />
+                    <View style={styles.detailsCardContent}>
+                      <Controller
+                        control={control}
+                        rules={{ required: "Receipt number is required" }}
+                        render={({ field: { onChange, onBlur, value } }) => (
+                          <>
+                            <TextInput
+                              label="Receipt Number *"
+                              mode="outlined"
+                              value={value}
+                              onChangeText={onChange}
+                              onBlur={onBlur}
+                              error={!!errors.receipt_number}
+                              style={styles.input}
+                              disabled={loading}
+                              placeholder="e.g., WF-2024-01-15-1234"
+                            />
+                            <HelperText
+                              type="error"
+                              visible={!!errors.receipt_number}
+                            >
+                              {errors.receipt_number?.message}
+                            </HelperText>
+                          </>
                         )}
-                      </>
-                    )}
+                        name="receipt_number"
+                      />
 
-                    <Controller
-                      control={control}
-                      rules={{ required: "Merchant name is required" }}
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <>
-                          <TextInput
-                            label="Merchant Name *"
-                            mode="outlined"
-                            value={value}
-                            onChangeText={onChange}
-                            onBlur={onBlur}
-                            error={!!errors.merchant_name}
-                            style={styles.input}
-                            disabled={loading}
-                          />
-                          <HelperText
-                            type="error"
-                            visible={!!errors.merchant_name}
-                          >
-                            {errors.merchant_name?.message}
-                          </HelperText>
-                        </>
-                      )}
-                      name="merchant_name"
-                    />
-
-                    <Controller
-                      control={control}
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <TextInput
-                          label="Merchant Address (Optional)"
-                          mode="outlined"
-                          value={value}
-                          onChangeText={onChange}
-                          onBlur={onBlur}
-                          style={styles.input}
-                          multiline
-                          numberOfLines={3}
-                          disabled={loading}
-                        />
-                      )}
-                      name="merchant_address"
-                    />
-
-                    <Controller
-                      control={control}
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <TextInput
-                          label="Phone Number"
-                          mode="outlined"
-                          value={value}
-                          onChangeText={onChange}
-                          onBlur={onBlur}
-                          style={styles.input}
-                          disabled={loading}
-                        />
-                      )}
-                      name="merchant_phone"
-                    />
-
-                    {/* Merchant Website */}
-                    <Controller
-                      control={control}
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <TextInput
-                          label="Website"
-                          mode="outlined"
-                          value={value}
-                          onChangeText={onChange}
-                          onBlur={onBlur}
-                          style={styles.input}
-                          disabled={loading}
-                        />
-                      )}
-                      name="merchant_website"
-                    />
-                    <Controller
-                      control={control}
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <TextInput
-                          label="Merchant VAT Number"
-                          mode="outlined"
-                          value={value}
-                          onChangeText={onChange}
-                          onBlur={onBlur}
-                          style={styles.input}
-                          disabled={loading}
-                        />
-                      )}
-                      name="merchant_vat"
-                    />
-
-                    {/* VAT Details */}
-                    <Controller
-                      control={control}
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <TextInput
-                          label="VAT Breakdown"
-                          mode="outlined"
-                          value={value}
-                          onChangeText={onChange}
-                          onBlur={onBlur}
-                          style={styles.input}
-                          multiline
-                          numberOfLines={4}
-                          disabled={loading}
-                        />
-                      )}
-                      name="vat_details"
-                    />
-                  </View>
-                </Surface>
-              </Animated.View>
-            </View>
-            <View style={styles.gridColumn}>
-              <Animated.View
-                entering={FadeIn.delay(200)}
-                style={styles.stepContainer}
-              >
-                <Surface style={[styles.formCard, styles.stepCard]}>
-                  <View style={styles.stepHeader}>
-                    <View style={styles.stepNumberContainer}>
-                      <Text style={styles.stepNumber}>2</Text>
-                    </View>
-                    <Text style={styles.stepTitle}>Upload Receipt</Text>
-                  </View>
-                  <View style={styles.cardContent}>
-                    <Text style={styles.stepDescription}>
-                      Upload a receipt image or PDF for automatic data
-                      extraction
-                    </Text>
-                    <View style={styles.imageButtonsContainer}>
-                      {Platform.OS === "web" && dimensions.width >= 768 ? (
-                        <Button
-                          mode="outlined"
-                          icon="file-upload"
-                          onPress={pickDocument}
-                          style={styles.uploadButton}
-                          disabled={isProcessingOCR || !selectedCompany}
-                        >
-                          Upload Image/PDF
-                        </Button>
+                      {Platform.OS === "web" ? (
+                        <View style={styles.dateInputWrapper}>
+                          <Text style={styles.inputLabel}>Transaction Date *</Text>
+                          <View style={styles.webDateInputContainer}>
+                            <input
+                              type="date"
+                              value={format(transaction_date, "yyyy-MM-dd")}
+                              onChange={(e) => handleDateChange(e, "transaction")}
+                              style={{
+                                width: "100%",
+                                padding: "12px",
+                                fontSize: "14px",
+                                borderRadius: "8px",
+                                border: "1px solid #e2e8f0",
+                                outline: "none",
+                                backgroundColor: "#f8fafc",
+                                transition: "all 0.2s ease",
+                                cursor: "pointer",
+                              }}
+                            />
+                          </View>
+                        </View>
                       ) : (
                         <>
+                          <Text style={styles.inputLabel}>Transaction Date *</Text>
                           <Button
                             mode="outlined"
-                            icon="camera"
-                            onPress={takePhoto}
-                            style={[styles.imageButton, { marginRight: 8 }]}
-                            disabled={isProcessingOCR || !selectedCompany}
+                            onPress={() => {
+                              setDatePickerType("transaction");
+                              setShowTransactionDatePicker(true);
+                            }}
+                            style={styles.dateButton}
+                            icon="calendar"
                           >
-                            Take Photo
+                            {format(transaction_date, "MMMM d, yyyy")}
                           </Button>
-                          <Button
-                            mode="outlined"
-                            icon="image"
-                            onPress={pickImage}
-                            style={styles.imageButton}
-                            disabled={isProcessingOCR || !selectedCompany}
-                          >
-                            Gallery
-                          </Button>
+
+                          {showTransactionDatePicker && (
+                            <DateTimePicker
+                              value={transaction_date}
+                              mode="date"
+                              display="default"
+                              onChange={(e) => handleDateChange(e, "transaction")}
+                            />
+                          )}
                         </>
                       )}
-                    </View>
-                    {renderPreview()}
-                  </View>
-                </Surface>
-              </Animated.View>
-              <Animated.View entering={FadeIn.delay(200)}>
-                {/* Line Items */}
-                <Surface style={[styles.formCard, { marginTop: 0 }]}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.headerLeft}>
-                      <View style={styles.iconContainer}>
-                        <IconButton
-                          icon="format-list-bulleted"
-                          size={20}
-                          iconColor="#64748b"
-                          style={styles.headerIcon}
-                        />
-                      </View>
-                      <Text style={styles.cardTitle}>
-                        Receipt Line Items
-                      </Text>
-                    </View>
-                  </View>
 
-                  <View style={styles.cardContent}>
-                    {lineItems.map((item, index) => (
-                      <View key={index} style={styles.lineItem}>
-                        <TextInput
-                          label="Item Name"
-                          value={item.name}
-                          onChangeText={(text) => {
-                            const updatedItems = [...lineItems];
-                            updatedItems[index].name = text;
-                            setLineItems(updatedItems);
-                          }}
-                          style={[styles.input, styles.lineItemInput]}
-                          mode="outlined"
-                        />
-                        <TextInput
-                          label="Qty"
-                          value={item.quantity.toString()}
-                          onChangeText={(text) => {
-                            const updatedItems = [...lineItems];
-                            updatedItems[index].quantity = Number(text) || 0;
-                            // Update total price when quantity changes
-                            updatedItems[index].totalPrice =
-                              updatedItems[index].unitPrice * Number(text);
-                            setLineItems(updatedItems);
-                          }}
-                          keyboardType="numeric"
-                          style={[styles.input, styles.qtyInput]}
-                          mode="outlined"
-                        />
-                        <TextInput
-                          label="Unit Price"
-                          value={item.unitPrice.toString()}
-                          onChangeText={(text) => {
-                            const updatedItems = [...lineItems];
-                            updatedItems[index].unitPrice = Number(text) || 0;
-                            // Update total price when unit price changes
-                            updatedItems[index].totalPrice =
-                              updatedItems[index].quantity * Number(text);
-                            setLineItems(updatedItems);
-                          }}
-                          keyboardType="decimal-pad"
-                          style={[styles.input, styles.priceInput]}
-                          mode="outlined"
-                          left={<TextInput.Affix text="CHF" />}
-                        />
-                        <TextInput
-                          label="Total Price"
-                          value={item.totalPrice.toString()}
-                          editable={false}
-                          style={[styles.input, styles.priceInput]}
-                          mode="outlined"
-                          left={<TextInput.Affix text="CHF" />}
-                        />
-                        <IconButton
-                          icon="delete"
-                          size={24}
-                          onPress={() => removeLineItem(index)}
-                          iconColor={theme.colors.error}
-                        />
-                      </View>
-                    ))}
+                      <Controller
+                        control={control}
+                        rules={{ required: "Merchant name is required" }}
+                        render={({ field: { onChange, onBlur, value } }) => (
+                          <>
+                            <TextInput
+                              label="Merchant Name *"
+                              mode="outlined"
+                              value={value}
+                              onChangeText={onChange}
+                              onBlur={onBlur}
+                              error={!!errors.merchant_name}
+                              style={styles.input}
+                              disabled={loading}
+                            />
+                            <HelperText type="error" visible={!!errors.merchant_name}>
+                              {errors.merchant_name?.message}
+                            </HelperText>
+                          </>
+                        )}
+                        name="merchant_name"
+                      />
 
-                    <Button
-                      mode="outlined"
-                      onPress={() =>
-                        setLineItems([
-                          ...lineItems,
-                          {
-                            name: "",
-                            quantity: 1,
-                            unitPrice: 0,
-                            totalPrice: 0,
-                          },
-                        ])
-                      }
-                      style={styles.addItemButton}
-                      icon="plus"
-                    >
-                      Add Line Item
-                    </Button>
-                  </View>
-                </Surface>
-              </Animated.View>
-              <Animated.View entering={FadeIn.delay(200)}>
-                {/* Financial Details */}
-                <Surface style={[styles.formCard]}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.headerLeft}>
-                      <View style={styles.iconContainer}>
-                        <IconButton
-                          icon="cash-multiple"
-                          size={20}
-                          iconColor="#64748b"
-                          style={styles.headerIcon}
-                        />
-                      </View>
-                      <Text style={styles.cardTitle}>
-                        Receipt Financial Details
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.cardContent}>
-                    {/* Subtotal Amount */}
-                    <Controller
-                      control={control}
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <TextInput
-                          label="Subtotal Amount"
-                          mode="outlined"
-                          value={value}
-                          onChangeText={onChange}
-                          onBlur={onBlur}
-                          style={styles.input}
-                          keyboardType="decimal-pad"
-                          disabled={loading}
-                          left={<TextInput.Affix text="CHF" />}
-                        />
-                      )}
-                      name="subtotal_amount"
-                    />
-
-                    {/* Rounding */}
-                    <Controller
-                      control={control}
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <TextInput
-                          label="Rounding"
-                          mode="outlined"
-                          value={value}
-                          onChangeText={onChange}
-                          onBlur={onBlur}
-                          style={styles.input}
-                          keyboardType="decimal-pad"
-                          disabled={loading}
-                          left={<TextInput.Affix text="CHF" />}
-                        />
-                      )}
-                      name="rounding_amount"
-                    />
-
-                    {/* Final Price */}
-                    <Controller
-                      control={control}
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <TextInput
-                          label="Final Price"
-                          mode="outlined"
-                          value={value}
-                          onChangeText={onChange}
-                          onBlur={onBlur}
-                          style={styles.input}
-                          keyboardType="decimal-pad"
-                          disabled={loading}
-                          left={<TextInput.Affix text="CHF" />}
-                        />
-                      )}
-                      name="final_price"
-                    />
-
-                    {/* Total Amount (existing) */}
-                    <Controller
-                      control={control}
-                      rules={{ required: "Total amount is required" }}
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <>
+                      <Controller
+                        control={control}
+                        render={({ field: { onChange, onBlur, value } }) => (
                           <TextInput
-                            label="Total Amount *"
+                            label="Merchant Address"
                             mode="outlined"
                             value={value}
                             onChangeText={onChange}
                             onBlur={onBlur}
-                            error={!!errors.total_amount}
+                            style={styles.input}
+                            multiline
+                            numberOfLines={3}
+                            disabled={loading}
+                          />
+                        )}
+                        name="merchant_address"
+                      />
+                    </View>
+                  </Surface>
+
+                  {/* Financial Details Section */}
+                  <Surface style={styles.detailsCard}>
+                    <View style={styles.detailsCardHeader}>
+                      <IconButton icon="cash-multiple" size={20} />
+                      <Text style={styles.detailsCardTitle}>
+                        Financial Details
+                      </Text>
+                    </View>
+                    <View style={styles.detailsCardContent}>
+                      <Controller
+                        control={control}
+                        render={({ field: { onChange, onBlur, value } }) => (
+                          <TextInput
+                            label="Subtotal Amount"
+                            mode="outlined"
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
                             style={styles.input}
                             keyboardType="decimal-pad"
                             disabled={loading}
                             left={<TextInput.Affix text="CHF" />}
                           />
-                          <HelperText
-                            type="error"
-                            visible={!!errors.total_amount}
-                          >
-                            {errors.total_amount?.message}
-                          </HelperText>
-                        </>
-                      )}
-                      name="total_amount"
-                    />
+                        )}
+                        name="subtotal_amount"
+                      />
 
-                    {/* Tax Amount (existing) */}
-                    <Controller
-                      control={control}
-                      rules={{ required: "Tax amount is required" }}
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <>
+                      <Controller
+                        control={control}
+                        render={({ field: { onChange, onBlur, value } }) => (
                           <TextInput
-                            label="Tax Amount *"
+                            label="Rounding"
                             mode="outlined"
                             value={value}
                             onChangeText={onChange}
                             onBlur={onBlur}
-                            error={!!errors.tax_amount}
                             style={styles.input}
                             keyboardType="decimal-pad"
                             disabled={loading}
                             left={<TextInput.Affix text="CHF" />}
                           />
-                          <HelperText
-                            type="error"
-                            visible={!!errors.tax_amount}
-                          >
-                            {errors.tax_amount?.message}
-                          </HelperText>
-                        </>
-                      )}
-                      name="tax_amount"
-                    />
+                        )}
+                        name="rounding_amount"
+                      />
 
-                    {/* Paid Amount */}
-                    <Controller
-                      control={control}
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <TextInput
-                          label="Paid Amount"
-                          mode="outlined"
-                          value={value}
-                          onChangeText={onChange}
-                          onBlur={onBlur}
-                          style={styles.input}
-                          keyboardType="decimal-pad"
-                          disabled={loading}
-                          left={<TextInput.Affix text="CHF" />}
-                        />
-                      )}
-                      name="paid_amount"
-                    />
+                      <Controller
+                        control={control}
+                        rules={{ required: "Total amount is required" }}
+                        render={({ field: { onChange, onBlur, value } }) => (
+                          <>
+                            <TextInput
+                              label="Total Amount *"
+                              mode="outlined"
+                              value={value}
+                              onChangeText={onChange}
+                              onBlur={onBlur}
+                              error={!!errors.total_amount}
+                              style={styles.input}
+                              keyboardType="decimal-pad"
+                              disabled={loading}
+                              left={<TextInput.Affix text="CHF" />}
+                            />
+                            <HelperText type="error" visible={!!errors.total_amount}>
+                              {errors.total_amount?.message}
+                            </HelperText>
+                          </>
+                        )}
+                        name="total_amount"
+                      />
 
-                    {/* Change Amount */}
-                    <Controller
-                      control={control}
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <TextInput
-                          label="Change"
-                          mode="outlined"
-                          value={value}
-                          onChangeText={onChange}
-                          onBlur={onBlur}
-                          style={styles.input}
-                          keyboardType="decimal-pad"
-                          disabled={loading}
-                          left={<TextInput.Affix text="CHF" />}
-                        />
-                      )}
-                      name="change_amount"
-                    />
+                      <Controller
+                        control={control}
+                        rules={{ required: "Tax amount is required" }}
+                        render={({ field: { onChange, onBlur, value } }) => (
+                          <>
+                            <TextInput
+                              label="Tax Amount *"
+                              mode="outlined"
+                              value={value}
+                              onChangeText={onChange}
+                              onBlur={onBlur}
+                              error={!!errors.tax_amount}
+                              style={styles.input}
+                              keyboardType="decimal-pad"
+                              disabled={loading}
+                              left={<TextInput.Affix text="CHF" />}
+                            />
+                            <HelperText type="error" visible={!!errors.tax_amount}>
+                              {errors.tax_amount?.message}
+                            </HelperText>
+                          </>
+                        )}
+                        name="tax_amount"
+                      />
 
-                    {/* Payment Method (existing) */}
-                    <Button
-                      mode="outlined"
-                      onPress={() => setShowPaymentMethodModal(true)}
-                      style={styles.selectButton}
-                      icon="credit-card"
-                    >
-                      {payment_method || "Select Payment Method"}
-                    </Button>
-                  </View>
-                </Surface>
-              </Animated.View>
-            </View>
-          </View>
+                      <Controller
+                        control={control}
+                        render={({ field: { onChange, onBlur, value } }) => (
+                          <TextInput
+                            label="Paid Amount"
+                            mode="outlined"
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
+                            style={styles.input}
+                            keyboardType="decimal-pad"
+                            disabled={loading}
+                            left={<TextInput.Affix text="CHF" />}
+                          />
+                        )}
+                        name="paid_amount"
+                      />
 
+                      <Controller
+                        control={control}
+                        render={({ field: { onChange, onBlur, value } }) => (
+                          <TextInput
+                            label="Change Amount"
+                            mode="outlined"
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
+                            style={styles.input}
+                            keyboardType="decimal-pad"
+                            disabled={loading}
+                            left={<TextInput.Affix text="CHF" />}
+                          />
+                        )}
+                        name="change_amount"
+                      />
 
-        </ScrollView>
+                      <Button
+                        mode="outlined"
+                        onPress={() => setShowPaymentMethodModal(true)}
+                        style={styles.selectButton}
+                        icon="credit-card"
+                      >
+                        {payment_method || "Select Payment Method"}
+                      </Button>
+                    </View>
+                  </Surface>
 
-        <Surface style={styles.bottomBar}>
-          <View style={styles.bottomBarContent}>
-            <Button
-              mode="outlined"
-              onPress={() => navigation.goBack()}
-              style={[styles.button, styles.cancelButton]}
-              disabled={loading}
-            >
-              Cancel
-            </Button>
-            <Button
-              mode="contained"
-              onPress={handleSubmit(onSubmit)}
-              style={[styles.button, styles.saveButton]}
-              disabled={loading}
-              buttonColor={theme.colors.primary}
-            >
-              {loading ? (
-                <ActivityIndicator color={theme.colors.surface} />
-              ) : (
-                "Add a Receipt"
-              )}
-            </Button>
-          </View>
-        </Surface>
+                  {/* Line Items Section */}
+                  <Surface style={styles.detailsCard}>
+                    <View style={styles.detailsCardHeader}>
+                      <IconButton icon="format-list-bulleted" size={20} />
+                      <Text style={styles.detailsCardTitle}>Line Items</Text>
+                    </View>
+                    <View style={styles.detailsCardContent}>
+                      {lineItems.map((item, index) => (
+                        <View key={index} style={styles.lineItem}>
+                          <TextInput
+                            label="Item Name"
+                            value={item.name}
+                            onChangeText={(text) => {
+                              const updatedItems = [...lineItems];
+                              updatedItems[index].name = text;
+                              setLineItems(updatedItems);
+                            }}
+                            style={[styles.input, styles.lineItemInput]}
+                            mode="outlined"
+                          />
+                          <TextInput
+                            label="Qty"
+                            value={item.quantity.toString()}
+                            onChangeText={(text) => {
+                              const updatedItems = [...lineItems];
+                              updatedItems[index].quantity = Number(text) || 0;
+                              updatedItems[index].totalPrice =
+                                updatedItems[index].unitPrice * Number(text);
+                              setLineItems(updatedItems);
+                            }}
+                            keyboardType="numeric"
+                            style={[styles.input, styles.qtyInput]}
+                            mode="outlined"
+                          />
+                          <TextInput
+                            label="Unit Price"
+                            value={item.unitPrice.toString()}
+                            onChangeText={(text) => {
+                              const updatedItems = [...lineItems];
       </KeyboardAvoidingView>
 
       {/* Company Selection Modal */}
@@ -2022,53 +1774,6 @@ const CreateReceiptScreen = () => {
           </ScrollView>
         </Modal>
       </Portal>
-
-      {/* Delete Confirmation Modal */}
-      <Portal>
-        <Modal
-          visible={showDeleteConfirmModal}
-          onDismiss={() => setShowDeleteConfirmModal(false)}
-          contentContainerStyle={[
-            styles.confirmModal,
-            {
-              width: isLargeScreen ? 480 : isMediumScreen ? 420 : "90%",
-              alignSelf: "center",
-            },
-          ]}
-        >
-          <View style={styles.confirmModalContent}>
-            <IconButton
-              icon="alert"
-              size={32}
-              iconColor="#ef4444"
-              style={styles.confirmModalIcon}
-            />
-            <Text style={styles.confirmModalTitle}>Delete Receipt?</Text>
-            <Text style={styles.confirmModalText}>
-              This will remove the uploaded receipt image and clear all
-              automatically filled fields. This action cannot be undone.
-            </Text>
-            <View style={styles.confirmModalButtons}>
-              <Button
-                mode="outlined"
-                onPress={() => setShowDeleteConfirmModal(false)}
-                style={[styles.confirmButton, styles.confirmCancelButton]}
-              >
-                Cancel
-              </Button>
-              <Button
-                mode="contained"
-                onPress={handleDeleteReceipt}
-                style={[styles.confirmButton, styles.confirmDeleteButton]}
-                buttonColor="#ef4444"
-              >
-                Delete
-              </Button>
-            </View>
-          </View>
-        </Modal>
-      </Portal>
-
       <CustomSnackbar
         visible={snackbarVisible}
         message={snackbarMessage}
@@ -2141,14 +1846,6 @@ const styles = StyleSheet.create({
     minWidth: 320,
     gap: 24,
   },
-  receiptGridContainer: {
-    flexDirection: "row",
-    gap: 24,
-    flexWrap: "wrap",
-    marginTop: 24,
-    marginBottom: 24,
-  },
-  stepContainer: {},
   formCard: {
     borderRadius: 16,
     overflow: "hidden",
@@ -2160,74 +1857,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#e2e8f0",
-  },
-  stepCard: {
-    overflow: "visible",
-  },
-  stepHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
-    gap: 16,
-  },
-  stepNumberContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#f1f5f9",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  stepNumber: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1e293b",
-    fontFamily: "Poppins-SemiBold",
-  },
-  stepTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#1e293b",
-    fontFamily: "Poppins-SemiBold",
-  },
-  stepDescription: {
-    fontSize: 14,
-    color: "#64748b",
-    marginBottom: 24,
-    fontFamily: "Poppins-Regular",
-  },
-  detailsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 24,
-    width: "100%",
-  },
-  detailsCard: {
-    flex: 1,
-    minWidth: 300,
-    borderRadius: 12,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  detailsCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
-    backgroundColor: "#f8fafc",
-  },
-  detailsCardTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1e293b",
-    fontFamily: "Poppins-SemiBold",
-  },
-  detailsCardContent: {
-    padding: 16,
   },
   cardHeader: {
     flexDirection: "row",
@@ -2308,6 +1937,7 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 200,
     borderRadius: 4,
+    overflow: "hidden",
   },
   deleteImageButton: {
     position: "absolute",
@@ -2402,7 +2032,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#64748b",
     textAlign: "center",
-    fontWeight: "600",
   },
   previewModal: {
     backgroundColor: "#FFFFFF",
@@ -2431,6 +2060,7 @@ const styles = StyleSheet.create({
   previewModalImage: {
     width: "100%",
     height: "100%",
+    overflow: "hidden",
   },
   previewTouchable: {
     width: "100%",
@@ -2448,11 +2078,11 @@ const styles = StyleSheet.create({
     opacity: Platform.OS === "web" ? 0 : 1,
   },
   previewHint: {
-    color: "#64748b",
+    color: "#FFFFFF",
     fontSize: 14,
     marginTop: 8,
     textAlign: "center",
-    fontWeight: "300",
+    fontWeight: "500",
   },
   snackbar: {
     marginBottom: 16,
@@ -2506,6 +2136,77 @@ const styles = StyleSheet.create({
   },
   confirmDeleteButton: {
     backgroundColor: "#ef4444",
+  },
+  stepContainer: {
+    marginTop: 24,
+  },
+  stepCard: {
+    overflow: "visible",
+  },
+  stepHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+    gap: 16,
+  },
+  stepNumberContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#f1f5f9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stepNumber: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1e293b",
+    fontFamily: "Poppins-SemiBold",
+  },
+  stepTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#1e293b",
+    fontFamily: "Poppins-SemiBold",
+  },
+  stepDescription: {
+    fontSize: 14,
+    color: "#64748b",
+    marginBottom: 24,
+    fontFamily: "Poppins-Regular",
+  },
+  detailsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 24,
+    width: "100%",
+  },
+  detailsCard: {
+    flex: 1,
+    minWidth: 300,
+    borderRadius: 12,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  detailsCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+    backgroundColor: "#f8fafc",
+  },
+  detailsCardTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1e293b",
+    fontFamily: "Poppins-SemiBold",
+  },
+  detailsCardContent: {
+    padding: 16,
   },
 });
 

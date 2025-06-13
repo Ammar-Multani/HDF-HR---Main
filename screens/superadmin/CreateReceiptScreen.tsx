@@ -386,7 +386,7 @@ const CreateReceiptScreen = () => {
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
       <AppHeader
-        title="Create Receipt"
+        title="Add a Receipt"
         showBackButton
         showHelpButton
         showLogo={false}
@@ -760,7 +760,7 @@ const CreateReceiptScreen = () => {
             loading={loading}
             disabled={loading}
           >
-            Create Receipt
+            Add a Receipt
           </Button>
         </ScrollView>
       </KeyboardAvoidingView>

@@ -245,37 +245,38 @@ const CreateAccidentReportScreen = () => {
       }
 
       const file = result.assets[0];
-      const currentReportId = watch("id");
+
+      // Create a File object from the picked document
+      const fileBlob = await fetch(file.uri).then((r) => r.blob());
+      const fileObject = new File([fileBlob], file.name, {
+        type: file.mimeType,
+      });
 
       // Create FormData
       const formData = new FormData();
-      formData.append("file", {
-        uri: file.uri,
-        type: file.mimeType,
-        name: file.name,
-      } as any);
+      formData.append("file", fileObject);
       formData.append("companyId", companyId as string);
       formData.append("employeeId", selectedEmployee.id);
       formData.append("uploadedBy", user?.id as string);
+      formData.append("reportId", watch("id") || "new");
       formData.append("reportType", "accident_report");
 
-      if (currentReportId) {
-        formData.append("reportId", currentReportId);
-      }
-
-      // Call Supabase Edge Function
-      const uploadResponse = await supabase.functions.invoke(
+      // Use Supabase functions invoke directly
+      const { data, error } = await supabase.functions.invoke(
         "onedrive-upload",
         {
           body: formData,
+          headers: {},
         }
       );
 
-      if (uploadResponse.error) {
-        throw new Error(uploadResponse.error.message);
+      if (error) {
+        throw error;
       }
 
-      const { data } = uploadResponse;
+      if (!data) {
+        throw new Error("No data received from upload");
+      }
 
       // Update form with file path and document ID
       setValue("medical_certificate", data.filePath);

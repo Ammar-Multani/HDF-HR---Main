@@ -1564,7 +1564,7 @@ const ReceiptsListScreen = () => {
 
         <FAB
           icon="plus"
-          label="Create Receipt"
+          label="Add a Receipt"
           style={[
             styles.fab,
             {

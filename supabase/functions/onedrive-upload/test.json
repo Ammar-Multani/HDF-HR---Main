@@ -1,0 +1,12 @@
+{
+  "companyId": "test-company-id",
+  "employeeId": "test-employee-id",
+  "uploadedBy": "test-user-id",
+  "reportId": "test-report-id",
+  "reportType": "accident_report",
+  "file": {
+    "name": "test.pdf",
+    "type": "application/pdf",
+    "size": 1024
+  }
+}
