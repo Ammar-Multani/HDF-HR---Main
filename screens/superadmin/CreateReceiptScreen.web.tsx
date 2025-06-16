@@ -353,27 +353,6 @@ const CreateReceiptScreen = () => {
         rawText: ocrData.text?.text?.substring(0, 200) + "...", // First 200 chars for readability
       });
 
-      // Log receipt number extraction attempts with more detail
-      const receiptNumberAttempts = {
-        fromReceiptNumber: {
-          value: ocrData.entities?.receiptNumber?.data,
-          confidence: ocrData.entities?.receiptNumber?.confidenceLevel,
-        },
-        fromInvoiceNumber: {
-          value: ocrData.entities?.invoiceNumber?.data,
-          confidence: ocrData.entities?.invoiceNumber?.confidenceLevel,
-        },
-        fromRawText: {
-          bonMatch: ocrData.text?.text?.match(
-            /(?:Bon|Beleg|Nr|Nummer)[:\s]+(\d+)/i
-          )?.[1],
-          endOfLineMatch: ocrData.text?.text?.match(
-            /\d{3}\s+\d{3}\s+(\d+)\s+\d+$/m
-          )?.[1],
-        },
-      };
-      console.log("Receipt Number Extraction Attempts:", receiptNumberAttempts);
-
       // Helper function for proper rounding
       const roundToTwoDecimals = (num: number): number => {
         return Math.round((num + Number.EPSILON) * 100) / 100;
@@ -382,6 +361,80 @@ const CreateReceiptScreen = () => {
       const formatAmount = (amount: number): string => {
         return roundToTwoDecimals(amount).toFixed(2);
       };
+
+      // Enhanced receipt number extraction
+      const extractReceiptNumber = (text: string): string | null => {
+        const receiptPatterns = [
+          // Common receipt number patterns
+          /(?:Beleg|Receipt|Bon|Quittung|Rechnung)[-\s]?(?:Nr\.?|Number|Nummer)?[:.\s]*([A-Z0-9][-A-Z0-9\/]{3,20})/i,
+          /(?:Nr\.?|No\.?|Number|Nummer)[:.\s]*([A-Z0-9][-A-Z0-9\/]{3,20})/i,
+          /#\s*([A-Z0-9][-A-Z0-9\/]{3,20})/i,
+          /\b(?:KA|RE|BN|RG|BLG)[-:]([A-Z0-9][-A-Z0-9\/]{3,20})\b/i,
+
+          // Date-based receipt numbers
+          /\b(\d{4}[-\/]\d{2}[-\/]\d{2}[-\/][A-Z0-9]+)\b/,
+          /\b([A-Z]{2,3}[-\/]?\d{2}[-\/]?\d{2}[-\/]?\d{4}[-\/]?[A-Z0-9]*)\b/,
+
+          // Sequential numbers with prefix
+          /\b([A-Z]{1,3}[-\/]?\d{6,10})\b/,
+          /\b(R-\d{4,10})\b/i,
+        ];
+
+        // Try each pattern
+        for (const pattern of receiptPatterns) {
+          const match = text.match(pattern);
+          if (match && match[1]) {
+            return match[1].trim();
+          }
+        }
+        return null;
+      };
+
+      // Try to get receipt number from multiple sources
+      let receiptNumber = null;
+
+      // 1. Try from direct receipt number field
+      if (ocrData.entities?.receiptNumber?.data) {
+        console.log(
+          "Found receipt number in receiptNumber field:",
+          ocrData.entities.receiptNumber.data
+        );
+        receiptNumber = String(ocrData.entities.receiptNumber.data);
+      }
+
+      // 2. Try from invoice number if receipt number not found
+      if (!receiptNumber && ocrData.entities?.invoiceNumber?.data) {
+        console.log(
+          "Found receipt number in invoiceNumber field:",
+          ocrData.entities.invoiceNumber.data
+        );
+        receiptNumber = String(ocrData.entities.invoiceNumber.data);
+      }
+
+      // 3. Try extracting from raw text
+      if (!receiptNumber && ocrData.text?.text) {
+        const extractedNumber = extractReceiptNumber(ocrData.text.text);
+        if (extractedNumber) {
+          console.log("Found receipt number in raw text:", extractedNumber);
+          receiptNumber = extractedNumber;
+        }
+      }
+
+      // 4. Generate a fallback receipt number if none found
+      if (!receiptNumber) {
+        // Generate receipt number based on date and random number
+        const today = new Date();
+        const randomNum = Math.floor(Math.random() * 10000)
+          .toString()
+          .padStart(4, "0");
+        receiptNumber = `R-${today.getFullYear()}${(today.getMonth() + 1).toString().padStart(2, "0")}${today.getDate().toString().padStart(2, "0")}-${randomNum}`;
+        console.log("Generated fallback receipt number:", receiptNumber);
+      }
+
+      // Set the receipt number
+      if (receiptNumber) {
+        setValue("receipt_number", receiptNumber);
+      }
 
       // Update form with extracted data
       if (ocrData.totalAmount?.data) {
