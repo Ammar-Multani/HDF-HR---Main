@@ -25,7 +25,7 @@ import {
   Switch,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { supabase } from "../../lib/supabase";
+import { clearAllCache, supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
@@ -1216,6 +1216,7 @@ const SuperAdminProfileScreen = () => {
 
   const performSignOut = async () => {
     try {
+      await clearAllCache();
       await signOut();
     } catch (error) {
       console.error("Error signing out:", error);

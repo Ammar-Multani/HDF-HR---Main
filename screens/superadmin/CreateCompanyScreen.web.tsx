@@ -15,6 +15,8 @@ import {
   Snackbar,
   Card,
   Surface,
+  Switch,
+  TouchableRipple,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -49,6 +51,7 @@ interface CompanyFormData {
   vat_type: string;
   stakeholder_name: string;
   stakeholder_percentage: string;
+  can_upload_receipts: boolean;
 }
 
 // Add window dimensions hook
@@ -95,6 +98,7 @@ const CreateCompanyScreen = () => {
     reset,
     watch,
     register,
+    setValue,
   } = useForm<CompanyFormData>({
     defaultValues: {
       company_name: "",
@@ -115,6 +119,7 @@ const CreateCompanyScreen = () => {
       vat_type: "",
       stakeholder_name: "",
       stakeholder_percentage: "",
+      can_upload_receipts: false,
     },
     mode: "onBlur",
   });
@@ -321,6 +326,7 @@ const CreateCompanyScreen = () => {
         created_by: user?.id,
         stakeholders,
         vat_type: data.vat_type,
+        can_upload_receipts: data.can_upload_receipts,
       };
 
       // Generate reset token just once - avoid regenerating later
@@ -444,6 +450,7 @@ const CreateCompanyScreen = () => {
           industry_type: data.industry_type,
           contact_number: data.contact_number,
           registration_number: data.registration_number,
+          can_upload_receipts: data.can_upload_receipts,
         },
       };
 
@@ -775,6 +782,50 @@ const CreateCompanyScreen = () => {
                         {errors.vat_type.message}
                       </Text>
                     )}
+
+                    <Surface style={styles.toggleCard} elevation={0}>
+                      <TouchableRipple
+                        onPress={() => {
+                          if (!loading) {
+                            const currentValue = watch("can_upload_receipts");
+                            setValue("can_upload_receipts", !currentValue);
+                          }
+                        }}
+                        style={styles.toggleTouchable}
+                      >
+                        <View style={styles.toggleContent}>
+                          <View style={styles.toggleLeft}>
+                            <View style={styles.toggleIconContainer}>
+                              <MaterialCommunityIcons
+                                name="receipt"
+                                size={20}
+                                color={theme.colors.primary}
+                              />
+                            </View>
+                            <View>
+                              <Text style={styles.toggleLabel}>
+                                {t("superAdmin.companies.allowReceiptUploads")}
+                              </Text>
+                              <Text style={styles.toggleDescription}>
+                                {t("superAdmin.companies.receiptUploadsHelper")}
+                              </Text>
+                            </View>
+                          </View>
+                          <Controller
+                            name="can_upload_receipts"
+                            control={control}
+                            render={({ field: { onChange, value } }) => (
+                              <Switch
+                                value={value}
+                                onValueChange={onChange}
+                                disabled={loading}
+                                color={theme.colors.primary}
+                              />
+                            )}
+                          />
+                        </View>
+                      </TouchableRipple>
+                    </Surface>
                   </Card.Content>
                 </Card>
 
@@ -1429,6 +1480,13 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 24,
   },
+  helperTextSmall: {
+    fontSize: 12,
+    color: "#64748b",
+    marginTop: 4,
+    marginBottom: 16,
+    marginLeft: 4,
+  },
   bottomBar: {
     backgroundColor: "#FFFFFF",
     borderTopWidth: 1,
@@ -1459,6 +1517,51 @@ const styles = StyleSheet.create({
     },
     shadowOpacity: 0.27,
     shadowRadius: 4.65,
+  },
+  toggleCard: {
+    marginTop: 8,
+    marginBottom: 16,
+    borderRadius: 12,
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    overflow: "hidden",
+  },
+  toggleTouchable: {
+    padding: 16,
+  },
+  toggleContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  toggleLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    marginRight: 16,
+  },
+  toggleIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    borderWidth: 0.5,
+    borderColor: "#e2e8f0",
+    backgroundColor: "#f1f5f9",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 16,
+  },
+  toggleLabel: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#1e293b",
+    marginBottom: 4,
+  },
+  toggleDescription: {
+    fontSize: 14,
+    color: "#64748b",
+    lineHeight: 20,
   },
 });
 

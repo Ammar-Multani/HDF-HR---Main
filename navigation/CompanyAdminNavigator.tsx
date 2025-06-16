@@ -19,6 +19,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import Text from "../components/Text";
 import { SidebarLayout } from "./components/SidebarLayout";
 import { t } from "i18next";
+import { supabase } from "../lib/supabase";
+import { useAuth } from "../contexts/AuthContext";
 
 // Company Admin Screens
 import CompanyAdminDashboard from "../screens/companyadmin/CompanyAdminDashboard";
@@ -36,6 +38,9 @@ import CompanyAdminEditTaskScreen from "../screens/companyadmin/CompanyAdminEdit
 import CreateEmployeeAccidentReportScreen from "../screens/companyadmin/CreateEmployeeAccidentReportScreen.web";
 import CreateEmployeeIllnessReportScreen from "../screens/companyadmin/CreateEmployeeIllnessReportScreen.web";
 import CreateEmployeeStaffDepartureReportScreen from "../screens/companyadmin/CreateEmployeeStaffDepartureScreen.web";
+import CompanyReceiptsListScreen from "../screens/companyadmin/CompanyReceiptsListScreen.web";
+import CreateCompanyReceiptScreen from "../screens/companyadmin/CreateCompanyReceiptScreen.web";
+import CompanyReceiptDetailsScreen from "../screens/companyadmin/CompanyReceiptDetailsScreen.web";
 
 // Stack navigators
 const CompanyAdminStack = createNativeStackNavigator();
@@ -71,9 +76,36 @@ const useWindowDimensions = () => {
 // Web Layout with SidebarLayout
 const WebStackNavigator = () => {
   const [activeScreen, setActiveScreen] = useState("Dashboard");
+  const [canUploadReceipts, setCanUploadReceipts] = useState(false);
   const navigation = useNavigation();
+  const { user } = useAuth();
 
-  const navigationItems = [
+  useEffect(() => {
+    fetchCompanyPermissions();
+  }, []);
+
+  const fetchCompanyPermissions = async () => {
+    if (!user) return;
+
+    try {
+      const { data: companyUser, error: companyUserError } = await supabase
+        .from("company_user")
+        .select("company_id, company:company_id(can_upload_receipts)")
+        .eq("id", user.id)
+        .single();
+
+      if (companyUserError) throw companyUserError;
+
+      if (companyUser) {
+        setCanUploadReceipts(companyUser.company?.can_upload_receipts || false);
+      }
+    } catch (error) {
+      console.error("Error fetching company permissions:", error);
+    }
+  };
+
+  // Base navigation items
+  const baseNavigationItems = [
     {
       icon: "home" as const,
       label: t("navigation.dashboard"),
@@ -101,14 +133,18 @@ const WebStackNavigator = () => {
     },
   ];
 
-  // Define the main content screens
-  const mainContent = {
-    Dashboard: <CompanyAdminDashboard />,
-    Employees: <EmployeeListScreen />,
-    Tasks: <CompanyAdminTasksScreen />,
-    FormSubmissions: <FormSubmissionsScreen />,
-    Profile: <CompanyAdminProfileScreen />,
-  };
+  // Add receipts navigation item if permitted
+  const navigationItems = canUploadReceipts
+    ? [
+        ...baseNavigationItems.slice(0, -1),
+        {
+          icon: "receipt" as const,
+          label: t("navigation.receipts"),
+          screen: "Receipts",
+        },
+        baseNavigationItems[baseNavigationItems.length - 1], // Profile at the end
+      ]
+    : baseNavigationItems;
 
   // Create a stack navigator for the content area
   const ContentStack = createNativeStackNavigator();
@@ -144,6 +180,25 @@ const WebStackNavigator = () => {
           component={FormSubmissionsScreen}
           options={{ title: t("navigation.forms") }}
         />
+        {canUploadReceipts && (
+          <>
+            <ContentStack.Screen
+              name="Receipts"
+              component={CompanyReceiptsListScreen}
+              options={{ title: t("navigation.receipts") }}
+            />
+            <ContentStack.Screen
+              name="CreateCompanyReceipt"
+              component={CreateCompanyReceiptScreen}
+              options={{ title: t("navigation.createReceipt") }}
+            />
+            <ContentStack.Screen
+              name="CompanyReceiptDetails"
+              component={CompanyReceiptDetailsScreen}
+              options={{ title: t("navigation.receiptDetails") }}
+            />
+          </>
+        )}
         <ContentStack.Screen
           name="Profile"
           component={CompanyAdminProfileScreen}
@@ -224,6 +279,7 @@ const WebStackNavigator = () => {
         Employees: <ContentArea />,
         Tasks: <ContentArea />,
         FormSubmissions: <ContentArea />,
+        Receipts: <ContentArea />,
         Profile: <ContentArea />,
       }}
       onNavigate={handleNavigation}
@@ -237,6 +293,32 @@ const CompanyAdminTabNavigator = () => {
   const { width } = useWindowDimensions();
   const isWeb = Platform.OS === "web";
   const isLargeScreen = isWeb && width > 768;
+  const { user } = useAuth();
+  const [canUploadReceipts, setCanUploadReceipts] = useState(false);
+
+  useEffect(() => {
+    fetchCompanyPermissions();
+  }, []);
+
+  const fetchCompanyPermissions = async () => {
+    if (!user) return;
+
+    try {
+      const { data: companyUser, error: companyUserError } = await supabase
+        .from("company_user")
+        .select("company_id, company:company_id(can_upload_receipts)")
+        .eq("id", user.id)
+        .single();
+
+      if (companyUserError) throw companyUserError;
+
+      if (companyUser) {
+        setCanUploadReceipts(companyUser.company?.can_upload_receipts || false);
+      }
+    } catch (error) {
+      console.error("Error fetching company permissions:", error);
+    }
+  };
 
   // For mobile or small screen: Use bottom tabs
   if (!isLargeScreen) {
@@ -347,6 +429,21 @@ const CompanyAdminTabNavigator = () => {
             ),
           }}
         />
+        {canUploadReceipts && (
+          <CompanyAdminTab.Screen
+            name="Receipts"
+            component={CompanyReceiptsListScreen}
+            options={{
+              tabBarIcon: ({ color }) => (
+                <MaterialCommunityIcons
+                  name="receipt"
+                  color={color}
+                  size={24}
+                />
+              ),
+            }}
+          />
+        )}
         <CompanyAdminTab.Screen
           name="Profile"
           component={CompanyAdminProfileScreen}
@@ -373,6 +470,32 @@ export const CompanyAdminNavigator = () => {
   const { width } = useWindowDimensions();
   const isWeb = Platform.OS === "web";
   const isLargeScreen = isWeb && width > 768;
+  const { user } = useAuth();
+  const [canUploadReceipts, setCanUploadReceipts] = useState(false);
+
+  useEffect(() => {
+    fetchCompanyPermissions();
+  }, []);
+
+  const fetchCompanyPermissions = async () => {
+    if (!user) return;
+
+    try {
+      const { data: companyUser, error: companyUserError } = await supabase
+        .from("company_user")
+        .select("company_id, company:company_id(can_upload_receipts)")
+        .eq("id", user.id)
+        .single();
+
+      if (companyUserError) throw companyUserError;
+
+      if (companyUser) {
+        setCanUploadReceipts(companyUser.company?.can_upload_receipts || false);
+      }
+    } catch (error) {
+      console.error("Error fetching company permissions:", error);
+    }
+  };
 
   if (isLargeScreen) {
     return <CompanyAdminTabNavigator />;
@@ -424,6 +547,18 @@ export const CompanyAdminNavigator = () => {
         name="CreateEmployeeStaffDepartureReport"
         component={CreateEmployeeStaffDepartureReportScreen}
       />
+      {canUploadReceipts && (
+        <>
+          <CompanyAdminStack.Screen
+            name="CreateCompanyReceipt"
+            component={CreateCompanyReceiptScreen}
+          />
+          <CompanyAdminStack.Screen
+            name="CompanyReceiptDetails"
+            component={CompanyReceiptDetailsScreen}
+          />
+        </>
+      )}
     </CompanyAdminStack.Navigator>
   );
 };

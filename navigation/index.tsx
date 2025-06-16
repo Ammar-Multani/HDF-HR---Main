@@ -159,7 +159,23 @@ export const AppNavigator = ({ initialAuthState = null }) => {
   return (
     <NavigationContainer
       ref={navRef}
-      linking={linking}
+      linking={{
+        ...linking,
+        config: {
+          ...linking.config,
+          screens: {
+            ...linking.config.screens,
+            CompanyAdmin: {
+              screens: {
+                ...linking.config.screens.CompanyAdmin?.screens,
+                Receipts: "receipts",
+                CreateCompanyReceipt: "receipts/create",
+                CompanyReceiptDetails: "receipts/:receiptId",
+              },
+            },
+          },
+        },
+      }}
       initialState={initialState}
       onStateChange={handleStateChange}
       fallback={<Text>Loading...</Text>}

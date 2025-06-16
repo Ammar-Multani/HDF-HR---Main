@@ -82,7 +82,6 @@ interface ReceiptFormData {
   merchant_address?: string;
   language_hint?: string;
   subtotal_amount: string;
-  rounding_amount: string;
   final_price: string;
   paid_amount: string;
   change_amount: string;
@@ -258,11 +257,10 @@ const CreateReceiptScreen = () => {
       merchant_name: "",
       total_amount: "",
       tax_amount: "",
-      payment_method: undefined,
+      payment_method: "",
       merchant_address: "",
       language_hint: "",
       subtotal_amount: "",
-      rounding_amount: "",
       final_price: "",
       paid_amount: "",
       change_amount: "",
@@ -376,292 +374,312 @@ const CreateReceiptScreen = () => {
       };
       console.log("Receipt Number Extraction Attempts:", receiptNumberAttempts);
 
-      // Extract line items from raw text since the API's productLineItems are empty
-      const extractLineItems = (text: string, amounts: any[]) => {
-        // First try to use the API's productLineItems
-        if (ocrData.entities?.productLineItems?.length > 0) {
-          return ocrData.entities.productLineItems.map((item) => ({
+      // Helper function for proper rounding
+      const roundToTwoDecimals = (num: number): number => {
+        return Math.round((num + Number.EPSILON) * 100) / 100;
+      };
+
+      const formatAmount = (amount: number): string => {
+        return roundToTwoDecimals(amount).toFixed(2);
+      };
+
+      // Update form with extracted data
+      if (ocrData.totalAmount?.data) {
+        const totalAmount = roundToTwoDecimals(
+          Number(ocrData.totalAmount.data)
+        );
+        setValue("total_amount", formatAmount(totalAmount));
+        // Also set final_price if it's not already set
+        if (!getValues("final_price")) {
+          setValue("final_price", formatAmount(totalAmount));
+        }
+      }
+
+      if (ocrData.taxAmount?.data) {
+        const taxAmount = roundToTwoDecimals(Number(ocrData.taxAmount.data));
+        setValue("tax_amount", formatAmount(taxAmount));
+      }
+
+      if (ocrData.merchantName?.data) {
+        setValue("merchant_name", String(ocrData.merchantName.data));
+      }
+
+      if (ocrData.merchantAddress?.data) {
+        setValue("merchant_address", String(ocrData.merchantAddress.data));
+      }
+
+      // Handle subtotal amount - try multiple sources
+      const subtotal = roundToTwoDecimals(
+        Number(
+          ocrData.entities?.productLineItems?.reduce(
+            (sum, item) => sum + (Number(item.data.totalPrice?.data) || 0),
+            0
+          ) ||
+            ocrData.amounts?.find((a) =>
+              a.text?.toLowerCase().includes("zwischensumme")
+            )?.data ||
+            ocrData.amounts?.find((a) =>
+              a.text?.toLowerCase().includes("subtotal")
+            )?.data ||
+            0
+        )
+      );
+
+      if (subtotal > 0) {
+        setValue("subtotal_amount", formatAmount(subtotal));
+      }
+
+      // Handle paid amount and change with improved calculation
+      if (
+        ocrData.paidAmount?.data ||
+        ocrData.amounts?.find(
+          (a) =>
+            a.text?.toLowerCase().includes("bezahlt") ||
+            a.text?.toLowerCase().includes("paid")
+        )?.data
+      ) {
+        const paidAmount = roundToTwoDecimals(
+          Number(
+            ocrData.paidAmount?.data ||
+              ocrData.amounts?.find(
+                (a) =>
+                  a.text?.toLowerCase().includes("bezahlt") ||
+                  a.text?.toLowerCase().includes("paid")
+              )?.data ||
+              0
+          )
+        );
+
+        if (paidAmount > 0) {
+          setValue("paid_amount", formatAmount(paidAmount));
+
+          // Calculate change amount if we have both paid amount and total amount
+          const totalAmount = Number(ocrData.totalAmount?.data || 0);
+          if (!isNaN(paidAmount) && !isNaN(totalAmount) && totalAmount > 0) {
+            const change = roundToTwoDecimals(paidAmount - totalAmount);
+            if (change > 0) {
+              setValue("change_amount", formatAmount(change));
+            }
+          }
+        }
+      }
+
+      // Try to determine payment method
+      const paymentMethodKeywords = {
+        "Credit Card": [
+          "credit",
+          "card",
+          "visa",
+          "mastercard",
+          "amex",
+          "kreditkarte",
+        ],
+        "Debit Card": ["debit", "ec", "maestro", "vpay", "debitkarte"],
+        Cash: ["cash", "bar", "bargeld"],
+        "Bank Transfer": ["bank", "transfer", "überweisung", "sepa"],
+        Check: ["check", "cheque", "scheck"],
+      };
+
+      const receiptText = ocrData.text?.text?.toLowerCase() || "";
+      for (const [method, keywords] of Object.entries(paymentMethodKeywords)) {
+        if (keywords.some((keyword) => receiptText.includes(keyword))) {
+          setValue("payment_method", method);
+          break;
+        }
+      }
+
+      // Handle final price - try multiple sources
+      const finalPrice = roundToTwoDecimals(
+        Number(
+          ocrData.totalAmount?.data ||
+            ocrData.amounts?.find(
+              (a) =>
+                a.text?.toLowerCase().includes("total") ||
+                a.text?.toLowerCase().includes("summe")
+            )?.data ||
+            0
+        )
+      );
+
+      if (finalPrice > 0) {
+        setValue("final_price", formatAmount(finalPrice));
+      }
+
+      // Enhanced merchant VAT number extraction
+      const extractVatNumber = (text: string): string | null => {
+        const vatPatterns = [
+          // Swiss VAT patterns
+          /(?:CHE-?)?(\d{3}\.?\d{3}\.?\d{3}(?:\s?MWST|\s?TVA|\s?IVA)?)/i,
+          /(?:MWST|USt|VAT|UID|TVA)[-.]?(?:Nr\.?|Nummer|\s)*[:\s]*((?:CHE-?)?\d{3}\.?\d{3}\.?\d{3})/i,
+
+          // General VAT patterns
+          /(?:VAT|MWST|USt|UID)[-.]?(?:ID|Nr\.?|Nummer)?[:\s]*([A-Z0-9]{8,15})/i,
+          /(?:Steuer|Tax)[-.]?(?:Nr\.?|Nummer)[:\s]*([A-Z0-9]{8,15})/i,
+
+          // Direct number patterns
+          /\b(CHE-?\d{3}\.?\d{3}\.?\d{3})\b/i,
+        ];
+
+        // Try each pattern
+        for (const pattern of vatPatterns) {
+          const match = text.match(pattern);
+          if (match && match[1]) {
+            // Clean up the found VAT number
+            let vatNumber = match[1].replace(/[^A-Z0-9]/gi, "");
+
+            // Format Swiss VAT numbers
+            if (vatNumber.length === 9 && /^\d+$/.test(vatNumber)) {
+              vatNumber = `CHE-${vatNumber.slice(0, 3)}.${vatNumber.slice(3, 6)}.${vatNumber.slice(6)}`;
+            }
+
+            return vatNumber;
+          }
+        }
+        return null;
+      };
+
+      // Try to extract VAT number from multiple sources
+      let merchantVat = null;
+
+      // 1. Try from merchantTaxId first (most reliable)
+      if (ocrData.merchantTaxId?.data) {
+        merchantVat = String(ocrData.merchantTaxId.data);
+      }
+
+      // 2. Try from entities if available
+      if (!merchantVat && ocrData.entities?.merchantTaxId?.data) {
+        merchantVat = String(ocrData.entities.merchantTaxId.data);
+      }
+
+      // 3. Try extracting from raw text
+      if (!merchantVat && ocrData.text?.text) {
+        merchantVat = extractVatNumber(ocrData.text.text);
+      }
+
+      // 4. Try looking in specific regions (headers, footers)
+      if (!merchantVat && ocrData.text?.regions) {
+        for (const region of ocrData.text.regions) {
+          if (region.text) {
+            merchantVat = extractVatNumber(region.text);
+            if (merchantVat) break;
+          }
+        }
+      }
+
+      // Set the merchant VAT if found
+      if (merchantVat) {
+        console.log("Found merchant VAT:", merchantVat);
+        setValue("merchant_vat", merchantVat);
+      } else {
+        console.log("No merchant VAT number found in receipt");
+      }
+
+      // Format VAT details for display with improved formatting and NaN handling
+      if (ocrData.entities?.multiTaxLineItems?.length > 0) {
+        console.log("Raw VAT data:", ocrData.entities.multiTaxLineItems);
+
+        const vatDetailsText = ocrData.entities.multiTaxLineItems
+          .map((vat) => {
+            // Try to get values from different possible locations in the data structure
+            const base = roundToTwoDecimals(
+              parseFloat(
+                String(
+                  vat.base ||
+                    vat.data?.base ||
+                    vat.data?.grossAmount?.data ||
+                    vat.data?.baseAmount?.data ||
+                    "0"
+                )
+              )
+            );
+            const rate = roundToTwoDecimals(
+              parseFloat(
+                String(
+                  vat.rate ||
+                    vat.data?.rate ||
+                    vat.data?.taxRate?.data ||
+                    vat.data?.percentage?.data ||
+                    "0"
+                )
+              ) * (vat.data?.taxRate?.data ? 100 : 1)
+            );
+
+            console.log("Parsed VAT values:", { base, rate });
+
+            if (isNaN(base) || isNaN(rate) || base === 0 || rate === 0) {
+              console.log("Skipping invalid VAT entry:", { base, rate });
+              return null;
+            }
+
+            const vatAmount = roundToTwoDecimals((base * rate) / 100);
+            const total = roundToTwoDecimals(base + vatAmount);
+
+            console.log("Calculated VAT values:", {
+              base: formatAmount(base),
+              rate: rate.toFixed(1),
+              vatAmount: formatAmount(vatAmount),
+              total: formatAmount(total),
+            });
+
+            return `MwSt ${rate.toFixed(1)}%\nBasis: CHF ${formatAmount(base)}\nMwSt: CHF ${formatAmount(vatAmount)}\nTotal: CHF ${formatAmount(total)}`;
+          })
+          .filter(Boolean)
+          .join("\n\n");
+
+        if (vatDetailsText) {
+          setValue("vat_details", vatDetailsText);
+        } else {
+          console.log(
+            "No valid VAT details to display, trying fallback calculation"
+          );
+
+          // Fallback: Try to calculate VAT from total and tax amounts
+          const total = roundToTwoDecimals(
+            parseFloat(String(ocrData.totalAmount?.data || "0"))
+          );
+          const tax = roundToTwoDecimals(
+            parseFloat(String(ocrData.taxAmount?.data || "0"))
+          );
+
+          if (!isNaN(total) && !isNaN(tax) && total > 0 && tax > 0) {
+            const base = roundToTwoDecimals(total - tax);
+            const rate = roundToTwoDecimals((tax / base) * 100);
+
+            console.log("Fallback VAT calculation:", {
+              total: formatAmount(total),
+              tax: formatAmount(tax),
+              base: formatAmount(base),
+              rate: rate.toFixed(1),
+            });
+
+            const fallbackVatText = `MwSt ${rate.toFixed(1)}%\nBasis: CHF ${formatAmount(base)}\nMwSt: CHF ${formatAmount(tax)}\nTotal: CHF ${formatAmount(total)}`;
+            setValue("vat_details", fallbackVatText);
+          }
+        }
+      }
+
+      // Set date if available
+      if (ocrData.date?.data) {
+        const parsedDate = new Date(ocrData.date.data);
+        setValue("date", parsedDate);
+        setValue("transaction_date", parsedDate);
+      }
+
+      // Update line items
+      if (ocrData.entities?.productLineItems?.length > 0) {
+        setLineItems(
+          ocrData.entities.productLineItems.map((item) => ({
             name: item.data.name.data,
             quantity: item.data.quantity.data,
             unitPrice: item.data.unitPrice.data,
             totalPrice: item.data.totalPrice.data,
-          }));
-        }
-
-        // If no productLineItems, try to extract from amounts array
-        if (amounts && amounts.length > 0) {
-          return amounts
-            .filter(
-              (amount) =>
-                amount.text &&
-                !amount.text.toLowerCase().includes("summe") &&
-                !amount.text.toLowerCase().includes("total") &&
-                !amount.text.toLowerCase().includes("mwst") &&
-                !amount.text.toLowerCase().includes("bar")
-            )
-            .map((amount) => ({
-              name: amount.text.split(/\d/)[0].trim(),
-              quantity: 1,
-              unitPrice: amount.data,
-              totalPrice: amount.data,
-            }));
-        }
-
-        return [];
-      };
-
-      // Extract VAT details from raw text
-      const extractVatDetails = (text: string) => {
-        const lines = text.split("\n");
-        const vatDetails: TaggunVatDetail[] = [];
-
-        lines.forEach((line) => {
-          // Match VAT lines (e.g., "A 2.6 % MwSt von 15.80 0.40")
-          const vatMatch = line.match(
-            /([AB])\s+([\d.]+)\s*%\s*(?:MwSt|MWST)\s+von\s+([\d.]+)\s+([\d.]+)/
-          );
-          if (vatMatch) {
-            vatDetails.push({
-              category: vatMatch[1],
-              rate: parseFloat(vatMatch[2]),
-              base: parseFloat(vatMatch[3]),
-              amount: parseFloat(vatMatch[4]),
-            });
-          }
-        });
-
-        return vatDetails;
-      };
-
-      // Process the response data according to the actual API structure
-      const processedData = {
-        // Basic Information
-        receiptNumber: String(
-          ocrData.entities?.receiptNumber?.data ||
-            ocrData.text?.text?.match(
-              /(?:Bon|Beleg|Nr|Nummer)[:\s]+(\d+)/i
-            )?.[1] ||
-            ocrData.text?.text?.match(/\d{3}\s+\d{3}\s+(\d+)\s+\d+$/m)?.[1] ||
-            ""
-        ),
-
-        // Merchant Information
-        merchant: {
-          name: ocrData.merchantName?.data || "",
-          address: [
-            ocrData.merchantAddress?.data,
-            ocrData.merchantCity?.data,
-            ocrData.merchantState?.data,
-            ocrData.merchantPostalCode?.data,
-            ocrData.merchantCountryCode?.data,
-          ]
-            .filter(Boolean)
-            .join(", "),
-          taxId:
-            ocrData.text?.text?.match(
-              /(?:MWST|USt|VAT)[-.]?(?:Nr\.?|Nummer)?[:\s]*([\w\d.-]+)/i
-            )?.[1] || ocrData.merchantTaxId?.data,
-          phone: ocrData.text?.text?.match(
-            /(?:Tel|Phone|Telefon)[:\s]*([+\d\s-]+)/i
-          )?.[1],
-          website: ocrData.text?.text?.match(
-            /(?:www\.[\w-]+(?:\.[\w-]+)+)/i
-          )?.[0],
-        },
-
-        // Financial Information
-        amounts: {
-          total: ocrData.totalAmount?.data,
-          subtotal: ocrData.amounts?.find((a) =>
-            a.text?.toLowerCase().includes("zwischensumme")
-          )?.data,
-          rounding: ocrData.amounts?.find((a) =>
-            a.text?.toLowerCase().includes("rundung")
-          )?.data,
-          finalPrice: ocrData.totalAmount?.data,
-          tax: ocrData.taxAmount?.data,
-          paid: ocrData.paidAmount?.data,
-          change: ocrData.amounts?.find(
-            (a) =>
-              a.text?.toLowerCase().includes("rückgeld") ||
-              a.text?.toLowerCase().includes("change")
-          )?.data,
-        },
-
-        // Line Items
-        lineItems: extractLineItems(ocrData.text?.text || "", ocrData.amounts),
-
-        // VAT Details
-        vatDetails:
-          ocrData.entities?.multiTaxLineItems?.map((item) => ({
-            category: item.data.taxCategory || "",
-            rate: item.data.taxRate.data * 100,
-            base: item.data.grossAmount.data,
-            amount: item.data.netAmount.data,
-          })) || [],
-
-        // Raw Text and Metadata
-        rawText: ocrData.text?.text,
-        metadata: {
-          confidence: ocrData.confidenceLevel,
-          currency: ocrData.totalAmount?.currencyCode || "CHF",
-          language: ocrData.location?.country?.iso_code === "CH" ? "de" : "en",
-          trackingId: ocrData.trackingId,
-          elapsed: ocrData.elapsed,
-          rotation: ocrData.targetRotation,
-        },
-      };
-
-      // Log processed data with more structure
-      console.log("Processed Receipt Data:", {
-        basicInfo: {
-          receiptNumber: processedData.receiptNumber,
-          date: ocrData.date?.data,
-          confidence: processedData.metadata.confidence,
-        },
-        merchant: processedData.merchant,
-        amounts: processedData.amounts,
-        lineItemsCount: processedData.lineItems.length,
-        vatDetailsCount: processedData.vatDetails.length,
-      });
-
-      try {
-        // Update form with the processed data
-        if (processedData.receiptNumber) {
-          setValue("receipt_number", processedData.receiptNumber);
-        } else {
-          console.warn("No receipt number could be extracted");
-        }
-
-        if (processedData.amounts.total) {
-          setValue("total_amount", processedData.amounts.total.toString());
-        } else {
-          console.warn("No total amount could be extracted");
-        }
-
-        if (processedData.amounts.tax) {
-          setValue("tax_amount", processedData.amounts.tax.toString());
-        }
-
-        if (processedData.amounts.subtotal) {
-          setValue(
-            "subtotal_amount",
-            processedData.amounts.subtotal.toString()
-          );
-        }
-
-        if (processedData.amounts.rounding) {
-          setValue(
-            "rounding_amount",
-            processedData.amounts.rounding.toString()
-          );
-        }
-
-        if (processedData.amounts.paid) {
-          setValue("paid_amount", processedData.amounts.paid.toString());
-        }
-
-        if (processedData.amounts.change) {
-          setValue("change_amount", processedData.amounts.change.toString());
-        }
-
-        if (processedData.merchant.name) {
-          setValue("merchant_name", String(processedData.merchant.name));
-        }
-
-        if (processedData.merchant.taxId) {
-          setValue("merchant_vat", String(processedData.merchant.taxId));
-        }
-
-        if (processedData.merchant.phone) {
-          setValue("merchant_phone", String(processedData.merchant.phone));
-        }
-
-        if (processedData.merchant.website) {
-          setValue("merchant_website", String(processedData.merchant.website));
-        }
-
-        if (processedData.merchant.address) {
-          setValue("merchant_address", String(processedData.merchant.address));
-        }
-
-        // Extract VAT number with improved pattern matching
-        const extractVatNumber = (text: string) => {
-          const vatPatterns = [
-            /(?:MWST|USt|VAT|UID)[-.]?(?:Nr\.?|Nummer)?[:\s]*(CHE-?[\d.-]+)/i,
-            /(?:MWST|USt|VAT|UID)[-.]?(?:Nr\.?|Nummer)?[:\s]*([\d.-]{6,})/i,
-            /(CHE-?[\d.-]+)/i,
-          ];
-
-          for (const pattern of vatPatterns) {
-            const match = text?.match(pattern);
-            if (match?.[1]) {
-              return match[1].trim();
-            }
-          }
-
-          return ocrData.merchantTaxId?.data
-            ? String(ocrData.merchantTaxId.data)
-            : "";
-        };
-
-        // Extract merchant VAT number
-        if (ocrData.text?.text) {
-          const vatNumber = extractVatNumber(ocrData.text.text);
-          setValue("merchant_vat", vatNumber);
-        }
-
-        // Format VAT details for display with improved formatting
-        if (processedData.vatDetails.length > 0) {
-          const vatDetailsText = processedData.vatDetails
-            .map((vat) => {
-              const baseAmount =
-                typeof vat.base === "number"
-                  ? vat.base.toFixed(2)
-                  : parseFloat(vat.base).toFixed(2);
-              const rate =
-                typeof vat.rate === "number"
-                  ? vat.rate
-                  : parseFloat(String(vat.rate));
-              const vatAmount = (parseFloat(baseAmount) * (rate / 100)).toFixed(
-                2
-              );
-              const totalAmount = (
-                parseFloat(baseAmount) + parseFloat(vatAmount)
-              ).toFixed(2);
-              const category = vat.category ? `${vat.category} ` : "";
-              return `${category}MwSt ${rate.toFixed(1)}%\nBasis: CHF ${baseAmount}\nMwSt: CHF ${vatAmount}\nTotal: CHF ${totalAmount}`;
-            })
-            .join("\n\n");
-          setValue("vat_details", vatDetailsText);
-        }
-
-        // Set date if available
-        if (ocrData.date?.data) {
-          const parsedDate = new Date(ocrData.date.data);
-          setValue("date", parsedDate);
-          setValue("transaction_date", parsedDate);
-        }
-
-        // Update line items
-        if (processedData.lineItems?.length > 0) {
-          setLineItems(
-            processedData.lineItems.map((item) => ({
-              name: item.name,
-              quantity: item.quantity || 1,
-              unitPrice: item.unitPrice || item.totalPrice,
-              totalPrice: item.totalPrice || item.unitPrice,
-            }))
-          );
-        }
-
-        setSnackbarMessage(
-          `Receipt details extracted successfully! Confidence: ${(processedData.metadata.confidence * 100).toFixed(1)}%`
+          }))
         );
-      } catch (error) {
-        console.error("Error updating form with processed data:", error);
-        setSnackbarMessage("Error updating form with extracted data");
       }
+
+      setSnackbarMessage(
+        `Receipt details extracted successfully! Confidence: ${(ocrData.confidenceLevel * 100).toFixed(1)}%`
+      );
     } catch (error: any) {
       console.error("OCR processing error:", error);
       let errorMessage =
@@ -1165,7 +1183,6 @@ const CreateReceiptScreen = () => {
     setValue("total_amount", "");
     setValue("tax_amount", "");
     setValue("subtotal_amount", "");
-    setValue("rounding_amount", "");
     setValue("final_price", "");
     setValue("paid_amount", "");
     setValue("change_amount", "");
@@ -1244,8 +1261,7 @@ const CreateReceiptScreen = () => {
 
     return (
       <View>
-
-        <View >
+        <View>
           <View style={styles.imageButtonsContainer}>
             {!isWebPlatform || isMobileWeb ? (
               <>
@@ -1354,7 +1370,6 @@ const CreateReceiptScreen = () => {
             <View style={styles.gridColumn}>
               {renderStepOne()}
               <Animated.View entering={FadeIn.delay(100)}>
-
                 {/* Basic Information */}
                 <Surface style={styles.formCard}>
                   <View style={styles.cardHeader}>
@@ -1725,25 +1740,6 @@ const CreateReceiptScreen = () => {
                         />
                       )}
                       name="subtotal_amount"
-                    />
-
-                    {/* Rounding */}
-                    <Controller
-                      control={control}
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <TextInput
-                          label="Rounding"
-                          mode="outlined"
-                          value={value}
-                          onChangeText={onChange}
-                          onBlur={onBlur}
-                          style={styles.input}
-                          keyboardType="decimal-pad"
-                          disabled={loading}
-                          left={<TextInput.Affix text="CHF" />}
-                        />
-                      )}
-                      name="rounding_amount"
                     />
 
                     {/* Final Price */}

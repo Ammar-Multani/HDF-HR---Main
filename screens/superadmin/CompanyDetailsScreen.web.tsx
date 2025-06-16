@@ -386,6 +386,28 @@ interface CompanyAdmin {
   created_at: string;
 }
 
+interface Company {
+  id: string;
+  company_name: string;
+  registration_number: string;
+  industry_type: string;
+  contact_number: string;
+  contact_email: string;
+  address: {
+    line1: string;
+    line2?: string;
+    city: string;
+    state: string;
+    postal_code: string;
+    country: string;
+  };
+  active: boolean;
+  stakeholders: Array<{ name: string; percentage: number }>;
+  vat_type: string;
+  created_at: string;
+  can_upload_receipts: boolean;
+}
+
 const CompanyDetailsScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
@@ -511,7 +533,8 @@ const CompanyDetailsScreen = () => {
                   active, 
                   vat_type, 
                   stakeholders,
-                  created_at
+                  created_at,
+                  can_upload_receipts
                 `
                 )
                 .eq("id", companyId)
@@ -903,6 +926,29 @@ const CompanyDetailsScreen = () => {
             {t("superAdmin.companies.vatType")}
           </Text>
           <Text style={styles.infoValue}>{company?.vat_type}</Text>
+        </View>
+
+        <View style={styles.infoItem}>
+          <Text style={styles.infoLabel}>
+            {t("superAdmin.companies.receiptUploads")}
+          </Text>
+          <View style={styles.receiptStatusContainer}>
+            <MaterialCommunityIcons
+              name="receipt"
+              size={18}
+              color={company?.can_upload_receipts ? "#10B981" : "#64748b"}
+            />
+            <Text
+              style={[
+                styles.receiptStatusText,
+                { color: company?.can_upload_receipts ? "#10B981" : "#64748b" },
+              ]}
+            >
+              {company?.can_upload_receipts
+                ? t("superAdmin.companies.receiptsEnabled")
+                : t("superAdmin.companies.receiptsDisabled")}
+            </Text>
+          </View>
         </View>
       </View>
     </View>
@@ -1516,6 +1562,16 @@ const styles = StyleSheet.create({
   },
   modalDestructiveText: {
     color: "#ffffff",
+  },
+  receiptStatusContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 4,
+  },
+  receiptStatusText: {
+    fontSize: 15,
+    fontWeight: "500",
   },
 });
 

@@ -17,6 +17,8 @@ import {
   Card,
   Portal,
   Surface,
+  Switch,
+  TouchableRipple,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
@@ -51,6 +53,7 @@ interface CompanyFormData {
   vat_type: string;
   stakeholder_name: string;
   stakeholder_percentage: string;
+  can_upload_receipts: boolean;
 }
 
 // Add window dimensions hook
@@ -122,6 +125,7 @@ const EditCompanyScreen = () => {
       vat_type: "",
       stakeholder_name: "",
       stakeholder_percentage: "",
+      can_upload_receipts: false,
     },
   });
 
@@ -153,6 +157,7 @@ const EditCompanyScreen = () => {
       setValue("contact_number", data.contact_number);
       setValue("contact_email", data.contact_email);
       setValue("vat_type", data.vat_type);
+      setValue("can_upload_receipts", data.can_upload_receipts || false);
 
       // Set address values
       if (data.address) {
@@ -287,6 +292,11 @@ const EditCompanyScreen = () => {
         "contact email"
       );
       compareAndTrackChange(company?.vat_type, data.vat_type, "VAT type");
+      compareAndTrackChange(
+        company?.can_upload_receipts,
+        data.can_upload_receipts,
+        "receipt upload permission"
+      );
 
       // Check address changes more precisely
       const oldAddress = company?.address || {};
@@ -355,6 +365,7 @@ const EditCompanyScreen = () => {
         address: company?.address,
         stakeholders: company?.stakeholders,
         vat_type: company?.vat_type,
+        can_upload_receipts: company?.can_upload_receipts,
       };
 
       // Update company record
@@ -369,6 +380,7 @@ const EditCompanyScreen = () => {
           address: newAddress,
           stakeholders,
           vat_type: data.vat_type,
+          can_upload_receipts: data.can_upload_receipts,
         })
         .eq("id", companyId);
 
@@ -405,6 +417,7 @@ const EditCompanyScreen = () => {
           address: newAddress,
           stakeholders: stakeholders,
           vat_type: data.vat_type,
+          can_upload_receipts: data.can_upload_receipts,
         },
       };
 
@@ -758,6 +771,50 @@ const EditCompanyScreen = () => {
                         {errors.vat_type.message}
                       </Text>
                     )}
+
+                    <Surface style={styles.toggleCard} elevation={0}>
+                      <TouchableRipple
+                        onPress={() => {
+                          if (!submitting) {
+                            const currentValue = watch("can_upload_receipts");
+                            setValue("can_upload_receipts", !currentValue);
+                          }
+                        }}
+                        style={styles.toggleTouchable}
+                      >
+                        <View style={styles.toggleContent}>
+                          <View style={styles.toggleLeft}>
+                            <View style={styles.toggleIconContainer}>
+                              <MaterialCommunityIcons
+                                name="receipt"
+                                size={20}
+                                color={theme.colors.primary}
+                              />
+                            </View>
+                            <View>
+                              <Text style={styles.toggleLabel}>
+                                {t("superAdmin.companies.allowReceiptUploads")}
+                              </Text>
+                              <Text style={styles.toggleDescription}>
+                                {t("superAdmin.companies.receiptUploadsHelper")}
+                              </Text>
+                            </View>
+                          </View>
+                          <Controller
+                            name="can_upload_receipts"
+                            control={control}
+                            render={({ field: { onChange, value } }) => (
+                              <Switch
+                                value={value}
+                                onValueChange={onChange}
+                                disabled={submitting}
+                                color={theme.colors.primary}
+                              />
+                            )}
+                          />
+                        </View>
+                      </TouchableRipple>
+                    </Surface>
                   </Card.Content>
                 </Card>
 
@@ -1260,6 +1317,51 @@ const styles = StyleSheet.create({
     },
     shadowOpacity: 0.27,
     shadowRadius: 4.65,
+  },
+  toggleCard: {
+    marginTop: 8,
+    marginBottom: 16,
+    borderRadius: 12,
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    overflow: "hidden",
+  },
+  toggleTouchable: {
+    padding: 16,
+  },
+  toggleContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  toggleLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    marginRight: 16,
+  },
+  toggleIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    borderWidth: 0.5,
+    borderColor: "#e2e8f0",
+    backgroundColor: "#f1f5f9",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 16,
+  },
+  toggleLabel: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#1e293b",
+    marginBottom: 4,
+  },
+  toggleDescription: {
+    fontSize: 14,
+    color: "#64748b",
+    lineHeight: 20,
   },
 });
 

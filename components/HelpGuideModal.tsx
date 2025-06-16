@@ -178,6 +178,7 @@ const HelpGuideModal = ({
                       borderColor: theme.colors.outline,
                     },
                   ]}
+                  elevation={0}
                 >
                   <View style={styles.stepHeader}>
                     <View
@@ -224,6 +225,7 @@ const HelpGuideModal = ({
                     borderColor: theme.colors.outline,
                   },
                 ]}
+                elevation={0}
               >
                 <Text
                   style={[styles.noteTitle, { color: theme.colors.primary }]}

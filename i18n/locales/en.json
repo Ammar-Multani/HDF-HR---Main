@@ -286,6 +286,11 @@
       "active": "Active",
       "inactive": "Inactive",
       "employees": "Employees",
+      "allowReceiptUploads": "Allow Receipt Uploads",
+      "receiptUploadsHelper": "Allow this company to upload receipts.",
+      "receiptUploads": "Receipt Uploads",
+      "receiptsEnabled": "Receipts are enabled for this company.",
+      "receiptsDisabled": "Receipts are disabled for this company.",
       "actions": "Actions",
       "vatTypePlaceholder": "e.g., Flat-rate VAT accounting, Effective VAT accounting.",
       "contactEmailRequired": "Contact email is required",
@@ -397,7 +402,12 @@
       "passwordNoSpaces": "Password cannot contain spaces",
       "passwordNoRepeatingChars": "Password cannot contain three or more repeating characters",
       "stakeholdersRequired": "At least one stakeholder is required",
-      "totalPercentageMustBe100": "Total stakeholder percentage must equal 100%"
+      "totalPercentageMustBe100": "Total stakeholder percentage must equal 100%",
+      "receipts": {
+        "title": "Receipts",
+        "subtitle": "View, add, and update receipts",
+        "searchPlaceholder": "Search receipts..."
+      }
     },
     "superAdminUsers": {
       "createAdmin": "Create HDF User",
@@ -425,6 +435,7 @@
       "passwordNoRepeatingChars": "Password cannot contain three or more repeating characters",
       "phoneNumberInvalidFormat": "Invalid phone number format. Must be 8-15 digits with optional + prefix"
     },
+
     "tasks": {
       "title": "Task",
       "company": "Company",
