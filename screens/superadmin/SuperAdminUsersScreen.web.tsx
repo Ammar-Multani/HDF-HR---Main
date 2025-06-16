@@ -85,6 +85,7 @@ interface Admin {
   status?: string | boolean;
   role: string;
   created_at: string;
+  admin_sequence_id?: number;
 }
 
 // Company type
@@ -106,6 +107,7 @@ interface CompanyUser {
   active_status?: string | boolean;
   job_title?: string;
   created_at: string;
+  company_user_sequence_id?: number;
 }
 
 // Add this component after the imports and before other components
@@ -904,9 +906,18 @@ const SuperAdminUsersScreen = () => {
                 "super"
               )}
               <View style={styles.userTextContainer}>
-                <Text variant="bold" style={styles.userName} numberOfLines={1}>
-                  {item.name || "Unnamed Admin"}
-                </Text>
+                <View style={styles.userNameContainer}>
+                  <Text
+                    variant="bold"
+                    style={styles.userName}
+                    numberOfLines={1}
+                  >
+                    {item.name || "Unnamed Admin"}
+                  </Text>
+                  <Text style={styles.sequenceId}>
+                    #{item.admin_sequence_id || "-"}
+                  </Text>
+                </View>
                 <Text style={styles.userEmail} numberOfLines={1}>
                   {item.email}
                 </Text>
@@ -952,10 +963,19 @@ const SuperAdminUsersScreen = () => {
                 "company"
               )}
               <View style={styles.userTextContainer}>
-                <Text variant="bold" style={styles.userName} numberOfLines={1}>
-                  {`${item.first_name || ""} ${item.last_name || ""}`.trim() ||
-                    "Unnamed Admin"}
-                </Text>
+                <View style={styles.userNameContainer}>
+                  <Text
+                    variant="bold"
+                    style={styles.userName}
+                    numberOfLines={1}
+                  >
+                    {`${item.first_name || ""} ${item.last_name || ""}`.trim() ||
+                      "Unnamed Admin"}
+                  </Text>
+                  <Text style={styles.sequenceId}>
+                    #{item.company_user_sequence_id || "-"}
+                  </Text>
+                </View>
                 <Text style={styles.userEmail} numberOfLines={1}>
                   {item.email}
                 </Text>
@@ -1014,10 +1034,19 @@ const SuperAdminUsersScreen = () => {
                 "employee"
               )}
               <View style={styles.userTextContainer}>
-                <Text variant="bold" style={styles.userName} numberOfLines={1}>
-                  {`${item.first_name || ""} ${item.last_name || ""}`.trim() ||
-                    "Unnamed Employee"}
-                </Text>
+                <View style={styles.userNameContainer}>
+                  <Text
+                    variant="bold"
+                    style={styles.userName}
+                    numberOfLines={1}
+                  >
+                    {`${item.first_name || ""} ${item.last_name || ""}`.trim() ||
+                      "Unnamed Employee"}
+                  </Text>
+                  <Text style={styles.sequenceId}>
+                    #{item.company_user_sequence_id || "-"}
+                  </Text>
+                </View>
                 <Text style={styles.userEmail} numberOfLines={1}>
                   {item.email}
                 </Text>
@@ -1210,6 +1239,11 @@ const SuperAdminUsersScreen = () => {
   // Add table header components
   const SuperAdminTableHeader = () => (
     <View style={styles.tableHeader}>
+      <View style={[styles.tableHeaderCell, { flex: 0.6 }]}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          ID
+        </Text>
+      </View>
       <View style={styles.tableHeaderCell}>
         <Text variant="medium" style={styles.tableHeaderText}>
           Name
@@ -1245,6 +1279,11 @@ const SuperAdminUsersScreen = () => {
 
   const CompanyAdminTableHeader = () => (
     <View style={styles.tableHeader}>
+      <View style={[styles.tableHeaderCell, { flex: 0.6 }]}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          ID
+        </Text>
+      </View>
       <View style={styles.tableHeaderCell}>
         <Text variant="medium" style={styles.tableHeaderText}>
           Name
@@ -1280,6 +1319,11 @@ const SuperAdminUsersScreen = () => {
 
   const EmployeeTableHeader = () => (
     <View style={styles.tableHeader}>
+      <View style={[styles.tableHeaderCell, { flex: 0.6 }]}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          ID
+        </Text>
+      </View>
       <View style={styles.tableHeaderCell}>
         <Text variant="medium" style={styles.tableHeaderText}>
           Name
@@ -1327,6 +1371,18 @@ const SuperAdminUsersScreen = () => {
         pressed && { backgroundColor: "#f8fafc" },
       ]}
     >
+      <View style={[styles.tableCell, { flex: 0.6 }]}>
+        <TouchableOpacity onPress={() => {
+          navigation.navigate("SuperAdminDetailsScreen", {
+            adminId: item.id,
+            adminType: "super",
+          });
+        }}>
+          <Text style={styles.receiptIdLink}>
+            {item.admin_sequence_id || "-"}
+          </Text>
+        </TouchableOpacity>
+      </View>
       <View style={styles.tableCell}>
         <TooltipText text={item.name || "Unnamed Admin"} />
       </View>
@@ -1390,6 +1446,11 @@ const SuperAdminUsersScreen = () => {
         pressed && { backgroundColor: "#f8fafc" },
       ]}
     >
+      <View style={[styles.tableCell, { flex: 0.6 }]}>
+        <Text style={styles.tableCellText}>
+          {item.company_user_sequence_id || "-"}
+        </Text>
+      </View>
       <View style={styles.tableCell}>
         <TooltipText
           text={
@@ -1460,6 +1521,11 @@ const SuperAdminUsersScreen = () => {
         pressed && { backgroundColor: "#f8fafc" },
       ]}
     >
+      <View style={[styles.tableCell, { flex: 0.6 }]}>
+        <Text style={styles.tableCellText}>
+          {item.company_user_sequence_id || "-"}
+        </Text>
+      </View>
       <View style={styles.tableCell}>
         <TooltipText
           text={
@@ -1527,6 +1593,9 @@ const SuperAdminUsersScreen = () => {
               .fill(0)
               .map((_, index) => (
                 <View key={`skeleton-${index}`} style={styles.tableRow}>
+                  <View style={[styles.tableCell, { flex: 0.6 }]}>
+                    <Shimmer width={60} height={16} />
+                  </View>
                   <View style={styles.tableCell}>
                     <Shimmer width={160} height={16} />
                   </View>
@@ -2272,9 +2341,7 @@ const SuperAdminUsersScreen = () => {
   };
 
   return (
-    <SafeAreaView
-      style={[styles.container, ]}
-    >
+    <SafeAreaView style={[styles.container]}>
       <AppHeader
         title="All Users"
         showBackButton={false}
@@ -3291,6 +3358,12 @@ const styles = StyleSheet.create({
     justifyContent: "space-evenly",
     alignItems: "flex-start",
   },
+      receiptIdLink: {
+      color: "#1a73e8",
+      cursor: "pointer",
+      fontSize: 14,
+      fontFamily: "Poppins-Regular",
+    },
   tableCellText: {
     fontSize: 14,
     color: "#334155",
@@ -3384,6 +3457,18 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins-Regular",
     flex: 1,
     marginRight: 16,
+  },
+  userNameContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-start",
+    marginBottom: 4,
+  },
+  sequenceId: {
+    fontSize: 14,
+    color: "#757575",
+    marginLeft: 8,
+    fontFamily: "Poppins-Regular",
   },
 });
 
