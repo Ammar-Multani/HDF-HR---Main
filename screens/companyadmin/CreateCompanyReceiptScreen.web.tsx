@@ -206,32 +206,21 @@ interface TaggunTax {
   category?: string;
 }
 
-// Update DateChangeEvent to fix type issues
+// Update DateChangeEvent to handle both web and native events
 interface DateChangeEvent {
-  type?: string;
+  type: string;
   nativeEvent?: {
     timestamp?: number;
   };
   target?: HTMLInputElement;
-  bubbles?: boolean;
-  cancelBubble?: boolean;
-  cancelable?: boolean;
-  composed?: boolean;
-  currentTarget?: EventTarget;
-  defaultPrevented?: boolean;
-  eventPhase?: number;
-  isTrusted?: boolean;
-  returnValue?: boolean;
-  srcElement?: Element;
-  timeStamp?: number;
-  initEvent?: (type: string, bubbles?: boolean, cancelable?: boolean) => void;
-  preventDefault?: () => void;
-  stopImmediatePropagation?: () => void;
-  stopPropagation?: () => void;
-  AT_TARGET?: number;
-  BUBBLING_PHASE?: number;
-  CAPTURING_PHASE?: number;
-  NONE?: number;
+}
+
+interface WebDateChangeEvent extends React.ChangeEvent<HTMLInputElement> {}
+interface NativeDateChangeEvent {
+  type: string;
+  nativeEvent: {
+    timestamp: number;
+  };
 }
 
 // Add these constants after the interfaces
@@ -266,6 +255,27 @@ const CreateCompanyReceiptScreen = () => {
   const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+
+  // Snackbar message handling
+  const showSnackbarMessage = (
+    message: string,
+    type: "success" | "error" | "info" = "info"
+  ) => {
+    let icon = "";
+    switch (type) {
+      case "success":
+        icon = "✓";
+        break;
+      case "error":
+        icon = "✕";
+        break;
+      case "info":
+        icon = "ℹ";
+        break;
+    }
+    setSnackbarMessage(`${icon} ${message}`);
+    setSnackbarVisible(true);
+  };
 
   // Receipt data state
   const [receiptImage, setReceiptImage] = useState<string | null>(null);
@@ -375,9 +385,41 @@ const CreateCompanyReceiptScreen = () => {
         throw new Error("Taggun API key is not configured");
       }
 
+      // Update snackbar message handling
+      const showSnackbarMessage = (
+        message: string,
+        type: "success" | "error" | "info" = "info"
+      ) => {
+        let icon = "";
+        switch (type) {
+          case "success":
+            icon = "✓";
+            break;
+          case "error":
+            icon = "✕";
+            break;
+          case "info":
+            icon = "ℹ";
+            break;
+        }
+        setSnackbarMessage(`${icon} ${message}`);
+        setSnackbarVisible(true);
+      };
+
+      // Update error handling in OCR processing
+      if (!TAGGUN_API_KEY) {
+        showSnackbarMessage(
+          "OCR service is not configured. Please contact support.",
+          "error"
+        );
+        return;
+      }
+
       setIsProcessingOCR(true);
-      setSnackbarMessage("Processing receipt...");
-      setSnackbarVisible(true);
+      showSnackbarMessage(
+        "Processing receipt... This may take a few moments",
+        "info"
+      );
 
       // Convert image URI to blob
       const response = await fetch(imageUri);
@@ -501,9 +543,6 @@ const CreateCompanyReceiptScreen = () => {
         extractVatNumber(ocrData.text?.text) ||
         (ocrData.merchantTaxId?.data
           ? String(ocrData.merchantTaxId.data)
-          : null) ||
-        (ocrData.entities?.merchantTaxId?.data
-          ? String(ocrData.entities.merchantTaxId.data)
           : null);
 
       if (vatNumber) {
@@ -631,15 +670,44 @@ const CreateCompanyReceiptScreen = () => {
         setLineItems(extractedItems);
       }
 
-      setSnackbarMessage(
-        `Receipt details extracted successfully! Confidence: ${(
-          ocrData.confidenceLevel * 100
-        ).toFixed(1)}%`
-      );
+      // Update success message with more details
+      const confidenceScore = (ocrData.confidenceLevel * 100).toFixed(1);
+      let successMessage = `Receipt processed successfully! (${confidenceScore}% confidence)`;
+
+      // Add details about what was found
+      const extractedFields = [];
+      if (ocrData.merchantName?.data) extractedFields.push("merchant name");
+      if (ocrData.totalAmount?.data) extractedFields.push("total amount");
+      if (ocrData.taxAmount?.data) extractedFields.push("tax amount");
+      if (ocrData.entities?.multiTaxLineItems?.length)
+        extractedFields.push("VAT details");
+
+      if (extractedFields.length > 0) {
+        successMessage += `\nFound: ${extractedFields.join(", ")}`;
+      }
+
+      showSnackbarMessage(successMessage, "success");
     } catch (error: any) {
       console.error("OCR processing error:", error);
-      setSnackbarMessage(error.message || "Failed to process receipt");
-      setSnackbarVisible(true);
+
+      // More descriptive error messages
+      let errorMessage = "Failed to process receipt. ";
+      if (error.message.includes("API key")) {
+        errorMessage += "API authentication failed. Please contact support.";
+      } else if (error.message.includes("file size")) {
+        errorMessage +=
+          "File is too large. Please try a smaller file (max 10MB).";
+      } else if (error.message.includes("file type")) {
+        errorMessage +=
+          "Please upload a valid image (JPEG, PNG, HEIC) or PDF file.";
+      } else if (error.message.includes("network")) {
+        errorMessage +=
+          "Network error. Please check your connection and try again.";
+      } else {
+        errorMessage += "Please try again or fill in details manually.";
+      }
+
+      showSnackbarMessage(errorMessage, "error");
     } finally {
       setIsProcessingOCR(false);
     }
@@ -1042,8 +1110,10 @@ const CreateCompanyReceiptScreen = () => {
     setLineItems([]);
 
     // Show success message
-    setSnackbarMessage("Receipt and auto-filled fields have been cleared");
-    setSnackbarVisible(true);
+    showSnackbarMessage(
+      "Receipt image and auto-filled fields have been cleared",
+      "info"
+    );
   };
 
   const handleDeleteReceipt = () => {
@@ -1248,39 +1318,40 @@ const CreateCompanyReceiptScreen = () => {
         console.error("Error in activity logging:", activityError);
       }
 
-      setSnackbarMessage("Receipt created successfully");
-      setSnackbarVisible(true);
+      showSnackbarMessage(
+        "Receipt created successfully! Redirecting...",
+        "success"
+      );
 
-      // Navigate back after a short delay
       setTimeout(() => {
         navigation.goBack();
       }, 1500);
     } catch (error) {
       console.error("Error creating receipt:", error);
-      setSnackbarMessage(
-        error instanceof Error ? error.message : "Failed to create receipt"
-      );
-      setSnackbarVisible(true);
+      const errorMessage =
+        error instanceof Error
+          ? `Failed to create receipt: ${error.message}`
+          : "Failed to create receipt. Please try again.";
+      showSnackbarMessage(errorMessage, "error");
     } finally {
       setLoading(false);
     }
   };
 
   const handleDateChange = (
-    event: DateChangeEvent | React.ChangeEvent<HTMLInputElement>,
+    event: WebDateChangeEvent | NativeDateChangeEvent,
     type: "receipt" | "transaction"
   ) => {
     if (Platform.OS === "web") {
-      const selectedDate = new Date(
-        (event as React.ChangeEvent<HTMLInputElement>).target.value
-      );
+      const webEvent = event as WebDateChangeEvent;
+      const selectedDate = new Date(webEvent.target.value);
       setValue(type === "receipt" ? "date" : "transaction_date", selectedDate);
     } else {
-      const nativeEvent = (event as DateChangeEvent).nativeEvent;
-      if (event.type === "set" && nativeEvent?.timestamp) {
+      const nativeEvent = event as NativeDateChangeEvent;
+      if (event.type === "set" && nativeEvent.nativeEvent?.timestamp) {
         setValue(
           type === "receipt" ? "date" : "transaction_date",
-          new Date(nativeEvent.timestamp)
+          new Date(nativeEvent.nativeEvent.timestamp)
         );
       }
       type === "receipt"
@@ -2046,15 +2117,11 @@ const CreateCompanyReceiptScreen = () => {
         message={snackbarMessage}
         onDismiss={() => setSnackbarVisible(false)}
         type={
-          snackbarMessage?.includes("successful") ||
-          snackbarMessage?.includes("Processing") ||
-          snackbarMessage?.includes("instructions will be sent")
+          snackbarMessage.startsWith("✓")
             ? "success"
-            : snackbarMessage?.includes("rate limit") ||
-                snackbarMessage?.includes("network") ||
-                snackbarMessage?.includes("processing")
-              ? "info"
-              : "error"
+            : snackbarMessage.startsWith("✕")
+              ? "error"
+              : "info"
         }
         duration={6000}
         action={{

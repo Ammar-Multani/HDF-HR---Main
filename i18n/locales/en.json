@@ -275,6 +275,7 @@
       "adminLastNameRequired": "Admin's last name is required",
       "manage": "Manage Companies",
       "subtitle": "View, add, and update company information",
+      "totalCompanies": "Total Companies",
       "createCompany": "Create Company",
       "addCompany": "Add Company",
       "companyName": "Company Name",
@@ -435,6 +436,8 @@
       "passwordNoRepeatingChars": "Password cannot contain three or more repeating characters",
       "phoneNumberInvalidFormat": "Invalid phone number format. Must be 8-15 digits with optional + prefix"
     },
+
+
 
     "tasks": {
       "title": "Task",
@@ -1245,5 +1248,38 @@
     "createEmployeeIllnessReport": "Create Employee Illness Report",
     "createEmployeeAccidentReport": "Create Employee Accident Report",
     "activityLog": "Activity Logs"
+  },
+
+  "receipts": {
+    "title": "Receipts",
+    "subtitle": "View, add, and update receipts",
+    "searchPlaceholder": "Search receipts...",
+    "noReceiptsFound": "No receipts found",
+    "noReceiptsSearch": "No receipts match your search criteria.",
+    "typeMoreChars": "Try typing at least 3 characters for better results.",
+    "noReceiptsYet": "You haven't added any receipts yet.",
+    "showing": "Showing",
+    "of": "of",
+    "receipts": "receipts",
+    "noReceiptsCreated": "Create your first receipt to get started.",
+    "createReceipt": "Create Receipt",
+    "receiptNumber": "Receipt No.",
+    "date": "Date",
+    "merchantName": "Merchant",
+    "transactionDate": "Transaction Date",
+    "amount": "Amount",
+    "status": "Status",
+    "actions": "Actions",
+    "receiptDetails": "Receipt Details",
+    "receiptActions": "Receipt Actions",
+    "receiptStatus": "Receipt Status",
+    "receiptNumberRequired": "Receipt number is required",
+    "dateRequired": "Date is required",
+    "merchantNameRequired": "Merchant name is required",
+    "transactionDateRequired": "Transaction date is required",
+    "amountRequired": "Amount is required",
+    "statusRequired": "Status is required",
+    "company": "Company",
+    "totalReceipts": "Total Receipts"
   }
 }

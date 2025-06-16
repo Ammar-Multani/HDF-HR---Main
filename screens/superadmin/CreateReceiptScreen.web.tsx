@@ -107,12 +107,20 @@ const PAYMENT_METHODS = [
   "Other",
 ];
 
-interface DateChangeEvent extends Event {
-  type?: string;
+interface DateChangeEvent {
+  type: string;
   nativeEvent?: {
     timestamp?: number;
   };
   target?: HTMLInputElement;
+}
+
+interface WebDateChangeEvent extends React.ChangeEvent<HTMLInputElement> {}
+interface NativeDateChangeEvent {
+  type: string;
+  nativeEvent: {
+    timestamp: number;
+  };
 }
 
 interface TaggunLocation {
@@ -181,6 +189,7 @@ interface TaggunResponse {
     invoiceNumber: TaggunEntity;
     receiptNumber: TaggunEntity;
     multiTaxLineItems: any[];
+    merchantTaxId?: TaggunEntity;
   };
   text: {
     text: string;
@@ -274,15 +283,42 @@ const CreateReceiptScreen = () => {
   const transaction_date = watch("transaction_date");
   const payment_method = watch("payment_method");
 
+  // Snackbar message handling
+  const showSnackbarMessage = (
+    message: string,
+    type: "success" | "error" | "info" = "info"
+  ) => {
+    let icon = "";
+    switch (type) {
+      case "success":
+        icon = "✓";
+        break;
+      case "error":
+        icon = "✕";
+        break;
+      case "info":
+        icon = "ℹ";
+        break;
+    }
+    setSnackbarMessage(`${icon} ${message}`);
+    setSnackbarVisible(true);
+  };
+
   const processReceiptWithOCR = async (imageUri: string) => {
     try {
       if (!TAGGUN_API_KEY) {
-        throw new Error("Taggun API key is not configured");
+        showSnackbarMessage(
+          "OCR service is not configured. Please contact support.",
+          "error"
+        );
+        return;
       }
 
       setIsProcessingOCR(true);
-      setSnackbarMessage("Processing receipt...");
-      setSnackbarVisible(true);
+      showSnackbarMessage(
+        "Processing receipt... This may take a few moments",
+        "info"
+      );
 
       // Convert image URI to blob
       const response = await fetch(imageUri);
@@ -591,40 +627,15 @@ const CreateReceiptScreen = () => {
         return null;
       };
 
-      // Try to extract VAT number from multiple sources
-      let merchantVat = null;
+      // Try to extract merchant VAT number from multiple sources
+      const vatNumber =
+        extractVatNumber(ocrData.text?.text) ||
+        (ocrData.merchantTaxId?.data
+          ? String(ocrData.merchantTaxId.data)
+          : null);
 
-      // 1. Try from merchantTaxId first (most reliable)
-      if (ocrData.merchantTaxId?.data) {
-        merchantVat = String(ocrData.merchantTaxId.data);
-      }
-
-      // 2. Try from entities if available
-      if (!merchantVat && ocrData.entities?.merchantTaxId?.data) {
-        merchantVat = String(ocrData.entities.merchantTaxId.data);
-      }
-
-      // 3. Try extracting from raw text
-      if (!merchantVat && ocrData.text?.text) {
-        merchantVat = extractVatNumber(ocrData.text.text);
-      }
-
-      // 4. Try looking in specific regions (headers, footers)
-      if (!merchantVat && ocrData.text?.regions) {
-        for (const region of ocrData.text.regions) {
-          if (region.text) {
-            merchantVat = extractVatNumber(region.text);
-            if (merchantVat) break;
-          }
-        }
-      }
-
-      // Set the merchant VAT if found
-      if (merchantVat) {
-        console.log("Found merchant VAT:", merchantVat);
-        setValue("merchant_vat", merchantVat);
-      } else {
-        console.log("No merchant VAT number found in receipt");
+      if (vatNumber) {
+        setValue("merchant_vat", vatNumber);
       }
 
       // Format VAT details for display with improved formatting and NaN handling
@@ -730,24 +741,44 @@ const CreateReceiptScreen = () => {
         );
       }
 
-      setSnackbarMessage(
-        `Receipt details extracted successfully! Confidence: ${(ocrData.confidenceLevel * 100).toFixed(1)}%`
-      );
-    } catch (error: any) {
-      console.error("OCR processing error:", error);
-      let errorMessage =
-        "Failed to process receipt. Please fill in details manually.";
+      // Update success message with more details
+      const confidenceScore = (ocrData.confidenceLevel * 100).toFixed(1);
+      let successMessage = `Receipt processed successfully! (${confidenceScore}% confidence)`;
 
-      if (error.message.includes("API key")) {
-        errorMessage = "API key error. Please contact support.";
-      } else if (error.message.includes("file size")) {
-        errorMessage = "File is too large. Please try a smaller file.";
-      } else if (error.message.includes("file type")) {
-        errorMessage = "Invalid file type. Please upload a valid image or PDF.";
+      // Add details about what was found
+      const extractedFields = [];
+      if (ocrData.merchantName?.data) extractedFields.push("merchant name");
+      if (ocrData.totalAmount?.data) extractedFields.push("total amount");
+      if (ocrData.taxAmount?.data) extractedFields.push("tax amount");
+      if (ocrData.entities?.multiTaxLineItems?.length)
+        extractedFields.push("VAT details");
+
+      if (extractedFields.length > 0) {
+        successMessage += `\nFound: ${extractedFields.join(", ")}`;
       }
 
-      setSnackbarMessage(errorMessage);
-      setSnackbarVisible(true);
+      showSnackbarMessage(successMessage, "success");
+    } catch (error: any) {
+      console.error("OCR processing error:", error);
+
+      // More descriptive error messages
+      let errorMessage = "Failed to process receipt. ";
+      if (error.message.includes("API key")) {
+        errorMessage += "API authentication failed. Please contact support.";
+      } else if (error.message.includes("file size")) {
+        errorMessage +=
+          "File is too large. Please try a smaller file (max 10MB).";
+      } else if (error.message.includes("file type")) {
+        errorMessage +=
+          "Please upload a valid image (JPEG, PNG, HEIC) or PDF file.";
+      } else if (error.message.includes("network")) {
+        errorMessage +=
+          "Network error. Please check your connection and try again.";
+      } else {
+        errorMessage += "Please try again or fill in details manually.";
+      }
+
+      showSnackbarMessage(errorMessage, "error");
     } finally {
       setIsProcessingOCR(false);
     }
@@ -912,17 +943,19 @@ const CreateReceiptScreen = () => {
   };
 
   const handleDateChange = (
-    event: DateChangeEvent,
+    event: WebDateChangeEvent | NativeDateChangeEvent,
     type: "receipt" | "transaction"
   ) => {
     if (Platform.OS === "web") {
-      const selectedDate = new Date((event.target as HTMLInputElement).value);
+      const webEvent = event as WebDateChangeEvent;
+      const selectedDate = new Date(webEvent.target.value);
       setValue(type === "receipt" ? "date" : "transaction_date", selectedDate);
     } else {
-      if (event.type === "set" && event.nativeEvent?.timestamp) {
+      const nativeEvent = event as NativeDateChangeEvent;
+      if (event.type === "set" && nativeEvent.nativeEvent?.timestamp) {
         setValue(
           type === "receipt" ? "date" : "transaction_date",
-          new Date(event.nativeEvent.timestamp)
+          new Date(nativeEvent.nativeEvent.timestamp)
         );
       }
       type === "receipt"
@@ -1081,17 +1114,21 @@ const CreateReceiptScreen = () => {
         console.error("Error logging activity:", activityLogError);
       }
 
-      setSnackbarMessage("Receipt created successfully");
-      setSnackbarVisible(true);
+      showSnackbarMessage(
+        "Receipt created successfully! Redirecting...",
+        "success"
+      );
 
-      // Navigate back after a short delay
       setTimeout(() => {
         navigation.goBack();
       }, 1500);
     } catch (error: any) {
       console.error("Error creating receipt:", error);
-      setSnackbarMessage(error.message || "Failed to create receipt");
-      setSnackbarVisible(true);
+      const errorMessage =
+        error instanceof Error
+          ? `Failed to create receipt: ${error.message}`
+          : "Failed to create receipt. Please try again.";
+      showSnackbarMessage(errorMessage, "error");
     } finally {
       setLoading(false);
     }
@@ -1246,8 +1283,10 @@ const CreateReceiptScreen = () => {
     setValue("language_hint", "");
     setLineItems([]);
     // Show success message
-    setSnackbarMessage("Receipt and auto-filled fields have been cleared");
-    setSnackbarVisible(true);
+    showSnackbarMessage(
+      "Receipt image and auto-filled fields have been cleared",
+      "info"
+    );
   };
 
   const handleDeleteReceipt = () => {
@@ -2040,15 +2079,11 @@ const CreateReceiptScreen = () => {
         message={snackbarMessage}
         onDismiss={() => setSnackbarVisible(false)}
         type={
-          snackbarMessage?.includes("successful") ||
-          snackbarMessage?.includes("Proccesing") ||
-          snackbarMessage?.includes("instructions will be sent")
+          snackbarMessage.startsWith("✓")
             ? "success"
-            : snackbarMessage?.includes("rate limit") ||
-                snackbarMessage?.includes("network") ||
-                snackbarMessage?.includes("processing")
-              ? "info"
-              : "error"
+            : snackbarMessage.startsWith("✕")
+              ? "error"
+              : "info"
         }
         duration={6000}
         action={{

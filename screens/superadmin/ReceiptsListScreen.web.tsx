@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  useCallback,
+} from "react";
 import {
   StyleSheet,
   View,
@@ -44,6 +50,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
 import Pagination from "../../components/Pagination";
+import CompanySelector from "../../components/CompanySelector";
 
 // Define the navigation param list type
 type RootStackParamList = {
@@ -65,7 +72,8 @@ interface Receipt {
   tax_amount: number;
   payment_method: string;
   created_at: string;
-  company: any; // Using any to avoid TypeScript issues
+  receipt_sequence_id?: number;
+  company: any;
 }
 
 // Add TooltipText component after imports and before Receipt interface
@@ -488,7 +496,7 @@ const createStyles = (theme: MD3Theme) =>
       borderColor: "#e0e0e0",
       overflow: "hidden",
     },
-    tableHeader: {
+    tableHeaderRow: {
       flexDirection: "row",
       backgroundColor: "#f8fafc",
       borderBottomWidth: 1,
@@ -515,7 +523,7 @@ const createStyles = (theme: MD3Theme) =>
       flexDirection: "row",
       borderBottomWidth: 1,
       borderBottomColor: "#e0e0e0",
-      paddingVertical: 16,
+      paddingVertical: 13,
       backgroundColor: "#fff",
       paddingHorizontal: 26,
       alignItems: "center",
@@ -544,6 +552,12 @@ const createStyles = (theme: MD3Theme) =>
     actionIcon: {
       margin: 0,
       marginRight: 8,
+    },
+    receiptIdLink: {
+      color: "#1a73e8",
+      cursor: "pointer",
+      fontSize: 14,
+      fontFamily: "Poppins-Regular",
     },
     tooltipContainer: {
       position: "relative",
@@ -588,7 +602,7 @@ const createStyles = (theme: MD3Theme) =>
       borderWidth: 1,
       borderColor: "#e0e0e0",
       borderRadius: 16,
-      marginTop: 12,
+      marginTop: 5,
       overflow: "hidden",
       width: "auto",
       alignSelf: "center",
@@ -607,11 +621,11 @@ const ReceiptsListScreen = () => {
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
   const [companies, setCompanies] = useState<any[]>([]);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
-  const [sortBy, setSortBy] = useState("date");
+  const [sortBy, setSortBy] = useState("none");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [appliedFilters, setAppliedFilters] = useState({
     companyId: null as string | null,
-    sortBy: "date",
+    sortBy: "none",
     sortOrder: "desc" as "asc" | "desc",
   });
 
@@ -624,6 +638,12 @@ const ReceiptsListScreen = () => {
     width: Dimensions.get("window").width,
     height: Dimensions.get("window").height,
   });
+
+  // Add state for filtered receipts
+  const [filteredReceipts, setFilteredReceipts] = useState<Receipt[]>([]);
+
+  // Add error state
+  const [error, setError] = useState<string | null>(null);
 
   const styles = createStyles(theme);
 
@@ -647,10 +667,9 @@ const ReceiptsListScreen = () => {
 
   const fetchReceipts = async (refresh = false) => {
     try {
+      setError(null);
       if (refresh) {
         setPage(0);
-        setLoading(true);
-      } else {
         setLoading(true);
       }
 
@@ -658,7 +677,6 @@ const ReceiptsListScreen = () => {
       const from = currentPage * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      // Build the base query with count
       let query = supabase.from("receipts").select(
         `
           id, 
@@ -671,6 +689,7 @@ const ReceiptsListScreen = () => {
           tax_amount,
           payment_method,
           created_at,
+          receipt_sequence_id,
           company:company_id (
             id, 
             company_name
@@ -679,42 +698,49 @@ const ReceiptsListScreen = () => {
         { count: "exact" }
       );
 
-      // Apply company filter if selected
       if (appliedFilters.companyId) {
         query = query.eq("company_id", appliedFilters.companyId);
       }
 
-      // Apply search filter if present
       if (searchQuery.trim() !== "") {
         query = query.or(
-          `merchant_name.ilike.%${searchQuery}%,receipt_number.ilike.%${searchQuery}%`
+          `merchant_name.ilike.%${searchQuery}%,receipt_number.ilike.%${searchQuery}%,receipt_sequence_id.eq.${parseInt(searchQuery) || 0}`
         );
       }
 
-      // Apply sorting
-      query = query.order(appliedFilters.sortBy, {
-        ascending: appliedFilters.sortOrder === "asc",
-      });
-
-      // Apply pagination
-      query = query.range(from, to);
-
-      const { data, error, count } = await query;
-
-      if (error) {
-        console.error("Error fetching receipts:", error);
-        return;
+      // Apply sorting based on sortBy
+      if (appliedFilters.sortBy === "none") {
+        // Default sort by date desc (newest first)
+        query = query.order("date", { ascending: false });
+      } else {
+        query = query.order(appliedFilters.sortBy, {
+          ascending: appliedFilters.sortOrder === "asc",
+        });
       }
 
-      // Update total items count
+      query = query.range(from, to);
+
+      const { data, error: supabaseError, count } = await query;
+
+      if (supabaseError) {
+        throw new Error(supabaseError.message);
+      }
+
       if (count !== null) {
         setTotalItems(count);
       }
 
       setReceipts(data || []);
+      setFilteredReceipts(data || []);
     } catch (error) {
       console.error("Error fetching receipts:", error);
+      setError(
+        error instanceof Error
+          ? error.message
+          : "An error occurred while fetching receipts"
+      );
       setReceipts([]);
+      setFilteredReceipts([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -723,16 +749,24 @@ const ReceiptsListScreen = () => {
 
   useEffect(() => {
     fetchCompanies();
-  }, []);
+  }, []); // Only fetch companies once on mount
 
   useEffect(() => {
     fetchReceipts(true);
-  }, [appliedFilters, searchQuery]);
+  }, [appliedFilters, searchQuery]); // Fetch when filters or search changes
 
-  const onRefresh = () => {
+  // Update page change effect
+  useEffect(() => {
+    if (!loading) {
+      // Only fetch if not already loading
+      fetchReceipts(false);
+    }
+  }, [page]);
+
+  const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchReceipts(true);
-  };
+  }, []);
 
   const handleCreateReceipt = () => {
     navigation.navigate("CreateReceipt");
@@ -749,9 +783,14 @@ const ReceiptsListScreen = () => {
   };
 
   // Update page handling
-  const handlePageChange = (newPage: number) => {
-    setPage(newPage);
-  };
+  const handlePageChange = useCallback(
+    (newPage: number) => {
+      if (newPage >= 0 && newPage < Math.ceil(totalItems / PAGE_SIZE)) {
+        setPage(newPage);
+      }
+    },
+    [totalItems, PAGE_SIZE]
+  );
 
   // Filter modal state and handlers
   const applyFilters = () => {
@@ -767,13 +806,13 @@ const ReceiptsListScreen = () => {
 
   const clearFilters = () => {
     setSelectedCompany(null);
-    setSortBy("date");
+    setSortBy("none");
     setSortOrder("desc");
-    setPage(0); // Reset to first page when clearing filters
+    setPage(0);
 
     setAppliedFilters({
       companyId: null,
-      sortBy: "date",
+      sortBy: "none",
       sortOrder: "desc",
     });
   };
@@ -783,9 +822,56 @@ const ReceiptsListScreen = () => {
   const isMediumScreen =
     windowDimensions.width >= 768 && windowDimensions.width < 1440;
 
-  // Update renderContent to include pagination
+  // Update memoizedFilteredReceipts
+  const memoizedFilteredReceipts = useMemo(() => {
+    try {
+      let filtered = receipts;
+
+      // Apply search filter
+      if (searchQuery.trim() !== "") {
+        filtered = filtered.filter(
+          (receipt) =>
+            receipt.merchant_name
+              .toLowerCase()
+              .includes(searchQuery.toLowerCase()) ||
+            receipt.receipt_number
+              .toLowerCase()
+              .includes(searchQuery.toLowerCase()) ||
+            (receipt.receipt_sequence_id &&
+              receipt.receipt_sequence_id.toString().includes(searchQuery))
+        );
+      }
+
+      return filtered;
+    } catch (error) {
+      console.error("Error filtering receipts:", error);
+      return receipts;
+    }
+  }, [receipts, searchQuery]);
+
+  // Update filteredReceipts when memoizedFilteredReceipts changes
+  useEffect(() => {
+    setFilteredReceipts(memoizedFilteredReceipts);
+  }, [memoizedFilteredReceipts]);
+
+  // Update renderContent to use filteredReceipts instead of receipts
   const renderContent = () => {
-    if (receipts.length === 0) {
+    if (error) {
+      return (
+        <EmptyState
+          icon="alert-circle"
+          title="Error Loading Receipts"
+          message={error}
+          buttonTitle="Try Again"
+          onButtonPress={() => {
+            setError(null);
+            fetchReceipts(true);
+          }}
+        />
+      );
+    }
+
+    if (filteredReceipts.length === 0) {
       return (
         <EmptyState
           icon="receipt"
@@ -820,7 +906,7 @@ const ReceiptsListScreen = () => {
           <View style={styles.tableContainer}>
             <TableHeader />
             <FlatList
-              data={receipts}
+              data={filteredReceipts}
               renderItem={({ item }) => <TableRow item={item} />}
               keyExtractor={(item) => item.id}
               contentContainerStyle={styles.tableContent}
@@ -829,30 +915,68 @@ const ReceiptsListScreen = () => {
               }
             />
           </View>
-          {totalPages > 1 && (
-            <View style={styles.paginationWrapper}>
-              <Pagination
-                currentPage={page}
-                totalPages={totalPages}
-                onPageChange={handlePageChange}
-              />
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                marginLeft: 12,
+                marginTop: 12,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 14,
+                  color: "#666",
+                  fontFamily: "Poppins-Regular",
+                }}
+              >
+                {t("receipts.totalReceipts")}:
+              </Text>
+              <Text
+                style={{
+                  fontSize: 14,
+                  color: theme.colors.primary,
+                  fontFamily: "Poppins-Medium",
+                  marginLeft: 4,
+                }}
+              >
+                {totalItems}
+              </Text>
             </View>
-          )}
+            {totalPages > 1 && (
+              <View style={styles.paginationWrapper}>
+                <Pagination
+                  currentPage={page}
+                  totalPages={totalPages}
+                  onPageChange={handlePageChange}
+                />
+              </View>
+            )}
+          </View>
         </>
       );
     }
 
     return (
       <>
-        <FlatList
-          data={receipts}
-          renderItem={renderReceiptItem}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-        />
+        <View style={{ flex: 1 }}>
+          <FlatList
+            data={filteredReceipts}
+            renderItem={renderReceiptItem}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+          />
+        </View>
         {totalPages > 1 && (
           <View style={styles.paginationWrapper}>
             <Pagination
@@ -866,17 +990,11 @@ const ReceiptsListScreen = () => {
     );
   };
 
-  const filteredReceipts = receipts.filter(
-    (receipt) =>
-      receipt.merchant_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      receipt.receipt_number.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
   // Check if we have any active filters
   const hasActiveFilters = () => {
     return (
       appliedFilters.companyId !== null ||
-      appliedFilters.sortBy !== "date" ||
+      appliedFilters.sortBy !== "none" ||
       appliedFilters.sortOrder !== "desc"
     );
   };
@@ -895,7 +1013,7 @@ const ReceiptsListScreen = () => {
     const modalPadding =
       Platform.OS === "web"
         ? isLargeScreen
-          ? 32
+          ? 29
           : isMediumScreen
             ? 24
             : 16
@@ -941,31 +1059,19 @@ const ReceiptsListScreen = () => {
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Company</Text>
               </View>
-              <RadioButton.Group
-                onValueChange={(value) =>
-                  setSelectedCompany(value === "all" ? null : value)
+              <CompanySelector
+                onSelect={(company) => {
+                  if (company) {
+                    setSelectedCompany(company.id);
+                  } else {
+                    setSelectedCompany(null);
+                  }
+                }}
+                selectedCompany={
+                  companies.find((c) => c.id === selectedCompany) || null
                 }
-                value={selectedCompany || "all"}
-              >
-                <View style={styles.radioItem}>
-                  <RadioButton.Android
-                    value="all"
-                    color={theme.colors.primary}
-                  />
-                  <Text style={styles.radioLabel}>All Companies</Text>
-                </View>
-                {companies.map((company) => (
-                  <View key={company.id} style={styles.radioItem}>
-                    <RadioButton.Android
-                      value={company.id}
-                      color={theme.colors.primary}
-                    />
-                    <Text style={styles.radioLabel}>
-                      {company.company_name}
-                    </Text>
-                  </View>
-                ))}
-              </RadioButton.Group>
+                label="Filter by Company"
+              />
             </View>
 
             <Divider style={styles.modalDivider} />
@@ -975,15 +1081,20 @@ const ReceiptsListScreen = () => {
                 <Text style={styles.sectionTitle}>Sort By</Text>
               </View>
               <RadioButton.Group
-                onValueChange={(value) => setSortBy(value)}
+                onValueChange={(value) => {
+                  setSortBy(value);
+                  if (value === "none") {
+                    setSortOrder("desc");
+                  }
+                }}
                 value={sortBy}
               >
                 <View style={styles.radioItem}>
                   <RadioButton.Android
-                    value="date"
+                    value="none"
                     color={theme.colors.primary}
                   />
-                  <Text style={styles.radioLabel}>Date</Text>
+                  <Text style={styles.radioLabel}>None</Text>
                 </View>
                 <View style={styles.radioItem}>
                   <RadioButton.Android
@@ -1002,36 +1113,42 @@ const ReceiptsListScreen = () => {
               </RadioButton.Group>
             </View>
 
-            <Divider style={styles.modalDivider} />
+            {sortBy !== "none" && (
+              <>
+                <Divider style={styles.modalDivider} />
 
-            <View style={styles.modalSection}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Sort Order</Text>
-              </View>
-              <RadioButton.Group
-                onValueChange={(value) => setSortOrder(value as "asc" | "desc")}
-                value={sortOrder}
-              >
-                <View style={styles.radioItem}>
-                  <RadioButton.Android
-                    value="desc"
-                    color={theme.colors.primary}
-                  />
-                  <Text style={styles.radioLabel}>
-                    {sortBy === "date" ? "Newest First" : "Highest First"}
-                  </Text>
+                <View style={styles.modalSection}>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitle}>Sort Order</Text>
+                  </View>
+                  <RadioButton.Group
+                    onValueChange={(value) =>
+                      setSortOrder(value as "asc" | "desc")
+                    }
+                    value={sortOrder}
+                  >
+                    <View style={styles.radioItem}>
+                      <RadioButton.Android
+                        value="desc"
+                        color={theme.colors.primary}
+                      />
+                      <Text style={styles.radioLabel}>
+                        {sortBy === "total_amount" ? "Highest First" : "A to Z"}
+                      </Text>
+                    </View>
+                    <View style={styles.radioItem}>
+                      <RadioButton.Android
+                        value="asc"
+                        color={theme.colors.primary}
+                      />
+                      <Text style={styles.radioLabel}>
+                        {sortBy === "total_amount" ? "Lowest First" : "Z to A"}
+                      </Text>
+                    </View>
+                  </RadioButton.Group>
                 </View>
-                <View style={styles.radioItem}>
-                  <RadioButton.Android
-                    value="asc"
-                    color={theme.colors.primary}
-                  />
-                  <Text style={styles.radioLabel}>
-                    {sortBy === "date" ? "Oldest First" : "Lowest First"}
-                  </Text>
-                </View>
-              </RadioButton.Group>
-            </View>
+              </>
+            )}
           </ScrollView>
 
           <View style={[styles.modalFooter, { padding: modalPadding }]}>
@@ -1134,15 +1251,15 @@ const ReceiptsListScreen = () => {
             </Chip>
           )}
 
-          {appliedFilters.sortBy !== "date" && (
+          {appliedFilters.sortBy !== "none" && (
             <Chip
               mode="outlined"
               onClose={() => {
                 setAppliedFilters({
                   ...appliedFilters,
-                  sortBy: "date",
+                  sortBy: "none",
                 });
-                setSortBy("date");
+                setSortBy("none");
               }}
               style={[
                 styles.activeFilterChip,
@@ -1257,15 +1374,18 @@ const ReceiptsListScreen = () => {
 
   // Add TableHeader component
   const TableHeader = () => (
-    <View style={styles.tableHeader}>
-      <View style={styles.tableHeaderCell}>
-        <Text style={styles.tableHeaderText}>Receipt Number</Text>
+    <View style={styles.tableHeaderRow}>
+      <View style={[styles.tableHeaderCell, { flex: 0.5 }]}>
+        <Text style={styles.tableHeaderText}>ID</Text>
+      </View>
+      <View style={[styles.tableHeaderCell, { flex: 0.8 }]}>
+        <Text style={styles.tableHeaderText}>Receipt No.</Text>
       </View>
       <View style={styles.tableHeaderCell}>
         <Text style={styles.tableHeaderText}>Merchant</Text>
       </View>
       <View style={styles.tableHeaderCell}>
-        <Text style={styles.tableHeaderText}>Receipt Date</Text>
+        <Text style={styles.tableHeaderText}>Date</Text>
       </View>
       <View style={styles.tableHeaderCell}>
         <Text style={styles.tableHeaderText}>Transaction Date</Text>
@@ -1283,91 +1403,119 @@ const ReceiptsListScreen = () => {
   );
 
   // Update the TableRow component to use TooltipText
-  const TableRow = ({ item }: { item: Receipt }) => {
-    const theme = useTheme();
-    return (
-      <Pressable
-        onPress={() => handleViewReceipt(item)}
-        style={({ pressed }) => [
-          styles.tableRow,
-          pressed && { backgroundColor: "#f8fafc" },
-        ]}
-      >
-        <View style={styles.tableCell}>
-          <TooltipText text={item.receipt_number} theme={theme} />
-        </View>
-        <View style={styles.tableCell}>
-          <TooltipText text={item.merchant_name} theme={theme} />
-        </View>
-        <View style={styles.tableCell}>
-          <TooltipText
-            text={format(new Date(item.date), "MMM d, yyyy")}
-            theme={theme}
-          />
-        </View>
-        <View style={styles.tableCell}>
-          <TooltipText
-            text={
-              item.transaction_date
-                ? format(new Date(item.transaction_date), "MMM d, yyyy")
-                : "N/A"
-            }
-            theme={theme}
-          />
-        </View>
-        <View style={styles.tableCell}>
-          <TooltipText
-            text={`$${item.total_amount.toFixed(2)}`}
-            theme={theme}
-          />
-        </View>
-        <View style={styles.tableCell}>
-          <TooltipText
-            text={
-              item.company &&
-              typeof item.company === "object" &&
-              "company_name" in item.company
-                ? item.company.company_name
-                : "Unknown Company"
-            }
-            theme={theme}
-          />
-        </View>
-        <View style={styles.actionCell}>
-          <IconButton
-            icon="pencil"
-            size={20}
-            onPress={(e) => {
-              e.stopPropagation();
-              navigation.navigate("EditReceipt", { receiptId: item.id });
-            }}
-            style={styles.actionIcon}
-          />
-          <IconButton
-            icon="eye"
-            size={20}
-            onPress={(e) => {
-              e.stopPropagation();
-              handleViewReceipt(item);
-            }}
-            style={styles.actionIcon}
-          />
-        </View>
-      </Pressable>
-    );
-  };
+  const TableRow = ({ item }: { item: Receipt }) => (
+    <Pressable
+      onPress={() => handleViewReceipt(item)}
+      style={({ pressed }) => [
+        styles.tableRow,
+        pressed && { backgroundColor: "#f8fafc" },
+      ]}
+    >
+      <View style={[styles.tableCell, { justifyContent: "center", marginRight: 60 }]}>
+        <TouchableOpacity
+          onPress={(e) => {
+            e.stopPropagation();
+            handleViewReceipt(item);
+          }}
+        >
+          <Text style={styles.receiptIdLink}>
+            {item.receipt_sequence_id ? `${item.receipt_sequence_id}` : "-"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+      <View style={[styles.tableCell, { flex: 0.8 }]}>
+        <TooltipText text={item.receipt_number} theme={theme} />
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText text={item.merchant_name} theme={theme} />
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText
+          text={format(new Date(item.date), "MMM d, yyyy")}
+          theme={theme}
+        />
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText
+          text={
+            item.transaction_date
+              ? format(new Date(item.transaction_date), "MMM d, yyyy")
+              : "N/A"
+          }
+          theme={theme}
+        />
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText text={`$${item.total_amount.toFixed(2)}`} theme={theme} />
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText
+          text={item.company?.company_name || "Unknown Company"}
+          theme={theme}
+        />
+      </View>
+      <View style={styles.actionCell}>
+        <IconButton
+          icon="pencil"
+          size={20}
+          onPress={(e) => {
+            e.stopPropagation();
+            navigation.navigate("EditReceipt", { receiptId: item.id });
+          }}
+          style={styles.actionIcon}
+        />
+        <IconButton
+          icon="eye"
+          size={20}
+          onPress={(e) => {
+            e.stopPropagation();
+            handleViewReceipt(item);
+          }}
+          style={styles.actionIcon}
+        />
+      </View>
+    </Pressable>
+  );
 
-  // Add TableSkeleton component
+  // Update TableSkeleton component
   const TableSkeleton = () => {
     return (
       <View style={styles.tableContainer}>
-        <TableHeader />
+        <View style={styles.tableHeaderRow}>
+          <View style={[styles.tableHeaderCell, { flex: 0.5 }]}>
+            <Shimmer width={60} height={20} />
+          </View>
+          <View style={[styles.tableHeaderCell, { flex: 0.8 }]}>
+            <Shimmer width={100} height={20} />
+          </View>
+          <View style={styles.tableHeaderCell}>
+            <Shimmer width={120} height={20} />
+          </View>
+          <View style={styles.tableHeaderCell}>
+            <Shimmer width={80} height={20} />
+          </View>
+          <View style={styles.tableHeaderCell}>
+            <Shimmer width={120} height={20} />
+          </View>
+          <View style={styles.tableHeaderCell}>
+            <Shimmer width={80} height={20} />
+          </View>
+          <View style={styles.tableHeaderCell}>
+            <Shimmer width={100} height={20} />
+          </View>
+          <View style={styles.tableHeaderCell}>
+            <Shimmer width={80} height={20} />
+          </View>
+        </View>
         {Array(5)
           .fill(0)
           .map((_, index) => (
             <View key={`skeleton-${index}`} style={styles.tableRow}>
-              <View style={styles.tableCell}>
-                <Shimmer width={140} height={16} />
+              <View style={[styles.tableCell, { flex: 0.5 }]}>
+                <Shimmer width={60} height={16} />
+              </View>
+              <View style={[styles.tableCell, { flex: 0.8 }]}>
+                <Shimmer width={100} height={16} />
               </View>
               <View style={styles.tableCell}>
                 <Shimmer width={160} height={16} />
@@ -1379,18 +1527,18 @@ const ReceiptsListScreen = () => {
                 <Shimmer width={100} height={16} />
               </View>
               <View style={styles.tableCell}>
-                <Shimmer width={120} height={16} />
+                <Shimmer width={80} height={16} />
               </View>
               <View style={styles.tableCell}>
                 <Shimmer width={140} height={16} />
               </View>
               <View style={styles.actionCell}>
                 <Shimmer
-                  width={40}
-                  height={40}
-                  style={{ borderRadius: 20, marginRight: 8 }}
+                  width={32}
+                  height={32}
+                  style={{ borderRadius: 16, marginRight: 8 }}
                 />
-                <Shimmer width={40} height={40} style={{ borderRadius: 20 }} />
+                <Shimmer width={32} height={32} style={{ borderRadius: 16 }} />
               </View>
             </View>
           ))}
@@ -1399,49 +1547,47 @@ const ReceiptsListScreen = () => {
   };
 
   // Add CardSkeleton component
-  const CardSkeleton = () => {
-    return (
-      <Surface style={styles.cardSurface}>
-        <View style={styles.cardTouchable}>
-          <View style={styles.cardHeader}>
-            <View style={styles.titleContainer}>
-              <Shimmer width={160} height={20} style={{ marginBottom: 8 }} />
-              <Shimmer width={140} height={16} />
-            </View>
-            <Shimmer width={120} height={32} style={{ borderRadius: 16 }} />
+  const CardSkeleton = () => (
+    <Surface style={styles.cardSurface}>
+      <View style={styles.cardTouchable}>
+        <View style={styles.cardHeader}>
+          <View style={styles.titleContainer}>
+            <Shimmer width={160} height={20} style={{ marginBottom: 8 }} />
+            <Shimmer width={140} height={16} />
           </View>
+          <Shimmer width={120} height={32} style={{ borderRadius: 16 }} />
+        </View>
 
-          <View style={styles.cardDetails}>
-            <View style={styles.detailItem}>
-              <Shimmer width={80} height={14} style={{ marginRight: 8 }} />
-              <Shimmer width={100} height={14} />
-            </View>
-            <View style={styles.detailItem}>
-              <Shimmer width={80} height={14} style={{ marginRight: 8 }} />
-              <Shimmer width={80} height={14} />
-            </View>
-            <View style={styles.detailItem}>
-              <Shimmer width={120} height={14} style={{ marginRight: 8 }} />
-              <Shimmer width={100} height={14} />
-            </View>
+        <View style={styles.cardDetails}>
+          <View style={styles.detailItem}>
+            <Shimmer width={80} height={14} style={{ marginRight: 8 }} />
+            <Shimmer width={100} height={14} />
           </View>
-
-          <View style={styles.cardFooter}>
-            <Shimmer width={160} height={32} style={{ borderRadius: 16 }} />
-            <View style={styles.viewDetailsContainer}>
-              <Shimmer
-                width={40}
-                height={40}
-                style={{ borderRadius: 20, marginRight: 8 }}
-              />
-              <Shimmer width={100} height={14} style={{ marginRight: 8 }} />
-              <Shimmer width={24} height={24} style={{ borderRadius: 12 }} />
-            </View>
+          <View style={styles.detailItem}>
+            <Shimmer width={80} height={14} style={{ marginRight: 8 }} />
+            <Shimmer width={80} height={14} />
+          </View>
+          <View style={styles.detailItem}>
+            <Shimmer width={120} height={14} style={{ marginRight: 8 }} />
+            <Shimmer width={100} height={14} />
           </View>
         </View>
-      </Surface>
-    );
-  };
+
+        <View style={styles.cardFooter}>
+          <Shimmer width={160} height={32} style={{ borderRadius: 16 }} />
+          <View style={styles.viewDetailsContainer}>
+            <Shimmer
+              width={40}
+              height={40}
+              style={{ borderRadius: 20, marginRight: 8 }}
+            />
+            <Shimmer width={100} height={14} style={{ marginRight: 8 }} />
+            <Shimmer width={24} height={24} style={{ borderRadius: 12 }} />
+          </View>
+        </View>
+      </View>
+    </Surface>
+  );
 
   if (loading && !refreshing) {
     const isLargeScreen = windowDimensions.width >= 1440;
@@ -1477,6 +1623,14 @@ const ReceiptsListScreen = () => {
             />
             <Shimmer
               width={48}
+              height={48}
+              style={{
+                borderRadius: 8,
+                marginRight: 15,
+              }}
+            />
+            <Shimmer
+              width={98}
               height={48}
               style={{
                 borderRadius: 8,
@@ -1531,7 +1685,7 @@ const ReceiptsListScreen = () => {
       >
         <View style={styles.searchBarContainer}>
           <Searchbar
-            placeholder="Search receipts..."
+            placeholder="Search by ID, receipt number, or merchant..."
             onChangeText={handleSearch}
             value={searchQuery}
             style={styles.searchbar}
