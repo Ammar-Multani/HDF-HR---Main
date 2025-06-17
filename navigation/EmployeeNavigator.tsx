@@ -19,6 +19,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import Text from "../components/Text";
 import { SidebarLayout } from "./components/SidebarLayout";
 import { t } from "i18next";
+import { NavigationProp } from "@react-navigation/native";
 
 // Employee Screens
 import EmployeeDashboard from "../screens/employee/EmployeeDashboard";
@@ -34,6 +35,21 @@ import EmployeeTaskDetailsScreen from "../screens/employee/EmployeeTaskDetailsSc
 // Stack navigators
 const EmployeeStack = createNativeStackNavigator();
 const EmployeeTab = createBottomTabNavigator();
+const ContentStack = createNativeStackNavigator();
+
+// Update the RootStackParamList type
+type RootStackParamList = {
+  EmployeeTabs: undefined;
+  MainContent: undefined;
+  DashboardScreen: undefined;
+  FormsScreen: undefined;
+  ProfileScreen: undefined;
+  CreateAccidentReport: undefined;
+  CreateIllnessReport: undefined;
+  CreateStaffDeparture: undefined;
+  FormDetails: { id: string };
+  TaskDetails: { id: string };
+};
 
 // Custom navigation item component for sidebar
 interface NavItemProps {
@@ -79,94 +95,108 @@ const NavItem = ({ icon, label, onPress, isActive = false }: NavItemProps) => {
   );
 };
 
+// Content area component that includes both main screens and stack screens
+const ContentArea = () => {
+  return (
+    <ContentStack.Navigator
+      screenOptions={{
+        headerShown: false,
+        animation: "none",
+      }}
+    >
+      <ContentStack.Group>
+        <ContentStack.Screen
+          name="MainContent"
+          component={MainContentNavigator}
+        />
+      </ContentStack.Group>
+
+      <ContentStack.Group
+        screenOptions={{
+          presentation: "modal",
+          animation: "slide_from_right",
+        }}
+      >
+        <ContentStack.Screen
+          name="CreateAccidentReport"
+          component={CreateAccidentReportScreen}
+        />
+        <ContentStack.Screen
+          name="CreateIllnessReport"
+          component={CreateIllnessReportScreen}
+        />
+        <ContentStack.Screen
+          name="CreateStaffDeparture"
+          component={CreateStaffDepartureScreen}
+        />
+        <ContentStack.Screen
+          name="FormDetails"
+          component={EmployeeFormDetailsScreen}
+        />
+        <ContentStack.Screen
+          name="TaskDetails"
+          component={EmployeeTaskDetailsScreen}
+        />
+      </ContentStack.Group>
+    </ContentStack.Navigator>
+  );
+};
+
+// MainContentNavigator for the main screens
+const MainContentNavigator = () => {
+  return (
+    <ContentStack.Navigator
+      screenOptions={{
+        headerShown: false,
+        animation: "none",
+      }}
+      initialRouteName="DashboardScreen"
+    >
+      <ContentStack.Screen
+        name="DashboardScreen"
+        component={EmployeeDashboard}
+      />
+      <ContentStack.Screen name="FormsScreen" component={EmployeeFormsScreen} />
+      <ContentStack.Screen
+        name="ProfileScreen"
+        component={EmployeeProfileScreen}
+      />
+    </ContentStack.Navigator>
+  );
+};
+
 // Web Layout with SidebarLayout
 const WebStackNavigator = () => {
-  const [activeScreen, setActiveScreen] = useState("Dashboard");
-  const navigation = useNavigation();
+  const [activeScreen, setActiveScreen] = useState("DashboardScreen");
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
 
   const navigationItems = [
     {
       icon: "home" as const,
       label: t("navigation.dashboard"),
-      screen: "Dashboard",
+      screen: "DashboardScreen",
     },
     {
       icon: "file-document" as const,
       label: t("navigation.forms"),
-      screen: "Forms",
+      screen: "FormsScreen",
     },
     {
       icon: "account-circle" as const,
       label: t("navigation.profile"),
-      screen: "Profile",
+      screen: "ProfileScreen",
     },
   ];
-
-  // Create a stack navigator for the content area
-  const ContentStack = createNativeStackNavigator();
-
-  // Content area component that includes both main screens and stack screens
-  const ContentArea = () => {
-    return (
-      <ContentStack.Navigator
-        screenOptions={{
-          headerShown: false,
-          animation: "none",
-        }}
-        initialRouteName={activeScreen}
-      >
-        {/* Main screens */}
-        <ContentStack.Screen
-          name="Dashboard"
-          component={EmployeeDashboard}
-          options={{ title: t("navigation.dashboard") }}
-        />
-        <ContentStack.Screen
-          name="Forms"
-          component={EmployeeFormsScreen}
-          options={{ title: t("navigation.forms") }}
-        />
-        <ContentStack.Screen
-          name="Profile"
-          component={EmployeeProfileScreen}
-          options={{ title: t("navigation.profile") }}
-        />
-
-        {/* Stack screens */}
-        <ContentStack.Screen
-          name="CreateAccidentReport"
-          component={CreateAccidentReportScreen}
-          options={{ title: t("navigation.createAccidentReport") }}
-        />
-        <ContentStack.Screen
-          name="CreateIllnessReport"
-          component={CreateIllnessReportScreen}
-          options={{ title: t("navigation.createIllnessReport") }}
-        />
-        <ContentStack.Screen
-          name="CreateStaffDeparture"
-          component={CreateStaffDepartureScreen}
-          options={{ title: t("navigation.createStaffDeparture") }}
-        />
-        <ContentStack.Screen
-          name="FormDetails"
-          component={EmployeeFormDetailsScreen}
-          options={{ title: t("navigation.formDetails") }}
-        />
-        <ContentStack.Screen
-          name="TaskDetails"
-          component={EmployeeTaskDetailsScreen}
-          options={{ title: t("navigation.taskDetails") }}
-        />
-      </ContentStack.Navigator>
-    );
-  };
 
   // Handle navigation
   const handleNavigation = (screen: string) => {
     setActiveScreen(screen);
-    // @ts-ignore - Ignore the typing error as we know these routes exist
-    navigation.navigate(screen);
+    navigation.navigate("MainContent");
+    // Use a timeout to ensure MainContent is mounted before navigating to the screen
+    setTimeout(() => {
+      // @ts-ignore - Ignore the typing error as we know these routes exist
+      navigation.navigate(screen);
+    }, 0);
   };
 
   return (
@@ -174,11 +204,7 @@ const WebStackNavigator = () => {
       activeScreen={activeScreen}
       setActiveScreen={setActiveScreen}
       navigationItems={navigationItems}
-      content={{
-        Dashboard: <ContentArea />,
-        Forms: <ContentArea />,
-        Profile: <ContentArea />,
-      }}
+      content={<ContentArea />}
       onNavigate={handleNavigation}
     />
   );
@@ -255,18 +281,20 @@ const EmployeeTabNavigator = () => {
       }}
     >
       <EmployeeTab.Screen
-        name="Dashboard"
+        name="DashboardScreen"
         component={EmployeeDashboard}
         options={{
+          tabBarLabel: "Dashboard",
           tabBarIcon: ({ color }) => (
             <MaterialCommunityIcons name="home" color={color} size={24} />
           ),
         }}
       />
       <EmployeeTab.Screen
-        name="Forms"
+        name="FormsScreen"
         component={EmployeeFormsScreen}
         options={{
+          tabBarLabel: "Forms",
           tabBarIcon: ({ color }) => (
             <MaterialCommunityIcons
               name="file-document"
@@ -277,9 +305,10 @@ const EmployeeTabNavigator = () => {
         }}
       />
       <EmployeeTab.Screen
-        name="Profile"
+        name="ProfileScreen"
         component={EmployeeProfileScreen}
         options={{
+          tabBarLabel: "Profile",
           tabBarIcon: ({ color }) => (
             <MaterialCommunityIcons
               name="account-circle"
@@ -300,40 +329,47 @@ export const EmployeeNavigator = () => {
   const isLargeScreen = isWeb && windowWidth > 768;
 
   if (isLargeScreen) {
-    return <EmployeeTabNavigator />;
+    return <WebStackNavigator />;
   }
 
   return (
-    <EmployeeStack.Navigator screenOptions={{ headerShown: false }}>
+    <EmployeeStack.Navigator
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
       <EmployeeStack.Screen
         name="EmployeeTabs"
         component={EmployeeTabNavigator}
       />
-      <EmployeeStack.Screen
-        name="CreateAccidentReport"
-        component={CreateAccidentReportScreen}
-        options={{ title: "Create Accident Report - HDF HR" }}
-      />
-      <EmployeeStack.Screen
-        name="CreateIllnessReport"
-        component={CreateIllnessReportScreen}
-        options={{ title: "Create Illness Report - HDF HR" }}
-      />
-      <EmployeeStack.Screen
-        name="CreateStaffDeparture"
-        component={CreateStaffDepartureScreen}
-        options={{ title: "Create Staff Departure - HDF HR" }}
-      />
-      <EmployeeStack.Screen
-        name="FormDetails"
-        component={EmployeeFormDetailsScreen}
-        options={{ title: "Form Details - HDF HR" }}
-      />
-      <EmployeeStack.Screen
-        name="TaskDetails"
-        component={EmployeeTaskDetailsScreen}
-        options={{ title: "Task Details - HDF HR" }}
-      />
+
+      <EmployeeStack.Group
+        screenOptions={{
+          presentation: "modal",
+          animation: "slide_from_right",
+        }}
+      >
+        <EmployeeStack.Screen
+          name="CreateAccidentReport"
+          component={CreateAccidentReportScreen}
+        />
+        <EmployeeStack.Screen
+          name="CreateIllnessReport"
+          component={CreateIllnessReportScreen}
+        />
+        <EmployeeStack.Screen
+          name="CreateStaffDeparture"
+          component={CreateStaffDepartureScreen}
+        />
+        <EmployeeStack.Screen
+          name="FormDetails"
+          component={EmployeeFormDetailsScreen}
+        />
+        <EmployeeStack.Screen
+          name="TaskDetails"
+          component={EmployeeTaskDetailsScreen}
+        />
+      </EmployeeStack.Group>
     </EmployeeStack.Navigator>
   );
 };

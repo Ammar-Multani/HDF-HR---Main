@@ -695,8 +695,8 @@ const CompanyReceiptsListScreen = () => {
   return (
     <SafeAreaView style={styles.container}>
       <AppHeader
-        title={t("companies.receipts.title")}
-        subtitle={t("companies.receipts.subtitle")}
+        title={t("receipts.title")}
+        subtitle={t("receipts.subtitle")}
         showLogo={false}
       />
       <View style={styles.content}>

@@ -115,8 +115,8 @@ export const AppNavigator = ({ initialAuthState = null }) => {
     if (navRef.current && navRef.isReady()) {
       const currentRoute = navRef.current.getCurrentRoute();
       if (currentRoute) {
-        // @ts-ignore - We know these routes exist
-        navRef.current.navigate(currentRoute.name);
+        // Preserve the current route and its params
+        navRef.current.navigate(currentRoute.name, currentRoute.params);
       }
     }
   }, [width]);

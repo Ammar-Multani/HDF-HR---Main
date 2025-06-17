@@ -6,6 +6,8 @@ import { useTheme } from "react-native-paper";
 import {
   useNavigationContainerRef,
   useNavigation,
+  useRoute,
+  NavigationProp,
 } from "@react-navigation/native";
 import {
   View,
@@ -52,6 +54,44 @@ import ActivityLogsScreen from "../screens/superadmin/ActivityLogsScreen";
 // Stack navigators
 const SuperAdminStack = createNativeStackNavigator();
 const SuperAdminTab = createBottomTabNavigator();
+const ContentStack = createNativeStackNavigator();
+const WebContentStack = createNativeStackNavigator();
+
+// Update the RootStackParamList type
+type RootStackParamList = {
+  MainContent: undefined;
+  MainTabs: undefined;
+  Dashboard: undefined;
+  Companies: undefined;
+  Users: undefined;
+  Forms: undefined;
+  Receipts: undefined;
+  Tasks: undefined;
+  Profile: undefined;
+  CompanyDetails: { companyId: string };
+  CreateCompany: undefined;
+  EditCompany: { companyId: string };
+  TaskDetails: { id: string };
+  CreateTask: undefined;
+  EditTask: { id: string };
+  CreateSuperAdmin: undefined;
+  SuperAdminDetailsScreen: { id: string };
+  EditSuperAdmin: { id: string };
+  CompanyAdminDetailsScreen: { id: string };
+  EditCompanyAdmin: { id: string };
+  CreateCompanyAdmin: undefined;
+  CreateEmployee: undefined;
+  SuperAdminFormDetailsScreen: { id: string };
+  CreateReceipt: undefined;
+  ReceiptDetails: { id: string };
+  EditReceipt: { id: string };
+  ActivityLogs: undefined;
+  EmployeeDetails: { id: string };
+  ReceiptsListScreen: undefined;
+  SuperAdminFormsScreen: undefined;
+  SuperAdminTasksScreen: undefined;
+  Utilities: undefined;
+};
 
 // Custom navigation item component for sidebar
 interface NavItemProps {
@@ -127,212 +167,55 @@ const useWindowDimensions = () => {
 // Web Layout with SidebarLayout
 const WebStackNavigator = () => {
   const [activeScreen, setActiveScreen] = useState("Dashboard");
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
 
   const navigationItems = [
     {
-      icon: "home" as const,
+      icon: "home",
       label: t("navigation.dashboard"),
       screen: "Dashboard",
     },
     {
-      icon: "domain" as const,
+      icon: "domain",
       label: t("navigation.companies"),
       screen: "Companies",
     },
     {
-      icon: "account-group" as const,
+      icon: "account-group",
       label: t("navigation.users"),
       screen: "Users",
     },
     {
-      icon: "file-document" as const,
+      icon: "file-document",
       label: t("navigation.forms"),
       screen: "Forms",
     },
     {
-      icon: "receipt" as const,
+      icon: "receipt",
       label: t("navigation.receipts"),
       screen: "Receipts",
     },
     {
-      icon: "clipboard-text" as const,
+      icon: "clipboard-text",
       label: t("navigation.tasks"),
       screen: "Tasks",
     },
     {
-      icon: "account-circle" as const,
+      icon: "account-circle",
       label: t("navigation.profile"),
       screen: "Profile",
     },
   ];
 
-  // Define the main content screens
-  const mainContent = {
-    Dashboard: <SuperAdminDashboard />,
-    Companies: <CompanyListScreen />,
-    Users: <SuperAdminUsersScreen />,
-    Forms: <SuperAdminFormsScreen />,
-    Receipts: <ReceiptsListScreen />,
-    Tasks: <SuperAdminTasksScreen />,
-    Profile: <SuperAdminProfileScreen />,
-  };
-
-  // Create a stack navigator for the content area
-  const ContentStack = createNativeStackNavigator();
-
-  // Content area component that includes both main screens and stack screens
-  const ContentArea = () => {
-    return (
-      <ContentStack.Navigator
-        screenOptions={{
-          headerShown: false,
-          animation: "none",
-        }}
-        initialRouteName={activeScreen}
-      >
-        {/* Main screens */}
-        <ContentStack.Screen
-          name="Dashboard"
-          component={SuperAdminDashboard}
-          options={{ title: t("navigation.dashboard") }}
-        />
-        <ContentStack.Screen
-          name="Companies"
-          component={CompanyListScreen}
-          options={{ title: t("navigation.companies") }}
-        />
-        <ContentStack.Screen
-          name="Users"
-          component={SuperAdminUsersScreen}
-          options={{ title: t("navigation.users") }}
-        />
-        <ContentStack.Screen
-          name="Forms"
-          component={SuperAdminFormsScreen}
-          options={{ title: t("navigation.forms") }}
-        />
-        <ContentStack.Screen
-          name="Receipts"
-          component={ReceiptsListScreen}
-          options={{ title: t("navigation.receipts") }}
-        />
-        <ContentStack.Screen
-          name="Tasks"
-          component={SuperAdminTasksScreen}
-          options={{ title: t("navigation.tasks") }}
-        />
-        <ContentStack.Screen
-          name="Profile"
-          component={SuperAdminProfileScreen}
-          options={{ title: t("navigation.profile") }}
-        />
-
-        {/* Stack screens */}
-        <ContentStack.Screen
-          name="CompanyDetails"
-          component={CompanyDetailsScreen}
-          options={{ title: t("navigation.companyDetails") }}
-        />
-        <ContentStack.Screen
-          name="CreateCompany"
-          component={CreateCompanyScreen}
-          options={{ title: t("navigation.createCompany") }}
-        />
-        <ContentStack.Screen
-          name="EditCompany"
-          component={EditCompanyScreen}
-          options={{ title: t("navigation.editCompany") }}
-        />
-        <ContentStack.Screen
-          name="TaskDetails"
-          component={SuperAdminTaskDetailsScreen}
-          options={{ title: t("navigation.taskDetails") }}
-        />
-        <ContentStack.Screen
-          name="CreateTask"
-          component={CreateTaskScreen}
-          options={{ title: t("navigation.createTask") }}
-        />
-        <ContentStack.Screen
-          name="CreateSuperAdmin"
-          component={CreateSuperAdminScreen}
-          options={{ title: t("navigation.createSuperAdmin") }}
-        />
-        <ContentStack.Screen
-          name="SuperAdminDetailsScreen"
-          component={SuperAdminDetailsScreen}
-          options={{ title: t("navigation.superAdminDetails") }}
-        />
-        <ContentStack.Screen
-          name="EditSuperAdmin"
-          component={EditSuperAdminScreen}
-          options={{ title: t("navigation.editSuperAdmin") }}
-        />
-        <ContentStack.Screen
-          name="CompanyAdminDetailsScreen"
-          component={CompanyAdminDetailsScreen}
-          options={{ title: t("navigation.companyAdminDetails") }}
-        />
-        <ContentStack.Screen
-          name="EditCompanyAdmin"
-          component={EditCompanyAdminScreen}
-          options={{ title: t("navigation.editCompanyAdmin") }}
-        />
-        <ContentStack.Screen
-          name="EmployeeDetailedScreen"
-          component={EmployeeDetailedScreen}
-          options={{ title: t("navigation.employeeDetails") }}
-        />
-        <ContentStack.Screen
-          name="CreateCompanyAdmin"
-          component={CreateCompanyAdminScreen}
-          options={{ title: t("navigation.createCompanyAdmin") }}
-        />
-        <ContentStack.Screen
-          name="CreateEmployee"
-          component={CreateEmployeesScreen}
-          options={{ title: t("navigation.createEmployee") }}
-        />
-        <ContentStack.Screen
-          name="SuperAdminFormDetailsScreen"
-          component={SuperAdminFormDetailsScreen}
-          options={{ title: t("navigation.formDetails") }}
-        />
-        <ContentStack.Screen
-          name="CreateReceipt"
-          component={CreateReceiptScreen}
-          options={{ title: t("navigation.createReceipt") }}
-        />
-        <ContentStack.Screen
-          name="ReceiptDetails"
-          component={ReceiptDetailsScreen}
-          options={{ title: t("navigation.receiptDetails") }}
-        />
-        <ContentStack.Screen
-          name="EditTask"
-          component={EditTaskScreen}
-          options={{ title: t("navigation.editTask") }}
-        />
-        <ContentStack.Screen
-          name="EditReceipt"
-          component={EditReceiptScreen}
-          options={{ title: t("navigation.editReceipt") }}
-        />
-        <ContentStack.Screen
-          name="ActivityLogs"
-          component={ActivityLogsScreen}
-          options={{ title: t("navigation.activityLog") }}
-        />
-      </ContentStack.Navigator>
-    );
-  };
-
   // Handle navigation
   const handleNavigation = (screen: string) => {
     setActiveScreen(screen);
-    // @ts-ignore - Ignore the typing error for now as we know these routes exist
-    navigation.navigate(screen);
+    // Navigate to MainContent first, then to the specific screen
+    navigation.navigate("MainContent");
+    // Use a timeout to ensure MainContent is mounted before navigating to the screen
+    setTimeout(() => {
+      (navigation as any).navigate(screen);
+    }, 0);
   };
 
   return (
@@ -340,15 +223,147 @@ const WebStackNavigator = () => {
       activeScreen={activeScreen}
       setActiveScreen={setActiveScreen}
       navigationItems={navigationItems}
-      content={{
-        Dashboard: <ContentArea />,
-        Companies: <ContentArea />,
-        Users: <ContentArea />,
-        Forms: <ContentArea />,
-        Receipts: <ContentArea />,
-        Tasks: <ContentArea />,
-        Profile: <ContentArea />,
-      }}
+      content={
+        <WebContentStack.Navigator
+          screenOptions={{
+            headerShown: false,
+            animation: "none",
+            presentation: "containedModal",
+            contentStyle: {
+              backgroundColor: "transparent",
+            },
+          }}
+        >
+          <WebContentStack.Group>
+            <WebContentStack.Screen name="MainContent">
+              {() => (
+                <ContentStack.Navigator
+                  screenOptions={{
+                    headerShown: false,
+                    animation: "none",
+                  }}
+                  initialRouteName="Dashboard"
+                >
+                  <ContentStack.Screen
+                    name="Dashboard"
+                    component={SuperAdminDashboard}
+                  />
+                  <ContentStack.Screen
+                    name="Companies"
+                    component={CompanyListScreen}
+                  />
+                  <ContentStack.Screen
+                    name="Users"
+                    component={SuperAdminUsersScreen}
+                  />
+                  <ContentStack.Screen
+                    name="Forms"
+                    component={SuperAdminFormsScreen}
+                  />
+                  <ContentStack.Screen
+                    name="Receipts"
+                    component={ReceiptsListScreen}
+                  />
+                  <ContentStack.Screen
+                    name="Tasks"
+                    component={SuperAdminTasksScreen}
+                  />
+                  <ContentStack.Screen
+                    name="Profile"
+                    component={SuperAdminProfileScreen}
+                  />
+                </ContentStack.Navigator>
+              )}
+            </WebContentStack.Screen>
+          </WebContentStack.Group>
+
+          <WebContentStack.Group
+            screenOptions={{
+              presentation: "containedModal",
+              contentStyle: {
+                backgroundColor: "#f8fafc",
+              },
+            }}
+          >
+            <WebContentStack.Screen
+              name="CompanyDetails"
+              component={CompanyDetailsScreen}
+            />
+            <WebContentStack.Screen
+              name="CreateCompany"
+              component={CreateCompanyScreen}
+            />
+            <WebContentStack.Screen
+              name="EditCompany"
+              component={EditCompanyScreen}
+            />
+            <WebContentStack.Screen
+              name="TaskDetails"
+              component={SuperAdminTaskDetailsScreen}
+            />
+            <WebContentStack.Screen
+              name="CreateTask"
+              component={CreateTaskScreen}
+            />
+            <WebContentStack.Screen
+              name="EditTask"
+              component={EditTaskScreen}
+            />
+            <WebContentStack.Screen
+              name="CreateSuperAdmin"
+              component={CreateSuperAdminScreen}
+            />
+            <WebContentStack.Screen
+              name="SuperAdminDetailsScreen"
+              component={SuperAdminDetailsScreen}
+            />
+            <WebContentStack.Screen
+              name="EditSuperAdmin"
+              component={EditSuperAdminScreen}
+            />
+            <WebContentStack.Screen
+              name="CompanyAdminDetailsScreen"
+              component={CompanyAdminDetailsScreen}
+            />
+            <WebContentStack.Screen
+              name="EditCompanyAdmin"
+              component={EditCompanyAdminScreen}
+            />
+            <WebContentStack.Screen
+              name="CreateCompanyAdmin"
+              component={CreateCompanyAdminScreen}
+            />
+            <WebContentStack.Screen
+              name="CreateEmployee"
+              component={CreateEmployeesScreen}
+            />
+            <WebContentStack.Screen
+              name="SuperAdminFormDetailsScreen"
+              component={SuperAdminFormDetailsScreen}
+            />
+            <WebContentStack.Screen
+              name="CreateReceipt"
+              component={CreateReceiptScreen}
+            />
+            <WebContentStack.Screen
+              name="ReceiptDetails"
+              component={ReceiptDetailsScreen}
+            />
+            <WebContentStack.Screen
+              name="EditReceipt"
+              component={EditReceiptScreen}
+            />
+            <WebContentStack.Screen
+              name="ActivityLogs"
+              component={ActivityLogsScreen}
+            />
+            <WebContentStack.Screen
+              name="EmployeeDetails"
+              component={EmployeeDetailedScreen}
+            />
+          </WebContentStack.Group>
+        </WebContentStack.Navigator>
+      }
       onNavigate={handleNavigation}
     />
   );
@@ -423,34 +438,64 @@ const SuperAdminTabNavigator = () => {
       >
         <SuperAdminTab.Screen
           name="Dashboard"
-          component={SuperAdminDashboard}
           options={{
             tabBarIcon: ({ color }) => (
               <MaterialCommunityIcons name="home" color={color} size={24} />
             ),
           }}
-        />
+        >
+          {() => (
+            <ContentStack.Navigator
+              screenOptions={{
+                headerShown: false,
+                animation: "none",
+              }}
+            >
+              <ContentStack.Screen
+                name="DashboardMain"
+                component={SuperAdminDashboard}
+              />
+            </ContentStack.Navigator>
+          )}
+        </SuperAdminTab.Screen>
+
         <SuperAdminTab.Screen
           name="Companies"
-          component={CompanyListScreen}
           options={{
             tabBarIcon: ({ color }) => (
               <MaterialCommunityIcons name="domain" color={color} size={24} />
             ),
           }}
-        />
-        <SuperAdminTab.Screen
-          name="Utilities"
-          component={SuperAdminUtilitiesScreen}
-          options={{
-            tabBarIcon: ({ color }) => (
-              <MaterialCommunityIcons name="tools" color={color} size={24} />
-            ),
-          }}
-        />
+        >
+          {() => (
+            <ContentStack.Navigator
+              screenOptions={{
+                headerShown: false,
+                animation: "none",
+              }}
+            >
+              <ContentStack.Screen
+                name="CompaniesList"
+                component={CompanyListScreen}
+              />
+              <ContentStack.Screen
+                name="CompanyDetails"
+                component={CompanyDetailsScreen}
+              />
+              <ContentStack.Screen
+                name="CreateCompany"
+                component={CreateCompanyScreen}
+              />
+              <ContentStack.Screen
+                name="EditCompany"
+                component={EditCompanyScreen}
+              />
+            </ContentStack.Navigator>
+          )}
+        </SuperAdminTab.Screen>
+
         <SuperAdminTab.Screen
           name="Users"
-          component={SuperAdminUsersScreen}
           options={{
             tabBarIcon: ({ color }) => (
               <MaterialCommunityIcons
@@ -460,10 +505,116 @@ const SuperAdminTabNavigator = () => {
               />
             ),
           }}
-        />
+        >
+          {() => (
+            <ContentStack.Navigator
+              screenOptions={{
+                headerShown: false,
+                animation: "none",
+              }}
+            >
+              <ContentStack.Screen
+                name="UsersList"
+                component={SuperAdminUsersScreen}
+              />
+              <ContentStack.Screen
+                name="CreateSuperAdmin"
+                component={CreateSuperAdminScreen}
+              />
+              <ContentStack.Screen
+                name="SuperAdminDetailsScreen"
+                component={SuperAdminDetailsScreen}
+              />
+              <ContentStack.Screen
+                name="EditSuperAdmin"
+                component={EditSuperAdminScreen}
+              />
+              <ContentStack.Screen
+                name="CompanyAdminDetailsScreen"
+                component={CompanyAdminDetailsScreen}
+              />
+              <ContentStack.Screen
+                name="EditCompanyAdmin"
+                component={EditCompanyAdminScreen}
+              />
+              <ContentStack.Screen
+                name="CreateCompanyAdmin"
+                component={CreateCompanyAdminScreen}
+              />
+              <ContentStack.Screen
+                name="CreateEmployee"
+                component={CreateEmployeesScreen}
+              />
+              <ContentStack.Screen
+                name="EmployeeDetails"
+                component={EmployeeDetailedScreen}
+              />
+            </ContentStack.Navigator>
+          )}
+        </SuperAdminTab.Screen>
+
+        <SuperAdminTab.Screen
+          name="Utilities"
+          options={{
+            tabBarIcon: ({ color }) => (
+              <MaterialCommunityIcons name="tools" color={color} size={24} />
+            ),
+          }}
+        >
+          {() => (
+            <ContentStack.Navigator
+              screenOptions={{
+                headerShown: false,
+                animation: "none",
+              }}
+            >
+              <ContentStack.Screen
+                name="UtilitiesMain"
+                component={SuperAdminUtilitiesScreen}
+              />
+              <ContentStack.Screen
+                name="FormsList"
+                component={SuperAdminFormsScreen}
+              />
+              <ContentStack.Screen
+                name="SuperAdminFormDetailsScreen"
+                component={SuperAdminFormDetailsScreen}
+              />
+              <ContentStack.Screen
+                name="TasksList"
+                component={SuperAdminTasksScreen}
+              />
+              <ContentStack.Screen
+                name="TaskDetails"
+                component={SuperAdminTaskDetailsScreen}
+              />
+              <ContentStack.Screen
+                name="CreateTask"
+                component={CreateTaskScreen}
+              />
+              <ContentStack.Screen name="EditTask" component={EditTaskScreen} />
+              <ContentStack.Screen
+                name="ReceiptsList"
+                component={ReceiptsListScreen}
+              />
+              <ContentStack.Screen
+                name="CreateReceipt"
+                component={CreateReceiptScreen}
+              />
+              <ContentStack.Screen
+                name="ReceiptDetails"
+                component={ReceiptDetailsScreen}
+              />
+              <ContentStack.Screen
+                name="EditReceipt"
+                component={EditReceiptScreen}
+              />
+            </ContentStack.Navigator>
+          )}
+        </SuperAdminTab.Screen>
+
         <SuperAdminTab.Screen
           name="Profile"
-          component={SuperAdminProfileScreen}
           options={{
             tabBarIcon: ({ color }) => (
               <MaterialCommunityIcons
@@ -473,7 +624,21 @@ const SuperAdminTabNavigator = () => {
               />
             ),
           }}
-        />
+        >
+          {() => (
+            <ContentStack.Navigator
+              screenOptions={{
+                headerShown: false,
+                animation: "none",
+              }}
+            >
+              <ContentStack.Screen
+                name="ProfileMain"
+                component={SuperAdminProfileScreen}
+              />
+            </ContentStack.Navigator>
+          )}
+        </SuperAdminTab.Screen>
       </SuperAdminTab.Navigator>
     );
   }
@@ -490,104 +655,51 @@ export const SuperAdminNavigator = () => {
   const isLargeScreen = isWeb && width > 768;
 
   if (isLargeScreen) {
-    return <SuperAdminTabNavigator />;
+    return <WebStackNavigator />;
   }
 
+  // For mobile/small screens, use a single stack navigator with nested tab navigator
   return (
     <SuperAdminStack.Navigator screenOptions={{ headerShown: false }}>
       <SuperAdminStack.Screen
-        name="SuperAdminTabs"
+        name="MainTabs"
         component={SuperAdminTabNavigator}
       />
+
+      {/* Additional stack screens for utilities navigation */}
       <SuperAdminStack.Screen
-        name="CompanyDetails"
-        component={CompanyDetailsScreen}
-      />
-      <SuperAdminStack.Screen
-        name="CreateCompany"
-        component={CreateCompanyScreen}
-      />
-      <SuperAdminStack.Screen
-        name="EditCompany"
-        component={EditCompanyScreen}
-      />
-      <SuperAdminStack.Screen
-        name="TaskDetails"
-        component={SuperAdminTaskDetailsScreen}
-      />
-      <SuperAdminStack.Screen name="CreateTask" component={CreateTaskScreen} />
-      <SuperAdminStack.Screen
-        name="CreateSuperAdmin"
-        component={CreateSuperAdminScreen}
-      />
-      <SuperAdminStack.Screen
-        name="SuperAdminDetailsScreen"
-        component={SuperAdminDetailsScreen}
-      />
-      <SuperAdminStack.Screen
-        name="SuperAdminProfileScreen"
-        component={SuperAdminProfileScreen}
-      />
-      <SuperAdminStack.Screen
-        name="EditSuperAdmin"
-        component={EditSuperAdminScreen}
-      />
-      <SuperAdminStack.Screen
-        name="CompanyAdminDetailsScreen"
-        component={CompanyAdminDetailsScreen}
-      />
-      <SuperAdminStack.Screen
-        name="EditCompanyAdmin"
-        component={EditCompanyAdminScreen}
-      />
-      <SuperAdminStack.Screen
-        name="EmployeeDetailedScreen"
-        component={EmployeeDetailedScreen}
-      />
-      <SuperAdminStack.Screen
-        name="CreateCompanyAdmin"
-        component={CreateCompanyAdminScreen}
-      />
-      <SuperAdminStack.Screen
-        name="CreateEmployee"
-        component={CreateEmployeesScreen}
+        name="ReceiptsListScreen"
+        component={ReceiptsListScreen}
       />
       <SuperAdminStack.Screen
         name="SuperAdminFormsScreen"
         component={SuperAdminFormsScreen}
       />
       <SuperAdminStack.Screen
+        name="SuperAdminTasksScreen"
+        component={SuperAdminTasksScreen}
+      />
+      <SuperAdminStack.Screen
         name="SuperAdminFormDetailsScreen"
         component={SuperAdminFormDetailsScreen}
       />
       <SuperAdminStack.Screen
-        name="SuperAdminUtilitiesScreen"
-        component={SuperAdminUtilitiesScreen}
+        name="TaskDetails"
+        component={SuperAdminTaskDetailsScreen}
       />
-      <SuperAdminStack.Screen
-        name="SuperAdminTasksScreen"
-        component={SuperAdminTasksScreen}
-      />
+      <SuperAdminStack.Screen name="CreateTask" component={CreateTaskScreen} />
+      <SuperAdminStack.Screen name="EditTask" component={EditTaskScreen} />
       <SuperAdminStack.Screen
         name="CreateReceipt"
         component={CreateReceiptScreen}
       />
       <SuperAdminStack.Screen
-        name="ReceiptsListScreen"
-        component={ReceiptsListScreen}
-      />
-      <SuperAdminStack.Screen
         name="ReceiptDetails"
         component={ReceiptDetailsScreen}
       />
-      <SuperAdminStack.Screen name="EditTask" component={EditTaskScreen} />
       <SuperAdminStack.Screen
         name="EditReceipt"
         component={EditReceiptScreen}
-      />
-      <SuperAdminStack.Screen
-        name="ActivityLogs"
-        component={ActivityLogsScreen}
       />
     </SuperAdminStack.Navigator>
   );

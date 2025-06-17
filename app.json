@@ -89,13 +89,6 @@
             "backgroundColor": "#151718"
           }
         }
-      ],
-      [
-        "react-native-msal",
-        {
-          "signatureHash": "zpXjsOwFbfGvNhiW/2tSjge2OH4=",
-          "accountMode": "SINGLE"
-        }
       ]
     ],
     "extra": {

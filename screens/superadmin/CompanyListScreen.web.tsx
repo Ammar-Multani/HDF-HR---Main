@@ -683,7 +683,7 @@ const styles = StyleSheet.create({
 const CompanyListScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   // Window dimensions state
   const [windowDimensions, setWindowDimensions] = useState({
@@ -817,8 +817,6 @@ const CompanyListScreen = () => {
 
   // Update the TableRow component to use TooltipText
   const TableRow = ({ item }: { item: ExtendedCompany }) => {
-    const { i18n } = useTranslation();
-
     return (
       <Pressable
         onPress={() => {
@@ -892,93 +890,94 @@ const CompanyListScreen = () => {
     );
   };
 
-  const renderCompanyItem = ({ item }: { item: ExtendedCompany }) => {
-    const { i18n } = useTranslation();
-
-    return (
-      <TouchableOpacity
-        onPress={() => {
-          navigation.navigate("CompanyDetails", { companyId: item.id });
-        }}
-      >
-        <Card
-          style={[
-            styles.card,
-            {
-              backgroundColor: "#FFFFFF",
-              shadowColor: "transparent",
-            },
-          ]}
-          elevation={0}
+  const renderCompanyItem = useCallback(
+    ({ item }: { item: ExtendedCompany }) => {
+      return (
+        <TouchableOpacity
+          onPress={() => {
+            navigation.navigate("CompanyDetails", { companyId: item.id });
+          }}
         >
-          <Card.Content>
-            <View style={styles.cardHeader}>
-              <Text variant="medium" style={styles.detailLabel}>
-                {t("superAdmin.companies.company")}
-              </Text>
-              <Text>:</Text>
-              <Text
-                variant="regular"
-                style={styles.companyName}
-                numberOfLines={1}
-                ellipsizeMode="tail"
-              >
-                {item.company_name}
-              </Text>
-              <StatusBadge
-                status={item.active ? UserStatus.ACTIVE : UserStatus.INACTIVE}
-              />
-            </View>
-
-            <View style={styles.cardDetails}>
-              <View style={styles.detailItem}>
+          <Card
+            style={[
+              styles.card,
+              {
+                backgroundColor: "#FFFFFF",
+                shadowColor: "transparent",
+              },
+            ]}
+            elevation={0}
+          >
+            <Card.Content>
+              <View style={styles.cardHeader}>
                 <Text variant="medium" style={styles.detailLabel}>
-                  {t("superAdmin.companies.registration")}
+                  {t("superAdmin.companies.company")}
                 </Text>
-                <Text style={styles.detailValue}>
-                  : {item.registration_number || "-"}
+                <Text>:</Text>
+                <Text
+                  variant="regular"
+                  style={styles.companyName}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {item.company_name}
                 </Text>
+                <StatusBadge
+                  status={item.active ? UserStatus.ACTIVE : UserStatus.INACTIVE}
+                />
               </View>
 
-              <View style={styles.detailItem}>
-                <Text variant="medium" style={styles.detailLabel}>
-                  {t("superAdmin.companies.industry")}
-                </Text>
-                <Text style={styles.detailValue}>
-                  : {item.industry_type || "-"}
-                </Text>
-              </View>
+              <View style={styles.cardDetails}>
+                <View style={styles.detailItem}>
+                  <Text variant="medium" style={styles.detailLabel}>
+                    {t("superAdmin.companies.registration")}
+                  </Text>
+                  <Text style={styles.detailValue}>
+                    : {item.registration_number || "-"}
+                  </Text>
+                </View>
 
-              <View style={styles.detailItem}>
-                <Text variant="medium" style={styles.detailLabel}>
-                  {t("superAdmin.companies.onboardingDate")}
-                </Text>
-                <Text style={styles.detailValue}>
-                  :{" "}
-                  {item.created_at
-                    ? formatDate(item.created_at, {
-                        type: "long",
-                        locale: i18n.language,
-                        t,
-                      })
-                    : "-"}
-                </Text>
-              </View>
+                <View style={styles.detailItem}>
+                  <Text variant="medium" style={styles.detailLabel}>
+                    {t("superAdmin.companies.industry")}
+                  </Text>
+                  <Text style={styles.detailValue}>
+                    : {item.industry_type || "-"}
+                  </Text>
+                </View>
 
-              <View style={styles.detailItem}>
-                <Text variant="medium" style={styles.detailLabel}>
-                  {t("superAdmin.companies.contactEmail")}
-                </Text>
-                <Text style={styles.detailValue}>
-                  : {item.contact_email || "-"}
-                </Text>
+                <View style={styles.detailItem}>
+                  <Text variant="medium" style={styles.detailLabel}>
+                    {t("superAdmin.companies.onboardingDate")}
+                  </Text>
+                  <Text style={styles.detailValue}>
+                    :{" "}
+                    {item.created_at
+                      ? formatDate(item.created_at, {
+                          type: "long",
+                          locale: i18n.language,
+                          t,
+                        })
+                      : "-"}
+                  </Text>
+                </View>
+
+                <View style={styles.detailItem}>
+                  <Text variant="medium" style={styles.detailLabel}>
+                    {t("superAdmin.companies.contactEmail")}
+                  </Text>
+                  <Text style={styles.detailValue}>
+                    : {item.contact_email || "-"}
+                  </Text>
+                </View>
               </View>
-            </View>
-          </Card.Content>
-        </Card>
-      </TouchableOpacity>
-    );
-  };
+            </Card.Content>
+          </Card>
+        </TouchableOpacity>
+      );
+    },
+    [t, i18n.language, navigation]
+  );
 
   const onRefresh = () => {
     if (networkStatus === false) {

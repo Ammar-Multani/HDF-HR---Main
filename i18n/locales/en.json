@@ -407,7 +407,9 @@
       "receipts": {
         "title": "Receipts",
         "subtitle": "View, add, and update receipts",
-        "searchPlaceholder": "Search receipts..."
+        "searchPlaceholder": "Search receipts...",
+        "emptyTitle": "No receipts found",
+        "emptyMessage": "You haven't added any receipts yet."
       }
     },
     "superAdminUsers": {
@@ -1280,6 +1282,9 @@
     "amountRequired": "Amount is required",
     "statusRequired": "Status is required",
     "company": "Company",
-    "totalReceipts": "Total Receipts"
+    "totalReceipts": "Total Receipts",
+    "emptyTitle": "No receipts found",
+    "emptyDescription": "You haven't added any receipts yet.",
+    "create": "Create Receipt"
   }
 }

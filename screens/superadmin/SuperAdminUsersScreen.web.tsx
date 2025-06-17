@@ -32,12 +32,16 @@ import {
   Modal,
   Portal,
   RadioButton,
+  Theme,
+  MD3Theme,
+  Banner,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   useNavigation,
   NavigationProp,
   ParamListBase,
+  useFocusEffect,
 } from "@react-navigation/native";
 import { supabase } from "../../lib/supabase";
 import AppHeader from "../../components/AppHeader";
@@ -111,109 +115,113 @@ interface CompanyUser {
 }
 
 // Add this component after the imports and before other components
-const TooltipText = ({
-  text,
-  numberOfLines = 1,
-}: {
-  text: string;
-  numberOfLines?: number;
-}) => {
-  const [isHovered, setIsHovered] = useState(false);
-  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
-  const containerRef = useRef<View>(null);
+const TooltipText = React.memo(
+  ({
+    text,
+    numberOfLines = 1,
+    styles,
+  }: {
+    text: string;
+    numberOfLines?: number;
+    styles: ReturnType<typeof getStyles>;
+  }) => {
+    const [isHovered, setIsHovered] = useState(false);
+    const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+    const containerRef = useRef<View>(null);
 
-  const updateTooltipPosition = () => {
-    if (Platform.OS === "web" && containerRef.current) {
-      // @ts-ignore - web specific
-      const rect = containerRef.current.getBoundingClientRect();
-      const windowHeight = window.innerHeight;
-      const spaceAbove = rect.top;
-      const spaceBelow = windowHeight - rect.bottom;
+    const updateTooltipPosition = () => {
+      if (Platform.OS === "web" && containerRef.current) {
+        // @ts-ignore - web specific
+        const rect = containerRef.current.getBoundingClientRect();
+        const windowHeight = window.innerHeight;
+        const spaceAbove = rect.top;
+        const spaceBelow = windowHeight - rect.bottom;
 
-      // Calculate horizontal position to prevent overflow
-      const windowWidth = window.innerWidth;
-      let xPos = rect.left;
+        // Calculate horizontal position to prevent overflow
+        const windowWidth = window.innerWidth;
+        let xPos = rect.left;
 
-      // Ensure tooltip doesn't overflow right edge
-      if (xPos + 300 > windowWidth) {
-        // 300 is max tooltip width
-        xPos = windowWidth - 310; // Add some padding
+        // Ensure tooltip doesn't overflow right edge
+        if (xPos + 300 > windowWidth) {
+          // 300 is max tooltip width
+          xPos = windowWidth - 310; // Add some padding
+        }
+
+        // Position vertically based on available space
+        let yPos;
+        if (spaceBelow >= 100) {
+          // If enough space below
+          yPos = rect.bottom + window.scrollY + 5;
+        } else if (spaceAbove >= 100) {
+          // If enough space above
+          yPos = rect.top + window.scrollY - 5;
+        } else {
+          // If neither, position it where there's more space
+          yPos =
+            spaceAbove > spaceBelow
+              ? rect.top + window.scrollY - 5
+              : rect.bottom + window.scrollY + 5;
+        }
+
+        setTooltipPosition({ x: xPos, y: yPos });
       }
+    };
 
-      // Position vertically based on available space
-      let yPos;
-      if (spaceBelow >= 100) {
-        // If enough space below
-        yPos = rect.bottom + window.scrollY + 5;
-      } else if (spaceAbove >= 100) {
-        // If enough space above
-        yPos = rect.top + window.scrollY - 5;
-      } else {
-        // If neither, position it where there's more space
-        yPos =
-          spaceAbove > spaceBelow
-            ? rect.top + window.scrollY - 5
-            : rect.bottom + window.scrollY + 5;
+    useEffect(() => {
+      if (isHovered) {
+        updateTooltipPosition();
+        // Add scroll and resize listeners
+        if (Platform.OS === "web") {
+          window.addEventListener("scroll", updateTooltipPosition);
+          window.addEventListener("resize", updateTooltipPosition);
+
+          return () => {
+            window.removeEventListener("scroll", updateTooltipPosition);
+            window.removeEventListener("resize", updateTooltipPosition);
+          };
+        }
       }
+    }, [isHovered]);
 
-      setTooltipPosition({ x: xPos, y: yPos });
+    if (Platform.OS !== "web") {
+      return (
+        <Text style={styles.tableCellText} numberOfLines={numberOfLines}>
+          {text}
+        </Text>
+      );
     }
-  };
 
-  useEffect(() => {
-    if (isHovered) {
-      updateTooltipPosition();
-      // Add scroll and resize listeners
-      if (Platform.OS === "web") {
-        window.addEventListener("scroll", updateTooltipPosition);
-        window.addEventListener("resize", updateTooltipPosition);
-
-        return () => {
-          window.removeEventListener("scroll", updateTooltipPosition);
-          window.removeEventListener("resize", updateTooltipPosition);
-        };
-      }
-    }
-  }, [isHovered]);
-
-  if (Platform.OS !== "web") {
     return (
-      <Text style={styles.tableCellText} numberOfLines={numberOfLines}>
-        {text}
-      </Text>
+      <View
+        ref={containerRef}
+        style={styles.tooltipContainer}
+        // @ts-ignore - web specific props
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <Text style={styles.tableCellText} numberOfLines={numberOfLines}>
+          {text}
+        </Text>
+        {isHovered && (
+          <Portal>
+            <View
+              style={[
+                styles.tooltip,
+                {
+                  position: "absolute",
+                  left: tooltipPosition.x,
+                  top: tooltipPosition.y,
+                },
+              ]}
+            >
+              <Text style={styles.tooltipText}>{text}</Text>
+            </View>
+          </Portal>
+        )}
+      </View>
     );
   }
-
-  return (
-    <View
-      ref={containerRef}
-      style={styles.tooltipContainer}
-      // @ts-ignore - web specific props
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      <Text style={styles.tableCellText} numberOfLines={numberOfLines}>
-        {text}
-      </Text>
-      {isHovered && (
-        <Portal>
-          <View
-            style={[
-              styles.tooltip,
-              {
-                position: "absolute",
-                left: tooltipPosition.x,
-                top: tooltipPosition.y,
-              },
-            ]}
-          >
-            <Text style={styles.tooltipText}>{text}</Text>
-          </View>
-        </Portal>
-      )}
-    </View>
-  );
-};
+);
 
 // Add Shimmer component after TooltipText component
 interface ShimmerProps {
@@ -278,8 +286,881 @@ const Shimmer: React.FC<ShimmerProps> = ({ width, height, style }) => {
   );
 };
 
+const getStyles = (theme: MD3Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: "#F5F7F9",
+    },
+    contentContainer: {
+      flex: 1,
+      paddingHorizontal: Platform.OS === "web" ? 24 : 16,
+    },
+    filterCard: {
+      marginBottom: 12,
+      borderRadius: 12,
+      elevation: 2,
+      overflow: "hidden",
+      borderColor: "#E0E0E0",
+      borderWidth: 1,
+    },
+    filterHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 12,
+    },
+    filterLabel: {
+      fontSize: 14,
+      marginBottom: 0,
+      fontWeight: "bold",
+    },
+    filterRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 12,
+    },
+    companyFilterContainer: {
+      flex: 1,
+      marginRight: 8,
+    },
+    searchContainer: {
+      padding: Platform.OS === "web" ? 24 : 16,
+      paddingTop: 10,
+      paddingBottom: 8,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    searchBarContainer: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    searchbar: {
+      elevation: 0,
+      borderRadius: 18,
+      height: 56,
+      backgroundColor: "#fff",
+      borderWidth: 1,
+      borderColor: "#e0e0e0",
+      flex: 1,
+    },
+    filterButtonContainer: {
+      position: "relative",
+      marginLeft: 8,
+    },
+    filterButton: {
+      borderWidth: 1,
+      borderColor: "#e0e0e0",
+      borderRadius: 8,
+      backgroundColor: "#fff",
+    },
+    inputContainer: {
+      height: 40,
+      paddingHorizontal: 8,
+    },
+    tabCount: {
+      fontSize: 12,
+      color: "#1a73e8",
+      fontFamily: "Poppins-Medium",
+    },
+    card: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: "#F0F0F0",
+      elevation: 0,
+      backgroundColor: "#FFFFFF",
+      marginBottom: 0,
+      marginHorizontal: 0,
+    },
+    cardHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+    },
+    cardContent: {
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+    },
+    cardContainer: {
+      marginBottom: 12,
+      marginHorizontal: 2,
+    },
+    userInfo: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      flex: 1,
+    },
+    userTextContainer: {
+      marginLeft: 16,
+      flex: 1,
+    },
+    userName: {
+      fontSize: 16,
+      fontFamily: "Poppins-SemiBold",
+      marginBottom: 4,
+      color: "#212121",
+    },
+    userEmail: {
+      fontSize: 14,
+      color: "#757575",
+      fontFamily: "Poppins-Regular",
+      marginBottom: 8,
+    },
+    userRole: {
+      fontSize: 12,
+      color: "#1a73e8",
+      fontFamily: "Poppins-Medium",
+      marginTop: 2,
+    },
+    userCompany: {
+      fontSize: 12,
+      color: "#616161",
+      fontFamily: "Poppins-Medium",
+      marginTop: 2,
+    },
+    jobTitle: {
+      fontSize: 12,
+      color: "#616161",
+      fontFamily: "Poppins-Regular",
+      marginTop: 2,
+    },
+    employeeDetails: {
+      marginTop: 2,
+    },
+    listContent: {
+      paddingVertical: 8,
+      paddingHorizontal: 2,
+    },
+    listContainer: {
+      flex: 1,
+      marginTop: 4,
+      marginBottom: 18,
+    },
+    listHeaderContainer: {
+      backgroundColor: "#FFFFFF",
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      marginBottom: 10,
+      borderRadius: 12,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      elevation: 2,
+      borderWidth: 1,
+      borderColor: "#F0F0F0",
+      marginHorizontal: 2,
+    },
+    listHeaderTitle: {
+      fontSize: 18,
+      fontFamily: "Poppins-Medium",
+      color: "#212121",
+    },
+    listHeaderCount: {
+      color: "#1a73e8",
+      fontSize: 16,
+      fontFamily: "Poppins-Regular",
+    },
+    activeFilterButton: {
+      backgroundColor: "#E8F0FE",
+      borderWidth: 1,
+      borderColor: "#1a73e8",
+    },
+    clearFilterButtonLabel: {
+      fontSize: 12,
+      color: "#1a73e8",
+    },
+    dropdownContainer: {
+      // marginBottom: 8,
+    },
+    dropdownButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      borderWidth: 1,
+      borderColor: "#E0E0E0",
+      borderRadius: 12,
+      paddingLeft: 4,
+      paddingRight: 8,
+      paddingVertical: 6,
+      backgroundColor: "#FFFFFF",
+    },
+    dropdownContent: {
+      flexDirection: "row",
+      alignItems: "center",
+      flex: 1,
+    },
+    dropdownLeadingIcon: {
+      margin: 0,
+      padding: 0,
+    },
+    dropdownButtonText: {
+      fontFamily: "Poppins-Regular",
+      color: "#424242",
+      flex: 1,
+      fontSize: 14,
+    },
+    dropdownIcon: {
+      margin: 0,
+      padding: 0,
+    },
+    modalContainer: {
+      backgroundColor: "white",
+      borderRadius: 16,
+      margin: 16,
+      overflow: "hidden",
+      maxHeight: "100%",
+      elevation: 5,
+      maxWidth: "40%",
+      justifyContent: "center",
+    },
+    modalHeaderContainer: {
+      backgroundColor: "white",
+      borderTopLeftRadius: 16,
+      borderTopRightRadius: 16,
+      zIndex: 1,
+    },
+    modalHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 16,
+      paddingVertical: 16,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontFamily: "Poppins-SemiBold",
+      color: "#212121",
+    },
+    modalContent: {
+      padding: 16,
+    },
+    modalFooter: {
+      flexDirection: "row",
+      justifyContent: "flex-end",
+      padding: 16,
+      borderTopWidth: 1,
+      borderTopColor: "#E0E0E0",
+      backgroundColor: "#FFFFFF",
+    },
+    modalButton: {
+      marginLeft: 12,
+      borderRadius: 8,
+    },
+    modalDivider: {
+      height: 1,
+      backgroundColor: "#E0E0E0",
+    },
+    modalSection: {
+      marginBottom: 14,
+    },
+    sectionHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 12,
+    },
+    selectionBadge: {
+      backgroundColor: "#F5F5F5",
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 16,
+    },
+    selectionHint: {
+      fontSize: 12,
+      color: "#616161",
+      fontFamily: "Poppins-Medium",
+    },
+    sectionTitle: {
+      fontSize: 16,
+      fontFamily: "Poppins-SemiBold",
+      color: "#212121",
+      marginBottom: 0,
+    },
+    activeDropdownButton: {
+      borderColor: "#1a73e8",
+      backgroundColor: "#F0F7FF",
+    },
+    activeFilterSection: {
+      marginBottom: 16,
+      backgroundColor: "#F5F5F5",
+      borderRadius: 12,
+      padding: 12,
+    },
+    activeFilterHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 8,
+    },
+    activeFilterTitle: {
+      fontSize: 14,
+      fontFamily: "Poppins-Medium",
+      color: "#424242",
+    },
+    activeFilterContainer: {
+      flexDirection: "column",
+      marginTop: 8,
+    },
+    activeFiltersContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "flex-start",
+      flexWrap: "wrap",
+      paddingHorizontal: 14,
+      paddingBottom: 12,
+    },
+    activeFiltersText: {
+      fontSize: 14,
+      fontFamily: "Poppins-Regular",
+      color: "#616161",
+      marginRight: 8,
+    },
+    filtersScrollView: {
+      flexGrow: 0,
+      marginVertical: 4,
+    },
+    clearAllButton: {
+      marginVertical: 0,
+      height: 30,
+      justifyContent: "center",
+      paddingBottom: 5,
+    },
+    menuHeader: {
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      backgroundColor: "#F5F5F5",
+    },
+    menuTitle: {
+      fontSize: 14,
+      fontFamily: "Poppins-Medium",
+      color: "#212121",
+    },
+    menuSubtitle: {
+      fontSize: 12,
+      fontFamily: "Poppins-Regular",
+      color: "#616161",
+      marginTop: 2,
+    },
+    menuContainer: {
+      borderRadius: 8,
+      width: 280,
+      marginTop: 4,
+      elevation: 3,
+    },
+    menuItemStyle: {
+      height: 48,
+      justifyContent: "center",
+      borderBottomWidth: 1,
+      borderColor: "#E0E0E0",
+    },
+    menuItemText: {
+      fontFamily: "Poppins-Regular",
+      fontSize: 14,
+      color: "#424242",
+    },
+    menuItemSelected: {
+      color: "#1a73e8",
+      fontFamily: "Poppins-Medium",
+      paddingRight: 12,
+    },
+    resultSummary: {
+      alignItems: "center",
+      padding: 8,
+      backgroundColor: "#e8f4fd",
+      borderRadius: 8,
+      marginTop: 12,
+    },
+    resultSummaryText: {
+      color: "#0066cc",
+      fontWeight: "500",
+      fontSize: 14,
+    },
+    resultsText: {
+      textAlign: "center",
+      fontSize: 14,
+      opacity: 0.7,
+    },
+    fab: {
+      borderRadius: 17,
+      height: 56,
+      elevation: 0,
+    },
+    avatarContainer: {
+      width: 50,
+      height: 50,
+      borderRadius: 25,
+      overflow: "hidden",
+    },
+    avatarGradient: {
+      width: "100%",
+      height: "100%",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingTop: 3,
+    },
+    avatarText: {
+      color: "#FFFFFF",
+      fontSize: 18,
+      fontFamily: "Poppins-Bold",
+    },
+    filterBadge: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: "#ff5252",
+      position: "absolute",
+      top: 8,
+      right: 8,
+      zIndex: 2,
+    },
+    statusContainer: {
+      flexDirection: "column",
+      alignItems: "flex-end",
+      justifyContent: "flex-start",
+    },
+    menuButton: {
+      margin: 0,
+      marginTop: -5,
+    },
+    superAdminAvatar: {
+      backgroundColor: "rgba(54,105,157,0.9)",
+    },
+    companyAdminAvatar: {
+      backgroundColor: "rgba(140,82,255,0.9)",
+    },
+    employeeAvatar: {
+      backgroundColor: "rgba(76,175,80,0.9)",
+    },
+    badgeContainer: {
+      flexDirection: "column",
+      marginTop: 2,
+    },
+    roleBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: "#1a73e8",
+      borderRadius: 16,
+      paddingRight: 8,
+      marginBottom: 4,
+      alignSelf: "flex-start",
+    },
+    employeeRoleBadge: {
+      backgroundColor: "#4CAF50",
+    },
+    roleIcon: {
+      margin: 0,
+      padding: 0,
+    },
+    roleBadgeText: {
+      color: "#FFFFFF",
+      fontSize: 12,
+      fontFamily: "Poppins-Medium",
+    },
+    companyBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: "#F5F5F5",
+      borderRadius: 16,
+      paddingRight: 8,
+      marginBottom: 4,
+      alignSelf: "flex-start",
+    },
+    companyIcon: {
+      margin: 0,
+      padding: 0,
+    },
+    companyBadgeText: {
+      color: "#616161",
+      fontSize: 12,
+      fontFamily: "Poppins-Regular",
+    },
+    jobTitleBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: "#F5F5F5",
+      borderRadius: 16,
+      paddingRight: 8,
+      alignSelf: "flex-start",
+    },
+    jobTitleIcon: {
+      margin: 0,
+      padding: 0,
+    },
+    jobTitleBadgeText: {
+      color: "#616161",
+      fontSize: 12,
+      fontFamily: "Poppins-Regular",
+    },
+    footerButton: {
+      paddingVertical: 10,
+      paddingHorizontal: 20,
+      borderRadius: 8,
+      marginLeft: 12,
+    },
+    clearButtonText: {
+      fontSize: 14,
+      fontFamily: "Poppins-Medium",
+      color: "#616161",
+    },
+    applyButton: {
+      elevation: 2,
+    },
+    applyButtonText: {
+      fontSize: 14,
+      fontFamily: "Poppins-Medium",
+      color: "#FFFFFF",
+    },
+    radioItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginVertical: 4,
+    },
+    radioLabel: {
+      fontSize: 16,
+      marginLeft: 8,
+      fontFamily: "Poppins-Regular",
+      color: "#424242",
+    },
+    searchTips: {
+      backgroundColor: "#e8f4fd",
+      padding: 12,
+      borderRadius: 8,
+      marginBottom: 12,
+    },
+    searchTipsText: {
+      color: "#0066cc",
+      fontWeight: "500",
+      fontSize: 14,
+    },
+    searchResultsContainer: {
+      backgroundColor: "#e8f4fd",
+      padding: 12,
+      borderRadius: 8,
+      marginBottom: 12,
+    },
+    searchResultsText: {
+      color: "#0066cc",
+      fontWeight: "500",
+      fontSize: 14,
+    },
+    userTypeDropdownContainer: {
+      marginBottom: 10,
+      zIndex: 10,
+    },
+    userTypeDropdown: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      borderWidth: 1.5,
+      borderColor: "#E0E0E0",
+      borderRadius: 15,
+      paddingVertical: 6,
+      paddingLeft: 6,
+      paddingRight: 8,
+      backgroundColor: "#FFFFFF",
+      elevation: 2,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.1,
+      shadowRadius: 2,
+      paddingHorizontal: 10,
+    },
+    userTypeDropdownContent: {
+      flexDirection: "row",
+      alignItems: "center",
+      flex: 1,
+    },
+    iconContainer: {
+      borderRadius: 12,
+      marginRight: 4,
+      padding: 2,
+    },
+    userTypeDropdownText: {
+      fontFamily: "Poppins-Medium",
+      color: "#424242",
+      flex: 1,
+      fontSize: 16,
+      marginLeft: 4,
+    },
+    menuBackdrop: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: "rgba(0, 0, 0, 0.01)",
+    },
+    enhancedMenuContainer: {
+      backgroundColor: "#FFFFFF",
+      borderRadius: 15,
+      paddingVertical: 8,
+      elevation: 6,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 6,
+      overflow: "hidden",
+      width: "100%",
+      maxWidth: 350,
+    },
+    userTypeMenuHeader: {
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: "#F0F0F0",
+    },
+    userTypeMenuTitle: {
+      fontSize: 16,
+      fontFamily: "Poppins-Medium",
+      color: "#333333",
+    },
+    enhancedMenuItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: "#F0F0F0",
+    },
+    selectedMenuItem: {
+      backgroundColor: "#F8F8F8",
+    },
+    menuIconContainer: {
+      borderRadius: 12,
+      padding: 2,
+      width: 44,
+      height: 44,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    menuIcon: {
+      margin: 0,
+      padding: 0,
+    },
+    menuItemContent: {
+      flex: 1,
+      marginLeft: 12,
+    },
+    menuItemTitleText: {
+      fontSize: 16,
+      fontFamily: "Poppins-Medium",
+      color: "#333333",
+      marginBottom: 2,
+    },
+    menuItemDescription: {
+      fontSize: 12,
+      fontFamily: "Poppins-Regular",
+      color: "#757575",
+    },
+    checkIconContainer: {
+      marginLeft: 8,
+    },
+    tabsContainer: {
+      paddingHorizontal: 24,
+      paddingBottom: 16,
+    },
+    tabsWrapper: {
+      flexDirection: "row",
+      alignItems: "center",
+      maxWidth: 600,
+    },
+    tab: {
+      paddingVertical: 12,
+      paddingHorizontal: 24,
+      marginRight: 8,
+      borderBottomWidth: 2,
+      borderBottomColor: "transparent",
+    },
+    activeTab: {},
+    tabText: {
+      fontSize: 14,
+      fontFamily: "Poppins-Medium",
+      color: "#616161",
+    },
+    activeTabText: {
+      color: "#1a73e8",
+    },
+    tableContainer: {
+      flex: 1,
+      backgroundColor: "#fff",
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: "#e0e0e0",
+      overflow: "hidden",
+    },
+    tableHeader: {
+      flexDirection: "row",
+      backgroundColor: "#f8fafc",
+      borderBottomWidth: 1,
+      borderBottomColor: "#e0e0e0",
+      paddingVertical: 16,
+      paddingHorizontal: 26,
+      alignContent: "center",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    tableHeaderCell: {
+      flex: 1,
+      paddingHorizontal: 16,
+      justifyContent: "space-around",
+      paddingLeft: 25,
+      alignItems: "flex-start",
+    },
+    tableHeaderText: {
+      fontSize: 14,
+      color: "#64748b",
+    },
+    tableRow: {
+      flexDirection: "row",
+      borderBottomWidth: 1,
+      borderBottomColor: "#e0e0e0",
+      paddingVertical: 16,
+      backgroundColor: "#fff",
+      paddingHorizontal: 26,
+      alignItems: "center",
+    },
+    tableCell: {
+      flex: 1,
+      paddingHorizontal: 26,
+      justifyContent: "space-evenly",
+      alignItems: "flex-start",
+    },
+    receiptIdLink: {
+      color: "#1a73e8",
+      cursor: "pointer",
+      fontSize: 14,
+      fontFamily: "Poppins-Regular",
+    },
+    tableCellText: {
+      fontSize: 14,
+      color: "#334155",
+    },
+    tableContent: {
+      flexGrow: 1,
+    },
+    actionCell: {
+      flex: 1,
+      flexDirection: "row",
+      justifyContent: "flex-start",
+      alignItems: "center",
+      paddingHorizontal: 26,
+    },
+    actionIcon: {
+      margin: 0,
+      marginRight: 8,
+    },
+    tooltipContainer: {
+      position: "relative",
+      flex: 1,
+      maxWidth: "100%",
+      zIndex: 10, // Higher z-index to appear above table header
+    },
+    tooltip: {
+      backgroundColor: "rgba(255, 255, 255, 0.95)",
+      padding: 8,
+      marginLeft: 30,
+      borderRadius: 4,
+      borderWidth: 1,
+      borderColor: "#e0e0e0",
+      maxWidth: 300,
+      shadowColor: "#000",
+      shadowOffset: {
+        width: 0,
+        height: 2,
+      },
+      shadowOpacity: 0.25,
+      shadowRadius: 3.84,
+      elevation: 5,
+      zIndex: 9999,
+      ...(Platform.OS === "web"
+        ? {
+            // @ts-ignore - web specific style
+            willChange: "transform",
+            // @ts-ignore - web specific style
+            isolation: "isolate",
+          }
+        : {}),
+    },
+    tooltipText: {
+      color: "#000",
+      fontSize: 12,
+      fontFamily: "Poppins-Regular",
+      lineHeight: 16,
+    },
+    skeleton: {
+      backgroundColor: "#F3F4F6",
+      borderRadius: 4,
+      overflow: "hidden",
+    },
+    skeletonCard: {
+      backgroundColor: "#FFFFFF",
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: "#F0F0F0",
+      padding: 16,
+      marginBottom: 16,
+    },
+    activeFilterChip: {
+      margin: 4,
+      backgroundColor: "rgba(26, 115, 232, 0.1)",
+      borderColor: "#1a73e8",
+    },
+    paginationWrapper: {
+      marginTop: 5,
+      overflow: "hidden",
+      width: "auto",
+      alignSelf: "center",
+    },
+    totalCountContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    totalCountText: {
+      fontSize: 14,
+      color: "#666",
+      fontFamily: "Poppins-Regular",
+    },
+    totalCountValue: {
+      fontSize: 14,
+      color: theme.colors.primary,
+      fontFamily: "Poppins-Medium",
+      marginLeft: 4,
+    },
+    switchContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: 8,
+      paddingHorizontal: 4,
+    },
+    switchLabel: {
+      fontSize: 14,
+      color: "#424242",
+      fontFamily: "Poppins-Regular",
+      flex: 1,
+      marginRight: 16,
+    },
+    userNameContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "flex-start",
+      marginBottom: 4,
+    },
+    sequenceId: {
+      fontSize: 14,
+      color: "#757575",
+      marginLeft: 8,
+      fontFamily: "Poppins-Regular",
+    },
+  });
+
 const SuperAdminUsersScreen = () => {
   const theme = useTheme();
+  const styles = React.useMemo(() => getStyles(theme), [theme]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -289,6 +1170,11 @@ const SuperAdminUsersScreen = () => {
   // Add pagination state
   const PAGE_SIZE = 10;
   const [page, setPage] = useState(0);
+
+  // Add separate count states for each user type
+  const [superAdminCount, setSuperAdminCount] = useState(0);
+  const [companyAdminCount, setCompanyAdminCount] = useState(0);
+  const [employeeCount, setEmployeeCount] = useState(0);
   const [totalItems, setTotalItems] = useState(0);
 
   // State for different user types
@@ -405,6 +1291,7 @@ const SuperAdminUsersScreen = () => {
       setSuperAdmins(data || []);
       setFilteredSuperAdmins(data || []);
       if (count !== null) {
+        setSuperAdminCount(count);
         setTotalItems(count);
       }
     } catch (error) {
@@ -422,7 +1309,8 @@ const SuperAdminUsersScreen = () => {
         .from("company_user")
         .select("*, company:company_id(company_name)", { count: "exact" })
         .eq("role", "admin")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .order("company_user_sequence_id", { ascending: true });
 
       // Apply status filter
       if (statusFilter === "deleted") {
@@ -458,6 +1346,7 @@ const SuperAdminUsersScreen = () => {
       setCompanyAdmins(data || []);
       setFilteredCompanyAdmins(data || []);
       if (count !== null) {
+        setCompanyAdminCount(count);
         setTotalItems(count);
       }
     } catch (error) {
@@ -475,7 +1364,8 @@ const SuperAdminUsersScreen = () => {
         .from("company_user")
         .select("*, company:company_id(company_name)", { count: "exact" })
         .eq("role", "employee")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .order("company_user_sequence_id", { ascending: true });
 
       // Apply status filter
       if (statusFilter === "deleted") {
@@ -511,6 +1401,7 @@ const SuperAdminUsersScreen = () => {
       setEmployees(data || []);
       setFilteredEmployees(data || []);
       if (count !== null) {
+        setEmployeeCount(count);
         setTotalItems(count);
       }
     } catch (error) {
@@ -1014,7 +1905,7 @@ const SuperAdminUsersScreen = () => {
     <TouchableOpacity
       onPress={() => {
         console.log("Employee selected:", item.id);
-        navigation.navigate("EmployeeDetailedScreen", {
+        navigation.navigate("EmployeeDetails", {
           employeeId: item.id,
           companyId: item.company_id,
         });
@@ -1281,7 +2172,7 @@ const SuperAdminUsersScreen = () => {
     <View style={styles.tableHeader}>
       <View style={[styles.tableHeaderCell, { flex: 0.6 }]}>
         <Text variant="medium" style={styles.tableHeaderText}>
-          ID
+          Admin ID
         </Text>
       </View>
       <View style={styles.tableHeaderCell}>
@@ -1321,7 +2212,7 @@ const SuperAdminUsersScreen = () => {
     <View style={styles.tableHeader}>
       <View style={[styles.tableHeaderCell, { flex: 0.6 }]}>
         <Text variant="medium" style={styles.tableHeaderText}>
-          ID
+          Employee ID
         </Text>
       </View>
       <View style={styles.tableHeaderCell}>
@@ -1372,22 +2263,24 @@ const SuperAdminUsersScreen = () => {
       ]}
     >
       <View style={[styles.tableCell, { flex: 0.6 }]}>
-        <TouchableOpacity onPress={() => {
-          navigation.navigate("SuperAdminDetailsScreen", {
-            adminId: item.id,
-            adminType: "super",
-          });
-        }}>
+        <TouchableOpacity
+          onPress={() => {
+            navigation.navigate("SuperAdminDetailsScreen", {
+              adminId: item.id,
+              adminType: "super",
+            });
+          }}
+        >
           <Text style={styles.receiptIdLink}>
             {item.admin_sequence_id || "-"}
           </Text>
         </TouchableOpacity>
       </View>
       <View style={styles.tableCell}>
-        <TooltipText text={item.name || "Unnamed Admin"} />
+        <TooltipText text={item.name || "Unnamed Admin"} styles={styles} />
       </View>
       <View style={styles.tableCell}>
-        <TooltipText text={item.email} />
+        <TooltipText text={item.email} styles={styles} />
       </View>
       <View style={styles.tableCell}>
         <Text style={styles.tableCellText}>Super Admin</Text>
@@ -1447,7 +2340,7 @@ const SuperAdminUsersScreen = () => {
       ]}
     >
       <View style={[styles.tableCell, { flex: 0.6 }]}>
-        <Text style={styles.tableCellText}>
+        <Text style={styles.receiptIdLink}>
           {item.company_user_sequence_id || "-"}
         </Text>
       </View>
@@ -1457,14 +2350,16 @@ const SuperAdminUsersScreen = () => {
             `${item.first_name || ""} ${item.last_name || ""}`.trim() ||
             "Unnamed Admin"
           }
+          styles={styles}
         />
       </View>
       <View style={styles.tableCell}>
-        <TooltipText text={item.email} />
+        <TooltipText text={item.email} styles={styles} />
       </View>
       <View style={styles.tableCell}>
         <TooltipText
           text={(item as any).company?.company_name || "Unknown Company"}
+          styles={styles}
         />
       </View>
       <View style={styles.tableCell}>
@@ -1511,7 +2406,7 @@ const SuperAdminUsersScreen = () => {
   const EmployeeTableRow = ({ item }: { item: CompanyUser }) => (
     <Pressable
       onPress={() => {
-        navigation.navigate("EmployeeDetailedScreen", {
+        navigation.navigate("EmployeeDetails", {
           employeeId: item.id,
           companyId: item.company_id,
         });
@@ -1522,7 +2417,7 @@ const SuperAdminUsersScreen = () => {
       ]}
     >
       <View style={[styles.tableCell, { flex: 0.6 }]}>
-        <Text style={styles.tableCellText}>
+        <Text style={styles.receiptIdLink}>
           {item.company_user_sequence_id || "-"}
         </Text>
       </View>
@@ -1532,18 +2427,20 @@ const SuperAdminUsersScreen = () => {
             `${item.first_name || ""} ${item.last_name || ""}`.trim() ||
             "Unnamed Employee"
           }
+          styles={styles}
         />
       </View>
       <View style={styles.tableCell}>
-        <TooltipText text={item.email} />
+        <TooltipText text={item.email} styles={styles} />
       </View>
       <View style={styles.tableCell}>
         <TooltipText
           text={(item as any).company?.company_name || "Unknown Company"}
+          styles={styles}
         />
       </View>
       <View style={styles.tableCell}>
-        <TooltipText text={item.job_title || "-"} />
+        <TooltipText text={item.job_title || "-"} styles={styles} />
       </View>
       <View style={styles.tableCell}>
         <StatusBadge
@@ -1561,7 +2458,7 @@ const SuperAdminUsersScreen = () => {
           size={20}
           onPress={(e) => {
             e.stopPropagation();
-            navigation.navigate("EmployeeDetailedScreen", {
+            navigation.navigate("EmployeeDetails", {
               employeeId: item.id,
               companyId: item.company_id,
             });
@@ -1578,65 +2475,9 @@ const SuperAdminUsersScreen = () => {
 
   const renderCurrentList = () => {
     if (loading && !refreshing) {
-      if (useTableLayout) {
-        // Table view skeleton
-        return (
-          <View style={styles.tableContainer}>
-            {selectedTab === UserListType.SUPER_ADMIN && (
-              <SuperAdminTableHeader />
-            )}
-            {selectedTab === UserListType.COMPANY_ADMIN && (
-              <CompanyAdminTableHeader />
-            )}
-            {selectedTab === UserListType.EMPLOYEE && <EmployeeTableHeader />}
-            {Array(6)
-              .fill(0)
-              .map((_, index) => (
-                <View key={`skeleton-${index}`} style={styles.tableRow}>
-                  <View style={[styles.tableCell, { flex: 0.6 }]}>
-                    <Shimmer width={60} height={16} />
-                  </View>
-                  <View style={styles.tableCell}>
-                    <Shimmer width={160} height={16} />
-                  </View>
-                  <View style={styles.tableCell}>
-                    <Shimmer width={180} height={16} />
-                  </View>
-                  <View style={styles.tableCell}>
-                    <Shimmer width={140} height={16} />
-                  </View>
-                  <View style={styles.tableCell}>
-                    <Shimmer width={100} height={16} />
-                  </View>
-                  <View style={styles.tableCell}>
-                    <Shimmer
-                      width={80}
-                      height={24}
-                      style={{ borderRadius: 12 }}
-                    />
-                  </View>
-                  <View style={styles.actionCell}>
-                    <Shimmer
-                      width={40}
-                      height={40}
-                      style={{ borderRadius: 20, marginRight: 8 }}
-                    />
-                    <Shimmer
-                      width={40}
-                      height={40}
-                      style={{ borderRadius: 20 }}
-                    />
-                  </View>
-                </View>
-              ))}
-          </View>
-        );
-      }
-
-      // Card view skeleton
       return (
         <FlatList
-          data={Array(4).fill(0)}
+          data={Array(6)}
           renderItem={() => (
             <View style={styles.cardContainer}>
               <Card style={[styles.card]} elevation={0}>
@@ -1644,28 +2485,17 @@ const SuperAdminUsersScreen = () => {
                   <View style={styles.cardHeader}>
                     <View style={styles.userInfo}>
                       <Shimmer
-                        width={50}
-                        height={50}
-                        style={{ borderRadius: 25, marginRight: 16 }}
+                        width={40}
+                        height={40}
+                        style={{ borderRadius: 20 }}
                       />
                       <View style={styles.userTextContainer}>
                         <Shimmer
-                          width={180}
-                          height={16}
-                          style={{ marginBottom: 8 }}
+                          width={150}
+                          height={20}
+                          style={{ marginBottom: 4 }}
                         />
-                        <Shimmer
-                          width={140}
-                          height={14}
-                          style={{ marginBottom: 8 }}
-                        />
-                        <View style={styles.badgeContainer}>
-                          <Shimmer
-                            width={120}
-                            height={24}
-                            style={{ borderRadius: 12, marginBottom: 4 }}
-                          />
-                        </View>
+                        <Shimmer width={120} height={16} />
                       </View>
                     </View>
                     <View style={styles.statusContainer}>
@@ -1688,6 +2518,64 @@ const SuperAdminUsersScreen = () => {
 
     const totalPages = Math.ceil(totalItems / PAGE_SIZE);
 
+    const renderTotalCount = () => (
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            marginLeft: 12,
+            paddingTop: 16,
+          }}
+        >
+          <Text
+            style={{
+              fontSize: 14,
+              color: "#666",
+              fontFamily: "Poppins-Regular",
+            }}
+          >
+            Total{" "}
+            {selectedTab === UserListType.SUPER_ADMIN
+              ? "HDF Users"
+              : selectedTab === UserListType.COMPANY_ADMIN
+                ? "Company Admins"
+                : "Employees"}
+            :
+          </Text>
+          <Text
+            style={{
+              fontSize: 14,
+              color: theme.colors.primary,
+              fontFamily: "Poppins-Medium",
+              marginLeft: 4,
+            }}
+          >
+            {selectedTab === UserListType.SUPER_ADMIN
+              ? superAdminCount
+              : selectedTab === UserListType.COMPANY_ADMIN
+                ? companyAdminCount
+                : employeeCount}
+          </Text>
+        </View>
+        {totalPages > 1 && (
+          <View style={styles.paginationWrapper}>
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              onPageChange={handlePageChange}
+            />
+          </View>
+        )}
+      </View>
+    );
+
     switch (selectedTab) {
       case UserListType.SUPER_ADMIN:
         if (filteredSuperAdmins.length === 0) {
@@ -1696,13 +2584,33 @@ const SuperAdminUsersScreen = () => {
         return (
           <>
             {useTableLayout ? (
-              <View style={styles.tableContainer}>
-                <SuperAdminTableHeader />
+              <>
+                <View style={styles.tableContainer}>
+                  <SuperAdminTableHeader />
+                  <FlatList
+                    data={filteredSuperAdmins}
+                    renderItem={({ item }) => (
+                      <SuperAdminTableRow item={item} />
+                    )}
+                    keyExtractor={(item) => `super-${item.id}`}
+                    contentContainerStyle={styles.tableContent}
+                    refreshControl={
+                      <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                      />
+                    }
+                  />
+                </View>
+                {renderTotalCount()}
+              </>
+            ) : (
+              <>
                 <FlatList
                   data={filteredSuperAdmins}
-                  renderItem={({ item }) => <SuperAdminTableRow item={item} />}
+                  renderItem={renderSuperAdminItem}
                   keyExtractor={(item) => `super-${item.id}`}
-                  contentContainerStyle={styles.tableContent}
+                  contentContainerStyle={styles.listContent}
                   refreshControl={
                     <RefreshControl
                       refreshing={refreshing}
@@ -1710,29 +2618,8 @@ const SuperAdminUsersScreen = () => {
                     />
                   }
                 />
-              </View>
-            ) : (
-              <FlatList
-                data={filteredSuperAdmins}
-                renderItem={renderSuperAdminItem}
-                keyExtractor={(item) => `super-${item.id}`}
-                contentContainerStyle={styles.listContent}
-                refreshControl={
-                  <RefreshControl
-                    refreshing={refreshing}
-                    onRefresh={onRefresh}
-                  />
-                }
-              />
-            )}
-            {totalPages > 1 && (
-              <View style={styles.paginationWrapper}>
-                <Pagination
-                  currentPage={page}
-                  totalPages={totalPages}
-                  onPageChange={handlePageChange}
-                />
-              </View>
+                {renderTotalCount()}
+              </>
             )}
           </>
         );
@@ -1744,15 +2631,33 @@ const SuperAdminUsersScreen = () => {
         return (
           <>
             {useTableLayout ? (
-              <View style={styles.tableContainer}>
-                <CompanyAdminTableHeader />
+              <>
+                <View style={styles.tableContainer}>
+                  <CompanyAdminTableHeader />
+                  <FlatList
+                    data={filteredCompanyAdmins}
+                    renderItem={({ item }) => (
+                      <CompanyAdminTableRow item={item} />
+                    )}
+                    keyExtractor={(item) => `admin-${item.id}`}
+                    contentContainerStyle={styles.tableContent}
+                    refreshControl={
+                      <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                      />
+                    }
+                  />
+                </View>
+                {renderTotalCount()}
+              </>
+            ) : (
+              <>
                 <FlatList
                   data={filteredCompanyAdmins}
-                  renderItem={({ item }) => (
-                    <CompanyAdminTableRow item={item} />
-                  )}
+                  renderItem={renderCompanyAdminItem}
                   keyExtractor={(item) => `admin-${item.id}`}
-                  contentContainerStyle={styles.tableContent}
+                  contentContainerStyle={styles.listContent}
                   refreshControl={
                     <RefreshControl
                       refreshing={refreshing}
@@ -1760,29 +2665,8 @@ const SuperAdminUsersScreen = () => {
                     />
                   }
                 />
-              </View>
-            ) : (
-              <FlatList
-                data={filteredCompanyAdmins}
-                renderItem={renderCompanyAdminItem}
-                keyExtractor={(item) => `admin-${item.id}`}
-                contentContainerStyle={styles.listContent}
-                refreshControl={
-                  <RefreshControl
-                    refreshing={refreshing}
-                    onRefresh={onRefresh}
-                  />
-                }
-              />
-            )}
-            {totalPages > 1 && (
-              <View style={styles.paginationWrapper}>
-                <Pagination
-                  currentPage={page}
-                  totalPages={totalPages}
-                  onPageChange={handlePageChange}
-                />
-              </View>
+                {renderTotalCount()}
+              </>
             )}
           </>
         );
@@ -1794,13 +2678,31 @@ const SuperAdminUsersScreen = () => {
         return (
           <>
             {useTableLayout ? (
-              <View style={styles.tableContainer}>
-                <EmployeeTableHeader />
+              <>
+                <View style={styles.tableContainer}>
+                  <EmployeeTableHeader />
+                  <FlatList
+                    data={filteredEmployees}
+                    renderItem={({ item }) => <EmployeeTableRow item={item} />}
+                    keyExtractor={(item) => `emp-${item.id}`}
+                    contentContainerStyle={styles.tableContent}
+                    refreshControl={
+                      <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                      />
+                    }
+                  />
+                </View>
+                {renderTotalCount()}
+              </>
+            ) : (
+              <>
                 <FlatList
                   data={filteredEmployees}
-                  renderItem={({ item }) => <EmployeeTableRow item={item} />}
+                  renderItem={renderEmployeeItem}
                   keyExtractor={(item) => `emp-${item.id}`}
-                  contentContainerStyle={styles.tableContent}
+                  contentContainerStyle={styles.listContent}
                   refreshControl={
                     <RefreshControl
                       refreshing={refreshing}
@@ -1808,29 +2710,8 @@ const SuperAdminUsersScreen = () => {
                     />
                   }
                 />
-              </View>
-            ) : (
-              <FlatList
-                data={filteredEmployees}
-                renderItem={renderEmployeeItem}
-                keyExtractor={(item) => `emp-${item.id}`}
-                contentContainerStyle={styles.listContent}
-                refreshControl={
-                  <RefreshControl
-                    refreshing={refreshing}
-                    onRefresh={onRefresh}
-                  />
-                }
-              />
-            )}
-            {totalPages > 1 && (
-              <View style={styles.paginationWrapper}>
-                <Pagination
-                  currentPage={page}
-                  totalPages={totalPages}
-                  onPageChange={handlePageChange}
-                />
-              </View>
+                {renderTotalCount()}
+              </>
             )}
           </>
         );
@@ -2615,861 +3496,5 @@ const SuperAdminUsersScreen = () => {
     </SafeAreaView>
   );
 };
-
-// Global styles outside component
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F5F7F9",
-  },
-  contentContainer: {
-    flex: 1,
-    paddingHorizontal: Platform.OS === "web" ? 24 : 16,
-  },
-  filterCard: {
-    marginBottom: 12,
-    borderRadius: 12,
-    elevation: 2,
-    overflow: "hidden",
-    borderColor: "#E0E0E0",
-    borderWidth: 1,
-  },
-  filterHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  filterLabel: {
-    fontSize: 14,
-    marginBottom: 0,
-    fontWeight: "bold",
-  },
-  filterRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  companyFilterContainer: {
-    flex: 1,
-    marginRight: 8,
-  },
-  searchContainer: {
-    padding: Platform.OS === "web" ? 24 : 16,
-    paddingTop: 10,
-    paddingBottom: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  searchBarContainer: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  searchbar: {
-    elevation: 0,
-    borderRadius: 18,
-    height: 56,
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    flex: 1,
-  },
-  filterButtonContainer: {
-    position: "relative",
-    marginLeft: 8,
-  },
-  filterButton: {
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    borderRadius: 8,
-    backgroundColor: "#fff",
-  },
-  inputContainer: {
-    height: 40,
-    paddingHorizontal: 8,
-  },
-  tabCount: {
-    fontSize: 12,
-    color: "#1a73e8",
-    fontFamily: "Poppins-Medium",
-  },
-  card: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#F0F0F0",
-    elevation: 0,
-    backgroundColor: "#FFFFFF",
-    marginBottom: 0,
-    marginHorizontal: 0,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-  },
-  cardContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  cardContainer: {
-    marginBottom: 12,
-    marginHorizontal: 2,
-  },
-  userInfo: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    flex: 1,
-  },
-  userTextContainer: {
-    marginLeft: 16,
-    flex: 1,
-  },
-  userName: {
-    fontSize: 16,
-    fontFamily: "Poppins-SemiBold",
-    marginBottom: 4,
-    color: "#212121",
-  },
-  userEmail: {
-    fontSize: 14,
-    color: "#757575",
-    fontFamily: "Poppins-Regular",
-    marginBottom: 8,
-  },
-  userRole: {
-    fontSize: 12,
-    color: "#1a73e8",
-    fontFamily: "Poppins-Medium",
-    marginTop: 2,
-  },
-  userCompany: {
-    fontSize: 12,
-    color: "#616161",
-    fontFamily: "Poppins-Medium",
-    marginTop: 2,
-  },
-  jobTitle: {
-    fontSize: 12,
-    color: "#616161",
-    fontFamily: "Poppins-Regular",
-    marginTop: 2,
-  },
-  employeeDetails: {
-    marginTop: 2,
-  },
-  listContent: {
-    paddingVertical: 8,
-    paddingHorizontal: 2,
-  },
-  listContainer: {
-    flex: 1,
-    marginTop: 4,
-    marginBottom: 18,
-  },
-  listHeaderContainer: {
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginBottom: 10,
-    borderRadius: 12,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: "#F0F0F0",
-    marginHorizontal: 2,
-  },
-  listHeaderTitle: {
-    fontSize: 18,
-    fontFamily: "Poppins-Medium",
-    color: "#212121",
-  },
-  listHeaderCount: {
-    color: "#1a73e8",
-    fontSize: 16,
-    fontFamily: "Poppins-Regular",
-  },
-  activeFilterButton: {
-    backgroundColor: "#E8F0FE",
-    borderWidth: 1,
-    borderColor: "#1a73e8",
-  },
-  clearFilterButtonLabel: {
-    fontSize: 12,
-    color: "#1a73e8",
-  },
-  dropdownContainer: {
-    // marginBottom: 8,
-  },
-  dropdownButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
-    borderRadius: 12,
-    paddingLeft: 4,
-    paddingRight: 8,
-    paddingVertical: 6,
-    backgroundColor: "#FFFFFF",
-  },
-  dropdownContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  dropdownLeadingIcon: {
-    margin: 0,
-    padding: 0,
-  },
-  dropdownButtonText: {
-    fontFamily: "Poppins-Regular",
-    color: "#424242",
-    flex: 1,
-    fontSize: 14,
-  },
-  dropdownIcon: {
-    margin: 0,
-    padding: 0,
-  },
-  modalContainer: {
-    backgroundColor: "white",
-    borderRadius: 16,
-    margin: 16,
-    overflow: "hidden",
-    maxHeight: "100%",
-    elevation: 5,
-    maxWidth: "40%",
-    justifyContent: "center",
-  },
-  modalHeaderContainer: {
-    backgroundColor: "white",
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    zIndex: 1,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontFamily: "Poppins-SemiBold",
-    color: "#212121",
-  },
-  modalContent: {
-    padding: 16,
-  },
-  modalFooter: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: "#E0E0E0",
-    backgroundColor: "#FFFFFF",
-  },
-  modalButton: {
-    marginLeft: 12,
-    borderRadius: 8,
-  },
-  modalDivider: {
-    height: 1,
-    backgroundColor: "#E0E0E0",
-  },
-  modalSection: {
-    marginBottom: 14,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  selectionBadge: {
-    backgroundColor: "#F5F5F5",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 16,
-  },
-  selectionHint: {
-    fontSize: 12,
-    color: "#616161",
-    fontFamily: "Poppins-Medium",
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontFamily: "Poppins-SemiBold",
-    color: "#212121",
-    marginBottom: 0,
-  },
-  activeDropdownButton: {
-    borderColor: "#1a73e8",
-    backgroundColor: "#F0F7FF",
-  },
-  activeFilterSection: {
-    marginBottom: 16,
-    backgroundColor: "#F5F5F5",
-    borderRadius: 12,
-    padding: 12,
-  },
-  activeFilterHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  activeFilterTitle: {
-    fontSize: 14,
-    fontFamily: "Poppins-Medium",
-    color: "#424242",
-  },
-  activeFilterContainer: {
-    flexDirection: "column",
-    marginTop: 8,
-  },
-  activeFiltersContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-start",
-    flexWrap: "wrap",
-    paddingHorizontal: 14,
-    paddingBottom: 12,
-  },
-  activeFiltersText: {
-    fontSize: 14,
-    fontFamily: "Poppins-Regular",
-    color: "#616161",
-    marginRight: 8,
-  },
-  filtersScrollView: {
-    flexGrow: 0,
-    marginVertical: 4,
-  },
-  clearAllButton: {
-    marginVertical: 0,
-    height: 30,
-    justifyContent: "center",
-    paddingBottom: 5,
-  },
-  menuHeader: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: "#F5F5F5",
-  },
-  menuTitle: {
-    fontSize: 14,
-    fontFamily: "Poppins-Medium",
-    color: "#212121",
-  },
-  menuSubtitle: {
-    fontSize: 12,
-    fontFamily: "Poppins-Regular",
-    color: "#616161",
-    marginTop: 2,
-  },
-  menuContainer: {
-    borderRadius: 8,
-    width: 280,
-    marginTop: 4,
-    elevation: 3,
-  },
-  menuItemStyle: {
-    height: 48,
-    justifyContent: "center",
-    borderBottomWidth: 1,
-    borderColor: "#E0E0E0",
-  },
-  menuItemText: {
-    fontFamily: "Poppins-Regular",
-    fontSize: 14,
-    color: "#424242",
-  },
-  menuItemSelected: {
-    color: "#1a73e8",
-    fontFamily: "Poppins-Medium",
-    paddingRight: 12,
-  },
-  resultSummary: {
-    alignItems: "center",
-    padding: 8,
-    backgroundColor: "#e8f4fd",
-    borderRadius: 8,
-    marginTop: 12,
-  },
-  resultSummaryText: {
-    color: "#0066cc",
-    fontWeight: "500",
-    fontSize: 14,
-  },
-  resultsText: {
-    textAlign: "center",
-    fontSize: 14,
-    opacity: 0.7,
-  },
-  fab: {
-    borderRadius: 17,
-    height: 56,
-    elevation: 0,
-  },
-  avatarContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    overflow: "hidden",
-  },
-  avatarGradient: {
-    width: "100%",
-    height: "100%",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingTop: 3,
-  },
-  avatarText: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontFamily: "Poppins-Bold",
-  },
-  filterBadge: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#ff5252",
-    position: "absolute",
-    top: 8,
-    right: 8,
-    zIndex: 2,
-  },
-  statusContainer: {
-    flexDirection: "column",
-    alignItems: "flex-end",
-    justifyContent: "flex-start",
-  },
-  menuButton: {
-    margin: 0,
-    marginTop: -5,
-  },
-  superAdminAvatar: {
-    backgroundColor: "rgba(54,105,157,0.9)",
-  },
-  companyAdminAvatar: {
-    backgroundColor: "rgba(140,82,255,0.9)",
-  },
-  employeeAvatar: {
-    backgroundColor: "rgba(76,175,80,0.9)",
-  },
-  badgeContainer: {
-    flexDirection: "column",
-    marginTop: 2,
-  },
-  roleBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#1a73e8",
-    borderRadius: 16,
-    paddingRight: 8,
-    marginBottom: 4,
-    alignSelf: "flex-start",
-  },
-  employeeRoleBadge: {
-    backgroundColor: "#4CAF50",
-  },
-  roleIcon: {
-    margin: 0,
-    padding: 0,
-  },
-  roleBadgeText: {
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontFamily: "Poppins-Medium",
-  },
-  companyBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F5F5F5",
-    borderRadius: 16,
-    paddingRight: 8,
-    marginBottom: 4,
-    alignSelf: "flex-start",
-  },
-  companyIcon: {
-    margin: 0,
-    padding: 0,
-  },
-  companyBadgeText: {
-    color: "#616161",
-    fontSize: 12,
-    fontFamily: "Poppins-Regular",
-  },
-  jobTitleBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F5F5F5",
-    borderRadius: 16,
-    paddingRight: 8,
-    alignSelf: "flex-start",
-  },
-  jobTitleIcon: {
-    margin: 0,
-    padding: 0,
-  },
-  jobTitleBadgeText: {
-    color: "#616161",
-    fontSize: 12,
-    fontFamily: "Poppins-Regular",
-  },
-  footerButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    marginLeft: 12,
-  },
-  clearButtonText: {
-    fontSize: 14,
-    fontFamily: "Poppins-Medium",
-    color: "#616161",
-  },
-  applyButton: {
-    elevation: 2,
-  },
-  applyButtonText: {
-    fontSize: 14,
-    fontFamily: "Poppins-Medium",
-    color: "#FFFFFF",
-  },
-  radioItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: 4,
-  },
-  radioLabel: {
-    fontSize: 16,
-    marginLeft: 8,
-    fontFamily: "Poppins-Regular",
-    color: "#424242",
-  },
-  searchTips: {
-    backgroundColor: "#e8f4fd",
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  searchTipsText: {
-    color: "#0066cc",
-    fontWeight: "500",
-    fontSize: 14,
-  },
-  searchResultsContainer: {
-    backgroundColor: "#e8f4fd",
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  searchResultsText: {
-    color: "#0066cc",
-    fontWeight: "500",
-    fontSize: 14,
-  },
-  userTypeDropdownContainer: {
-    marginBottom: 10,
-    zIndex: 10,
-  },
-  userTypeDropdown: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderWidth: 1.5,
-    borderColor: "#E0E0E0",
-    borderRadius: 15,
-    paddingVertical: 6,
-    paddingLeft: 6,
-    paddingRight: 8,
-    backgroundColor: "#FFFFFF",
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    paddingHorizontal: 10,
-  },
-  userTypeDropdownContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  iconContainer: {
-    borderRadius: 12,
-    marginRight: 4,
-    padding: 2,
-  },
-  userTypeDropdownText: {
-    fontFamily: "Poppins-Medium",
-    color: "#424242",
-    flex: 1,
-    fontSize: 16,
-    marginLeft: 4,
-  },
-  menuBackdrop: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0, 0, 0, 0.01)",
-  },
-  enhancedMenuContainer: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 15,
-    paddingVertical: 8,
-    elevation: 6,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    overflow: "hidden",
-    width: "100%",
-    maxWidth: 350,
-  },
-  userTypeMenuHeader: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
-  },
-  userTypeMenuTitle: {
-    fontSize: 16,
-    fontFamily: "Poppins-Medium",
-    color: "#333333",
-  },
-  enhancedMenuItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
-  },
-  selectedMenuItem: {
-    backgroundColor: "#F8F8F8",
-  },
-  menuIconContainer: {
-    borderRadius: 12,
-    padding: 2,
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  menuIcon: {
-    margin: 0,
-    padding: 0,
-  },
-  menuItemContent: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  menuItemTitleText: {
-    fontSize: 16,
-    fontFamily: "Poppins-Medium",
-    color: "#333333",
-    marginBottom: 2,
-  },
-  menuItemDescription: {
-    fontSize: 12,
-    fontFamily: "Poppins-Regular",
-    color: "#757575",
-  },
-  checkIconContainer: {
-    marginLeft: 8,
-  },
-  tabsContainer: {
-    paddingHorizontal: 24,
-    paddingBottom: 16,
-  },
-  tabsWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    maxWidth: 600,
-  },
-  tab: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    marginRight: 8,
-    borderBottomWidth: 2,
-    borderBottomColor: "transparent",
-  },
-  activeTab: {},
-  tabText: {
-    fontSize: 14,
-    fontFamily: "Poppins-Medium",
-    color: "#616161",
-  },
-  activeTabText: {
-    color: "#1a73e8",
-  },
-  tableContainer: {
-    flex: 1,
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    overflow: "hidden",
-  },
-  tableHeader: {
-    flexDirection: "row",
-    backgroundColor: "#f8fafc",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
-    paddingVertical: 16,
-    paddingHorizontal: 26,
-    alignContent: "center",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  tableHeaderCell: {
-    flex: 1,
-    paddingHorizontal: 16,
-    justifyContent: "space-around",
-    paddingLeft: 25,
-    alignItems: "flex-start",
-  },
-  tableHeaderText: {
-    fontSize: 14,
-    color: "#64748b",
-  },
-  tableRow: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
-    paddingVertical: 16,
-    backgroundColor: "#fff",
-    paddingHorizontal: 26,
-    alignItems: "center",
-  },
-  tableCell: {
-    flex: 1,
-    paddingHorizontal: 26,
-    justifyContent: "space-evenly",
-    alignItems: "flex-start",
-  },
-      receiptIdLink: {
-      color: "#1a73e8",
-      cursor: "pointer",
-      fontSize: 14,
-      fontFamily: "Poppins-Regular",
-    },
-  tableCellText: {
-    fontSize: 14,
-    color: "#334155",
-  },
-  tableContent: {
-    flexGrow: 1,
-  },
-  actionCell: {
-    flex: 1,
-    flexDirection: "row",
-    justifyContent: "flex-start",
-    alignItems: "center",
-    paddingHorizontal: 26,
-  },
-  actionIcon: {
-    margin: 0,
-    marginRight: 8,
-  },
-  tooltipContainer: {
-    position: "relative",
-    flex: 1,
-    maxWidth: "100%",
-    zIndex: 10, // Higher z-index to appear above table header
-  },
-  tooltip: {
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
-    padding: 8,
-    marginLeft: 30,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    maxWidth: 300,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-    zIndex: 9999,
-    ...(Platform.OS === "web"
-      ? {
-          // @ts-ignore - web specific style
-          willChange: "transform",
-          // @ts-ignore - web specific style
-          isolation: "isolate",
-        }
-      : {}),
-  },
-  tooltipText: {
-    color: "#000",
-    fontSize: 12,
-    fontFamily: "Poppins-Regular",
-    lineHeight: 16,
-  },
-  skeleton: {
-    backgroundColor: "#F3F4F6",
-    borderRadius: 4,
-    overflow: "hidden",
-  },
-  skeletonCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#F0F0F0",
-    padding: 16,
-    marginBottom: 16,
-  },
-  activeFilterChip: {
-    margin: 4,
-    backgroundColor: "rgba(26, 115, 232, 0.1)",
-    borderColor: "#1a73e8",
-  },
-  paginationWrapper: {
-    marginTop: 5,
-    overflow: "hidden",
-    width: "auto",
-    alignSelf: "center",
-  },
-  switchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-  },
-  switchLabel: {
-    fontSize: 14,
-    color: "#424242",
-    fontFamily: "Poppins-Regular",
-    flex: 1,
-    marginRight: 16,
-  },
-  userNameContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-start",
-    marginBottom: 4,
-  },
-  sequenceId: {
-    fontSize: 14,
-    color: "#757575",
-    marginLeft: 8,
-    fontFamily: "Poppins-Regular",
-  },
-});
 
 export default SuperAdminUsersScreen;

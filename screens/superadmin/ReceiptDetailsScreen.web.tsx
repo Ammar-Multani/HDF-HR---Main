@@ -82,6 +82,14 @@ interface Receipt {
   receipt_image_path?: string;
   merchant_address?: string;
   language_hint?: string;
+  subtotal_amount?: number;
+  final_price?: number;
+  paid_amount?: number;
+  change_amount?: number;
+  merchant_vat?: string;
+  merchant_phone?: string;
+  merchant_website?: string;
+  vat_details?: string;
   notes?: string;
   category?: string;
   line_items?: LineItem[];
@@ -329,6 +337,42 @@ const ReceiptDetailsScreen = () => {
                     </View>
                   )}
 
+                  {receipt.merchant_vat && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>VAT/Tax Number:</Text>
+                      <Text style={styles.detailValue}>
+                        {receipt.merchant_vat}
+                      </Text>
+                    </View>
+                  )}
+
+                  {receipt.merchant_phone && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Phone:</Text>
+                      <Text style={styles.detailValue}>
+                        {receipt.merchant_phone}
+                      </Text>
+                    </View>
+                  )}
+
+                  {receipt.merchant_website && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Website:</Text>
+                      <Text style={styles.detailValue}>
+                        {receipt.merchant_website}
+                      </Text>
+                    </View>
+                  )}
+
+                  {receipt.language_hint && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Language:</Text>
+                      <Text style={styles.detailValue}>
+                        {receipt.language_hint}
+                      </Text>
+                    </View>
+                  )}
+
                   {receipt.category && (
                     <View style={styles.detailRow}>
                       <Text style={styles.detailLabel}>Category:</Text>
@@ -360,12 +404,14 @@ const ReceiptDetailsScreen = () => {
                 </View>
 
                 <View style={styles.cardContent}>
-                  <View style={styles.amountRow}>
-                    <Text style={styles.amountLabel}>Total Amount:</Text>
-                    <Text style={styles.amountValue}>
-                      {formatCurrency(receipt.total_amount)}
-                    </Text>
-                  </View>
+                  {receipt.subtotal_amount !== undefined && (
+                    <View style={styles.amountRow}>
+                      <Text style={styles.amountLabel}>Subtotal Amount:</Text>
+                      <Text style={styles.amountValue}>
+                        {formatCurrency(receipt.subtotal_amount)}
+                      </Text>
+                    </View>
+                  )}
 
                   <View style={styles.amountRow}>
                     <Text style={styles.amountLabel}>Tax Amount:</Text>
@@ -373,6 +419,40 @@ const ReceiptDetailsScreen = () => {
                       {formatCurrency(receipt.tax_amount)}
                     </Text>
                   </View>
+
+                  <View style={styles.amountRow}>
+                    <Text style={styles.amountLabel}>Total Amount:</Text>
+                    <Text style={styles.amountValue}>
+                      {formatCurrency(receipt.total_amount)}
+                    </Text>
+                  </View>
+
+                  {receipt.final_price !== undefined && (
+                    <View style={styles.amountRow}>
+                      <Text style={styles.amountLabel}>Final Price:</Text>
+                      <Text style={styles.amountValue}>
+                        {formatCurrency(receipt.final_price)}
+                      </Text>
+                    </View>
+                  )}
+
+                  {receipt.paid_amount !== undefined && (
+                    <View style={styles.amountRow}>
+                      <Text style={styles.amountLabel}>Paid Amount:</Text>
+                      <Text style={styles.amountValue}>
+                        {formatCurrency(receipt.paid_amount)}
+                      </Text>
+                    </View>
+                  )}
+
+                  {receipt.change_amount !== undefined && (
+                    <View style={styles.amountRow}>
+                      <Text style={styles.amountLabel}>Change Amount:</Text>
+                      <Text style={styles.amountValue}>
+                        {formatCurrency(receipt.change_amount)}
+                      </Text>
+                    </View>
+                  )}
 
                   <Divider style={styles.divider} />
 
@@ -382,6 +462,18 @@ const ReceiptDetailsScreen = () => {
                       {receipt.payment_method}
                     </Chip>
                   </View>
+
+                  {receipt.vat_details && (
+                    <>
+                      <Divider style={styles.divider} />
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>VAT Details:</Text>
+                        <Text style={styles.detailValue}>
+                          {receipt.vat_details}
+                        </Text>
+                      </View>
+                    </>
+                  )}
                 </View>
               </Surface>
             </Animated.View>

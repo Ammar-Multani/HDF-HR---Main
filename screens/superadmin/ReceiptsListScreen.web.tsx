@@ -1411,7 +1411,7 @@ const ReceiptsListScreen = () => {
         pressed && { backgroundColor: "#f8fafc" },
       ]}
     >
-      <View style={[styles.tableCell, { justifyContent: "center", marginRight: 60 }]}>
+      <View style={[styles.tableCell, { flex: 0.5 }]}>
         <TouchableOpacity
           onPress={(e) => {
             e.stopPropagation();

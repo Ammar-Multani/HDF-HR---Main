@@ -9,7 +9,8 @@ CREATE TYPE activity_type AS ENUM (
   'data_access',
   'data_modification',
   'permission_change',
-  'system_error'
+  'system_error',
+  'SYSTEM_MAINTENANCE'
 );
 
 -- Create activity_logs table

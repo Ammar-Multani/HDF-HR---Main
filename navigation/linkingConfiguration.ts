@@ -7,7 +7,6 @@ export const linking = {
     "https://hdfhr.netlify.app", // Your Netlify domain
   ],
   config: {
-    initialRouteName: "Login",
     screens: {
       // Auth screens
       Login: "",
@@ -20,8 +19,8 @@ export const linking = {
         },
       },
 
-      // Super Admin screens
-      SuperAdminTabs: {
+      // Super Admin Main Navigation
+      MainTabs: {
         path: "admin",
         screens: {
           Dashboard: "",
@@ -31,30 +30,38 @@ export const linking = {
           Receipts: "receipts",
           Tasks: "tasks",
           Profile: "profile",
-          CompanyDetails: "company/:id",
-          CreateCompany: "company/create",
-          EditCompany: "company/:id/edit",
-          TaskDetails: "task/:id",
-          CreateTask: "task/create",
-          EditTask: "task/:id/edit",
         },
       },
 
+      // Super Admin Detail Screens
+      CompanyDetails: "admin/company/:companyId",
+      CreateCompany: "admin/company/create",
+      EditCompany: "admin/company/:companyId/edit",
+      TaskDetails: "admin/task/:id",
+      CreateTask: "admin/task/create",
+      EditTask: "admin/task/:id/edit",
+      CreateSuperAdmin: "admin/user/create",
+      SuperAdminDetailsScreen: "admin/user/:id",
+      EditSuperAdmin: "admin/user/:id/edit",
+      CompanyAdminDetailsScreen: "admin/company-admin/:id",
+      EditCompanyAdmin: "admin/company-admin/:id/edit",
+      CreateCompanyAdmin: "admin/company-admin/create",
+      CreateEmployee: "admin/employee/create",
+      SuperAdminFormDetailsScreen: "admin/form/:id",
+      CreateReceipt: "admin/receipt/create",
+      ReceiptDetails: "admin/receipt/:id",
+      EditReceipt: "admin/receipt/:id/edit",
+      ActivityLogs: "admin/logs",
+
       // Company Admin screens
       CompanyAdminTabs: {
-        path: "company",
+        path: "company-admin",
         screens: {
           Dashboard: "",
           Employees: "employees",
           Tasks: "tasks",
           FormSubmissions: "forms",
           Profile: "profile",
-          EmployeeDetails: "employee/:id",
-          CreateEmployee: "employee/create",
-          EditEmployee: "employee/:id/edit",
-          TaskDetails: "task/:id",
-          CreateTask: "task/create",
-          EditTask: "task/:id/edit",
         },
       },
 
@@ -70,4 +77,4 @@ export const linking = {
       },
     },
   },
-}; 
+};

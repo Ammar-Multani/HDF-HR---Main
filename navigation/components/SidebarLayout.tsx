@@ -11,21 +11,21 @@ interface SidebarLayoutProps {
   activeScreen: string;
   setActiveScreen: (screen: string) => void;
   navigationItems: Array<{
-    icon: keyof typeof MaterialCommunityIcons.glyphMap;
+    icon: string;
     label: string;
     screen: string;
   }>;
-  content: { [key: string]: ReactNode };
-  onNavigate?: (screen: string) => void;
+  content: ReactNode;
+  onNavigate: (screen: string) => void;
 }
 
-export const SidebarLayout = ({
+export const SidebarLayout: React.FC<SidebarLayoutProps> = ({
   activeScreen,
   setActiveScreen,
   navigationItems,
   content,
   onNavigate,
-}: SidebarLayoutProps) => {
+}) => {
   // Load saved active screen on mount
   useEffect(() => {
     const loadActiveScreen = async () => {
@@ -36,7 +36,7 @@ export const SidebarLayout = ({
           navigationItems.some((item) => item.screen === savedScreen)
         ) {
           setActiveScreen(savedScreen);
-          onNavigate?.(savedScreen);
+          onNavigate(savedScreen);
         }
       } catch (err) {
         console.warn("Failed to load active screen:", err);
@@ -64,7 +64,7 @@ export const SidebarLayout = ({
   // Handle navigation and active screen update
   const handleScreenChange = async (screen: string) => {
     setActiveScreen(screen);
-    onNavigate?.(screen);
+    onNavigate(screen);
     try {
       await AsyncStorage.setItem(ACTIVE_SCREEN_KEY, screen);
     } catch (err) {
@@ -116,7 +116,7 @@ export const SidebarLayout = ({
       </View>
 
       {/* Main Content */}
-      <View style={styles.content}>{content[activeScreen]}</View>
+      <View style={styles.content}>{content}</View>
     </View>
   );
 };
@@ -144,15 +144,15 @@ const styles = StyleSheet.create({
   },
   logoWrapper: {
     width: 160,
-              height: 70,
-              justifyContent: "center",
-              alignItems: "center",
+    height: 70,
+    justifyContent: "center",
+    alignItems: "center",
   },
   logo: {
     width: 170,
-                height: 130,
-                resizeMode: "contain",
-                alignSelf: "center",
+    height: 130,
+    resizeMode: "contain",
+    alignSelf: "center",
   },
   navItemsContainer: {
     paddingLeft: 20,

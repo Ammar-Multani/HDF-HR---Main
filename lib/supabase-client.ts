@@ -1,6 +1,7 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY } from "@env";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { poolConfig, queryConfig } from "./config/database";
 
 // Export all cache-related functionality
 export * from "./services/cacheService";
@@ -12,11 +13,65 @@ export * from "./utils/storageUtils";
 import { cachedQuery } from "./services/cacheService";
 import { isNetworkAvailable } from "./utils/networkUtils";
 
-// Create Supabase client
+// Create Supabase client with enhanced configuration
 const supabaseUrl = EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Initialize client with pooling and query configurations
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  ...queryConfig,
+  auth: {
+    ...queryConfig.auth,
+    storage: AsyncStorage,
+  },
+});
+
+// Add connection pool monitoring
+let activeConnections = 0;
+const maxRetries = 3;
+
+// Type for Supabase query result
+type QueryResult<T> = {
+  data: T | null;
+  error: any;
+};
+
+// Enhanced query wrapper with connection management
+export const executeQuery = async <T>(
+  queryFn: () => Promise<QueryResult<T>>,
+  retryCount = 0
+): Promise<QueryResult<T>> => {
+  try {
+    if (activeConnections >= poolConfig.maxConnections) {
+      throw new Error("Connection pool exhausted");
+    }
+
+    activeConnections++;
+    const result = await queryFn();
+    return result;
+  } catch (error: any) {
+    if (
+      retryCount < maxRetries &&
+      error.message === "Connection pool exhausted"
+    ) {
+      // Wait before retrying
+      await new Promise((resolve) =>
+        setTimeout(resolve, 1000 * Math.pow(2, retryCount))
+      );
+      return executeQuery(queryFn, retryCount + 1);
+    }
+    return { data: null, error };
+  } finally {
+    activeConnections--;
+  }
+};
+
+// Type for company data
+interface CompanyData {
+  id: number;
+  company_name: string;
+  active: boolean;
+}
 
 /**
  * Prefetch commonly used data in the background
@@ -24,16 +79,22 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
  */
 export const prefetchCommonData = async (): Promise<void> => {
   try {
-    // Stagger prefetching to avoid overwhelming the device
+    // Stagger prefetching to avoid overwhelming the connection pool
     setTimeout(async () => {
-      await cachedQuery<any>(
+      await cachedQuery<{ data: CompanyData[] | null; error: any }>(
         async () => {
-          const result = await supabase
-            .from("company")
-            .select("id, company_name, active")
-            .limit(25);
-
-          return result;
+          const result = await executeQuery<CompanyData[]>(() =>
+            Promise.resolve(
+              supabase
+                .from("company")
+                .select("id, company_name, active")
+                .limit(25)
+            )
+          );
+          return {
+            data: { data: result.data, error: result.error },
+            error: null,
+          };
         },
         "prefetch_companies",
         { cacheTtl: 15 * 60 * 1000 } // 15 minutes

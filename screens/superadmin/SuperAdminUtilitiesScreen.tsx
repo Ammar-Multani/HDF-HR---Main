@@ -98,7 +98,8 @@ const SuperAdminUtilitiesScreen = () => {
     return (
       <Surface
         key={card.id}
-        style={[styles.card, { backgroundColor: "#FFFFFF" }]}
+        style={[styles.card, { backgroundColor: "#FFFFFF", borderWidth: 0.5, borderColor: "#e0e0e0", elevation: 0.3 }]}
+        elevation={0}
       >
         <TouchableOpacity
           style={styles.cardTouchable}

@@ -1002,11 +1002,24 @@ const SuperAdminTaskDetailsScreen = () => {
                 </View>
 
                 <View style={styles.cardContent}>
-                {/* <View style={styles.statusSection}>
+                  <View style={styles.statusSection}>
                     <View style={styles.statusRow}>
-                      <Text style={styles.statusLabel}>Current Status:</Text>
+                      <Text style={styles.statusLabel}>
+                        {t("superAdmin.tasks.currentStatus")}:
+                      </Text>
                       <TouchableOpacity
-                        onPress={handleStatusPress}
+                        onPress={() => {
+                          if (canUpdateStatus()) {
+                            setStatusMenuVisible(true);
+                          } else {
+                            Alert.alert(
+                              t("common.error"),
+                              t(
+                                "superAdmin.tasks.onlyCreatorOrAssignedCanUpdateStatus"
+                              )
+                            );
+                          }
+                        }}
                         disabled={submitting}
                         style={[
                           styles.statusBadgeClickable,
@@ -1028,7 +1041,7 @@ const SuperAdminTaskDetailsScreen = () => {
                             },
                           ]}
                         >
-                          {task?.status.replace(/_/g, " ")}
+                          {getTranslatedStatus(task?.status || TaskStatus.OPEN)}
                         </Text>
                         <IconButton
                           icon={getStatusIcon(task?.status || TaskStatus.OPEN)}
@@ -1040,7 +1053,8 @@ const SuperAdminTaskDetailsScreen = () => {
                         />
                       </TouchableOpacity>
                     </View>
-                  </View> */}
+                  </View>
+
                   <View style={styles.taskMetaContainer}>
                     <Chip
                       icon="flag"
@@ -1177,36 +1191,6 @@ const SuperAdminTaskDetailsScreen = () => {
                         const roleColors = getUserRoleBadgeColor(user.role);
                         return (
                           <Surface key={user.id} style={styles.userCard}>
-                            {/* <View style={styles.userCardHeader}>
-                              <IconButton
-                                icon="account-circle"
-                                size={24}
-                                iconColor={roleColors.text}
-                              />
-                              <View
-                                style={[
-                                  styles.roleBadge,
-                                  {
-                                    backgroundColor: roleColors.background,
-                                    borderColor: roleColors.border,
-                                  },
-                                ]}
-                              >
-                                <Text
-                                  style={[
-                                    styles.roleText,
-                                    { color: roleColors.text },
-                                  ]}
-                                >
-                                  {user.role === "SUPER_ADMIN"
-                                    ? t("superAdmin.tasks.superAdmin")
-                                    : user.role === "COMPANY_ADMIN"
-                                      ? t("superAdmin.tasks.companyAdmin")
-                                      : t("superAdmin.tasks.user")}
-                                </Text>
-                              </View>
-                            </View> */}
-
                             <Text style={styles.userName}>
                               {user.first_name} {user.last_name}
                             </Text>

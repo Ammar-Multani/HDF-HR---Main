@@ -72,11 +72,21 @@ interface Receipt {
   company_id: string;
   receipt_number: string;
   date: string;
+  transaction_date: string;
   merchant_name: string;
   total_amount: number;
   tax_amount: number;
   payment_method: string;
   merchant_address?: string;
+  language_hint?: string;
+  subtotal_amount?: number;
+  final_price?: number;
+  paid_amount?: number;
+  change_amount?: number;
+  merchant_vat?: string;
+  merchant_phone?: string;
+  merchant_website?: string;
+  vat_details?: string;
   line_items?: LineItem[];
 }
 
@@ -108,6 +118,8 @@ const EditReceiptScreen = () => {
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTransactionDatePicker, setShowTransactionDatePicker] =
+    useState(false);
   const [showCompanyModal, setShowCompanyModal] = useState(false);
   const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
 
@@ -115,12 +127,22 @@ const EditReceiptScreen = () => {
   const [formData, setFormData] = useState({
     receipt_number: "",
     date: new Date(),
+    transaction_date: new Date(),
     merchant_name: "",
     merchant_address: "",
-    total_amount: "",
-    tax_amount: "",
+    total_amount: "0",
+    tax_amount: "0",
     payment_method: "",
     company_id: "",
+    language_hint: "",
+    subtotal_amount: "0",
+    final_price: "0",
+    paid_amount: "0",
+    change_amount: "0",
+    merchant_vat: "",
+    merchant_phone: "",
+    merchant_website: "",
+    vat_details: "",
     line_items: [] as LineItem[],
   });
 
@@ -132,6 +154,9 @@ const EditReceiptScreen = () => {
     tax_amount: "",
     payment_method: "",
     company_id: "",
+    subtotal_amount: "",
+    final_price: "",
+    paid_amount: "",
   });
 
   const paymentMethods = [
@@ -161,15 +186,31 @@ const EditReceiptScreen = () => {
       if (data) {
         setReceipt(data);
         setFormData({
-          receipt_number: data.receipt_number,
+          receipt_number: data.receipt_number || "",
           date: new Date(data.date),
-          merchant_name: data.merchant_name,
+          transaction_date: new Date(data.transaction_date || data.date),
+          merchant_name: data.merchant_name || "",
           merchant_address: data.merchant_address || "",
-          total_amount: data.total_amount.toString(),
-          tax_amount: data.tax_amount.toString(),
-          payment_method: data.payment_method,
-          company_id: data.company_id,
-          line_items: data.line_items || [],
+          total_amount: (data.total_amount || 0).toString(),
+          tax_amount: (data.tax_amount || 0).toString(),
+          payment_method: data.payment_method || "",
+          company_id: data.company_id || "",
+          language_hint: data.language_hint || "",
+          subtotal_amount: (data.subtotal_amount || 0).toString(),
+          final_price: (data.final_price || 0).toString(),
+          paid_amount: (data.paid_amount || 0).toString(),
+          change_amount: (data.change_amount || 0).toString(),
+          merchant_vat: data.merchant_vat || "",
+          merchant_phone: data.merchant_phone || "",
+          merchant_website: data.merchant_website || "",
+          vat_details: data.vat_details || "",
+          line_items: Array.isArray(data.line_items)
+            ? data.line_items.map((item: LineItem) => ({
+                name: item.name || "",
+                qty: item.qty || 0,
+                price: item.price || 0,
+              }))
+            : [],
         });
       }
     } catch (error) {
@@ -202,6 +243,9 @@ const EditReceiptScreen = () => {
       tax_amount: "",
       payment_method: "",
       company_id: "",
+      subtotal_amount: "",
+      final_price: "",
+      paid_amount: "",
     };
 
     let isValid = true;
@@ -223,6 +267,21 @@ const EditReceiptScreen = () => {
 
     if (!formData.tax_amount || isNaN(Number(formData.tax_amount))) {
       newErrors.tax_amount = "Valid tax amount is required";
+      isValid = false;
+    }
+
+    if (!formData.subtotal_amount || isNaN(Number(formData.subtotal_amount))) {
+      newErrors.subtotal_amount = "Valid subtotal amount is required";
+      isValid = false;
+    }
+
+    if (!formData.final_price || isNaN(Number(formData.final_price))) {
+      newErrors.final_price = "Valid final price is required";
+      isValid = false;
+    }
+
+    if (!formData.paid_amount || isNaN(Number(formData.paid_amount))) {
+      newErrors.paid_amount = "Valid paid amount is required";
       isValid = false;
     }
 
@@ -274,12 +333,22 @@ const EditReceiptScreen = () => {
       const updatedReceipt = {
         receipt_number: formData.receipt_number,
         date: format(formData.date, "yyyy-MM-dd"),
+        transaction_date: format(formData.transaction_date, "yyyy-MM-dd"),
         merchant_name: formData.merchant_name,
         merchant_address: formData.merchant_address,
         total_amount: Number(formData.total_amount),
         tax_amount: Number(formData.tax_amount),
         payment_method: formData.payment_method,
         company_id: formData.company_id,
+        language_hint: formData.language_hint,
+        subtotal_amount: Number(formData.subtotal_amount),
+        final_price: Number(formData.final_price),
+        paid_amount: Number(formData.paid_amount),
+        change_amount: Number(formData.change_amount),
+        merchant_vat: formData.merchant_vat,
+        merchant_phone: formData.merchant_phone,
+        merchant_website: formData.merchant_website,
+        vat_details: formData.vat_details,
         line_items: formData.line_items,
       };
 
@@ -392,7 +461,7 @@ const EditReceiptScreen = () => {
     const updatedLineItems = [...formData.line_items];
     updatedLineItems[index] = {
       ...updatedLineItems[index],
-      [field]: field === "name" ? value : Number(value),
+      [field]: field === "name" ? value : Number(value) || 0,
     };
     setFormData({ ...formData, line_items: updatedLineItems });
   };
@@ -487,27 +556,62 @@ const EditReceiptScreen = () => {
                     </HelperText>
 
                     {Platform.OS === "web" ? (
-                      <View style={styles.dateInputWrapper}>
-                        <Text style={styles.inputLabel}>Receipt Date</Text>
-                        <View style={styles.webDateInputContainer}>
-                          <input
-                            type="date"
-                            value={format(formData.date, "yyyy-MM-dd")}
-                            onChange={handleDateChange}
-                            style={{
-                              width: "100%",
-                              padding: "12px",
-                              fontSize: "14px",
-                              borderRadius: "8px",
-                              border: "1px solid #e2e8f0",
-                              outline: "none",
-                              backgroundColor: "#f8fafc",
-                              transition: "all 0.2s ease",
-                              cursor: "pointer",
-                            }}
-                          />
+                      <>
+                        <View style={styles.dateInputWrapper}>
+                          <Text style={styles.inputLabel}>Receipt Date</Text>
+                          <View style={styles.webDateInputContainer}>
+                            <input
+                              type="date"
+                              value={format(formData.date, "yyyy-MM-dd")}
+                              onChange={handleDateChange}
+                              style={{
+                                width: "100%",
+                                padding: "12px",
+                                fontSize: "14px",
+                                borderRadius: "8px",
+                                border: "1px solid #e2e8f0",
+                                outline: "none",
+                                backgroundColor: "#f8fafc",
+                                transition: "all 0.2s ease",
+                                cursor: "pointer",
+                              }}
+                            />
+                          </View>
                         </View>
-                      </View>
+
+                        <View style={styles.dateInputWrapper}>
+                          <Text style={styles.inputLabel}>
+                            Transaction Date
+                          </Text>
+                          <View style={styles.webDateInputContainer}>
+                            <input
+                              type="date"
+                              value={format(
+                                formData.transaction_date,
+                                "yyyy-MM-dd"
+                              )}
+                              onChange={(e) => {
+                                const selectedDate = new Date(e.target.value);
+                                setFormData({
+                                  ...formData,
+                                  transaction_date: selectedDate,
+                                });
+                              }}
+                              style={{
+                                width: "100%",
+                                padding: "12px",
+                                fontSize: "14px",
+                                borderRadius: "8px",
+                                border: "1px solid #e2e8f0",
+                                outline: "none",
+                                backgroundColor: "#f8fafc",
+                                transition: "all 0.2s ease",
+                                cursor: "pointer",
+                              }}
+                            />
+                          </View>
+                        </View>
+                      </>
                     ) : (
                       <>
                         <Button
@@ -517,6 +621,16 @@ const EditReceiptScreen = () => {
                           icon="calendar"
                         >
                           {format(formData.date, "MMMM d, yyyy")}
+                        </Button>
+
+                        <Button
+                          mode="outlined"
+                          onPress={() => setShowTransactionDatePicker(true)}
+                          style={styles.dateButton}
+                          icon="calendar"
+                        >
+                          Transaction Date:{" "}
+                          {format(formData.transaction_date, "MMMM d, yyyy")}
                         </Button>
 
                         {showDatePicker && (
@@ -530,6 +644,23 @@ const EditReceiptScreen = () => {
                                 setFormData({
                                   ...formData,
                                   date: selectedDate,
+                                });
+                              }
+                            }}
+                          />
+                        )}
+
+                        {showTransactionDatePicker && (
+                          <DateTimePicker
+                            value={formData.transaction_date}
+                            mode="date"
+                            display="default"
+                            onChange={(event, selectedDate) => {
+                              setShowTransactionDatePicker(false);
+                              if (selectedDate) {
+                                setFormData({
+                                  ...formData,
+                                  transaction_date: selectedDate,
                                 });
                               }
                             }}
@@ -563,6 +694,46 @@ const EditReceiptScreen = () => {
                       numberOfLines={3}
                       mode="outlined"
                     />
+
+                    <TextInput
+                      label="Merchant VAT/Tax Number"
+                      value={formData.merchant_vat}
+                      onChangeText={(text) =>
+                        setFormData({ ...formData, merchant_vat: text })
+                      }
+                      style={styles.input}
+                      mode="outlined"
+                    />
+
+                    <TextInput
+                      label="Merchant Phone"
+                      value={formData.merchant_phone}
+                      onChangeText={(text) =>
+                        setFormData({ ...formData, merchant_phone: text })
+                      }
+                      style={styles.input}
+                      mode="outlined"
+                    />
+
+                    <TextInput
+                      label="Merchant Website"
+                      value={formData.merchant_website}
+                      onChangeText={(text) =>
+                        setFormData({ ...formData, merchant_website: text })
+                      }
+                      style={styles.input}
+                      mode="outlined"
+                    />
+
+                    <TextInput
+                      label="Language Hint"
+                      value={formData.language_hint}
+                      onChangeText={(text) =>
+                        setFormData({ ...formData, language_hint: text })
+                      }
+                      style={styles.input}
+                      mode="outlined"
+                    />
                   </View>
                 </Surface>
 
@@ -584,18 +755,18 @@ const EditReceiptScreen = () => {
 
                   <View style={styles.cardContent}>
                     <TextInput
-                      label="Total Amount"
-                      value={formData.total_amount}
+                      label="Subtotal Amount"
+                      value={formData.subtotal_amount}
                       onChangeText={(text) =>
-                        setFormData({ ...formData, total_amount: text })
+                        setFormData({ ...formData, subtotal_amount: text })
                       }
                       keyboardType="decimal-pad"
                       style={styles.input}
-                      error={!!errors.total_amount}
+                      error={!!errors.subtotal_amount}
                       mode="outlined"
                     />
-                    <HelperText type="error" visible={!!errors.total_amount}>
-                      {errors.total_amount}
+                    <HelperText type="error" visible={!!errors.subtotal_amount}>
+                      {errors.subtotal_amount}
                     </HelperText>
 
                     <TextInput
@@ -612,6 +783,74 @@ const EditReceiptScreen = () => {
                     <HelperText type="error" visible={!!errors.tax_amount}>
                       {errors.tax_amount}
                     </HelperText>
+
+                    <TextInput
+                      label="Total Amount"
+                      value={formData.total_amount}
+                      onChangeText={(text) =>
+                        setFormData({ ...formData, total_amount: text })
+                      }
+                      keyboardType="decimal-pad"
+                      style={styles.input}
+                      error={!!errors.total_amount}
+                      mode="outlined"
+                    />
+                    <HelperText type="error" visible={!!errors.total_amount}>
+                      {errors.total_amount}
+                    </HelperText>
+
+                    <TextInput
+                      label="Final Price"
+                      value={formData.final_price}
+                      onChangeText={(text) =>
+                        setFormData({ ...formData, final_price: text })
+                      }
+                      keyboardType="decimal-pad"
+                      style={styles.input}
+                      error={!!errors.final_price}
+                      mode="outlined"
+                    />
+                    <HelperText type="error" visible={!!errors.final_price}>
+                      {errors.final_price}
+                    </HelperText>
+
+                    <TextInput
+                      label="Paid Amount"
+                      value={formData.paid_amount}
+                      onChangeText={(text) =>
+                        setFormData({ ...formData, paid_amount: text })
+                      }
+                      keyboardType="decimal-pad"
+                      style={styles.input}
+                      error={!!errors.paid_amount}
+                      mode="outlined"
+                    />
+                    <HelperText type="error" visible={!!errors.paid_amount}>
+                      {errors.paid_amount}
+                    </HelperText>
+
+                    <TextInput
+                      label="Change Amount"
+                      value={formData.change_amount}
+                      onChangeText={(text) =>
+                        setFormData({ ...formData, change_amount: text })
+                      }
+                      keyboardType="decimal-pad"
+                      style={styles.input}
+                      mode="outlined"
+                    />
+
+                    <TextInput
+                      label="VAT Details"
+                      value={formData.vat_details}
+                      onChangeText={(text) =>
+                        setFormData({ ...formData, vat_details: text })
+                      }
+                      style={styles.input}
+                      multiline
+                      numberOfLines={3}
+                      mode="outlined"
+                    />
 
                     <Button
                       mode="outlined"
