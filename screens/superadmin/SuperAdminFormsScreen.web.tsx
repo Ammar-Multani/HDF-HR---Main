@@ -29,6 +29,7 @@ import {
   Divider,
   RadioButton,
   Surface,
+  FAB,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -1124,6 +1125,109 @@ const SuperAdminFormsScreen = () => {
     </Pressable>
   );
 
+  // Add state for FAB menu
+  const [fabMenuVisible, setFabMenuVisible] = useState(false);
+
+  // Add renderFabMenu function
+  const renderFabMenu = () => (
+    <View style={{ position: "relative" }}>
+      <FAB
+        icon={fabMenuVisible ? "close" : "plus"}
+        label={isLargeScreen ? "Create Form" : undefined}
+        style={[
+          styles.fab,
+          {
+            backgroundColor: theme.colors.primary,
+            position: "relative",
+            margin: 0,
+            marginLeft: 16,
+          },
+        ]}
+        onPress={() => setFabMenuVisible(!fabMenuVisible)}
+        color={theme.colors.surface}
+        mode="flat"
+        theme={{ colors: { accent: theme.colors.surface } }}
+      />
+      {fabMenuVisible && (
+        <Portal>
+          <Pressable
+            style={styles.fabMenuOverlay}
+            onPress={() => setFabMenuVisible(false)}
+          >
+            <View style={[styles.fabMenuContainer]}>
+              <View style={styles.fabMenuHeader}>
+                <Text style={styles.fabMenuHeaderTitle}>Create New Form</Text>
+                <IconButton
+                  icon="close"
+                  size={24}
+                  onPress={() => setFabMenuVisible(false)}
+                />
+              </View>
+              <Divider style={styles.fabMenuDivider} />
+              <View style={styles.fabMenuContent}>
+                <TouchableOpacity
+                  style={[styles.fabMenuItem, { backgroundColor: "#ffebee" }]}
+                  onPress={() => {
+                    setFabMenuVisible(false);
+                    navigation.navigate(
+                      "SuperAdminCreateEmployeeAccidentReport"
+                    );
+                  }}
+                >
+                  <View style={styles.fabMenuItemContent}>
+                    <View style={styles.fabMenuItemIcon}>
+                      <IconButton
+                        icon="alert-circle"
+                        size={24}
+                        iconColor="#f44336"
+                      />
+                    </View>
+                    <View style={styles.fabMenuItemText}>
+                      <Text style={styles.fabMenuItemTitle}>
+                        Create Accident Report
+                      </Text>
+                      <Text style={styles.fabMenuItemDescription}>
+                        Create a workplace accident report for any employee
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.fabMenuItem, { backgroundColor: "#fff3e0" }]}
+                  onPress={() => {
+                    setFabMenuVisible(false);
+                    navigation.navigate(
+                      "SuperAdminCreateEmployeeIllnessReport"
+                    );
+                  }}
+                >
+                  <View style={styles.fabMenuItemContent}>
+                    <View style={styles.fabMenuItemIcon}>
+                      <IconButton
+                        icon="medical-bag"
+                        size={24}
+                        iconColor="#ff9800"
+                      />
+                    </View>
+                    <View style={styles.fabMenuItemText}>
+                      <Text style={styles.fabMenuItemTitle}>
+                        Create Illness Report
+                      </Text>
+                      <Text style={styles.fabMenuItemDescription}>
+                        Create a health-related report for any employee
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Pressable>
+        </Portal>
+      )}
+    </View>
+  );
+
   if (loading && !refreshing) {
     const isLargeScreen = windowDimensions.width >= 1440;
     const isMediumScreen =
@@ -1220,7 +1324,7 @@ const SuperAdminFormsScreen = () => {
       >
         <View style={styles.searchBarContainer}>
           <Searchbar
-            placeholder={t("superAdmin.forms.search") || "Search forms..."}
+            placeholder="Search by form ID, employee name, or form type..."
             onChangeText={setSearchQuery}
             value={searchQuery}
             style={styles.searchbar}
@@ -1249,6 +1353,7 @@ const SuperAdminFormsScreen = () => {
             />
             {hasActiveFilters() && <View style={styles.filterBadge} />}
           </View>
+          {renderFabMenu()}
         </View>
       </View>
 
@@ -1739,6 +1844,83 @@ const styles = StyleSheet.create({
     cursor: "pointer",
     fontSize: 14,
     fontFamily: "Poppins-Medium",
+  },
+  fabMenuOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    zIndex: 1000,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  fabMenuContainer: {
+    width: 380,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    zIndex: 1001,
+  },
+  fabMenuHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    paddingBottom: 12,
+  },
+  fabMenuHeaderTitle: {
+    fontSize: 20,
+    fontFamily: "Poppins-SemiBold",
+    color: "#333",
+  },
+  fabMenuDivider: {
+    backgroundColor: "#e0e0e0",
+  },
+  fabMenuContent: {
+    padding: 16,
+  },
+  fabMenuItem: {
+    borderRadius: 12,
+    marginVertical: 6,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.05)",
+  },
+  fabMenuItemContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+  },
+  fabMenuItemIcon: {
+    marginRight: 16,
+  },
+  fabMenuItemText: {
+    flex: 1,
+  },
+  fabMenuItemTitle: {
+    fontSize: 16,
+    fontFamily: "Poppins-Medium",
+    color: "#333",
+    marginBottom: 4,
+  },
+  fabMenuItemDescription: {
+    fontSize: 13,
+    fontFamily: "Poppins-Regular",
+    color: "#666",
+    lineHeight: 18,
+  },
+  fab: {
+    borderRadius: 17,
+    height: 56,
   },
 } as const);
 

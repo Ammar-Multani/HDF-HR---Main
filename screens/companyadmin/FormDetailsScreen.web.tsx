@@ -9,6 +9,8 @@ import {
   TouchableOpacity,
   Platform,
   Dimensions,
+  ViewStyle,
+  TextStyle,
 } from "react-native";
 import {
   Card,
@@ -22,6 +24,7 @@ import {
   Menu,
   Portal,
   Modal,
+  Snackbar,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
@@ -35,6 +38,9 @@ import Text from "../../components/Text";
 import { useAuth } from "../../contexts/AuthContext";
 import Animated, { FadeIn } from "react-native-reanimated";
 import HelpGuideModal from "../../components/HelpGuideModal";
+import { WebView } from "react-native-webview";
+import { t } from "i18next";
+import CustomSnackbar from "../../components/CustomSnackbar";
 
 // Add window dimensions hook
 const useWindowDimensions = () => {
@@ -73,6 +79,57 @@ type FormDetailsRouteParams = {
   formType: "accident" | "illness" | "departure";
 };
 
+type StylesType = {
+  container: ViewStyle;
+  scrollView: ViewStyle;
+  scrollContent: ViewStyle;
+  gridContainer: ViewStyle;
+  gridColumn: ViewStyle;
+  statusSection: ViewStyle;
+  statusRow: ViewStyle;
+  statusLabel: TextStyle;
+  statusBadgeClickable: ViewStyle;
+  statusText: TextStyle;
+  editStatusIcon: ViewStyle;
+  detailsCard: ViewStyle;
+  cardHeader: ViewStyle;
+  headerLeft: ViewStyle;
+  iconContainer: ViewStyle;
+  headerIcon: ViewStyle;
+  cardTitle: TextStyle;
+  cardContent: ViewStyle;
+  sectionDivider: ViewStyle;
+  sectionSubtitle: TextStyle;
+  description: TextStyle;
+  detailRow: ViewStyle;
+  detailLabel: TextStyle;
+  detailValue: TextStyle;
+  documentsContainer: ViewStyle;
+  documentChip: ViewStyle;
+  documentButton: ViewStyle;
+  button: ViewStyle;
+  errorContainer: ViewStyle;
+  modalContainer: ViewStyle;
+  modalSurface: ViewStyle;
+  modalHeader: ViewStyle;
+  modalHeaderLeft: ViewStyle;
+  modalHeaderIcon: ViewStyle;
+  modalTitle: TextStyle;
+  modalDivider: ViewStyle;
+  statusOptionsContainer: ViewStyle;
+  statusOption: ViewStyle;
+  statusOptionContent: ViewStyle;
+  statusIconContainer: ViewStyle;
+  statusTextContainer: ViewStyle;
+  statusOptionTitle: TextStyle;
+  statusDescription: TextStyle;
+  simpleCardHeader: ViewStyle;
+  simpleCardHeaderTitle: TextStyle;
+  detailsSection: ViewStyle;
+  documentActions: ViewStyle;
+  snackbar: ViewStyle;
+};
+
 const FormDetailsScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
@@ -95,10 +152,18 @@ const FormDetailsScreen = () => {
   const [statusMenuVisible, setStatusMenuVisible] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<FormStatus | null>(null);
   const [helpModalVisible, setHelpModalVisible] = useState(false);
+  const [snackbarVisible, setSnackbarVisible] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState("");
 
   const fetchFormDetails = async () => {
     try {
       setLoading(true);
+      console.log(
+        "Fetching form details for formId:",
+        formId,
+        "type:",
+        formType
+      );
 
       let formData;
       let employeeData;
@@ -118,6 +183,81 @@ const FormDetailsScreen = () => {
 
         formData = data;
         employeeData = data.employee;
+        console.log("Fetched accident report:", formData);
+        console.log(
+          "Medical certificate field value:",
+          formData.medical_certificate
+        );
+
+        // Get document details if medical certificate exists
+        if (formData.medical_certificate) {
+          console.log(
+            "Medical certificate exists, fetching document details..."
+          );
+
+          // First try to find by reference_id and type
+          const { data: docData, error: documentError } = await supabase
+            .from("employee_documents")
+            .select("*")
+            .eq("reference_type", "accident_report")
+            .eq("reference_id", formId)
+            .eq("document_type", "MEDICAL_CERTIFICATE");
+
+          console.log("Document query result:", { docData, documentError });
+
+          if (documentError) {
+            console.error("Error fetching document details:", documentError);
+          } else if (docData && docData.length > 0) {
+            const doc = docData[0];
+            console.log("Found document with URL:", doc.file_url);
+            formData.document_url = doc.file_url;
+          } else {
+            // If not found by reference, try to find by file_path
+            console.log(
+              "Trying to find document by file path:",
+              formData.medical_certificate
+            );
+            const { data: pathDocData, error: pathError } = await supabase
+              .from("employee_documents")
+              .select("*")
+              .eq("file_path", formData.medical_certificate);
+
+            console.log("Path-based document query result:", {
+              pathDocData,
+              pathError,
+            });
+
+            if (pathError) {
+              console.error("Error fetching document by path:", pathError);
+            } else if (pathDocData && pathDocData.length > 0) {
+              const doc = pathDocData[0];
+              console.log("Found document by path with URL:", doc.file_url);
+              formData.document_url = doc.file_url;
+            } else {
+              console.log(
+                "No document found in employee_documents table for this accident report"
+              );
+              // Let's check if there are any documents for this employee
+              const { data: employeeDocs, error: employeeDocsError } =
+                await supabase
+                  .from("employee_documents")
+                  .select("*")
+                  .eq("employee_id", formData.employee_id)
+                  .eq("document_type", "MEDICAL_CERTIFICATE");
+
+              console.log(
+                "All medical certificates for this employee:",
+                employeeDocs
+              );
+              if (employeeDocsError) {
+                console.error(
+                  "Error fetching employee documents:",
+                  employeeDocsError
+                );
+              }
+            }
+          }
+        }
       } else if (formType === "illness") {
         const { data, error } = await supabase
           .from("illness_report")
@@ -132,6 +272,81 @@ const FormDetailsScreen = () => {
 
         formData = data;
         employeeData = data.employee;
+        console.log("Fetched illness report:", formData);
+        console.log(
+          "Medical certificate field value:",
+          formData.medical_certificate
+        );
+
+        // Get document details if medical certificate exists
+        if (formData.medical_certificate) {
+          console.log(
+            "Medical certificate exists, fetching document details..."
+          );
+
+          // First try to find by reference_id and type
+          const { data: docData, error: documentError } = await supabase
+            .from("employee_documents")
+            .select("*")
+            .eq("reference_type", "illness_report")
+            .eq("reference_id", formId)
+            .eq("document_type", "MEDICAL_CERTIFICATE");
+
+          console.log("Document query result:", { docData, documentError });
+
+          if (documentError) {
+            console.error("Error fetching document details:", documentError);
+          } else if (docData && docData.length > 0) {
+            const doc = docData[0];
+            console.log("Found document with URL:", doc.file_url);
+            formData.document_url = doc.file_url;
+          } else {
+            // If not found by reference, try to find by file_path
+            console.log(
+              "Trying to find document by file path:",
+              formData.medical_certificate
+            );
+            const { data: pathDocData, error: pathError } = await supabase
+              .from("employee_documents")
+              .select("*")
+              .eq("file_path", formData.medical_certificate);
+
+            console.log("Path-based document query result:", {
+              pathDocData,
+              pathError,
+            });
+
+            if (pathError) {
+              console.error("Error fetching document by path:", pathError);
+            } else if (pathDocData && pathDocData.length > 0) {
+              const doc = pathDocData[0];
+              console.log("Found document by path with URL:", doc.file_url);
+              formData.document_url = doc.file_url;
+            } else {
+              console.log(
+                "No document found in employee_documents table for this illness report"
+              );
+              // Let's check if there are any documents for this employee
+              const { data: employeeDocs, error: employeeDocsError } =
+                await supabase
+                  .from("employee_documents")
+                  .select("*")
+                  .eq("employee_id", formData.employee_id)
+                  .eq("document_type", "MEDICAL_CERTIFICATE");
+
+              console.log(
+                "All medical certificates for this employee:",
+                employeeDocs
+              );
+              if (employeeDocsError) {
+                console.error(
+                  "Error fetching employee documents:",
+                  employeeDocsError
+                );
+              }
+            }
+          }
+        }
       } else if (formType === "departure") {
         const { data, error } = await supabase
           .from("staff_departure_report")
@@ -151,8 +366,9 @@ const FormDetailsScreen = () => {
       setForm(formData);
       setEmployee(employeeData);
       setComments(formData?.comments || "");
+      console.log("Final form data with document URL:", formData?.document_url);
     } catch (error) {
-      console.error("Error fetching form details:", error);
+      console.error("Error in fetchFormDetails:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -224,11 +440,18 @@ const FormDetailsScreen = () => {
     }
   };
 
-  const handleViewDocument = (documentUrl: string) => {
-    if (documentUrl) {
-      Linking.openURL(documentUrl);
-    } else {
-      Alert.alert("Error", "Document URL is not available");
+  const handleCopyLink = async () => {
+    if (form?.document_url) {
+      console.log("Copying document URL:", form.document_url);
+      try {
+        await navigator.clipboard.writeText(form.document_url);
+        setSnackbarMessage("Link copied to clipboard");
+        setSnackbarVisible(true);
+      } catch (err) {
+        console.error("Error copying link:", err);
+        setSnackbarMessage("Failed to copy link");
+        setSnackbarVisible(true);
+      }
     }
   };
 
@@ -329,15 +552,37 @@ const FormDetailsScreen = () => {
           </View>
 
           {form.medical_certificate && (
-            <Button
-              mode="outlined"
-              onPress={() => handleViewDocument(form.medical_certificate)}
-              style={styles.documentButton}
-              icon="file-document"
-              textColor="#F44336"
-            >
-              View Medical Certificate
-            </Button>
+            <View style={styles.documentActions}>
+              <Button
+                mode="outlined"
+                onPress={() => {
+                  console.log("Opening document URL:", form.document_url);
+                  if (form.document_url) {
+                    if (Platform.OS === "web") {
+                      window.open(form.document_url, "_blank");
+                    } else {
+                      Linking.openURL(form.document_url);
+                    }
+                  }
+                }}
+                style={styles.documentButton}
+                icon="file-document"
+                textColor={formType === "accident" ? "#F44336" : "#FF9800"}
+                disabled={!form.document_url}
+              >
+                Open Document
+              </Button>
+              <Button
+                mode="outlined"
+                onPress={handleCopyLink}
+                style={styles.documentButton}
+                icon="share-variant"
+                textColor={formType === "accident" ? "#F44336" : "#FF9800"}
+                disabled={!form.document_url}
+              >
+                Copy Link
+              </Button>
+            </View>
           )}
         </View>
       </Surface>
@@ -379,15 +624,37 @@ const FormDetailsScreen = () => {
           <Text style={styles.description}>{form.leave_description}</Text>
 
           {form.medical_certificate && (
-            <Button
-              mode="outlined"
-              onPress={() => handleViewDocument(form.medical_certificate)}
-              style={styles.documentButton}
-              icon="file-document"
-              textColor="#FF9800"
-            >
-              View Medical Certificate
-            </Button>
+            <View style={styles.documentActions}>
+              <Button
+                mode="outlined"
+                onPress={() => {
+                  console.log("Opening document URL:", form.document_url);
+                  if (form.document_url) {
+                    if (Platform.OS === "web") {
+                      window.open(form.document_url, "_blank");
+                    } else {
+                      Linking.openURL(form.document_url);
+                    }
+                  }
+                }}
+                style={styles.documentButton}
+                icon="file-document"
+                textColor="#FF9800"
+                disabled={!form.document_url}
+              >
+                Open Document
+              </Button>
+              <Button
+                mode="outlined"
+                onPress={handleCopyLink}
+                style={styles.documentButton}
+                icon="share-variant"
+                textColor="#FF9800"
+                disabled={!form.document_url}
+              >
+                Copy Link
+              </Button>
+            </View>
           )}
         </View>
       </Surface>
@@ -803,11 +1070,40 @@ const FormDetailsScreen = () => {
           </View>
         </View>
       </ScrollView>
+      <CustomSnackbar
+        visible={snackbarVisible}
+        message={snackbarMessage}
+        onDismiss={() => setSnackbarVisible(false)}
+        type={
+          snackbarMessage?.includes("successful") ||
+          snackbarMessage?.includes("copied") ||
+          snackbarMessage?.includes("updated")
+            ? "success"
+            : snackbarMessage?.includes("rate limit") ||
+                snackbarMessage?.includes("network")
+              ? "warning"
+              : "error"
+        }
+        duration={6000}
+        action={{
+          label: t("common.ok"),
+          onPress: () => setSnackbarVisible(false),
+        }}
+        style={[
+          styles.snackbar,
+          {
+            width: Platform.OS === "web" ? 700 : undefined,
+            alignSelf: "center",
+            position: Platform.OS === "web" ? "absolute" : undefined,
+            bottom: Platform.OS === "web" ? 24 : undefined,
+          },
+        ]}
+      />
     </SafeAreaView>
   );
 };
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create<StylesType>({
   container: {
     flex: 1,
     backgroundColor: "#F8F9FA",
@@ -953,8 +1249,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#E3F2FD",
   },
   documentButton: {
-    marginTop: 20,
-    borderRadius: 12,
+    borderColor: "#E0E0E0",
+    borderRadius: 8,
   },
   button: {
     marginTop: 16,
@@ -1064,6 +1360,23 @@ const styles = StyleSheet.create({
     color: "#424242",
   },
   detailsSection: {},
+  documentActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 20,
+  },
+  snackbar: {
+    marginBottom: 16,
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.27,
+    shadowRadius: 4.65,
+  },
 });
 
 export default FormDetailsScreen;

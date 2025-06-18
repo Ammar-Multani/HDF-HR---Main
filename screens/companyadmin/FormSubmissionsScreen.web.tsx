@@ -750,7 +750,7 @@ const FormSubmissionsScreen = () => {
         .eq("company_id", currentCompanyId)
         .neq("status", FormStatus.DRAFT)
         .order("created_at", {
-          ascending: true,
+          ascending: false,
         })
         .range(from, to)) as {
         data: AccidentReport[] | null;
@@ -785,7 +785,7 @@ const FormSubmissionsScreen = () => {
         .eq("company_id", currentCompanyId)
         .neq("status", FormStatus.DRAFT)
         .order("submission_date", {
-          ascending: true,
+          ascending: false,
         })
         .range(from, to)) as {
         data: IllnessReport[] | null;
@@ -820,7 +820,7 @@ const FormSubmissionsScreen = () => {
         .eq("company_id", currentCompanyId)
         .neq("status", FormStatus.DRAFT)
         .order("created_at", {
-          ascending: true,
+          ascending: false,
         })
         .range(from, to);
 

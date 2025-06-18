@@ -50,6 +50,8 @@ import ReceiptDetailsScreen from "../screens/superadmin/ReceiptDetailsScreen";
 import EditTaskScreen from "../screens/superadmin/EditTaskScreen";
 import EditReceiptScreen from "../screens/superadmin/EditReceiptScreen";
 import ActivityLogsScreen from "../screens/superadmin/ActivityLogsScreen";
+import SuperAdminCreateEmployeeAccidentReportScreen from "../screens/superadmin/SuperAdminCreateEmployeeAccidentReportScreen.web";
+import SuperAdminCreateEmployeeIllnessReportScreen from "../screens/superadmin/SuperAdminCreateEmployeeIllnessReportScreen.web";
 
 // Stack navigators
 const SuperAdminStack = createNativeStackNavigator();
@@ -91,6 +93,8 @@ type RootStackParamList = {
   SuperAdminFormsScreen: undefined;
   SuperAdminTasksScreen: undefined;
   Utilities: undefined;
+  SuperAdminCreateEmployeeAccidentReport: undefined;
+  SuperAdminCreateEmployeeIllnessReport: undefined;
 };
 
 // Custom navigation item component for sidebar
@@ -360,6 +364,14 @@ const WebStackNavigator = () => {
             <WebContentStack.Screen
               name="EmployeeDetails"
               component={EmployeeDetailedScreen}
+            />
+            <WebContentStack.Screen
+              name="SuperAdminCreateEmployeeAccidentReport"
+              component={SuperAdminCreateEmployeeAccidentReportScreen}
+            />
+            <WebContentStack.Screen
+              name="SuperAdminCreateEmployeeIllnessReport"
+              component={SuperAdminCreateEmployeeIllnessReportScreen}
             />
           </WebContentStack.Group>
         </WebContentStack.Navigator>
@@ -700,6 +712,14 @@ export const SuperAdminNavigator = () => {
       <SuperAdminStack.Screen
         name="EditReceipt"
         component={EditReceiptScreen}
+      />
+      <SuperAdminStack.Screen
+        name="SuperAdminCreateEmployeeAccidentReport"
+        component={SuperAdminCreateEmployeeAccidentReportScreen}
+      />
+      <SuperAdminStack.Screen
+        name="SuperAdminCreateEmployeeIllnessReport"
+        component={SuperAdminCreateEmployeeIllnessReportScreen}
       />
     </SuperAdminStack.Navigator>
   );

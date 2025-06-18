@@ -7,6 +7,9 @@ import {
   Platform,
   Alert,
   Dimensions,
+  ViewStyle,
+  TextStyle,
+  Linking,
 } from "react-native";
 import {
   Text,
@@ -36,6 +39,7 @@ import CustomSnackbar from "../../components/CustomSnackbar";
 import { t } from "i18next";
 import EmployeeSelector from "../../components/EmployeeSelector";
 import * as DocumentPicker from "expo-document-picker";
+import { WebView } from "react-native-webview";
 
 // Add window dimensions hook
 const useWindowDimensions = () => {
@@ -83,6 +87,83 @@ interface AccidentReportFormData {
   document_id?: string;
 }
 
+interface OneDriveUploadResponse {
+  success: boolean;
+  data: {
+    filePath: string;
+    driveId: string;
+    itemId: string;
+    webUrl: string;
+    fileName: string;
+    mimeType: string;
+    document: {
+      id: string;
+      file_path: string;
+    };
+    report: {
+      id: string;
+      medical_certificate: string;
+    };
+    sharingLink?: string;
+  };
+  error?: string;
+}
+
+// Update the styles type at the top of the file after imports
+type StylesType = {
+  container: ViewStyle;
+  keyboardAvoidingView: ViewStyle;
+  scrollView: ViewStyle;
+  scrollContent: ViewStyle;
+  headerSection: ViewStyle;
+  pageTitle: TextStyle;
+  gridContainer: ViewStyle;
+  gridColumn: ViewStyle;
+  formCard: ViewStyle;
+  cardHeader: ViewStyle;
+  headerLeft: ViewStyle;
+  iconContainer: ViewStyle;
+  headerIcon: ViewStyle;
+  cardTitle: TextStyle;
+  cardContent: ViewStyle;
+  input: ViewStyle;
+  inputLabel: TextStyle;
+  dateButton: ViewStyle;
+  documentPickerContainer: ViewStyle;
+  documentButton: ViewStyle;
+  errorText: TextStyle;
+  bottomBar: ViewStyle;
+  bottomBarContent: ViewStyle;
+  button: ViewStyle;
+  cancelButton: ViewStyle;
+  submitButton: ViewStyle;
+  webDatePickerModal: ViewStyle;
+  modalSurface: ViewStyle;
+  modalHeader: ViewStyle;
+  modalTitle: TextStyle;
+  webDatePickerContainer: ViewStyle;
+  webDateInputRow: ViewStyle;
+  webDateInputContainer: ViewStyle;
+  webDateInputLabel: TextStyle;
+  webDateInput: ViewStyle;
+  webDatePickerActions: ViewStyle;
+  webDatePickerButton: ViewStyle;
+  snackbar: ViewStyle;
+  previewModal: ViewStyle;
+  previewModalContent: ViewStyle;
+  previewModalHeader: ViewStyle;
+  previewContainer: ViewStyle;
+  previewButton: ViewStyle;
+  mobilePreviewContainer: ViewStyle;
+  mobilePreviewText: TextStyle;
+  mobilePreviewButton: ViewStyle;
+  fallbackPreviewContainer: ViewStyle;
+  fallbackPreviewText: TextStyle;
+  fallbackPreviewSubtext: TextStyle;
+  fallbackPreviewButton: ViewStyle;
+  documentActions: ViewStyle;
+};
+
 const CreateAccidentReportScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
@@ -103,6 +184,7 @@ const CreateAccidentReportScreen = () => {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(
     null
   );
+  const [sharingLink, setSharingLink] = useState<string | null>(null);
 
   const {
     control,
@@ -230,6 +312,54 @@ const CreateAccidentReportScreen = () => {
     try {
       setUploadingDocument(true);
 
+      // Validate company ID
+      if (!companyId) {
+        throw new Error("Company ID is not available");
+      }
+
+      // Create accident report first if it doesn't exist
+      let reportId = watch("id");
+      if (!reportId) {
+        console.log("Creating new accident report...");
+        const { data: accidentReport, error: createError } = await supabase
+          .from("accident_report")
+          .insert([
+            {
+              employee_id: selectedEmployee.id,
+              company_id: companyId,
+              date_of_accident: watch("date_of_accident").toISOString(),
+              time_of_accident: watch("time_of_accident"),
+              accident_address: watch("accident_address") || "",
+              city: watch("city") || "",
+              accident_description: watch("accident_description") || "",
+              objects_involved: watch("objects_involved") || "",
+              injuries: watch("injuries") || "",
+              accident_type: watch("accident_type") || "",
+              status: FormStatus.DRAFT,
+              submitted_by: user?.id,
+              submission_date: new Date().toISOString(),
+            },
+          ])
+          .select()
+          .single();
+
+        if (createError) {
+          console.error("Error creating accident report:", createError);
+          throw createError;
+        }
+
+        if (!accidentReport) {
+          console.error("No accident report data returned from insert");
+          throw new Error(
+            "Failed to create accident report - no data returned"
+          );
+        }
+
+        console.log("Created accident report:", accidentReport);
+        reportId = accidentReport.id;
+        setValue("id", reportId);
+      }
+
       // Use document picker
       const result = await DocumentPicker.getDocumentAsync({
         type: [
@@ -246,45 +376,123 @@ const CreateAccidentReportScreen = () => {
 
       const file = result.assets[0];
 
+      // Validate file size (10MB limit)
+      const MAX_FILE_SIZE = 10 * 1024 * 1024;
+      if (!file.size || file.size > MAX_FILE_SIZE) {
+        throw new Error(
+          `File size must be less than ${MAX_FILE_SIZE / (1024 * 1024)}MB`
+        );
+      }
+
       // Create a File object from the picked document
       const fileBlob = await fetch(file.uri).then((r) => r.blob());
       const fileObject = new File([fileBlob], file.name, {
         type: file.mimeType,
       });
 
-      // Create FormData
+      // Create and validate FormData
       const formData = new FormData();
       formData.append("file", fileObject);
       formData.append("companyId", companyId as string);
-      formData.append("employeeId", selectedEmployee.id);
-      formData.append("uploadedBy", user?.id as string);
-      formData.append("reportId", watch("id") || "new");
+      formData.append("employeeId", selectedEmployee.id as string);
+      const uploadedById = user?.id;
+      if (typeof uploadedById !== "string") {
+        throw new Error("User ID is required");
+      }
+      formData.append("uploadedBy", uploadedById);
+      formData.append("reportId", reportId as string);
       formData.append("reportType", "accident_report");
 
-      // Use Supabase functions invoke directly
-      const { data, error } = await supabase.functions.invoke(
-        "onedrive-upload",
-        {
-          body: formData,
-          headers: {},
+      // Add metadata as JSON string
+      const metadata = {
+        reportId: reportId,
+        reportType: "accident_report",
+        company_id: companyId,
+        employee_id: selectedEmployee.id,
+      };
+      formData.append("metadata", JSON.stringify(metadata));
+
+      // Add retry logic for network issues
+      const MAX_RETRIES = 3;
+      let retryCount = 0;
+      let uploadSuccess = false;
+      let uploadResponse = null;
+
+      while (retryCount < MAX_RETRIES && !uploadSuccess) {
+        try {
+          console.log("Attempting to upload file...");
+          const response = await supabase.functions.invoke("onedrive-upload", {
+            body: formData,
+          });
+
+          console.log("Raw upload response:", response);
+
+          if (response.error) {
+            throw new Error(response.error.message);
+          }
+
+          uploadResponse = response;
+          uploadSuccess = true;
+        } catch (error) {
+          retryCount++;
+          console.error(`Upload attempt ${retryCount} failed:`, error);
+          if (retryCount === MAX_RETRIES) {
+            throw error;
+          }
+          // Wait before retrying (exponential backoff)
+          await new Promise((resolve) =>
+            setTimeout(resolve, Math.pow(2, retryCount) * 1000)
+          );
         }
-      );
-
-      if (error) {
-        throw error;
       }
 
-      if (!data) {
-        throw new Error("No data received from upload");
+      if (uploadResponse?.data) {
+        console.log("Upload response data:", uploadResponse.data);
+
+        // The actual data is nested inside data.data
+        const responseData = uploadResponse.data.data;
+        console.log("Processed response data:", responseData);
+
+        // Update form with file path if available
+        if (responseData?.filePath) {
+          setValue("medical_certificate", responseData.filePath);
+        }
+
+        // Only try to set document_id if document object exists and has an id
+        if (responseData?.document?.id) {
+          setValue("document_id", responseData.document.id);
+        }
+
+        setDocumentName(file.name);
+
+        // Store both webUrl and sharingLink
+        if (responseData?.webUrl) {
+          console.log("Original webUrl:", responseData.webUrl);
+
+          // Extract the direct file URL from SharePoint URL
+          let directUrl = responseData.webUrl;
+
+          // If it's a SharePoint URL, modify it to get direct access
+          if (directUrl.includes("sharepoint.com")) {
+            // Remove any query parameters
+            directUrl = directUrl.split("?")[0];
+            // Add direct access parameter
+            directUrl += "?web=1";
+          }
+
+          console.log("Setting preview URL to:", directUrl);
+          setSharingLink(responseData.sharingLink);
+        } else {
+          console.warn("No webUrl in response data:", responseData);
+        }
+
+        setSnackbarMessage("Medical certificate uploaded successfully");
+        setSnackbarVisible(true);
+      } else {
+        console.warn("Upload response missing data:", uploadResponse);
+        setSnackbarMessage("Document uploaded but some data was missing");
+        setSnackbarVisible(true);
       }
-
-      // Update form with file path and document ID
-      setValue("medical_certificate", data.filePath);
-      setValue("document_id", data.document.id);
-      setDocumentName(file.name);
-
-      setSnackbarMessage("Medical certificate uploaded successfully");
-      setSnackbarVisible(true);
     } catch (error: any) {
       console.error("Error picking document:", error);
       setSnackbarMessage(
@@ -293,6 +501,19 @@ const CreateAccidentReportScreen = () => {
       setSnackbarVisible(true);
     } finally {
       setUploadingDocument(false);
+    }
+  };
+
+  const handleCopyLink = async () => {
+    if (sharingLink) {
+      try {
+        await navigator.clipboard.writeText(sharingLink);
+        setSnackbarMessage("Link copied to clipboard");
+        setSnackbarVisible(true);
+      } catch (err) {
+        setSnackbarMessage("Failed to copy link");
+        setSnackbarVisible(true);
+      }
     }
   };
 
@@ -746,6 +967,34 @@ const CreateAccidentReportScreen = () => {
                       >
                         {documentName || "Upload Medical Certificate"}
                       </Button>
+                      {documentName && sharingLink && (
+                        <View style={styles.documentActions}>
+                          <Button
+                            mode="outlined"
+                            onPress={() => {
+                              if (Platform.OS === "web") {
+                                window.open(sharingLink, "_blank");
+                              } else {
+                                Linking.openURL(sharingLink);
+                              }
+                            }}
+                            style={styles.documentButton}
+                            icon="file-document"
+                            textColor="#F44336"
+                          >
+                            Open Document
+                          </Button>
+                          <Button
+                            mode="outlined"
+                            onPress={handleCopyLink}
+                            style={styles.documentButton}
+                            icon="share-variant"
+                            textColor="#F44336"
+                          >
+                            Copy Link
+                          </Button>
+                        </View>
+                      )}
                     </View>
                   </View>
                 </Surface>
@@ -797,7 +1046,8 @@ const CreateAccidentReportScreen = () => {
         onDismiss={() => setSnackbarVisible(false)}
         type={
           snackbarMessage?.includes("successful") ||
-          snackbarMessage?.includes("instructions will be sent")
+          snackbarMessage?.includes("instructions will be sent") ||
+          snackbarMessage?.includes("copied")
             ? "success"
             : snackbarMessage?.includes("rate limit") ||
                 snackbarMessage?.includes("network")
@@ -823,7 +1073,7 @@ const CreateAccidentReportScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create<StylesType>({
   container: {
     flex: 1,
     backgroundColor: "#F8F9FA",
@@ -918,6 +1168,9 @@ const styles = StyleSheet.create({
   },
   documentPickerContainer: {
     marginTop: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
   },
   documentButton: {
     borderColor: "#E0E0E0",
@@ -1025,6 +1278,75 @@ const styles = StyleSheet.create({
     },
     shadowOpacity: 0.27,
     shadowRadius: 4.65,
+  },
+  previewModal: {
+    margin: 20,
+    backgroundColor: "transparent",
+  },
+  previewModalContent: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    overflow: "hidden",
+    maxWidth: 1200,
+    width: "100%",
+    alignSelf: "center",
+  },
+  previewModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+  },
+  previewContainer: {
+    flex: 1,
+    backgroundColor: "#f5f5f5",
+  },
+  previewButton: {
+    marginLeft: 8,
+  },
+  mobilePreviewContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  mobilePreviewText: {
+    textAlign: "center",
+    marginBottom: 20,
+    fontSize: 16,
+    color: "#666",
+  },
+  mobilePreviewButton: {
+    minWidth: 200,
+  },
+  fallbackPreviewContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+    backgroundColor: "#f5f5f5",
+  },
+  fallbackPreviewText: {
+    fontSize: 18,
+    fontFamily: "Poppins-Medium",
+    color: "#424242",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  fallbackPreviewSubtext: {
+    fontSize: 14,
+    fontFamily: "Poppins-Regular",
+    color: "#666",
+    textAlign: "center",
+    marginBottom: 24,
+  },
+  fallbackPreviewButton: {
+    minWidth: 200,
+  },
+  documentActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
 });
 

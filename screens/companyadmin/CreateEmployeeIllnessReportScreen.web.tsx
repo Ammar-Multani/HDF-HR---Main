@@ -7,6 +7,7 @@ import {
   Platform,
   Alert,
   Dimensions,
+  Linking,
 } from "react-native";
 import {
   Text,
@@ -97,6 +98,7 @@ const CreateIllnessReportScreen = () => {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(
     null
   );
+  const [sharingLink, setSharingLink] = useState<string | null>(null);
 
   const {
     control,
@@ -158,6 +160,46 @@ const CreateIllnessReportScreen = () => {
     try {
       setUploadingDocument(true);
 
+      // Validate company ID
+      if (!companyId) {
+        throw new Error("Company ID is not available");
+      }
+
+      // Create illness report first if it doesn't exist
+      let reportId = watch("id");
+      if (!reportId) {
+        console.log("Creating new illness report...");
+        const { data: illnessReport, error: createError } = await supabase
+          .from("illness_report")
+          .insert([
+            {
+              employee_id: selectedEmployee.id,
+              company_id: companyId,
+              date_of_onset_leave: watch("date_of_onset_leave").toISOString(),
+              leave_description: watch("leave_description") || "",
+              status: FormStatus.DRAFT,
+              submitted_by: user?.id,
+              submission_date: new Date().toISOString(),
+            },
+          ])
+          .select()
+          .single();
+
+        if (createError) {
+          console.error("Error creating illness report:", createError);
+          throw createError;
+        }
+
+        if (!illnessReport) {
+          console.error("No illness report data returned from insert");
+          throw new Error("Failed to create illness report - no data returned");
+        }
+
+        console.log("Created illness report:", illnessReport);
+        reportId = illnessReport.id;
+        setValue("id", reportId);
+      }
+
       // Use document picker
       const result = await DocumentPicker.getDocumentAsync({
         type: [
@@ -173,45 +215,111 @@ const CreateIllnessReportScreen = () => {
       }
 
       const file = result.assets[0];
-      const currentReportId = watch("id");
 
-      // Create FormData
-      const formData = new FormData();
-      formData.append("file", {
-        uri: file.uri,
+      // Validate file size (10MB limit)
+      const MAX_FILE_SIZE = 10 * 1024 * 1024;
+      if (!file.size || file.size > MAX_FILE_SIZE) {
+        throw new Error(
+          `File size must be less than ${MAX_FILE_SIZE / (1024 * 1024)}MB`
+        );
+      }
+
+      // Create a File object from the picked document
+      const fileBlob = await fetch(file.uri).then((r) => r.blob());
+      const fileObject = new File([fileBlob], file.name, {
         type: file.mimeType,
-        name: file.name,
-      } as any);
+      });
+
+      // Create and validate FormData
+      const formData = new FormData();
+      formData.append("file", fileObject);
       formData.append("companyId", companyId as string);
-      formData.append("employeeId", selectedEmployee.id);
-      formData.append("uploadedBy", user?.id as string);
+      formData.append("employeeId", selectedEmployee.id as string);
+      const uploadedById = user?.id;
+      if (typeof uploadedById !== "string") {
+        throw new Error("User ID is required");
+      }
+      formData.append("uploadedBy", uploadedById);
+      formData.append("reportId", reportId as string);
       formData.append("reportType", "illness_report");
 
-      if (currentReportId) {
-        formData.append("reportId", currentReportId);
-      }
+      // Add metadata as JSON string
+      const metadata = {
+        reportId: reportId,
+        reportType: "illness_report",
+        company_id: companyId,
+        employee_id: selectedEmployee.id,
+      };
+      formData.append("metadata", JSON.stringify(metadata));
 
-      // Call Supabase Edge Function
-      const uploadResponse = await supabase.functions.invoke(
-        "onedrive-upload",
-        {
-          body: formData,
+      // Add retry logic for network issues
+      const MAX_RETRIES = 3;
+      let retryCount = 0;
+      let uploadSuccess = false;
+      let uploadResponse = null;
+
+      while (retryCount < MAX_RETRIES && !uploadSuccess) {
+        try {
+          console.log("Attempting to upload file...");
+          const response = await supabase.functions.invoke("onedrive-upload", {
+            body: formData,
+          });
+
+          console.log("Raw upload response:", response);
+
+          if (response.error) {
+            throw new Error(response.error.message);
+          }
+
+          uploadResponse = response;
+          uploadSuccess = true;
+        } catch (error) {
+          retryCount++;
+          console.error(`Upload attempt ${retryCount} failed:`, error);
+          if (retryCount === MAX_RETRIES) {
+            throw error;
+          }
+          // Wait before retrying (exponential backoff)
+          await new Promise((resolve) =>
+            setTimeout(resolve, Math.pow(2, retryCount) * 1000)
+          );
         }
-      );
-
-      if (uploadResponse.error) {
-        throw new Error(uploadResponse.error.message);
       }
 
-      const { data } = uploadResponse;
+      if (uploadResponse?.data) {
+        console.log("Upload response data:", uploadResponse.data);
 
-      // Update form with file path and document ID
-      setValue("medical_certificate", data.filePath);
-      setValue("document_id", data.document.id);
-      setDocumentName(file.name);
+        // The actual data is nested inside data.data
+        const responseData = uploadResponse.data.data;
+        console.log("Processed response data:", responseData);
 
-      setSnackbarMessage("Medical certificate uploaded successfully");
-      setSnackbarVisible(true);
+        // Update form with file path if available
+        if (responseData?.filePath) {
+          setValue("medical_certificate", responseData.filePath);
+        }
+
+        // Only try to set document_id if document object exists and has an id
+        if (responseData?.document?.id) {
+          setValue("document_id", responseData.document.id);
+        }
+
+        setDocumentName(file.name);
+
+        // Store both webUrl and sharingLink
+        if (responseData?.webUrl) {
+          console.log("Original webUrl:", responseData.webUrl);
+          setSharingLink(responseData.sharingLink);
+        } else {
+          console.warn("No webUrl in response data:", responseData);
+        }
+
+        setSnackbarMessage("Medical certificate uploaded successfully");
+        setSnackbarVisible(true);
+      } else {
+        console.warn("Upload response missing data:", uploadResponse);
+        setSnackbarMessage("Document uploaded but some data was missing");
+        setSnackbarVisible(true);
+      }
     } catch (error: any) {
       console.error("Error picking document:", error);
       setSnackbarMessage(
@@ -220,6 +328,19 @@ const CreateIllnessReportScreen = () => {
       setSnackbarVisible(true);
     } finally {
       setUploadingDocument(false);
+    }
+  };
+
+  const handleCopyLink = async () => {
+    if (sharingLink) {
+      try {
+        await navigator.clipboard.writeText(sharingLink);
+        setSnackbarMessage("Link copied to clipboard");
+        setSnackbarVisible(true);
+      } catch (err) {
+        setSnackbarMessage("Failed to copy link");
+        setSnackbarVisible(true);
+      }
     }
   };
 
@@ -518,6 +639,34 @@ const CreateIllnessReportScreen = () => {
                       >
                         {documentName || "Upload Medical Certificate"}
                       </Button>
+                      {documentName && sharingLink && (
+                        <View style={styles.documentActions}>
+                          <Button
+                            mode="outlined"
+                            onPress={() => {
+                              if (Platform.OS === "web") {
+                                window.open(sharingLink, "_blank");
+                              } else {
+                                Linking.openURL(sharingLink);
+                              }
+                            }}
+                            style={styles.documentButton}
+                            icon="file-document"
+                            textColor="#FF9800"
+                          >
+                            Open Document
+                          </Button>
+                          <Button
+                            mode="outlined"
+                            onPress={handleCopyLink}
+                            style={styles.documentButton}
+                            icon="share-variant"
+                            textColor="#FF9800"
+                          >
+                            Copy Link
+                          </Button>
+                        </View>
+                      )}
                     </View>
                   </View>
                 </Surface>
@@ -795,6 +944,12 @@ const styles = StyleSheet.create({
     },
     shadowOpacity: 0.27,
     shadowRadius: 4.65,
+  },
+  documentActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 12,
   },
 });
 

@@ -7,6 +7,8 @@ import {
   Platform,
   Alert,
   Dimensions,
+  ViewStyle,
+  TextStyle,
   Linking,
 } from "react-native";
 import {
@@ -32,11 +34,13 @@ import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import { FormStatus } from "../../types";
-import { pickAndUploadDocument } from "../../utils/documentPicker";
 import Animated, { FadeIn } from "react-native-reanimated";
 import CustomSnackbar from "../../components/CustomSnackbar";
 import { t } from "i18next";
+import EmployeeSelector from "../../components/EmployeeSelector";
 import * as DocumentPicker from "expo-document-picker";
+import { WebView } from "react-native-webview";
+import CompanySelector from "../../components/CompanySelector";
 
 // Add window dimensions hook
 const useWindowDimensions = () => {
@@ -62,6 +66,20 @@ const useWindowDimensions = () => {
   return dimensions;
 };
 
+interface Employee {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  job_title?: string;
+}
+
+interface Company {
+  id: string;
+  company_name: string;
+  active: boolean;
+}
+
 interface AccidentReportFormData {
   id?: string;
   date_of_accident: Date;
@@ -74,7 +92,85 @@ interface AccidentReportFormData {
   accident_type: string;
   medical_certificate?: string;
   document_id?: string;
+  company_id: string;
 }
+
+interface OneDriveUploadResponse {
+  success: boolean;
+  data: {
+    filePath: string;
+    driveId: string;
+    itemId: string;
+    webUrl: string;
+    fileName: string;
+    mimeType: string;
+    document: {
+      id: string;
+      file_path: string;
+    };
+    report: {
+      id: string;
+      medical_certificate: string;
+    };
+    sharingLink?: string;
+  };
+  error?: string;
+}
+
+// Update the styles type at the top of the file after imports
+type StylesType = {
+  container: ViewStyle;
+  keyboardAvoidingView: ViewStyle;
+  scrollView: ViewStyle;
+  scrollContent: ViewStyle;
+  headerSection: ViewStyle;
+  pageTitle: TextStyle;
+  gridContainer: ViewStyle;
+  gridColumn: ViewStyle;
+  formCard: ViewStyle;
+  cardHeader: ViewStyle;
+  headerLeft: ViewStyle;
+  iconContainer: ViewStyle;
+  headerIcon: ViewStyle;
+  cardTitle: TextStyle;
+  cardContent: ViewStyle;
+  input: ViewStyle;
+  inputLabel: TextStyle;
+  dateButton: ViewStyle;
+  documentPickerContainer: ViewStyle;
+  documentButton: ViewStyle;
+  errorText: TextStyle;
+  bottomBar: ViewStyle;
+  bottomBarContent: ViewStyle;
+  button: ViewStyle;
+  cancelButton: ViewStyle;
+  submitButton: ViewStyle;
+  webDatePickerModal: ViewStyle;
+  modalSurface: ViewStyle;
+  modalHeader: ViewStyle;
+  modalTitle: TextStyle;
+  webDatePickerContainer: ViewStyle;
+  webDateInputRow: ViewStyle;
+  webDateInputContainer: ViewStyle;
+  webDateInputLabel: TextStyle;
+  webDateInput: ViewStyle;
+  webDatePickerActions: ViewStyle;
+  webDatePickerButton: ViewStyle;
+  snackbar: ViewStyle;
+  previewModal: ViewStyle;
+  previewModalContent: ViewStyle;
+  previewModalHeader: ViewStyle;
+  previewContainer: ViewStyle;
+  previewButton: ViewStyle;
+  mobilePreviewContainer: ViewStyle;
+  mobilePreviewText: TextStyle;
+  mobilePreviewButton: ViewStyle;
+  fallbackPreviewContainer: ViewStyle;
+  fallbackPreviewText: TextStyle;
+  fallbackPreviewSubtext: TextStyle;
+  fallbackPreviewButton: ViewStyle;
+  documentActions: ViewStyle;
+};
 
 const CreateAccidentReportScreen = () => {
   const theme = useTheme();
@@ -87,13 +183,27 @@ const CreateAccidentReportScreen = () => {
   const isMediumScreen = dimensions.width >= 768 && dimensions.width < 1440;
 
   const [loading, setLoading] = useState(false);
-  const [companyId, setCompanyId] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [uploadingDocument, setUploadingDocument] = useState(false);
   const [documentName, setDocumentName] = useState<string | null>(null);
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(
+    null
+  );
   const [sharingLink, setSharingLink] = useState<string | null>(null);
+  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
+  const [companyError, setCompanyError] = useState<string>("");
+
+  // Clear employee selection when company changes
+  useEffect(() => {
+    if (
+      selectedEmployee &&
+      selectedEmployee.company_id !== selectedCompany?.id
+    ) {
+      setSelectedEmployee(null);
+    }
+  }, [selectedCompany]);
 
   const {
     control,
@@ -117,31 +227,6 @@ const CreateAccidentReportScreen = () => {
 
   const dateOfAccident = watch("date_of_accident");
 
-  const fetchCompanyId = async () => {
-    if (!user) return;
-
-    try {
-      const { data, error } = await supabase
-        .from("company_user")
-        .select("company_id")
-        .eq("id", user.id)
-        .single();
-
-      if (error) {
-        console.error("Error fetching company ID:", error);
-        return;
-      }
-
-      setCompanyId(data.company_id);
-    } catch (error) {
-      console.error("Error fetching company ID:", error);
-    }
-  };
-
-  useEffect(() => {
-    fetchCompanyId();
-  }, [user]);
-
   const handleDateConfirm = (selectedDate: Date) => {
     setShowDatePicker(false);
     setValue("date_of_accident", selectedDate);
@@ -153,32 +238,43 @@ const CreateAccidentReportScreen = () => {
 
   const onSubmit = async (data: AccidentReportFormData) => {
     try {
-      if (!user || !companyId) {
-        setSnackbarMessage("User or company information not available");
+      if (!selectedCompany) {
+        setCompanyError("Please select a company");
+        return;
+      }
+      setCompanyError("");
+
+      if (!selectedEmployee) {
+        setSnackbarMessage("Please select an employee");
         setSnackbarVisible(true);
         return;
       }
 
       setLoading(true);
 
-      // Create accident report - make medical_certificate optional
-      const { error } = await supabase.from("accident_report").insert([
-        {
-          employee_id: user.id,
-          company_id: companyId,
-          date_of_accident: data.date_of_accident.toISOString(),
-          time_of_accident: data.time_of_accident,
-          accident_address: data.accident_address,
-          city: data.city,
-          accident_description: data.accident_description,
-          objects_involved: data.objects_involved,
-          injuries: data.injuries,
-          accident_type: data.accident_type,
-          // Allow medical_certificate to be null or empty string
-          medical_certificate: data.medical_certificate || null,
-          status: FormStatus.PENDING,
-        },
-      ]);
+      // Create accident report with selectedCompany.id
+      const { data: accidentReport, error } = await supabase
+        .from("accident_report")
+        .insert([
+          {
+            employee_id: selectedEmployee.id,
+            company_id: selectedCompany.id,
+            date_of_accident: data.date_of_accident.toISOString(),
+            time_of_accident: data.time_of_accident,
+            accident_address: data.accident_address,
+            city: data.city,
+            accident_description: data.accident_description,
+            objects_involved: data.objects_involved,
+            injuries: data.injuries,
+            accident_type: data.accident_type,
+            medical_certificate: data.medical_certificate || null,
+            status: FormStatus.PENDING,
+            submitted_by: user?.id,
+            submission_date: new Date().toISOString(),
+          },
+        ])
+        .select()
+        .single();
 
       if (error) {
         throw error;
@@ -201,11 +297,23 @@ const CreateAccidentReportScreen = () => {
   };
 
   const handlePickDocument = async () => {
+    if (!selectedCompany) {
+      setSnackbarMessage("Please select a company first");
+      setSnackbarVisible(true);
+      return;
+    }
+
+    if (!selectedEmployee) {
+      setSnackbarMessage("Please select an employee first");
+      setSnackbarVisible(true);
+      return;
+    }
+
     try {
       setUploadingDocument(true);
 
       // Validate company ID
-      if (!companyId) {
+      if (!selectedCompany) {
         throw new Error("Company ID is not available");
       }
 
@@ -217,8 +325,8 @@ const CreateAccidentReportScreen = () => {
           .from("accident_report")
           .insert([
             {
-              employee_id: user?.id,
-              company_id: companyId,
+              employee_id: selectedEmployee.id,
+              company_id: selectedCompany.id,
               date_of_accident: watch("date_of_accident").toISOString(),
               time_of_accident: watch("time_of_accident"),
               accident_address: watch("accident_address") || "",
@@ -229,6 +337,7 @@ const CreateAccidentReportScreen = () => {
               accident_type: watch("accident_type") || "",
               status: FormStatus.DRAFT,
               submitted_by: user?.id,
+              submission_date: new Date().toISOString(),
             },
           ])
           .select()
@@ -284,8 +393,8 @@ const CreateAccidentReportScreen = () => {
       // Create and validate FormData
       const formData = new FormData();
       formData.append("file", fileObject);
-      formData.append("companyId", companyId as string);
-      formData.append("employeeId", user?.id as string);
+      formData.append("companyId", selectedCompany.id as string);
+      formData.append("employeeId", selectedEmployee.id as string);
       const uploadedById = user?.id;
       if (typeof uploadedById !== "string") {
         throw new Error("User ID is required");
@@ -298,8 +407,8 @@ const CreateAccidentReportScreen = () => {
       const metadata = {
         reportId: reportId,
         reportType: "accident_report",
-        company_id: companyId,
-        employee_id: user?.id,
+        company_id: selectedCompany.id,
+        employee_id: selectedEmployee.id,
       };
       formData.append("metadata", JSON.stringify(metadata));
 
@@ -359,6 +468,19 @@ const CreateAccidentReportScreen = () => {
         // Store both webUrl and sharingLink
         if (responseData?.webUrl) {
           console.log("Original webUrl:", responseData.webUrl);
+
+          // Extract the direct file URL from SharePoint URL
+          let directUrl = responseData.webUrl;
+
+          // If it's a SharePoint URL, modify it to get direct access
+          if (directUrl.includes("sharepoint.com")) {
+            // Remove any query parameters
+            directUrl = directUrl.split("?")[0];
+            // Add direct access parameter
+            directUrl += "?web=1";
+          }
+
+          console.log("Setting preview URL to:", directUrl);
           setSharingLink(responseData.sharingLink);
         } else {
           console.warn("No webUrl in response data:", responseData);
@@ -373,16 +495,13 @@ const CreateAccidentReportScreen = () => {
       }
     } catch (error: any) {
       console.error("Error picking document:", error);
-      setSnackbarMessage(
-        error.message || "Failed to upload document. Please try again."
-      );
+      setSnackbarMessage("Error uploading document. Please try again.");
       setSnackbarVisible(true);
     } finally {
       setUploadingDocument(false);
     }
   };
 
-  // Add handleCopyLink function
   const handleCopyLink = async () => {
     if (sharingLink) {
       try {
@@ -485,9 +604,7 @@ const CreateAccidentReportScreen = () => {
     );
   };
 
-  if (!companyId) {
-    return <LoadingIndicator />;
-  }
+
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: "#F8F9FA" }]}>
@@ -526,132 +643,201 @@ const CreateAccidentReportScreen = () => {
                     <View style={styles.headerLeft}>
                       <View style={styles.iconContainer}>
                         <IconButton
+                          icon="domain"
+                          size={24}
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>Company Information</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardContent}>
+                    <CompanySelector
+                      onSelect={(company) => {
+                        setSelectedCompany(company);
+                        setCompanyError("");
+                      }}
+                      selectedCompany={selectedCompany}
+                      error={companyError}
+                      required={true}
+                      label="Select Company"
+                    />
+                  </View>
+                </Surface>
+
+                {selectedCompany && (
+                  <Surface style={[styles.formCard, { marginTop: 24 }]}>
+                    <View style={styles.cardHeader}>
+                      <View style={styles.headerLeft}>
+                        <View style={styles.iconContainer}>
+                          <IconButton
+                            icon="account"
+                            size={20}
+                            iconColor="#F44336"
+                            style={styles.headerIcon}
+                          />
+                        </View>
+                        <Text style={styles.cardTitle}>Employee Details</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.cardContent}>
+                      <EmployeeSelector
+                        companyId={selectedCompany.id}
+                        onSelect={setSelectedEmployee}
+                        selectedEmployee={selectedEmployee}
+                      />
+                    </View>
+                  </Surface>
+                )}
+
+
+                  <>
+                    <Surface style={[styles.formCard, { marginTop: 24 }]}>
+                      <View style={styles.cardHeader}>
+                        <View style={styles.headerLeft}>
+                          <View style={styles.iconContainer}>
+                            <IconButton
+                              icon="calendar"
+                              size={20}
+                              iconColor="#F44336"
+                              style={styles.headerIcon}
+                            />
+                          </View>
+                          <Text style={styles.cardTitle}>Date and Time</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.cardContent}>
+                        <Text style={styles.inputLabel}>
+                          Date of Accident *
+                        </Text>
+                        <Button
+                          mode="outlined"
+                          onPress={() => setShowDatePicker(true)}
+                          style={styles.dateButton}
                           icon="calendar"
-                          size={20}
-                          iconColor="#F44336"
-                          style={styles.headerIcon}
+                          textColor="#F44336"
+                        >
+                          {format(watch("date_of_accident"), "MMMM d, yyyy")}
+                        </Button>
+
+                        <Controller
+                          control={control}
+                          rules={{ required: "Time of accident is required" }}
+                          render={({ field: { onChange, onBlur, value } }) => (
+                            <>
+                              <Text style={styles.inputLabel}>
+                                Time of Accident *
+                              </Text>
+                              <TextInput
+                                mode="outlined"
+                                value={value}
+                                onChangeText={onChange}
+                                onBlur={onBlur}
+                                error={!!errors.time_of_accident}
+                                style={styles.input}
+                                disabled={loading}
+                                outlineColor="#E0E0E0"
+                                activeOutlineColor="#F44336"
+                              />
+                              {errors.time_of_accident && (
+                                <HelperText
+                                  type="error"
+                                  style={styles.errorText}
+                                >
+                                  {errors.time_of_accident.message}
+                                </HelperText>
+                              )}
+                            </>
+                          )}
+                          name="time_of_accident"
                         />
                       </View>
-                      <Text style={styles.cardTitle}>Date and Time</Text>
-                    </View>
-                  </View>
+                    </Surface>
 
-                  <View style={styles.cardContent}>
-                    <Text style={styles.inputLabel}>Date of Accident *</Text>
-                    <Button
-                      mode="outlined"
-                      onPress={() => setShowDatePicker(true)}
-                      style={styles.dateButton}
-                      icon="calendar"
-                      textColor="#F44336"
-                    >
-                      {format(watch("date_of_accident"), "MMMM d, yyyy")}
-                    </Button>
+                    <Surface style={[styles.formCard, { marginTop: 24 }]}>
+                      <View style={styles.cardHeader}>
+                        <View style={styles.headerLeft}>
+                          <View style={styles.iconContainer}>
+                            <IconButton
+                              icon="map-marker"
+                              size={20}
+                              iconColor="#F44336"
+                              style={styles.headerIcon}
+                            />
+                          </View>
+                          <Text style={styles.cardTitle}>Location Details</Text>
+                        </View>
+                      </View>
 
-                    <Controller
-                      control={control}
-                      rules={{ required: "Time of accident is required" }}
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <>
-                          <Text style={styles.inputLabel}>
-                            Time of Accident *
-                          </Text>
-                          <TextInput
-                            mode="outlined"
-                            value={value}
-                            onChangeText={onChange}
-                            onBlur={onBlur}
-                            error={!!errors.time_of_accident}
-                            style={styles.input}
-                            disabled={loading}
-                            outlineColor="#E0E0E0"
-                            activeOutlineColor="#F44336"
-                          />
-                          {errors.time_of_accident && (
-                            <HelperText type="error" style={styles.errorText}>
-                              {errors.time_of_accident.message}
-                            </HelperText>
+                      <View style={styles.cardContent}>
+                        <Controller
+                          control={control}
+                          rules={{ required: "Address is required" }}
+                          render={({ field: { onChange, onBlur, value } }) => (
+                            <>
+                              <Text style={styles.inputLabel}>
+                                Accident Address *
+                              </Text>
+                              <TextInput
+                                mode="outlined"
+                                value={value}
+                                onChangeText={onChange}
+                                onBlur={onBlur}
+                                error={!!errors.accident_address}
+                                style={styles.input}
+                                disabled={loading}
+                                outlineColor="#E0E0E0"
+                                activeOutlineColor="#F44336"
+                              />
+                              {errors.accident_address && (
+                                <HelperText
+                                  type="error"
+                                  style={styles.errorText}
+                                >
+                                  {errors.accident_address.message}
+                                </HelperText>
+                              )}
+                            </>
                           )}
-                        </>
-                      )}
-                      name="time_of_accident"
-                    />
-                  </View>
-                </Surface>
+                          name="accident_address"
+                        />
 
-                <Surface style={[styles.formCard, { marginTop: 24 }]}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.headerLeft}>
-                      <View style={styles.iconContainer}>
-                        <IconButton
-                          icon="map-marker"
-                          size={20}
-                          iconColor="#F44336"
-                          style={styles.headerIcon}
+                        <Controller
+                          control={control}
+                          rules={{ required: "City is required" }}
+                          render={({ field: { onChange, onBlur, value } }) => (
+                            <>
+                              <Text style={styles.inputLabel}>City *</Text>
+                              <TextInput
+                                mode="outlined"
+                                value={value}
+                                onChangeText={onChange}
+                                onBlur={onBlur}
+                                error={!!errors.city}
+                                style={styles.input}
+                                disabled={loading}
+                                outlineColor="#E0E0E0"
+                                activeOutlineColor="#F44336"
+                              />
+                              {errors.city && (
+                                <HelperText
+                                  type="error"
+                                  style={styles.errorText}
+                                >
+                                  {errors.city.message}
+                                </HelperText>
+                              )}
+                            </>
+                          )}
+                          name="city"
                         />
                       </View>
-                      <Text style={styles.cardTitle}>Location Details</Text>
-                    </View>
-                  </View>
+                    </Surface>
+                  </>
 
-                  <View style={styles.cardContent}>
-                    <Controller
-                      control={control}
-                      rules={{ required: "Address is required" }}
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <>
-                          <Text style={styles.inputLabel}>
-                            Accident Address *
-                          </Text>
-                          <TextInput
-                            mode="outlined"
-                            value={value}
-                            onChangeText={onChange}
-                            onBlur={onBlur}
-                            error={!!errors.accident_address}
-                            style={styles.input}
-                            disabled={loading}
-                            outlineColor="#E0E0E0"
-                            activeOutlineColor="#F44336"
-                          />
-                          {errors.accident_address && (
-                            <HelperText type="error" style={styles.errorText}>
-                              {errors.accident_address.message}
-                            </HelperText>
-                          )}
-                        </>
-                      )}
-                      name="accident_address"
-                    />
-
-                    <Controller
-                      control={control}
-                      rules={{ required: "City is required" }}
-                      render={({ field: { onChange, onBlur, value } }) => (
-                        <>
-                          <Text style={styles.inputLabel}>City *</Text>
-                          <TextInput
-                            mode="outlined"
-                            value={value}
-                            onChangeText={onChange}
-                            onBlur={onBlur}
-                            error={!!errors.city}
-                            style={styles.input}
-                            disabled={loading}
-                            outlineColor="#E0E0E0"
-                            activeOutlineColor="#F44336"
-                          />
-                          {errors.city && (
-                            <HelperText type="error" style={styles.errorText}>
-                              {errors.city.message}
-                            </HelperText>
-                          )}
-                        </>
-                      )}
-                      name="city"
-                    />
-                  </View>
-                </Surface>
               </Animated.View>
             </View>
 
@@ -899,7 +1085,8 @@ const CreateAccidentReportScreen = () => {
         onDismiss={() => setSnackbarVisible(false)}
         type={
           snackbarMessage?.includes("successful") ||
-          snackbarMessage?.includes("instructions will be sent")
+          snackbarMessage?.includes("instructions will be sent") ||
+          snackbarMessage?.includes("copied")
             ? "success"
             : snackbarMessage?.includes("rate limit") ||
                 snackbarMessage?.includes("network")
@@ -925,7 +1112,7 @@ const CreateAccidentReportScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create<StylesType>({
   container: {
     flex: 1,
     backgroundColor: "#F8F9FA",
@@ -1020,6 +1207,9 @@ const styles = StyleSheet.create({
   },
   documentPickerContainer: {
     marginTop: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
   },
   documentButton: {
     borderColor: "#E0E0E0",
@@ -1057,19 +1247,26 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: "hidden",
     backgroundColor: "transparent",
+    elevation: 0,
+    shadowColor: "transparent",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
   },
   modalSurface: {
     backgroundColor: "white",
     borderRadius: 16,
     overflow: "hidden",
-    elevation: 4,
-    shadowColor: "rgba(0,0,0,0.1)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
+    elevation: 0,
+    shadowColor: "transparent",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
     maxWidth: 500,
     width: "100%",
     alignSelf: "center",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
   },
   modalHeader: {
     flexDirection: "row",
@@ -1121,11 +1318,74 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.27,
     shadowRadius: 4.65,
   },
+  previewModal: {
+    margin: 20,
+    backgroundColor: "transparent",
+  },
+  previewModalContent: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    overflow: "hidden",
+    maxWidth: 1200,
+    width: "100%",
+    alignSelf: "center",
+  },
+  previewModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+  },
+  previewContainer: {
+    flex: 1,
+    backgroundColor: "#f5f5f5",
+  },
+  previewButton: {
+    marginLeft: 8,
+  },
+  mobilePreviewContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  mobilePreviewText: {
+    textAlign: "center",
+    marginBottom: 20,
+    fontSize: 16,
+    color: "#666",
+  },
+  mobilePreviewButton: {
+    minWidth: 200,
+  },
+  fallbackPreviewContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+    backgroundColor: "#f5f5f5",
+  },
+  fallbackPreviewText: {
+    fontSize: 18,
+    fontFamily: "Poppins-Medium",
+    color: "#424242",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  fallbackPreviewSubtext: {
+    fontSize: 14,
+    fontFamily: "Poppins-Regular",
+    color: "#666",
+    textAlign: "center",
+    marginBottom: 24,
+  },
+  fallbackPreviewButton: {
+    minWidth: 200,
+  },
   documentActions: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginTop: 12,
   },
 });
 

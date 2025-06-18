@@ -12,11 +12,139 @@ const SUPABASE_SERVICE_ROLE_KEY =
 const NODE_ENV = Deno.env.get("NODE_ENV") || "production";
 // Constants
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-// Report types enum
-const REPORT_TYPES = {
-  ACCIDENT: "accident_report",
-  ILLNESS: "illness_report",
+
+// Folder structure constants
+const FOLDER_STRUCTURE = {
+  ROOT: "HDFHR-System",
+  COMPANIES: "Companies",
+  DOCUMENT_TYPES: {
+    MEDICAL_CERTIFICATES: "Medical-Certificates",
+    EMPLOYEE_DOCUMENTS: "Employee-Documents",
+    TASK_ATTACHMENTS: "Task-Attachments",
+    RECEIPTS: "Receipts",
+    AHV_CARDS: "AHV-Cards",
+    ID_CARDS: "ID-Cards",
+  },
+  REPORT_TYPES: {
+    ACCIDENT: "Accident-Reports",
+    ILLNESS: "Illness-Reports",
+    DEPARTURE: "Departure-Reports",
+  },
 };
+
+// File naming and validation
+const FILE_CONSTANTS = {
+  PREFIXES: {
+    MEDICAL_CERTIFICATE: "med-cert",
+    AHV_CARD: "ahv-card",
+    ID_CARD: "id-card",
+    TASK_ATTACHMENT: "task-attach",
+    RECEIPT: "receipt",
+  },
+  ALLOWED_MIME_TYPES: [
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "image/heic",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ],
+  MAX_FILENAME_LENGTH: 100,
+};
+
+// Generate unique filename with meaningful components
+function generateUniqueFilename(
+  originalFilename: string,
+  reportType: string,
+  metadata: any
+) {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const fileExtension = originalFilename.split(".").pop()?.toLowerCase() || "";
+
+  // Get sequence IDs
+  const companySeqId = metadata.company_sequence_id || "";
+  const employeeSeqId = metadata.company_user_sequence_id || "";
+  const formSeqId = metadata.form_sequence_id || "";
+
+  // Create meaningful filename components
+  const prefix = FILE_CONSTANTS.PREFIXES.MEDICAL_CERTIFICATE;
+  const reportTypeShort = reportType === "accident_report" ? "ACC" : "ILL";
+
+  // Format: prefix_reportType_companySeqId_employeeSeqId_formSeqId_timestamp.ext
+  return `${prefix}_${reportTypeShort}_C${companySeqId}_E${employeeSeqId}_F${formSeqId}_${timestamp}.${fileExtension}`;
+}
+
+// Build folder path with company and employee names if available
+function buildFolderPath(
+  companyId: string,
+  employeeId: string,
+  reportType: string,
+  metadata: any
+) {
+  // Get company and employee sequence IDs
+  const companySeqId = metadata.company_sequence_id;
+  const employeeSeqId = metadata.company_user_sequence_id;
+
+  if (!companySeqId || !employeeSeqId) {
+    throw new Error("Company and employee sequence IDs are required");
+  }
+
+  // Get company and employee names from metadata if available
+  const companyName = metadata.company_name
+    ? `C${companySeqId}-${sanitizeFolderName(metadata.company_name)}`
+    : `C${companySeqId}`;
+
+  const employeeName = metadata.employee_name
+    ? `E${employeeSeqId}-${sanitizeFolderName(metadata.employee_name)}`
+    : `E${employeeSeqId}`;
+
+  const reportFolder =
+    reportType === "accident_report"
+      ? FOLDER_STRUCTURE.REPORT_TYPES.ACCIDENT
+      : FOLDER_STRUCTURE.REPORT_TYPES.ILLNESS;
+
+  return `/${FOLDER_STRUCTURE.ROOT}/${FOLDER_STRUCTURE.COMPANIES}/${companyName}/Employees/${employeeName}/${FOLDER_STRUCTURE.DOCUMENT_TYPES.MEDICAL_CERTIFICATES}/${reportFolder}`;
+}
+
+// Sanitize folder names to be valid
+function sanitizeFolderName(name: string): string {
+  return name
+    .replace(/[^a-zA-Z0-9-_]/g, "-") // Replace invalid chars with hyphen
+    .replace(/-+/g, "-") // Replace multiple hyphens with single hyphen
+    .slice(0, 50); // Limit length
+}
+
+// Validate folder name
+function isValidFolderName(name: string): boolean {
+  return /^[a-zA-Z0-9-_]+$/.test(name);
+}
+
+// Validate file
+function validateFile(file) {
+  // Check file size
+  if (file.size > MAX_FILE_SIZE) {
+    throw new Error(
+      `File size exceeds ${MAX_FILE_SIZE / (1024 * 1024)}MB limit`
+    );
+  }
+
+  // Check mime type
+  if (!FILE_CONSTANTS.ALLOWED_MIME_TYPES.includes(file.type)) {
+    throw new Error(
+      `File type ${file.type} is not allowed. Allowed types: ${FILE_CONSTANTS.ALLOWED_MIME_TYPES.join(", ")}`
+    );
+  }
+
+  // Check filename length
+  if (file.name.length > FILE_CONSTANTS.MAX_FILENAME_LENGTH) {
+    throw new Error(
+      `Filename is too long. Maximum length is ${FILE_CONSTANTS.MAX_FILENAME_LENGTH} characters`
+    );
+  }
+
+  return true;
+}
+
 // Initialize Supabase client with service role key
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 // Environment-specific configurations
@@ -51,7 +179,7 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, x-app-version",
 };
 // Logger function with environment-specific behavior
 function logger(level, message, data) {
@@ -93,6 +221,61 @@ async function initializeGraphClient() {
     throw error;
   }
 }
+
+// Retry configuration
+const RETRY_CONFIG = {
+  MAX_RETRIES: 3,
+  INITIAL_DELAY: 1000, // 1 second
+  MAX_DELAY: 5000, // 5 seconds
+};
+
+// Helper function for exponential backoff
+async function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Retry wrapper function
+async function withRetry(operation, retryCount = 0) {
+  try {
+    return await operation();
+  } catch (error) {
+    if (retryCount >= RETRY_CONFIG.MAX_RETRIES) {
+      throw error;
+    }
+
+    const delay = Math.min(
+      RETRY_CONFIG.INITIAL_DELAY * Math.pow(2, retryCount),
+      RETRY_CONFIG.MAX_DELAY
+    );
+
+    console.log(`Retry attempt ${retryCount + 1} after ${delay}ms`);
+    await sleep(delay);
+    return withRetry(operation, retryCount + 1);
+  }
+}
+
+// Create sharing link for the file
+async function createSharingLink(graphClient, itemId) {
+  try {
+    const permission = {
+      type: "view",
+      scope: "anonymous",
+    };
+
+    const response = await graphClient
+      .api(`/users/${MICROSOFT_ADMIN_EMAIL}/drive/items/${itemId}/createLink`)
+      .post({
+        type: "view",
+        scope: "anonymous",
+      });
+
+    return response.link;
+  } catch (error) {
+    console.error("Error creating sharing link:", error);
+    throw error;
+  }
+}
+
 // Upload file to OneDrive
 async function uploadFileToOneDrive(
   graphClient,
@@ -101,78 +284,142 @@ async function uploadFileToOneDrive(
   employeeId,
   fileName,
   mimeType,
-  reportType
+  reportType,
+  metadata
 ) {
   try {
-    // Create folder structure if it doesn't exist
-    const basePath1 = `/Companies/${companyId}/Employees/${employeeId}/MedicalCertificates/${reportType}`;
-    await ensureFolderPath(graphClient, basePath1);
-    // Generate unique filename with timestamp
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const fileExtension = fileName.split(".").pop();
-    const uniqueFileName = `medical_certificate_${timestamp}.${fileExtension}`;
-    const filePath = `${basePath1}/${uniqueFileName}`;
-    // Upload file to OneDrive using admin's drive
-    const response = await graphClient
-      .api(`/users/${MICROSOFT_ADMIN_EMAIL}/drive/root:${filePath}:/content`)
-      .header("Content-Type", mimeType)
-      .put(file);
+    // Validate file first
+    validateFile({ name: fileName, type: mimeType, size: file.byteLength });
+
+    // Get additional metadata for folder naming
+    const { data: companyData } = await supabase
+      .from("company")
+      .select("company_name, company_sequence_id")
+      .eq("id", companyId)
+      .single();
+
+    const { data: employeeData } = await supabase
+      .from("company_user")
+      .select("first_name, last_name, company_user_sequence_id")
+      .eq("id", employeeId)
+      .single();
+
+    // Get form sequence ID based on report type
+    const { data: reportData } = await supabase
+      .from(reportType)
+      .select("form_sequence_id")
+      .eq("id", metadata.reportId)
+      .single();
+
+    // Combine metadata
+    const enrichedMetadata = {
+      ...metadata,
+      company_name: companyData?.company_name,
+      company_sequence_id: companyData?.company_sequence_id,
+      employee_name: employeeData
+        ? `${employeeData.first_name}-${employeeData.last_name}`
+        : undefined,
+      company_user_sequence_id: employeeData?.company_user_sequence_id,
+      form_sequence_id: reportData?.form_sequence_id,
+    };
+
+    const basePath = buildFolderPath(
+      companyId,
+      employeeId,
+      reportType,
+      enrichedMetadata
+    );
+    await ensureFolderPath(graphClient, basePath);
+
+    // Generate unique filename using the new function
+    const uniqueFileName = generateUniqueFilename(
+      fileName,
+      reportType,
+      enrichedMetadata
+    );
+    const filePath = `${basePath}/${uniqueFileName}`;
+
+    // Upload file to OneDrive using admin's drive with retry logic
+    const response = await withRetry(async () => {
+      try {
+        return await graphClient
+          .api(
+            `/users/${MICROSOFT_ADMIN_EMAIL}/drive/root:${filePath}:/content`
+          )
+          .header("Content-Type", mimeType)
+          .put(file);
+      } catch (uploadError) {
+        // Enhance error information
+        const errorDetails = await uploadError?.response?.text?.();
+        const enhancedError = new Error(
+          `Upload failed: ${errorDetails || uploadError.message}`
+        );
+        enhancedError.originalError = uploadError;
+        enhancedError.context = {
+          filePath,
+          mimeType,
+          fileSize: file.byteLength,
+        };
+        throw enhancedError;
+      }
+    });
+
+    // Create sharing link
+    console.log("Creating sharing link for item:", response.id);
+    const sharingLink = await createSharingLink(graphClient, response.id);
+    console.log("Sharing link created:", sharingLink);
+
     return {
       filePath,
       driveId: response.parentReference.driveId,
       itemId: response.id,
       webUrl: response.webUrl,
+      sharingLink: sharingLink.webUrl,
       fileName: uniqueFileName,
       mimeType,
     };
   } catch (error) {
-    // Enhanced error logging
-    const message = await error?.response?.text?.();
     console.error("Graph API upload error:", {
-      error: message || error,
-      path: basePath,
-      fileName,
-      mimeType,
+      error: error.message,
+      context: error.context,
+      originalError: error.originalError,
     });
-    throw new Error(message || error.message || "Failed to upload file");
+    throw error;
   }
 }
+
 // Ensure folder path exists
 async function ensureFolderPath(graphClient, path) {
   const folders = path.split("/").filter(Boolean);
   let currentPath = "";
+
   for (const folder of folders) {
     currentPath += `/${folder}`;
-    try {
-      await graphClient
-        .api(`/users/${MICROSOFT_ADMIN_EMAIL}/drive/root:${currentPath}`)
-        .get();
-    } catch (error) {
+
+    await withRetry(async () => {
       try {
-        // Folder doesn't exist, create it
         await graphClient
           .api(`/users/${MICROSOFT_ADMIN_EMAIL}/drive/root:${currentPath}`)
-          .header("Content-Type", "application/json")
-          .put({
-            name: folder,
-            folder: {},
-            "@microsoft.graph.conflictBehavior": "replace",
-          });
-      } catch (createError) {
-        // Enhanced error logging for folder creation
-        const message = await createError?.response?.text?.();
-        console.error("Graph API folder creation error:", {
-          error: message || createError,
-          path: currentPath,
-          folder,
-        });
-        throw new Error(
-          message || createError.message || "Failed to create folder"
-        );
+          .get();
+      } catch (error) {
+        if (error.statusCode === 404) {
+          // Folder doesn't exist, create it
+          await graphClient
+            .api(`/users/${MICROSOFT_ADMIN_EMAIL}/drive/root:${currentPath}`)
+            .header("Content-Type", "application/json")
+            .put({
+              name: folder,
+              folder: {},
+              "@microsoft.graph.conflictBehavior": "replace",
+            });
+        } else {
+          throw error;
+        }
       }
-    }
+    });
   }
 }
+
 // Create document record and update report
 async function createDocumentAndUpdateReport(
   uploadResult,
@@ -194,7 +441,7 @@ async function createDocumentAndUpdateReport(
         file_path: uploadResult.filePath,
         drive_id: uploadResult.driveId,
         item_id: uploadResult.itemId,
-        file_url: uploadResult.webUrl,
+        file_url: uploadResult.sharingLink,
         file_name: uploadResult.fileName,
         mime_type: uploadResult.mimeType,
         uploaded_by: uploadedBy,
@@ -221,6 +468,7 @@ async function createDocumentAndUpdateReport(
     report,
   };
 }
+
 // Log activity
 async function logActivity(
   userId,
@@ -251,6 +499,7 @@ async function logActivity(
     // Don't throw - we don't want to fail the upload if logging fails
   }
 }
+
 serve(async (req) => {
   // Log all incoming request details
   console.log("Request details:", {
@@ -258,7 +507,6 @@ serve(async (req) => {
     url: req.url,
     headers: Object.fromEntries(req.headers.entries()),
   });
-
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     console.log("Handling OPTIONS request");
@@ -270,11 +518,9 @@ serve(async (req) => {
       },
     });
   }
-
   try {
     // Log request method
     console.log(`Processing ${req.method} request`);
-
     if (req.method !== "POST") {
       return new Response(
         JSON.stringify({
@@ -289,7 +535,6 @@ serve(async (req) => {
         }
       );
     }
-
     // Verify authorization
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {
@@ -338,6 +583,19 @@ serve(async (req) => {
     const uploadedBy = formData.get("uploadedBy");
     const reportId = formData.get("reportId");
     const reportType = formData.get("reportType");
+
+    // Parse metadata
+    let metadata;
+    try {
+      const metadataStr = formData.get("metadata");
+      metadata = metadataStr ? JSON.parse(metadataStr as string) : {};
+      // Ensure reportId is available in metadata
+      metadata.reportId = reportId;
+    } catch (error) {
+      console.error("Error parsing metadata:", error);
+      metadata = { reportId };
+    }
+
     // Validate required fields
     if (!file) {
       return new Response(
@@ -458,7 +716,8 @@ serve(async (req) => {
       employeeId,
       file.name,
       file.type,
-      reportType
+      reportType,
+      metadata
     );
     // Create document record and update report
     const { document, report } = await createDocumentAndUpdateReport(
@@ -495,7 +754,13 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         data: {
-          ...uploadResult,
+          filePath: uploadResult.filePath,
+          driveId: uploadResult.driveId,
+          itemId: uploadResult.itemId,
+          webUrl: uploadResult.webUrl,
+          sharingLink: uploadResult.sharingLink,
+          fileName: uploadResult.fileName,
+          mimeType: uploadResult.mimeType,
           document,
           report,
         },
@@ -510,7 +775,6 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error("Function error:", error);
-
     return new Response(
       JSON.stringify({
         error: error.message,

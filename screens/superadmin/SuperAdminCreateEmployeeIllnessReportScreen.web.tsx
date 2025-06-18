@@ -32,11 +32,12 @@ import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import { FormStatus } from "../../types";
-import { pickAndUploadDocument } from "../../utils/documentPicker";
+import * as DocumentPicker from "expo-document-picker";
 import Animated, { FadeIn } from "react-native-reanimated";
 import CustomSnackbar from "../../components/CustomSnackbar";
 import { t } from "i18next";
-import * as DocumentPicker from "expo-document-picker";
+import EmployeeSelector from "../../components/EmployeeSelector";
+import CompanySelector from "../../components/CompanySelector";
 
 // Add window dimensions hook
 const useWindowDimensions = () => {
@@ -62,12 +63,29 @@ const useWindowDimensions = () => {
   return dimensions;
 };
 
+
+
+interface Employee {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  job_title?: string;
+}
+
+interface Company {
+  id: string;
+  company_name: string;
+  active: boolean;
+}
+
 interface IllnessReportFormData {
   id?: string;
   date_of_onset_leave: Date;
   leave_description: string;
   medical_certificate?: string;
   document_id?: string;
+  company_id: string;
 }
 
 const CreateIllnessReportScreen = () => {
@@ -87,7 +105,22 @@ const CreateIllnessReportScreen = () => {
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [uploadingDocument, setUploadingDocument] = useState(false);
   const [documentName, setDocumentName] = useState<string | null>(null);
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(
+    null
+  );
   const [sharingLink, setSharingLink] = useState<string | null>(null);
+  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
+  const [companyError, setCompanyError] = useState<string>("");
+
+  // Clear employee selection when company changes
+  useEffect(() => {
+    if (
+      selectedEmployee &&
+      selectedEmployee.company_id !== selectedCompany?.id
+    ) {
+      setSelectedEmployee(null);
+    }
+  }, [selectedCompany]);
 
   const {
     control,
@@ -140,6 +173,12 @@ const CreateIllnessReportScreen = () => {
   };
 
   const handlePickDocument = async () => {
+    if (!selectedEmployee) {
+      setSnackbarMessage("Please select an employee first");
+      setSnackbarVisible(true);
+      return;
+    }
+
     try {
       setUploadingDocument(true);
 
@@ -156,7 +195,7 @@ const CreateIllnessReportScreen = () => {
           .from("illness_report")
           .insert([
             {
-              employee_id: user?.id,
+              employee_id: selectedEmployee.id,
               company_id: companyId,
               date_of_onset_leave: watch("date_of_onset_leave").toISOString(),
               leave_description: watch("leave_description") || "",
@@ -217,7 +256,7 @@ const CreateIllnessReportScreen = () => {
       const formData = new FormData();
       formData.append("file", fileObject);
       formData.append("companyId", companyId as string);
-      formData.append("employeeId", user?.id as string);
+      formData.append("employeeId", selectedEmployee.id as string);
       const uploadedById = user?.id;
       if (typeof uploadedById !== "string") {
         throw new Error("User ID is required");
@@ -231,7 +270,7 @@ const CreateIllnessReportScreen = () => {
         reportId: reportId,
         reportType: "illness_report",
         company_id: companyId,
-        employee_id: user?.id,
+        employee_id: selectedEmployee.id,
       };
       formData.append("metadata", JSON.stringify(metadata));
 
@@ -329,24 +368,36 @@ const CreateIllnessReportScreen = () => {
 
   const onSubmit = async (data: IllnessReportFormData) => {
     try {
-      if (!user || !companyId) {
-        setSnackbarMessage("User or company information not available");
+      if (!selectedCompany) {
+        setCompanyError("Please select a company");
+        return;
+      }
+      setCompanyError("");
+
+      if (!companyId) {
+        setSnackbarMessage("Company information not available");
+        setSnackbarVisible(true);
+        return;
+      }
+
+      if (!selectedEmployee) {
+        setSnackbarMessage("Please select an employee");
         setSnackbarVisible(true);
         return;
       }
 
       setLoading(true);
 
-      // Create illness report - make medical_certificate optional
+      // Create illness report
       const { error } = await supabase.from("illness_report").insert([
         {
-          employee_id: user.id,
+          employee_id: selectedEmployee.id,
           company_id: companyId,
           date_of_onset_leave: data.date_of_onset_leave.toISOString(),
           leave_description: data.leave_description,
-          // Allow medical_certificate to be null or empty string
           medical_certificate: data.medical_certificate || null,
           status: FormStatus.PENDING,
+          submitted_by: user?.id,
           submission_date: new Date().toISOString(),
         },
       ]);
@@ -462,9 +513,7 @@ const CreateIllnessReportScreen = () => {
     );
   };
 
-  if (!companyId) {
-    return <LoadingIndicator />;
-  }
+
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: "#F8F9FA" }]}>
@@ -498,7 +547,64 @@ const CreateIllnessReportScreen = () => {
           <View style={styles.gridContainer}>
             <View style={styles.gridColumn}>
               <Animated.View entering={FadeIn.delay(100)}>
+
+              <Surface style={styles.formCard}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="domain"
+                          size={24}
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>Company Information</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardContent}>
+                    <CompanySelector
+                      onSelect={(company) => {
+                        setSelectedCompany(company);
+                        setCompanyError("");
+                      }}
+                      selectedCompany={selectedCompany}
+                      error={companyError}
+                      required={true}
+                      label="Select Company"
+                    />
+                  </View>
+                </Surface>
+
+                {selectedCompany && (
                 <Surface style={styles.formCard}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="account"
+                          size={20}
+                          iconColor="#FF9800"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>Employee Details</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardContent}>
+                    {companyId && (
+                      <EmployeeSelector
+                        companyId={companyId}
+                        onSelect={setSelectedEmployee}
+                        selectedEmployee={selectedEmployee}
+                      />
+                    )}
+                  </View>
+                </Surface>
+                )}
+
+                <Surface style={[styles.formCard, { marginTop: 24 }]}>
                   <View style={styles.cardHeader}>
                     <View style={styles.headerLeft}>
                       <View style={styles.iconContainer}>
@@ -561,7 +667,7 @@ const CreateIllnessReportScreen = () => {
             </View>
 
             <View style={styles.gridColumn}>
-              <Animated.View entering={FadeIn.delay(200)}>
+              <Animated.View entering={FadeIn.delay(300)}>
                 <Surface style={styles.formCard}>
                   <View style={styles.cardHeader}>
                     <View style={styles.headerLeft}>
@@ -623,6 +729,32 @@ const CreateIllnessReportScreen = () => {
                   </View>
                 </Surface>
               </Animated.View>
+            </View>
+
+            <View style={styles.gridColumn}>
+              <Surface style={styles.formCard}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.headerLeft}>
+                    <View style={styles.iconContainer}>
+                      <IconButton
+                        icon="domain"
+                        size={24}
+                        style={styles.headerIcon}
+                      />
+                    </View>
+                    <Text style={styles.cardTitle}>Company Information</Text>
+                  </View>
+                </View>
+                <View style={styles.cardContent}>
+                  <CompanySelector
+                    onSelect={setSelectedCompany}
+                    selectedCompany={selectedCompany}
+                    error={companyError}
+                    required={true}
+                    label="Select Company"
+                  />
+                </View>
+              </Surface>
             </View>
           </View>
         </ScrollView>
@@ -828,6 +960,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: "hidden",
     backgroundColor: "transparent",
+    elevation: 0,
+    shadowColor: "transparent",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
   },
   modalSurface: {
     backgroundColor: "white",

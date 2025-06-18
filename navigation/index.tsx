@@ -173,6 +173,13 @@ export const AppNavigator = ({ initialAuthState = null }) => {
                 CompanyReceiptDetails: "receipts/:receiptId",
               },
             },
+            SuperAdmin: {
+              screens: {
+                ...linking.config.screens.SuperAdmin?.screens,
+                SuperAdminCreateEmployeeAccidentReport: "form/accident/create",
+                SuperAdminCreateEmployeeIllnessReport: "form/illness/create",
+              },
+            },
           },
         },
       }}
