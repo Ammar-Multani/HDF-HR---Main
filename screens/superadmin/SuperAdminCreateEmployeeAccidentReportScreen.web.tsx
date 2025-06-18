@@ -604,8 +604,6 @@ const CreateAccidentReportScreen = () => {
     );
   };
 
-
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: "#F8F9FA" }]}>
       <AppHeader
@@ -692,152 +690,139 @@ const CreateAccidentReportScreen = () => {
                   </Surface>
                 )}
 
-
-                  <>
-                    <Surface style={[styles.formCard, { marginTop: 24 }]}>
-                      <View style={styles.cardHeader}>
-                        <View style={styles.headerLeft}>
-                          <View style={styles.iconContainer}>
-                            <IconButton
-                              icon="calendar"
-                              size={20}
-                              iconColor="#F44336"
-                              style={styles.headerIcon}
-                            />
-                          </View>
-                          <Text style={styles.cardTitle}>Date and Time</Text>
+                <>
+                  <Surface style={[styles.formCard, { marginTop: 24 }]}>
+                    <View style={styles.cardHeader}>
+                      <View style={styles.headerLeft}>
+                        <View style={styles.iconContainer}>
+                          <IconButton
+                            icon="calendar"
+                            size={20}
+                            iconColor="#F44336"
+                            style={styles.headerIcon}
+                          />
                         </View>
+                        <Text style={styles.cardTitle}>Date and Time</Text>
                       </View>
+                    </View>
 
-                      <View style={styles.cardContent}>
-                        <Text style={styles.inputLabel}>
-                          Date of Accident *
-                        </Text>
-                        <Button
-                          mode="outlined"
-                          onPress={() => setShowDatePicker(true)}
-                          style={styles.dateButton}
-                          icon="calendar"
-                          textColor="#F44336"
-                        >
-                          {format(watch("date_of_accident"), "MMMM d, yyyy")}
-                        </Button>
+                    <View style={styles.cardContent}>
+                      <Text style={styles.inputLabel}>Date of Accident *</Text>
+                      <Button
+                        mode="outlined"
+                        onPress={() => setShowDatePicker(true)}
+                        style={styles.dateButton}
+                        icon="calendar"
+                        textColor="#F44336"
+                      >
+                        {format(watch("date_of_accident"), "MMMM d, yyyy")}
+                      </Button>
 
-                        <Controller
-                          control={control}
-                          rules={{ required: "Time of accident is required" }}
-                          render={({ field: { onChange, onBlur, value } }) => (
-                            <>
-                              <Text style={styles.inputLabel}>
-                                Time of Accident *
-                              </Text>
-                              <TextInput
-                                mode="outlined"
-                                value={value}
-                                onChangeText={onChange}
-                                onBlur={onBlur}
-                                error={!!errors.time_of_accident}
-                                style={styles.input}
-                                disabled={loading}
-                                outlineColor="#E0E0E0"
-                                activeOutlineColor="#F44336"
-                              />
-                              {errors.time_of_accident && (
-                                <HelperText
-                                  type="error"
-                                  style={styles.errorText}
-                                >
-                                  {errors.time_of_accident.message}
-                                </HelperText>
-                              )}
-                            </>
-                          )}
-                          name="time_of_accident"
-                        />
-                      </View>
-                    </Surface>
-
-                    <Surface style={[styles.formCard, { marginTop: 24 }]}>
-                      <View style={styles.cardHeader}>
-                        <View style={styles.headerLeft}>
-                          <View style={styles.iconContainer}>
-                            <IconButton
-                              icon="map-marker"
-                              size={20}
-                              iconColor="#F44336"
-                              style={styles.headerIcon}
+                      <Controller
+                        control={control}
+                        rules={{ required: "Time of accident is required" }}
+                        render={({ field: { onChange, onBlur, value } }) => (
+                          <>
+                            <Text style={styles.inputLabel}>
+                              Time of Accident *
+                            </Text>
+                            <TextInput
+                              mode="outlined"
+                              value={value}
+                              onChangeText={onChange}
+                              onBlur={onBlur}
+                              error={!!errors.time_of_accident}
+                              style={styles.input}
+                              disabled={loading}
+                              outlineColor="#E0E0E0"
+                              activeOutlineColor="#F44336"
                             />
-                          </View>
-                          <Text style={styles.cardTitle}>Location Details</Text>
+                            {errors.time_of_accident && (
+                              <HelperText type="error" style={styles.errorText}>
+                                {errors.time_of_accident.message}
+                              </HelperText>
+                            )}
+                          </>
+                        )}
+                        name="time_of_accident"
+                      />
+                    </View>
+                  </Surface>
+
+                  <Surface style={[styles.formCard, { marginTop: 24 }]}>
+                    <View style={styles.cardHeader}>
+                      <View style={styles.headerLeft}>
+                        <View style={styles.iconContainer}>
+                          <IconButton
+                            icon="map-marker"
+                            size={20}
+                            iconColor="#F44336"
+                            style={styles.headerIcon}
+                          />
                         </View>
+                        <Text style={styles.cardTitle}>Location Details</Text>
                       </View>
+                    </View>
 
-                      <View style={styles.cardContent}>
-                        <Controller
-                          control={control}
-                          rules={{ required: "Address is required" }}
-                          render={({ field: { onChange, onBlur, value } }) => (
-                            <>
-                              <Text style={styles.inputLabel}>
-                                Accident Address *
-                              </Text>
-                              <TextInput
-                                mode="outlined"
-                                value={value}
-                                onChangeText={onChange}
-                                onBlur={onBlur}
-                                error={!!errors.accident_address}
-                                style={styles.input}
-                                disabled={loading}
-                                outlineColor="#E0E0E0"
-                                activeOutlineColor="#F44336"
-                              />
-                              {errors.accident_address && (
-                                <HelperText
-                                  type="error"
-                                  style={styles.errorText}
-                                >
-                                  {errors.accident_address.message}
-                                </HelperText>
-                              )}
-                            </>
-                          )}
-                          name="accident_address"
-                        />
+                    <View style={styles.cardContent}>
+                      <Controller
+                        control={control}
+                        rules={{ required: "Address is required" }}
+                        render={({ field: { onChange, onBlur, value } }) => (
+                          <>
+                            <Text style={styles.inputLabel}>
+                              Accident Address *
+                            </Text>
+                            <TextInput
+                              mode="outlined"
+                              value={value}
+                              onChangeText={onChange}
+                              onBlur={onBlur}
+                              error={!!errors.accident_address}
+                              style={styles.input}
+                              disabled={loading}
+                              outlineColor="#E0E0E0"
+                              activeOutlineColor="#F44336"
+                            />
+                            {errors.accident_address && (
+                              <HelperText type="error" style={styles.errorText}>
+                                {errors.accident_address.message}
+                              </HelperText>
+                            )}
+                          </>
+                        )}
+                        name="accident_address"
+                      />
 
-                        <Controller
-                          control={control}
-                          rules={{ required: "City is required" }}
-                          render={({ field: { onChange, onBlur, value } }) => (
-                            <>
-                              <Text style={styles.inputLabel}>City *</Text>
-                              <TextInput
-                                mode="outlined"
-                                value={value}
-                                onChangeText={onChange}
-                                onBlur={onBlur}
-                                error={!!errors.city}
-                                style={styles.input}
-                                disabled={loading}
-                                outlineColor="#E0E0E0"
-                                activeOutlineColor="#F44336"
-                              />
-                              {errors.city && (
-                                <HelperText
-                                  type="error"
-                                  style={styles.errorText}
-                                >
-                                  {errors.city.message}
-                                </HelperText>
-                              )}
-                            </>
-                          )}
-                          name="city"
-                        />
-                      </View>
-                    </Surface>
-                  </>
-
+                      <Controller
+                        control={control}
+                        rules={{ required: "City is required" }}
+                        render={({ field: { onChange, onBlur, value } }) => (
+                          <>
+                            <Text style={styles.inputLabel}>City *</Text>
+                            <TextInput
+                              mode="outlined"
+                              value={value}
+                              onChangeText={onChange}
+                              onBlur={onBlur}
+                              error={!!errors.city}
+                              style={styles.input}
+                              disabled={loading}
+                              outlineColor="#E0E0E0"
+                              activeOutlineColor="#F44336"
+                            />
+                            {errors.city && (
+                              <HelperText type="error" style={styles.errorText}>
+                                {errors.city.message}
+                              </HelperText>
+                            )}
+                          </>
+                        )}
+                        name="city"
+                      />
+                    </View>
+                  </Surface>
+                </>
               </Animated.View>
             </View>
 
