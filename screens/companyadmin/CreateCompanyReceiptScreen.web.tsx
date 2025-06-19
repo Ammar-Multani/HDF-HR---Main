@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   StyleSheet,
   View,
@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   Dimensions,
   ImageStyle,
+  Linking,
 } from "react-native";
 import {
   Text,
@@ -45,6 +46,25 @@ import CustomSnackbar from "../../components/CustomSnackbar";
 import { t } from "i18next";
 import { ActivityType } from "../../types/activity-log";
 import { MD3Theme } from "react-native-paper/lib/typescript/types";
+
+// Add OneDrive upload response interface
+interface OneDriveUploadResponse {
+  success: boolean;
+  data: {
+    filePath: string;
+    driveId: string;
+    itemId: string;
+    webUrl: string;
+    fileName: string;
+    mimeType: string;
+    document: {
+      id: string;
+      file_path: string;
+    };
+    sharingLink?: string;
+  };
+  error?: string;
+}
 
 // Add these interfaces before the useWindowDimensions hook
 interface CompanyData {
@@ -294,6 +314,22 @@ const CreateCompanyReceiptScreen = () => {
   // Add image manipulation state
   const [imageScale, setImageScale] = useState(1);
   const [imageRotation, setImageRotation] = useState(0);
+
+  // Add OneDrive upload state
+  const [uploadingToOneDrive, setUploadingToOneDrive] = useState(false);
+  const [oneDriveUploadProgress, setOneDriveUploadProgress] = useState(0);
+  const [oneDriveUploadError, setOneDriveUploadError] = useState<string | null>(
+    null
+  );
+  const [oneDriveItemId, setOneDriveItemId] = useState<string | null>(null);
+  const [oneDriveSharingLink, setOneDriveSharingLink] = useState<string | null>(
+    null
+  );
+  const [isDragActive, setIsDragActive] = useState(false);
+  const [uploadedDocumentId, setUploadedDocumentId] = useState<string | null>(
+    null
+  );
+  const [deletingReceipt, setDeletingReceipt] = useState(false);
 
   // Form setup
   const {
@@ -713,13 +749,258 @@ const CreateCompanyReceiptScreen = () => {
     }
   };
 
+  // Add drop handler for web
+  const dropRef = useRef(null);
+
+  useEffect(() => {
+    if (Platform.OS === "web" && dropRef.current) {
+      const element = dropRef.current as unknown as HTMLElement;
+
+      const handleDragEnter = (e: Event) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragActive(true);
+      };
+
+      const handleDragOver = (e: Event) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragActive(true);
+      };
+
+      const handleDragLeave = (e: Event) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragActive(false);
+      };
+
+      const handleDrop = (e: any) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragActive(false);
+
+        if (
+          e.dataTransfer &&
+          e.dataTransfer.files &&
+          e.dataTransfer.files.length > 0
+        ) {
+          const file = e.dataTransfer.files[0];
+
+          // Check file type
+          const validTypes = [
+            "application/pdf",
+            "image/jpeg",
+            "image/png",
+            "image/jpg",
+            "image/heic",
+          ];
+
+          if (!validTypes.includes(file.type)) {
+            setSnackbarMessage(
+              "Invalid file type. Please upload PDF or image files."
+            );
+            setSnackbarVisible(true);
+            return;
+          }
+
+          // Check file size (10MB)
+          if (file.size > 10 * 1024 * 1024) {
+            setSnackbarMessage("File is too large. Maximum size is 10MB.");
+            setSnackbarVisible(true);
+            return;
+          }
+
+          handleImageSelection(URL.createObjectURL(file), "gallery", file);
+        }
+      };
+
+      element.addEventListener("dragenter", handleDragEnter);
+      element.addEventListener("dragover", handleDragOver);
+      element.addEventListener("dragleave", handleDragLeave);
+      element.addEventListener("drop", handleDrop);
+
+      return () => {
+        element.removeEventListener("dragenter", handleDragEnter);
+        element.removeEventListener("dragover", handleDragOver);
+        element.removeEventListener("dragleave", handleDragLeave);
+        element.removeEventListener("drop", handleDrop);
+      };
+    }
+  }, [dropRef, companyId]);
+
+  // Update handleImageSelection to accept an optional File parameter
   const handleImageSelection = async (
     uri: string,
-    source: "camera" | "gallery"
+    source: "camera" | "gallery",
+    droppedFile?: File
   ) => {
     setReceiptImage(uri);
     setImageSource(source);
+
+    // Process with Taggun OCR first
     await processReceiptWithOCR(uri);
+
+    // After OCR processing, upload to OneDrive if we have a valid receipt
+    if (companyId && user) {
+      uploadReceiptToOneDrive(uri, droppedFile);
+    }
+  };
+
+  // Add function to upload receipt to OneDrive
+  const uploadReceiptToOneDrive = async (uri: string, droppedFile?: File) => {
+    try {
+      if (!companyId || !user) {
+        setSnackbarMessage("Missing required information for upload");
+        setSnackbarVisible(true);
+        return;
+      }
+
+      setUploadingToOneDrive(true);
+      setOneDriveUploadProgress(10);
+      setOneDriveUploadError(null);
+
+      // Create a File object from the image URI if not provided
+      let fileObject;
+      let fileName;
+      let mimeType;
+
+      if (droppedFile) {
+        fileObject = droppedFile;
+        fileName = droppedFile.name;
+        mimeType = droppedFile.type;
+      } else {
+        // For camera or gallery images, fetch the blob and create a File
+        const response = await fetch(uri);
+        const blob = await response.blob();
+
+        // Generate a filename based on date and source
+        fileName = `receipt_${Date.now()}.${fileType === "pdf" ? "pdf" : "jpg"}`;
+        mimeType = fileType === "pdf" ? "application/pdf" : "image/jpeg";
+
+        fileObject = new File([blob], fileName, { type: mimeType });
+      }
+
+      setOneDriveUploadProgress(20);
+
+      // Create FormData for the upload
+      const formData = new FormData();
+      formData.append("file", fileObject);
+      formData.append("companyId", companyId);
+      formData.append("employeeId", user.id); // Using user ID as employee ID
+      formData.append("uploadedBy", user.id);
+
+      // Create a temporary receipt record if needed for reference
+      let receiptId = "";
+
+      // Add receipt-specific metadata
+      const metadata = {
+        receiptType: "company_receipt",
+        company_id: companyId,
+        merchant_name: watch("merchant_name") || "Unknown Merchant",
+        receipt_number: watch("receipt_number") || `REC-${Date.now()}`,
+        receipt_date: watch("date")?.toISOString() || new Date().toISOString(),
+        total_amount: watch("total_amount") || "0.00",
+      };
+
+      formData.append("metadata", JSON.stringify(metadata));
+      formData.append("reportType", "company_receipt");
+      formData.append("reportId", receiptId || "temp");
+
+      setOneDriveUploadProgress(40);
+
+      // Call the Edge Function to upload to OneDrive
+      const response = await supabase.functions.invoke("onedrive-upload", {
+        body: formData,
+      });
+
+      console.log("OneDrive upload response:", response);
+
+      if (response.error) {
+        throw new Error(response.error.message || "Upload failed");
+      }
+
+      setOneDriveUploadProgress(80);
+
+      // Process the response
+      if (response.data?.data) {
+        const responseData = response.data.data;
+
+        // Store the OneDrive item ID and sharing link
+        setOneDriveItemId(responseData.itemId);
+        setOneDriveSharingLink(responseData.sharingLink);
+
+        // Store document ID if available
+        if (responseData.document?.id) {
+          setUploadedDocumentId(responseData.document.id);
+        }
+
+        setSnackbarMessage("Receipt uploaded to OneDrive successfully");
+        setSnackbarVisible(true);
+      }
+
+      setOneDriveUploadProgress(100);
+
+      // Complete upload after showing progress
+      setTimeout(() => {
+        setUploadingToOneDrive(false);
+      }, 800);
+    } catch (error: any) {
+      console.error("Error uploading to OneDrive:", error);
+      setOneDriveUploadError(
+        error.message || "Failed to upload receipt to OneDrive"
+      );
+      setSnackbarMessage("Error uploading to OneDrive: " + error.message);
+      setSnackbarVisible(true);
+      setUploadingToOneDrive(false);
+    }
+  };
+
+  // Add function to delete receipt from OneDrive
+  const handleDeleteReceiptFromOneDrive = async () => {
+    if (!oneDriveItemId && !uploadedDocumentId) {
+      // If we don't have OneDrive data, just proceed with local deletion
+      handleDeleteReceipt();
+      return;
+    }
+
+    try {
+      setDeletingReceipt(true);
+
+      // Call the Edge Function to delete from OneDrive
+      const response = await supabase.functions.invoke("onedrive-upload", {
+        method: "DELETE",
+        body: {
+          itemId: oneDriveItemId || "unknown",
+          documentId: uploadedDocumentId,
+          userId: user?.id,
+          companyId,
+          reportType: "company_receipt",
+        },
+      });
+
+      console.log("Delete response:", response);
+
+      // Reset OneDrive-related state
+      setOneDriveItemId(null);
+      setOneDriveSharingLink(null);
+      setUploadedDocumentId(null);
+
+      // Continue with local deletion
+      handleDeleteReceipt();
+    } catch (error: any) {
+      console.error("Error deleting from OneDrive:", error);
+
+      // Even if OneDrive deletion fails, proceed with local deletion
+      handleDeleteReceipt();
+
+      setSnackbarMessage(
+        "Receipt removed but there was an issue with cloud storage: " +
+          error.message
+      );
+      setSnackbarVisible(true);
+    } finally {
+      setDeletingReceipt(false);
+    }
   };
 
   const pickImage = async () => {
@@ -876,55 +1157,122 @@ const CreateCompanyReceiptScreen = () => {
     setShowPreviewModal(true);
   };
 
+  // Define styles inside the component to access theme
+  const dynamicStyles = StyleSheet.create({
+    dropzoneActive: {
+      borderColor: theme.colors.primary,
+      backgroundColor: "#E3F2FD",
+    },
+    dropzoneUploading: {
+      borderColor: theme.colors.primary,
+      borderWidth: 2,
+      backgroundColor: "#E3F2FD",
+      opacity: 0.9,
+      transform: [{ scale: 1.01 }],
+    },
+    uploadingText: {
+      fontSize: 16,
+      color: theme.colors.primary,
+      fontFamily: "Poppins-Medium",
+      textAlign: "center",
+      marginTop: 16,
+    },
+  });
+
   const renderUploadSection = () => {
     const isWebPlatform = Platform.OS === "web";
     const isMobileWeb = isWebPlatform && dimensions.width < 768;
 
     return (
       <View>
-        <View>
-          <View style={styles.imageButtonsContainer}>
-            {!isWebPlatform || isMobileWeb ? (
-              <>
-                <Button
-                  mode="outlined"
-                  icon="camera"
-                  onPress={takePhoto}
-                  style={[styles.imageButton, { marginRight: 8 }]}
-                  disabled={isProcessingOCR}
-                >
-                  Take Photo
-                </Button>
-                <Button
-                  mode="outlined"
-                  icon="image"
-                  onPress={pickImage}
-                  style={styles.imageButton}
-                  disabled={isProcessingOCR}
-                >
-                  Gallery
-                </Button>
-              </>
+        {!receiptImage ? (
+          <TouchableOpacity
+            ref={dropRef}
+            style={[
+              styles.dropzone,
+              isDragActive && dynamicStyles.dropzoneActive,
+              (isProcessingOCR || uploadingToOneDrive) &&
+                dynamicStyles.dropzoneUploading,
+            ]}
+            onPress={showImageOptions}
+            disabled={isProcessingOCR || uploadingToOneDrive}
+          >
+            {isProcessingOCR || uploadingToOneDrive ? (
+              <Animated.View style={styles.uploadingContainer}>
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+                <Text style={dynamicStyles.uploadingText}>
+                  {isProcessingOCR
+                    ? "Processing receipt..."
+                    : `Uploading... ${oneDriveUploadProgress}%`}
+                </Text>
+                <Text style={styles.uploadingSubtext}>
+                  {isProcessingOCR
+                    ? "Extracting receipt data"
+                    : "Saving to secure storage"}
+                </Text>
+              </Animated.View>
             ) : (
-              <Button
-                mode="outlined"
-                icon="file-upload"
-                onPress={pickDocument}
-                style={styles.uploadButton}
-                disabled={isProcessingOCR}
-              >
-                Upload Image/PDF
-              </Button>
-            )}
-          </View>
+              <>
+                <IconButton
+                  icon="receipt"
+                  size={48}
+                  iconColor={theme.colors.primary}
+                />
+                <Text style={styles.dropzoneText}>
+                  Click to upload a receipt image or PDF
+                </Text>
+                <Text style={styles.dropzoneSubText}>
+                  Supported formats: PDF, JPG, PNG (max 10MB)
+                </Text>
+                {isWebPlatform && (
+                  <Text style={styles.dropzoneSubText}>
+                    Or drag and drop files here
+                  </Text>
+                )}
 
-          {renderPreview()}
-        </View>
+                <View style={styles.imageButtonsContainer}>
+                  {!isWebPlatform || isMobileWeb ? (
+                    <>
+                      <Button
+                        mode="outlined"
+                        icon="camera"
+                        onPress={takePhoto}
+                        style={[styles.imageButton, { marginRight: 8 }]}
+                      >
+                        Take Photo
+                      </Button>
+                      <Button
+                        mode="outlined"
+                        icon="image"
+                        onPress={pickImage}
+                        style={styles.imageButton}
+                      >
+                        Gallery
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      mode="outlined"
+                      icon="file-upload"
+                      onPress={pickDocument}
+                      style={styles.uploadButton}
+                    >
+                      Browse Files
+                    </Button>
+                  )}
+                </View>
+              </>
+            )}
+          </TouchableOpacity>
+        ) : (
+          renderPreview()
+        )}
         {renderDeleteConfirmModal()}
         {renderPreviewModal()}
       </View>
     );
   };
+
   const renderPreview = () => {
     if (!receiptImage && fileType !== "pdf") return null;
 
@@ -957,20 +1305,63 @@ const CreateCompanyReceiptScreen = () => {
             </View>
           ) : null}
         </TouchableOpacity>
+
         <View style={styles.previewActions}>
+          {oneDriveSharingLink && (
+            <>
+              <IconButton
+                icon="link"
+                size={24}
+                style={styles.actionButton}
+                onPress={() => {
+                  if (Platform.OS === "web") {
+                    navigator.clipboard.writeText(oneDriveSharingLink);
+                    setSnackbarMessage("Link copied to clipboard");
+                    setSnackbarVisible(true);
+                  } else {
+                    Linking.openURL(oneDriveSharingLink);
+                  }
+                }}
+                iconColor="#0078d4"
+              />
+              <IconButton
+                icon="microsoft-onedrive"
+                size={24}
+                style={styles.actionButton}
+                onPress={() => {
+                  if (Platform.OS === "web") {
+                    window.open(oneDriveSharingLink, "_blank");
+                  } else {
+                    Linking.openURL(oneDriveSharingLink);
+                  }
+                }}
+                iconColor="#0078d4"
+              />
+            </>
+          )}
           <IconButton
-            icon="delete"
+            icon={deletingReceipt ? "sync" : "delete"}
             size={24}
             style={styles.deleteImageButton}
             onPress={() => setShowDeleteConfirmModal(true)}
             iconColor="#ef4444"
-            disabled={isProcessingOCR}
+            disabled={isProcessingOCR || uploadingToOneDrive || deletingReceipt}
           />
         </View>
-        {isProcessingOCR && (
+
+        {(isProcessingOCR || uploadingToOneDrive) && (
           <View style={styles.ocrLoadingOverlay}>
-            <ActivityIndicator size="large" />
-            <Text style={styles.ocrLoadingText}>Processing Receipt...</Text>
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+            <Text style={styles.ocrLoadingText}>
+              {isProcessingOCR
+                ? "Processing Receipt..."
+                : "Uploading Receipt..."}
+            </Text>
+            {uploadingToOneDrive && (
+              <Text style={styles.ocrLoadingSubtext}>
+                {oneDriveUploadProgress}% Complete
+              </Text>
+            )}
           </View>
         )}
       </View>
@@ -1121,6 +1512,9 @@ const CreateCompanyReceiptScreen = () => {
     setFileType(null);
     clearOCRFields();
     setShowDeleteConfirmModal(false);
+    setOneDriveItemId(null);
+    setOneDriveSharingLink(null);
+    setUploadedDocumentId(null);
   };
 
   const renderDeleteConfirmModal = () => {
@@ -1147,21 +1541,31 @@ const CreateCompanyReceiptScreen = () => {
             <Text style={styles.confirmModalTitle}>Delete Receipt?</Text>
             <Text style={styles.confirmModalText}>
               This will remove the uploaded receipt image and clear all
-              automatically filled fields. This action cannot be undone.
+              automatically filled fields.{" "}
+              {oneDriveItemId &&
+                "The receipt will also be removed from cloud storage."}{" "}
+              This action cannot be undone.
             </Text>
             <View style={styles.confirmModalButtons}>
               <Button
                 mode="outlined"
                 onPress={() => setShowDeleteConfirmModal(false)}
                 style={[styles.confirmButton, styles.confirmCancelButton]}
+                disabled={deletingReceipt}
               >
                 Cancel
               </Button>
               <Button
                 mode="contained"
-                onPress={handleDeleteReceipt}
+                onPress={
+                  oneDriveItemId
+                    ? handleDeleteReceiptFromOneDrive
+                    : handleDeleteReceipt
+                }
                 style={[styles.confirmButton, styles.confirmDeleteButton]}
                 buttonColor="#ef4444"
+                loading={deletingReceipt}
+                disabled={deletingReceipt}
               >
                 Delete
               </Button>
@@ -1267,7 +1671,8 @@ const CreateCompanyReceiptScreen = () => {
         tax_amount: parseFloat(data.tax_amount),
         payment_method: data.payment_method,
         merchant_address: data.merchant_address || null,
-        receipt_image_path: null, // We'll handle image upload separately if needed
+        receipt_image_path: oneDriveSharingLink || null,
+        document_id: uploadedDocumentId || null,
         language_hint: data.language_hint || null,
         created_by: user.id,
         merchant_vat: data.merchant_vat || null,
@@ -1304,6 +1709,7 @@ const CreateCompanyReceiptScreen = () => {
             receipt_number: data.receipt_number,
             merchant_name: data.merchant_name,
             total_amount: data.total_amount,
+            has_document: !!uploadedDocumentId,
           },
         };
 
@@ -2089,21 +2495,31 @@ const CreateCompanyReceiptScreen = () => {
             <Text style={styles.confirmModalTitle}>Delete Receipt?</Text>
             <Text style={styles.confirmModalText}>
               This will remove the uploaded receipt image and clear all
-              automatically filled fields. This action cannot be undone.
+              automatically filled fields.{" "}
+              {oneDriveItemId &&
+                "The receipt will also be removed from cloud storage."}{" "}
+              This action cannot be undone.
             </Text>
             <View style={styles.confirmModalButtons}>
               <Button
                 mode="outlined"
                 onPress={() => setShowDeleteConfirmModal(false)}
                 style={[styles.confirmButton, styles.confirmCancelButton]}
+                disabled={deletingReceipt}
               >
                 Cancel
               </Button>
               <Button
                 mode="contained"
-                onPress={handleDeleteReceipt}
+                onPress={
+                  oneDriveItemId
+                    ? handleDeleteReceiptFromOneDrive
+                    : handleDeleteReceipt
+                }
                 style={[styles.confirmButton, styles.confirmDeleteButton]}
                 buttonColor="#ef4444"
+                loading={deletingReceipt}
+                disabled={deletingReceipt}
               >
                 Delete
               </Button>
@@ -2638,6 +3054,50 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     marginTop: 16,
+  },
+  dropzone: {
+    borderWidth: 2,
+    borderColor: "#E0E0E0",
+    borderStyle: "dashed",
+    borderRadius: 16,
+    padding: 24,
+    backgroundColor: "#FAFAFA",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 16,
+  },
+  dropzoneText: {
+    fontSize: 16,
+    color: "#64748B",
+    textAlign: "center",
+    fontFamily: "Poppins-Medium",
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  dropzoneSubText: {
+    fontSize: 14,
+    color: "#94A3B8",
+    textAlign: "center",
+    marginBottom: 16,
+    fontFamily: "Poppins-Regular",
+  },
+  uploadingContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+    position: "relative",
+    overflow: "hidden",
+  },
+  uploadingSubtext: {
+    fontSize: 14,
+    color: "#64748B",
+    fontFamily: "Poppins-Regular",
+    marginTop: 8,
+    textAlign: "center",
+  },
+  actionButton: {
+    margin: 4,
+    backgroundColor: "#F8FAFC",
   },
 });
 

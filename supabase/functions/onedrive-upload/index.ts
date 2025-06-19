@@ -29,6 +29,7 @@ const FOLDER_STRUCTURE = {
     ACCIDENT: "Accident-Reports",
     ILLNESS: "Illness-Reports",
     DEPARTURE: "Departure-Reports",
+    RECEIPT: "Company-Receipts",
   },
 };
 
@@ -67,11 +68,23 @@ function generateUniqueFilename(
   const formSeqId = metadata.form_sequence_id || "";
 
   // Create meaningful filename components
-  const prefix = FILE_CONSTANTS.PREFIXES.MEDICAL_CERTIFICATE;
-  const reportTypeShort = reportType === "accident_report" ? "ACC" : "ILL";
+  let prefix = FILE_CONSTANTS.PREFIXES.MEDICAL_CERTIFICATE;
+  let reportTypeShort = "DOC";
+
+  // Set appropriate prefix and report type based on the report type
+  if (reportType === "accident_report") {
+    prefix = FILE_CONSTANTS.PREFIXES.MEDICAL_CERTIFICATE;
+    reportTypeShort = "ACC";
+  } else if (reportType === "illness_report") {
+    prefix = FILE_CONSTANTS.PREFIXES.MEDICAL_CERTIFICATE;
+    reportTypeShort = "ILL";
+  } else if (reportType === "company_receipt") {
+    prefix = FILE_CONSTANTS.PREFIXES.RECEIPT;
+    reportTypeShort = "REC";
+  }
 
   // Format: prefix_reportType_companySeqId_employeeSeqId_formSeqId_timestamp.ext
-  return `${prefix}_${reportTypeShort}_C${companySeqId}_E${employeeSeqId}_F${formSeqId}_${timestamp}.${fileExtension}`;
+  return `${prefix}_${reportTypeShort}_C${companySeqId}_E${employeeSeqId}_${formSeqId ? `F${formSeqId}_` : ""}${timestamp}.${fileExtension}`;
 }
 
 // Build folder path with company and employee names if available
@@ -85,8 +98,8 @@ function buildFolderPath(
   const companySeqId = metadata.company_sequence_id;
   const employeeSeqId = metadata.company_user_sequence_id;
 
-  if (!companySeqId || !employeeSeqId) {
-    throw new Error("Company and employee sequence IDs are required");
+  if (!companySeqId) {
+    throw new Error("Company sequence ID is required");
   }
 
   // Get company and employee names from metadata if available
@@ -94,16 +107,29 @@ function buildFolderPath(
     ? `C${companySeqId}-${sanitizeFolderName(metadata.company_name)}`
     : `C${companySeqId}`;
 
-  const employeeName = metadata.employee_name
-    ? `E${employeeSeqId}-${sanitizeFolderName(metadata.employee_name)}`
-    : `E${employeeSeqId}`;
+  // Handle different report types
+  if (reportType === "company_receipt") {
+    // Company receipts go in a different folder structure
+    return `/${FOLDER_STRUCTURE.ROOT}/${FOLDER_STRUCTURE.COMPANIES}/${companyName}/${FOLDER_STRUCTURE.DOCUMENT_TYPES.RECEIPTS}/${FOLDER_STRUCTURE.REPORT_TYPES.RECEIPT}`;
+  } else {
+    // For employee-related documents, require employee sequence ID
+    if (!employeeSeqId) {
+      throw new Error(
+        "Employee sequence ID is required for employee documents"
+      );
+    }
 
-  const reportFolder =
-    reportType === "accident_report"
-      ? FOLDER_STRUCTURE.REPORT_TYPES.ACCIDENT
-      : FOLDER_STRUCTURE.REPORT_TYPES.ILLNESS;
+    const employeeName = metadata.employee_name
+      ? `E${employeeSeqId}-${sanitizeFolderName(metadata.employee_name)}`
+      : `E${employeeSeqId}`;
 
-  return `/${FOLDER_STRUCTURE.ROOT}/${FOLDER_STRUCTURE.COMPANIES}/${companyName}/Employees/${employeeName}/${FOLDER_STRUCTURE.DOCUMENT_TYPES.MEDICAL_CERTIFICATES}/${reportFolder}`;
+    const reportFolder =
+      reportType === "accident_report"
+        ? FOLDER_STRUCTURE.REPORT_TYPES.ACCIDENT
+        : FOLDER_STRUCTURE.REPORT_TYPES.ILLNESS;
+
+    return `/${FOLDER_STRUCTURE.ROOT}/${FOLDER_STRUCTURE.COMPANIES}/${companyName}/Employees/${employeeName}/${FOLDER_STRUCTURE.DOCUMENT_TYPES.MEDICAL_CERTIFICATES}/${reportFolder}`;
+  }
 }
 
 // Sanitize folder names to be valid
@@ -298,18 +324,33 @@ async function uploadFileToOneDrive(
       .eq("id", companyId)
       .single();
 
-    const { data: employeeData } = await supabase
-      .from("company_user")
-      .select("first_name, last_name, company_user_sequence_id")
-      .eq("id", employeeId)
-      .single();
+    let employeeData = null;
+    if (reportType !== "company_receipt") {
+      // Only fetch employee data for employee-related documents
+      const { data: empData } = await supabase
+        .from("company_user")
+        .select("first_name, last_name, company_user_sequence_id")
+        .eq("id", employeeId)
+        .single();
+
+      employeeData = empData;
+    }
 
     // Get form sequence ID based on report type
-    const { data: reportData } = await supabase
-      .from(reportType)
-      .select("form_sequence_id")
-      .eq("id", metadata.reportId)
-      .single();
+    let reportData = null;
+    if (
+      reportType !== "company_receipt" &&
+      metadata.reportId &&
+      metadata.reportId !== "temp"
+    ) {
+      const { data: repData } = await supabase
+        .from(reportType)
+        .select("form_sequence_id")
+        .eq("id", metadata.reportId)
+        .single();
+
+      reportData = repData;
+    }
 
     // Combine metadata
     const enrichedMetadata = {
@@ -429,44 +470,80 @@ async function createDocumentAndUpdateReport(
   employeeId,
   uploadedBy
 ) {
-  const { data: document, error: documentError } = await supabase
-    .from("employee_documents")
-    .insert([
-      {
-        company_id: companyId,
-        employee_id: employeeId,
-        document_type: "MEDICAL_CERTIFICATE",
-        reference_type: reportType,
-        reference_id: reportId,
-        file_path: uploadResult.filePath,
-        drive_id: uploadResult.driveId,
-        item_id: uploadResult.itemId,
-        file_url: uploadResult.sharingLink,
-        file_name: uploadResult.fileName,
-        mime_type: uploadResult.mimeType,
-        uploaded_by: uploadedBy,
-        status: "active",
-      },
-    ])
-    .select()
-    .single();
-  if (documentError) throw documentError;
-  // Update the report with the document reference
-  const { data: report, error: reportError } = await supabase
-    .from(reportType)
-    .update({
-      medical_certificate: uploadResult.filePath,
-      modified_at: new Date().toISOString(),
-      modified_by: uploadedBy,
-    })
-    .eq("id", reportId)
-    .select()
-    .single();
-  if (reportError) throw reportError;
-  return {
-    document,
-    report,
-  };
+  // Handle company receipts differently
+  if (reportType === "company_receipt") {
+    // For company receipts, create a document record but don't update any report
+    const { data: document, error: documentError } = await supabase
+      .from("employee_documents")
+      .insert([
+        {
+          company_id: companyId,
+          employee_id: employeeId,
+          document_type: "RECEIPT",
+          reference_type: reportType,
+          reference_id: reportId !== "temp" ? reportId : null,
+          file_path: uploadResult.filePath,
+          drive_id: uploadResult.driveId,
+          item_id: uploadResult.itemId,
+          file_url: uploadResult.sharingLink,
+          file_name: uploadResult.fileName,
+          mime_type: uploadResult.mimeType,
+          uploaded_by: uploadedBy,
+          status: "active",
+        },
+      ])
+      .select()
+      .single();
+
+    if (documentError) throw documentError;
+
+    return {
+      document,
+      report: null, // No report to update for receipts
+    };
+  } else {
+    // Original code for medical certificates
+    const { data: document, error: documentError } = await supabase
+      .from("employee_documents")
+      .insert([
+        {
+          company_id: companyId,
+          employee_id: employeeId,
+          document_type: "MEDICAL_CERTIFICATE",
+          reference_type: reportType,
+          reference_id: reportId,
+          file_path: uploadResult.filePath,
+          drive_id: uploadResult.driveId,
+          item_id: uploadResult.itemId,
+          file_url: uploadResult.sharingLink,
+          file_name: uploadResult.fileName,
+          mime_type: uploadResult.mimeType,
+          uploaded_by: uploadedBy,
+          status: "active",
+        },
+      ])
+      .select()
+      .single();
+    if (documentError) throw documentError;
+
+    // Update the report with the document reference
+    const { data: report, error: reportError } = await supabase
+      .from(reportType)
+      .update({
+        medical_certificate: uploadResult.filePath,
+        modified_at: new Date().toISOString(),
+        modified_by: uploadedBy,
+      })
+      .eq("id", reportId)
+      .select()
+      .single();
+    if (reportError) throw reportError;
+
+    return {
+      document,
+      report,
+    };
+  }
 }
 
 // Log activity
@@ -940,7 +1017,12 @@ serve(async (req) => {
         }
       );
     }
-    if (!["accident_report", "illness_report"].includes(reportType)) {
+    // Update to allow company_receipt as a valid report type
+    if (
+      !["accident_report", "illness_report", "company_receipt"].includes(
+        reportType
+      )
+    ) {
       return new Response(
         JSON.stringify({
           success: false,
@@ -996,17 +1078,22 @@ serve(async (req) => {
       employeeId,
       uploadedBy
     );
-    // Log the activity
+    // Log the activity with appropriate activity type
+    let activityType = "MEDICAL_CERTIFICATE_UPLOAD";
+    if (reportType === "company_receipt") {
+      activityType = "RECEIPT_UPLOAD";
+    }
+
     await logActivity(
       uploadedBy,
       companyId,
-      "MEDICAL_CERTIFICATE_UPLOAD",
-      `Medical certificate uploaded for ${reportType} ${reportId}`,
+      activityType,
+      `${reportType === "company_receipt" ? "Receipt" : "Medical certificate"} uploaded for ${reportType} ${reportId}`,
       {
-        medical_certificate: report.medical_certificate,
+        document_path: null,
       },
       {
-        medical_certificate: uploadResult.filePath,
+        document_path: uploadResult.filePath,
       },
       {
         documentId: document.id,
