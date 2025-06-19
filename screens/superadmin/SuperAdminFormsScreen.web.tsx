@@ -1220,6 +1220,34 @@ const SuperAdminFormsScreen = () => {
                     </View>
                   </View>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.fabMenuItem, { backgroundColor: "#e3f2fd" }]}
+                  onPress={() => {
+                    setFabMenuVisible(false);
+                    navigation.navigate(
+                      "SuperAdminCreateEmployeeStaffDeparture"  
+                    );
+                  }}
+                >
+                  <View style={styles.fabMenuItemContent}>
+                    <View style={styles.fabMenuItemIcon}>
+                      <IconButton
+                        icon="exit-to-app"
+                        size={24}
+                        iconColor="#2196f3"
+                      />
+                    </View>
+                    <View style={styles.fabMenuItemText}>
+                      <Text style={styles.fabMenuItemTitle}>
+                        Create Staff Departure
+                      </Text>
+                      <Text style={styles.fabMenuItemDescription}>
+                        Create a staff departure report for any employee
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+
               </View>
             </View>
           </Pressable>

@@ -52,7 +52,7 @@ import EditReceiptScreen from "../screens/superadmin/EditReceiptScreen";
 import ActivityLogsScreen from "../screens/superadmin/ActivityLogsScreen";
 import SuperAdminCreateEmployeeAccidentReportScreen from "../screens/superadmin/SuperAdminCreateEmployeeAccidentReportScreen.web";
 import SuperAdminCreateEmployeeIllnessReportScreen from "../screens/superadmin/SuperAdminCreateEmployeeIllnessReportScreen.web";
-
+import SuperAdminCreateEmployeeStaffDepartureScreen from "../screens/superadmin/SuperAdminCreateEmployeeStaffDepartureScreen.web";
 // Stack navigators
 const SuperAdminStack = createNativeStackNavigator();
 const SuperAdminTab = createBottomTabNavigator();
@@ -372,6 +372,10 @@ const WebStackNavigator = () => {
             <WebContentStack.Screen
               name="SuperAdminCreateEmployeeIllnessReport"
               component={SuperAdminCreateEmployeeIllnessReportScreen}
+            />
+            <WebContentStack.Screen
+              name="SuperAdminCreateEmployeeStaffDeparture"
+              component={SuperAdminCreateEmployeeStaffDepartureScreen}
             />
           </WebContentStack.Group>
         </WebContentStack.Navigator>
@@ -720,6 +724,10 @@ export const SuperAdminNavigator = () => {
       <SuperAdminStack.Screen
         name="SuperAdminCreateEmployeeIllnessReport"
         component={SuperAdminCreateEmployeeIllnessReportScreen}
+      />
+      <SuperAdminStack.Screen
+        name="SuperAdminCreateEmployeeStaffDeparture"
+        component={SuperAdminCreateEmployeeStaffDepartureScreen}
       />
     </SuperAdminStack.Navigator>
   );

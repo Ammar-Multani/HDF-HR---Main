@@ -66,3 +66,15 @@ logs
 *.njsproj
 *.sln
 *.sw?
+
+# Xcode
+*.pbxproj
+*.xcworkspace
+*.xcuserdata
+*.xcuserstate
+*.xcscheme
+
+
+# Yarn
+yarn.lock
+

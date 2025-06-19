@@ -217,6 +217,7 @@ const CompanySelector = ({
                   styles.companyName,
                   isSelected && { color: theme.colors.primary },
                 ]}
+                numberOfLines={1}
               >
                 {company.company_name}
               </Text>
@@ -262,7 +263,7 @@ const CompanySelector = ({
                     style={styles.selectedCompanyIcon}
                   />
                   <View style={styles.selectedInfo}>
-                    <Text style={styles.selectedName}>
+                    <Text style={styles.selectedName} numberOfLines={1}>
                       {selectedCompany.company_name}
                     </Text>
                   </View>
@@ -510,12 +511,15 @@ const styles = StyleSheet.create({
     minHeight: 250,
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    padding: 24,
   },
   errorContainer: {
     padding: 16,
     alignItems: "center",
     minHeight: 250,
     justifyContent: "center",
+    backgroundColor: "#FFFFFF",
   },
   errorText: {
     color: "#dc2626",
@@ -536,7 +540,7 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins-Medium",
   },
   companyItem: {
-    padding: 12,
+    padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#e2e8f0",
     backgroundColor: "#FFFFFF",
@@ -552,6 +556,7 @@ const styles = StyleSheet.create({
   },
   companyInfo: {
     flex: 1,
+    marginRight: 16,
   },
   companyNameContainer: {
     flexDirection: "row",
@@ -565,6 +570,7 @@ const styles = StyleSheet.create({
     color: "#1e293b",
     fontFamily: "Poppins-Medium",
     marginLeft: 4,
+    flex: 1,
   },
   selectedIcon: {
     margin: 0,

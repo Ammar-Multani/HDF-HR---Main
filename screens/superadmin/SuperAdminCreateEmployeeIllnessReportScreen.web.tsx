@@ -8,6 +8,10 @@ import {
   Alert,
   Dimensions,
   Linking,
+  TouchableOpacity,
+  Image,
+  ViewStyle,
+  TextStyle,
 } from "react-native";
 import {
   Text,
@@ -38,6 +42,8 @@ import CustomSnackbar from "../../components/CustomSnackbar";
 import { t } from "i18next";
 import EmployeeSelector from "../../components/EmployeeSelector";
 import CompanySelector from "../../components/CompanySelector";
+import { AnimatedCircularProgress } from "react-native-circular-progress";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 // Add window dimensions hook
 const useWindowDimensions = () => {
@@ -63,14 +69,13 @@ const useWindowDimensions = () => {
   return dimensions;
 };
 
-
-
 interface Employee {
   id: string;
   first_name: string;
   last_name: string;
   email: string;
   job_title?: string;
+  company_id?: string;
 }
 
 interface Company {
@@ -88,6 +93,74 @@ interface IllnessReportFormData {
   company_id: string;
 }
 
+// Add StylesType interface definition after imports
+type StylesType = {
+  container: ViewStyle;
+  keyboardAvoidingView: ViewStyle;
+  scrollView: ViewStyle;
+  scrollContent: ViewStyle;
+  headerSection: ViewStyle;
+  pageTitle: TextStyle;
+  gridContainer: ViewStyle;
+  gridColumn: ViewStyle;
+  formCard: ViewStyle;
+  cardHeader: ViewStyle;
+  headerLeft: ViewStyle;
+  iconContainer: ViewStyle;
+  headerIcon: ViewStyle;
+  cardTitle: TextStyle;
+  cardContent: ViewStyle;
+  input: ViewStyle;
+  inputLabel: TextStyle;
+  dateButton: ViewStyle;
+  documentUploadSection: ViewStyle;
+  dropzone: ViewStyle;
+  dropzoneActive: ViewStyle;
+  dropzoneUploading: ViewStyle;
+  dropzoneIcon: ViewStyle;
+  dropzoneText: TextStyle;
+  dropzoneSubText: TextStyle;
+  uploadPreview: ViewStyle;
+  previewIcon: ViewStyle;
+  previewContent: ViewStyle;
+  fileName: TextStyle;
+  fileInfo: TextStyle;
+  previewActions: ViewStyle;
+  actionButton: ViewStyle;
+  actionButtonDanger: ViewStyle;
+  progressContainer: ViewStyle;
+  uploadProgress: ViewStyle;
+  progressText: TextStyle;
+  errorContainer: ViewStyle;
+  retryButton: ViewStyle;
+  retryButtonText: TextStyle;
+  uploadingContainer: ViewStyle;
+  uploadingText: TextStyle;
+  uploadingSubtext: TextStyle;
+  progressIcon: ViewStyle;
+  downloadButton: ViewStyle;
+  downloadButtonText: TextStyle;
+  bottomBar: ViewStyle;
+  bottomBarContent: ViewStyle;
+  button: ViewStyle;
+  cancelButton: ViewStyle;
+  submitButton: ViewStyle;
+  webDatePickerModal: ViewStyle;
+  modalSurface: ViewStyle;
+  modalHeader: ViewStyle;
+  modalTitle: TextStyle;
+  webDatePickerContainer: ViewStyle;
+  webDateInputRow: ViewStyle;
+  webDateInputContainer: ViewStyle;
+  webDateInputLabel: TextStyle;
+  webDateInput: ViewStyle;
+  webDatePickerActions: ViewStyle;
+  webDatePickerButton: ViewStyle;
+  snackbar: ViewStyle;
+  documentActions: ViewStyle;
+  errorText: TextStyle;
+};
+
 const CreateIllnessReportScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
@@ -99,7 +172,6 @@ const CreateIllnessReportScreen = () => {
   const isMediumScreen = dimensions.width >= 768 && dimensions.width < 1440;
 
   const [loading, setLoading] = useState(false);
-  const [companyId, setCompanyId] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
@@ -111,6 +183,13 @@ const CreateIllnessReportScreen = () => {
   const [sharingLink, setSharingLink] = useState<string | null>(null);
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [companyError, setCompanyError] = useState<string>("");
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [fileSize, setFileSize] = useState(0);
+  const [uploadDate, setUploadDate] = useState(new Date());
+  const [isDragActive, setIsDragActive] = useState(false);
+  const [deletingDocument, setDeletingDocument] = useState(false);
+  const [documentItemId, setDocumentItemId] = useState<string | null>(null);
 
   // Clear employee selection when company changes
   useEffect(() => {
@@ -121,6 +200,15 @@ const CreateIllnessReportScreen = () => {
       setSelectedEmployee(null);
     }
   }, [selectedCompany]);
+
+  const handleDateConfirm = (selectedDate: Date) => {
+    setShowDatePicker(false);
+    setValue("date_of_onset_leave", selectedDate);
+  };
+
+  const handleDateCancel = () => {
+    setShowDatePicker(false);
+  };
 
   const {
     control,
@@ -138,41 +226,142 @@ const CreateIllnessReportScreen = () => {
 
   const dateOfOnsetLeave = watch("date_of_onset_leave");
 
-  const fetchCompanyId = async () => {
-    if (!user) return;
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
 
-    try {
-      const { data, error } = await supabase
-        .from("company_user")
-        .select("company_id")
-        .eq("id", user.id)
-        .single();
+  const formatDate = (date: Date) => {
+    return format(date, "MMM d, yyyy");
+  };
 
-      if (error) {
-        console.error("Error fetching company ID:", error);
-        return;
-      }
+  const getFileIcon = (filename: string | null) => {
+    if (!filename)
+      return <MaterialCommunityIcons name="file" size={24} color="#FF9800" />;
 
-      setCompanyId(data.company_id);
-    } catch (error) {
-      console.error("Error fetching company ID:", error);
+    const extension = filename.split(".").pop()?.toLowerCase();
+
+    switch (extension) {
+      case "pdf":
+        return <MaterialCommunityIcons name="file" size={24} color="#FF9800" />;
+      case "doc":
+      case "docx":
+        return <MaterialCommunityIcons name="file" size={24} color="#2196F3" />;
+      case "jpg":
+      case "jpeg":
+      case "png":
+        return (
+          <MaterialCommunityIcons name="image" size={24} color="#4CAF50" />
+        );
+      default:
+        return <MaterialCommunityIcons name="file" size={24} color="#FF9800" />;
     }
   };
 
-  useEffect(() => {
-    fetchCompanyId();
-  }, [user]);
+  const handleDeleteDocument = async () => {
+    try {
+      // Check if we have the necessary information to delete the document
+      const documentId = watch("document_id");
+      const reportId = watch("id");
 
-  const handleDateConfirm = (selectedDate: Date) => {
-    setShowDatePicker(false);
-    setValue("date_of_onset_leave", selectedDate);
+      // Use the stored itemId directly or try to extract it from sharing link if not available
+      let itemId = documentItemId;
+
+      if (!itemId && sharingLink) {
+        try {
+          // For Microsoft 365 sharing links, try to extract the ID from the URL
+          const urlMatch = sharingLink.match(/\/([a-zA-Z0-9_-]{43})(\/|\?|$)/);
+          if (urlMatch && urlMatch[1]) {
+            itemId = urlMatch[1];
+          } else {
+            // Fallback - try to get ID from query params
+            const url = new URL(sharingLink);
+            const idParam = url.searchParams.get("id");
+            if (idParam) itemId = idParam;
+          }
+        } catch (error) {
+          console.error("Error parsing sharing link:", error);
+        }
+      }
+
+      if (!documentId) {
+        setSnackbarMessage("Cannot delete document: Missing document ID");
+        setSnackbarVisible(true);
+        return;
+      }
+
+      if (!selectedCompany) {
+        setSnackbarMessage(
+          "Cannot delete document: Company information missing"
+        );
+        setSnackbarVisible(true);
+        return;
+      }
+
+      setDeletingDocument(true);
+      setSnackbarMessage("Deleting document...");
+      setSnackbarVisible(true);
+
+      // Call the Edge Function to delete the file
+      const response = await supabase.functions.invoke("onedrive-upload", {
+        method: "DELETE",
+        body: {
+          itemId: itemId || "unknown", // Even without itemId, we'll update the database
+          documentId,
+          userId: user?.id,
+          companyId: selectedCompany.id,
+          reportId,
+          reportType: "illness_report",
+        },
+      });
+
+      console.log("Delete response:", response);
+
+      // Reset document-related state variables even if there was an error
+      // This ensures the UI is cleaned up
+      setDocumentName(null);
+      setSharingLink(null);
+      setDocumentItemId(null);
+      setValue("medical_certificate", "");
+      setValue("document_id", "");
+
+      setSnackbarMessage("Medical certificate deleted successfully");
+      setSnackbarVisible(true);
+    } catch (error: any) {
+      console.error("Error deleting document:", error);
+
+      // Reset document-related state variables even on error
+      // This is important for UX - if deletion fails in the cloud but works in the database
+      setDocumentName(null);
+      setSharingLink(null);
+      setDocumentItemId(null);
+      setValue("medical_certificate", "");
+      setValue("document_id", "");
+
+      setSnackbarMessage(
+        "Document removed from report. " + (error.message || "")
+      );
+      setSnackbarVisible(true);
+    } finally {
+      setDeletingDocument(false);
+    }
   };
 
-  const handleDateCancel = () => {
-    setShowDatePicker(false);
+  const handleRetryUpload = () => {
+    setUploadError(null);
+    handlePickDocument();
   };
 
-  const handlePickDocument = async () => {
+  const handlePickDocument = async (droppedFile?: File) => {
+    if (!selectedCompany) {
+      setSnackbarMessage("Please select a company first");
+      setSnackbarVisible(true);
+      return;
+    }
+
     if (!selectedEmployee) {
       setSnackbarMessage("Please select an employee first");
       setSnackbarVisible(true);
@@ -181,22 +370,28 @@ const CreateIllnessReportScreen = () => {
 
     try {
       setUploadingDocument(true);
+      setUploadProgress(0);
+      setUploadError(null);
+
+      // Show initial loading progress
+      setUploadProgress(10);
 
       // Validate company ID
-      if (!companyId) {
+      if (!selectedCompany.id) {
         throw new Error("Company ID is not available");
       }
 
       // Create illness report first if it doesn't exist
       let reportId = watch("id");
       if (!reportId) {
+        setUploadProgress(20);
         console.log("Creating new illness report...");
         const { data: illnessReport, error: createError } = await supabase
           .from("illness_report")
           .insert([
             {
               employee_id: selectedEmployee.id,
-              company_id: companyId,
+              company_id: selectedCompany.id,
               date_of_onset_leave: watch("date_of_onset_leave").toISOString(),
               leave_description: watch("leave_description") || "",
               status: FormStatus.DRAFT,
@@ -220,23 +415,40 @@ const CreateIllnessReportScreen = () => {
         console.log("Created illness report:", illnessReport);
         reportId = illnessReport.id;
         setValue("id", reportId);
+
+        // After successful report creation
+        setUploadProgress(30);
       }
 
-      // Use document picker
-      const result = await DocumentPicker.getDocumentAsync({
-        type: [
-          "application/pdf",
-          "image/*",
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        ],
-        copyToCacheDirectory: true,
-      });
+      let file;
+      if (droppedFile) {
+        // Use the dropped file from drag and drop
+        file = {
+          uri: URL.createObjectURL(droppedFile),
+          name: droppedFile.name,
+          size: droppedFile.size,
+          mimeType: droppedFile.type,
+        };
+        setUploadProgress(40);
+      } else {
+        // Use document picker
+        const result = await DocumentPicker.getDocumentAsync({
+          type: [
+            "application/pdf",
+            "image/*",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          ],
+          copyToCacheDirectory: true,
+        });
 
-      if (result.canceled) {
-        return;
+        if (result.canceled) {
+          setUploadingDocument(false);
+          return;
+        }
+
+        file = result.assets[0];
+        setUploadProgress(40);
       }
-
-      const file = result.assets[0];
 
       // Validate file size (10MB limit)
       const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -255,7 +467,7 @@ const CreateIllnessReportScreen = () => {
       // Create and validate FormData
       const formData = new FormData();
       formData.append("file", fileObject);
-      formData.append("companyId", companyId as string);
+      formData.append("companyId", selectedCompany.id as string);
       formData.append("employeeId", selectedEmployee.id as string);
       const uploadedById = user?.id;
       if (typeof uploadedById !== "string") {
@@ -269,10 +481,12 @@ const CreateIllnessReportScreen = () => {
       const metadata = {
         reportId: reportId,
         reportType: "illness_report",
-        company_id: companyId,
+        company_id: selectedCompany.id,
         employee_id: selectedEmployee.id,
       };
       formData.append("metadata", JSON.stringify(metadata));
+
+      setUploadProgress(50);
 
       // Add retry logic for network issues
       const MAX_RETRIES = 3;
@@ -308,6 +522,8 @@ const CreateIllnessReportScreen = () => {
         }
       }
 
+      setUploadProgress(70);
+
       if (uploadResponse?.data) {
         console.log("Upload response data:", uploadResponse.data);
 
@@ -325,7 +541,14 @@ const CreateIllnessReportScreen = () => {
           setValue("document_id", responseData.document.id);
         }
 
+        // Store the itemId for later use in deletion
+        if (responseData?.itemId) {
+          setDocumentItemId(responseData.itemId);
+        }
+
         setDocumentName(file.name);
+        setFileSize(file.size);
+        setUploadDate(new Date());
 
         // Store both webUrl and sharingLink
         if (responseData?.webUrl) {
@@ -337,18 +560,32 @@ const CreateIllnessReportScreen = () => {
 
         setSnackbarMessage("Medical certificate uploaded successfully");
         setSnackbarVisible(true);
+
+        // Show almost complete
+        setUploadProgress(90);
+
+        // Finish after a short delay to show the animation
+        setTimeout(() => {
+          setUploadProgress(100);
+          setUploadingDocument(false);
+        }, 500);
       } else {
         console.warn("Upload response missing data:", uploadResponse);
         setSnackbarMessage("Document uploaded but some data was missing");
         setSnackbarVisible(true);
+        setUploadProgress(100);
+        setUploadingDocument(false);
       }
     } catch (error: any) {
       console.error("Error picking document:", error);
+      setUploadError(
+        error.message || "Failed to upload document. Please try again."
+      );
       setSnackbarMessage(
         error.message || "Failed to upload document. Please try again."
       );
       setSnackbarVisible(true);
-    } finally {
+      setUploadProgress(0);
       setUploadingDocument(false);
     }
   };
@@ -374,12 +611,6 @@ const CreateIllnessReportScreen = () => {
       }
       setCompanyError("");
 
-      if (!companyId) {
-        setSnackbarMessage("Company information not available");
-        setSnackbarVisible(true);
-        return;
-      }
-
       if (!selectedEmployee) {
         setSnackbarMessage("Please select an employee");
         setSnackbarVisible(true);
@@ -388,11 +619,11 @@ const CreateIllnessReportScreen = () => {
 
       setLoading(true);
 
-      // Create illness report
+      // Create illness report with selectedCompany.id
       const { error } = await supabase.from("illness_report").insert([
         {
           employee_id: selectedEmployee.id,
-          company_id: companyId,
+          company_id: selectedCompany.id,
           date_of_onset_leave: data.date_of_onset_leave.toISOString(),
           leave_description: data.leave_description,
           medical_certificate: data.medical_certificate || null,
@@ -513,7 +744,84 @@ const CreateIllnessReportScreen = () => {
     );
   };
 
+  // Add custom drop handler for web
+  const dropRef = React.useRef(null);
 
+  useEffect(() => {
+    if (Platform.OS === "web" && dropRef.current) {
+      const element = dropRef.current as unknown as HTMLElement;
+
+      const handleDragEnter = (e: Event) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragActive(true);
+      };
+
+      const handleDragOver = (e: Event) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragActive(true);
+      };
+
+      const handleDragLeave = (e: Event) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragActive(false);
+      };
+
+      const handleDrop = (e: any) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragActive(false);
+
+        if (
+          e.dataTransfer &&
+          e.dataTransfer.files &&
+          e.dataTransfer.files.length > 0
+        ) {
+          const file = e.dataTransfer.files[0];
+
+          // Check file type
+          const validTypes = [
+            "application/pdf",
+            "image/jpeg",
+            "image/png",
+            "image/jpg",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          ];
+
+          if (!validTypes.includes(file.type)) {
+            setSnackbarMessage(
+              "Invalid file type. Please upload PDF, DOCX, JPG or PNG files."
+            );
+            setSnackbarVisible(true);
+            return;
+          }
+
+          // Check file size (10MB)
+          if (file.size > 10 * 1024 * 1024) {
+            setSnackbarMessage("File is too large. Maximum size is 10MB.");
+            setSnackbarVisible(true);
+            return;
+          }
+
+          handlePickDocument(file);
+        }
+      };
+
+      element.addEventListener("dragenter", handleDragEnter);
+      element.addEventListener("dragover", handleDragOver);
+      element.addEventListener("dragleave", handleDragLeave);
+      element.addEventListener("drop", handleDrop);
+
+      return () => {
+        element.removeEventListener("dragenter", handleDragEnter);
+        element.removeEventListener("dragover", handleDragOver);
+        element.removeEventListener("dragleave", handleDragLeave);
+        element.removeEventListener("drop", handleDrop);
+      };
+    }
+  }, [dropRef, selectedCompany, selectedEmployee]);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: "#F8F9FA" }]}>
@@ -547,8 +855,7 @@ const CreateIllnessReportScreen = () => {
           <View style={styles.gridContainer}>
             <View style={styles.gridColumn}>
               <Animated.View entering={FadeIn.delay(100)}>
-
-              <Surface style={styles.formCard}>
+                <Surface style={styles.formCard}>
                   <View style={styles.cardHeader}>
                     <View style={styles.headerLeft}>
                       <View style={styles.iconContainer}>
@@ -577,31 +884,29 @@ const CreateIllnessReportScreen = () => {
                 </Surface>
 
                 {selectedCompany && (
-                <Surface style={styles.formCard}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.headerLeft}>
-                      <View style={styles.iconContainer}>
-                        <IconButton
-                          icon="account"
-                          size={20}
-                          iconColor="#FF9800"
-                          style={styles.headerIcon}
-                        />
+                  <Surface style={[styles.formCard, { marginTop: 24 }]}>
+                    <View style={styles.cardHeader}>
+                      <View style={styles.headerLeft}>
+                        <View style={styles.iconContainer}>
+                          <IconButton
+                            icon="account"
+                            size={20}
+                            iconColor="#FF9800"
+                            style={styles.headerIcon}
+                          />
+                        </View>
+                        <Text style={styles.cardTitle}>Employee Details</Text>
                       </View>
-                      <Text style={styles.cardTitle}>Employee Details</Text>
                     </View>
-                  </View>
 
-                  <View style={styles.cardContent}>
-                    {companyId && (
+                    <View style={styles.cardContent}>
                       <EmployeeSelector
-                        companyId={companyId}
+                        companyId={selectedCompany.id}
                         onSelect={setSelectedEmployee}
                         selectedEmployee={selectedEmployee}
                       />
-                    )}
-                  </View>
-                </Surface>
+                    </View>
+                  </Surface>
                 )}
 
                 <Surface style={[styles.formCard, { marginTop: 24 }]}>
@@ -685,76 +990,193 @@ const CreateIllnessReportScreen = () => {
 
                   <View style={styles.cardContent}>
                     <Text style={styles.inputLabel}>Medical Certificate</Text>
-                    <View style={styles.documentPickerContainer}>
-                      <Button
-                        mode="outlined"
-                        onPress={handlePickDocument}
-                        style={styles.documentButton}
-                        icon="file-upload"
-                        loading={uploadingDocument}
-                        disabled={loading || uploadingDocument}
-                        textColor="#FF9800"
-                      >
-                        {documentName || "Upload Medical Certificate"}
-                      </Button>
-                      {documentName && sharingLink && (
-                        <View style={styles.documentActions}>
-                          <Button
-                            mode="outlined"
-                            onPress={() => {
-                              if (Platform.OS === "web") {
-                                window.open(sharingLink, "_blank");
-                              } else {
-                                Linking.openURL(sharingLink);
-                              }
-                            }}
-                            style={styles.documentButton}
-                            icon="file-document"
-                            textColor="#FF9800"
-                          >
-                            Open Document
-                          </Button>
-                          <Button
-                            mode="outlined"
-                            onPress={handleCopyLink}
-                            style={styles.documentButton}
-                            icon="share-variant"
-                            textColor="#FF9800"
-                          >
-                            Copy Link
-                          </Button>
+
+                    {!documentName ? (
+                      <View style={styles.documentUploadSection}>
+                        <TouchableOpacity
+                          ref={dropRef}
+                          style={[
+                            styles.dropzone,
+                            isDragActive && styles.dropzoneActive,
+                            uploadingDocument && styles.dropzoneUploading,
+                          ]}
+                          onPress={() => handlePickDocument()}
+                          disabled={uploadingDocument}
+                        >
+                          {uploadingDocument ? (
+                            <View style={styles.uploadingContainer}>
+                              <AnimatedCircularProgress
+                                size={64}
+                                width={6}
+                                fill={uploadProgress}
+                                tintColor="#FF9800"
+                                backgroundColor="#FFE0B2"
+                                rotation={0}
+                                lineCap="round"
+                              />
+                              <Text style={styles.uploadingText}>
+                                Uploading... {uploadProgress}%
+                              </Text>
+                              <Text style={styles.uploadingSubtext}>
+                                Please wait
+                              </Text>
+                            </View>
+                          ) : (
+                            <>
+                              <MaterialCommunityIcons
+                                name="cloud-upload"
+                                size={48}
+                                color="#FF9800"
+                              />
+                              <Text style={styles.dropzoneText}>
+                                Click to select your medical certificate
+                              </Text>
+                              <Text style={styles.dropzoneSubText}>
+                                Supported formats: PDF, DOCX, JPG, PNG (max
+                                10MB)
+                              </Text>
+                              {Platform.OS === "web" && (
+                                <Text style={styles.dropzoneSubText}>
+                                  Or drag and drop files here
+                                </Text>
+                              )}
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <View style={styles.uploadPreview}>
+                        <View style={styles.previewIcon}>
+                          {getFileIcon(documentName)}
                         </View>
-                      )}
-                    </View>
+
+                        <View style={styles.previewContent}>
+                          <Text style={styles.fileName} numberOfLines={1}>
+                            {documentName}
+                          </Text>
+                          <Text style={styles.fileInfo}>
+                            {formatFileSize(fileSize)} • Uploaded{" "}
+                            {formatDate(uploadDate)}
+                          </Text>
+
+                          {/* Add download button */}
+                          {/* {sharingLink && (
+                            <TouchableOpacity
+                              style={styles.downloadButton}
+                              onPress={() => {
+                                if (Platform.OS === "web") {
+                                  window.open(sharingLink, "_blank");
+                                } else {
+                                  Linking.openURL(sharingLink);
+                                }
+                              }}
+                            >
+                              <Text style={styles.downloadButtonText}>
+                                Download
+                              </Text>
+                            </TouchableOpacity>
+                          )} */}
+                        </View>
+
+                        <View style={styles.previewActions}>
+                          {sharingLink && (
+                            <>
+                              <IconButton
+                                icon="eye"
+                                size={20}
+                                onPress={() => {
+                                  if (Platform.OS === "web") {
+                                    window.open(sharingLink, "_blank");
+                                  } else {
+                                    Linking.openURL(sharingLink);
+                                  }
+                                }}
+                                style={styles.actionButton}
+                              />
+                              <IconButton
+                                icon="content-copy"
+                                size={20}
+                                onPress={handleCopyLink}
+                                style={styles.actionButton}
+                              />
+                            </>
+                          )}
+                          {deletingDocument ? (
+                            <IconButton
+                              icon="sync"
+                              size={20}
+                              disabled={true}
+                              style={[
+                                styles.actionButton,
+                                styles.actionButtonDanger,
+                              ]}
+                            />
+                          ) : (
+                            <IconButton
+                              icon="delete"
+                              size={20}
+                              onPress={handleDeleteDocument}
+                              style={[
+                                styles.actionButton,
+                                styles.actionButtonDanger,
+                              ]}
+                            />
+                          )}
+                        </View>
+
+                        {uploadingDocument && (
+                          <View style={styles.progressContainer}>
+                            <View style={styles.uploadProgress}>
+                              <AnimatedCircularProgress
+                                size={80}
+                                width={8}
+                                fill={uploadProgress}
+                                tintColor={
+                                  uploadProgress === 100 ? "#4CAF50" : "#FF9800"
+                                }
+                                backgroundColor={
+                                  uploadProgress === 100 ? "#E8F5E9" : "#FFE0B2"
+                                }
+                                rotation={0}
+                                lineCap="round"
+                              />
+                              {uploadProgress === 100 ? (
+                                <MaterialCommunityIcons
+                                  name="check"
+                                  size={32}
+                                  color="#4CAF50"
+                                  style={styles.progressIcon}
+                                />
+                              ) : (
+                                <Text style={styles.progressText}>
+                                  {uploadProgress}%
+                                </Text>
+                              )}
+                            </View>
+                          </View>
+                        )}
+                      </View>
+                    )}
+
+                    {uploadError && (
+                      <View style={styles.errorContainer}>
+                        <MaterialCommunityIcons
+                          name="alert-circle"
+                          size={20}
+                          color="#EF4444"
+                        />
+                        <Text style={styles.errorText}>{uploadError}</Text>
+                        <TouchableOpacity
+                          style={styles.retryButton}
+                          onPress={handleRetryUpload}
+                        >
+                          <Text style={styles.retryButtonText}>Retry</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
                   </View>
                 </Surface>
               </Animated.View>
-            </View>
-
-            <View style={styles.gridColumn}>
-              <Surface style={styles.formCard}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.headerLeft}>
-                    <View style={styles.iconContainer}>
-                      <IconButton
-                        icon="domain"
-                        size={24}
-                        style={styles.headerIcon}
-                      />
-                    </View>
-                    <Text style={styles.cardTitle}>Company Information</Text>
-                  </View>
-                </View>
-                <View style={styles.cardContent}>
-                  <CompanySelector
-                    onSelect={setSelectedCompany}
-                    selectedCompany={selectedCompany}
-                    error={companyError}
-                    required={true}
-                    label="Select Company"
-                  />
-                </View>
-              </Surface>
             </View>
           </View>
         </ScrollView>
@@ -828,7 +1250,7 @@ const CreateIllnessReportScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create<StylesType>({
   container: {
     flex: 1,
     backgroundColor: "#F8F9FA",
@@ -921,18 +1343,174 @@ const styles = StyleSheet.create({
     borderColor: "#E0E0E0",
     borderRadius: 8,
   },
-  documentPickerContainer: {
-    marginTop: 8,
+  documentUploadSection: {
+    marginTop: 16,
   },
-  documentButton: {
+  dropzone: {
+    borderWidth: 2,
     borderColor: "#E0E0E0",
-    borderRadius: 8,
+    borderStyle: "dashed",
+    borderRadius: 16,
+    padding: 24,
+    backgroundColor: "#FAFAFA",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  errorText: {
-    color: "#EF4444",
+  dropzoneActive: {
+    borderColor: "#FF9800",
+    backgroundColor: "#FFF8E1",
+  },
+  dropzoneUploading: {
+    borderColor: "#FF9800",
+    borderWidth: 2,
+    backgroundColor: "#FFF8E1",
+    opacity: 0.9,
+  },
+  dropzoneIcon: {
+    width: 48,
+    height: 48,
+    marginBottom: 16,
+  },
+  dropzoneText: {
+    fontSize: 16,
+    color: "#64748B",
+    textAlign: "center",
+    fontFamily: "Poppins-Medium",
+  },
+  dropzoneSubText: {
+    fontSize: 14,
+    color: "#94A3B8",
+    textAlign: "center",
+    marginTop: 8,
+    fontFamily: "Poppins-Regular",
+  },
+  uploadPreview: {
+    marginTop: 24,
+    padding: 16,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+  },
+  previewIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: "#FFF8E1",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  previewContent: {
+    flex: 1,
+  },
+  fileName: {
+    fontSize: 14,
+    color: "#1E293B",
+    fontFamily: "Poppins-Medium",
+    marginBottom: 4,
+  },
+  fileInfo: {
     fontSize: 12,
-    marginTop: -8,
-    marginBottom: 12,
+    color: "#64748B",
+    fontFamily: "Poppins-Regular",
+  },
+  previewActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  actionButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: "#F8FAFC",
+  },
+  actionButtonDanger: {
+    backgroundColor: "#FEF2F2",
+  },
+  progressContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+  },
+  uploadProgress: {
+    position: "relative",
+  },
+  progressText: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    transform: [{ translateX: -20 }, { translateY: -12 }],
+    fontSize: 14,
+    fontFamily: "Poppins-Medium",
+    color: "#FF9800",
+  },
+  errorContainer: {
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: "#FEF2F2",
+    borderRadius: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  retryButton: {
+    backgroundColor: "#FEE2E2",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  retryButtonText: {
+    fontSize: 14,
+    color: "#EF4444",
+    fontFamily: "Poppins-Medium",
+  },
+  uploadingContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+    position: "relative",
+    overflow: "hidden",
+  },
+  uploadingText: {
+    fontSize: 16,
+    color: "#FF9800",
+    fontFamily: "Poppins-Medium",
+    marginTop: 16,
+    textAlign: "center",
+  },
+  uploadingSubtext: {
+    fontSize: 14,
+    color: "#64748B",
+    fontFamily: "Poppins-Regular",
+    marginTop: 8,
+    textAlign: "center",
+  },
+  progressIcon: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    transform: [{ translateX: -16 }, { translateY: -16 }],
+  },
+  downloadButton: {
+    marginTop: 8,
+    backgroundColor: "#F1F5F9",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    alignSelf: "flex-start",
+  },
+  downloadButtonText: {
+    fontSize: 12,
+    color: "#475569",
+    fontFamily: "Poppins-Medium",
   },
   bottomBar: {
     backgroundColor: "#FFFFFF",
@@ -1034,6 +1612,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     marginTop: 12,
+  },
+  errorText: {
+    color: "#EF4444",
+    fontSize: 12,
+    marginTop: -8,
+    marginBottom: 12,
   },
 });
 

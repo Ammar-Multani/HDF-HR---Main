@@ -177,7 +177,7 @@ const envConfig =
 // CORS headers
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Methods": "POST, OPTIONS, DELETE",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-app-version",
 };
@@ -500,6 +500,114 @@ async function logActivity(
   }
 }
 
+// Update document record after deletion
+async function updateDocumentAfterDeletion(documentId, userId, companyId) {
+  try {
+    // First get the document details for logging
+    const { data: document, error: fetchError } = await supabase
+      .from("employee_documents")
+      .select("*")
+      .eq("id", documentId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    // Update the document status to deleted - using updated_at instead of modified_at
+    const { error: updateError } = await supabase
+      .from("employee_documents")
+      .update({
+        status: "deleted",
+        updated_at: new Date().toISOString(),
+        // Don't use modified_at/modified_by as they don't exist
+      })
+      .eq("id", documentId);
+
+    if (updateError) throw updateError;
+
+    // Log the activity
+    await logActivity(
+      userId,
+      companyId,
+      "MEDICAL_CERTIFICATE_DELETE",
+      `Medical certificate deleted: ${document.file_name}`,
+      {
+        document_status: document.status,
+        file_path: document.file_path,
+      },
+      {
+        document_status: "deleted",
+      },
+      {
+        documentId: documentId,
+        fileName: document.file_name,
+        fileType: document.mime_type,
+        reportId: document.reference_id,
+        reportType: document.reference_type,
+      }
+    );
+
+    return { success: true, document };
+  } catch (error) {
+    console.error("Error updating document after deletion:", error);
+    throw error;
+  }
+}
+
+// Add new function to delete file from OneDrive
+async function deleteFileFromOneDrive(graphClient, itemId) {
+  try {
+    console.log(`Attempting to delete file with item ID: ${itemId}`);
+
+    // Delete the file using Microsoft Graph API
+    try {
+      await withRetry(async () => {
+        try {
+          return await graphClient
+            .api(`/users/${MICROSOFT_ADMIN_EMAIL}/drive/items/${itemId}`)
+            .delete();
+        } catch (deleteError) {
+          // Check if the error is "item not found" (404) - if so, consider it a success
+          if (deleteError.statusCode === 404) {
+            console.log(
+              `Item ${itemId} not found, considering deletion successful`
+            );
+            return { success: true };
+          }
+
+          // For other errors, enhance error information
+          const errorDetails = await deleteError?.response?.text?.();
+          const enhancedError = new Error(
+            `Delete failed: ${errorDetails || deleteError.message}`
+          );
+          enhancedError.originalError = deleteError;
+          enhancedError.context = {
+            itemId,
+          };
+          throw enhancedError;
+        }
+      });
+    } catch (error) {
+      // If the error is "item not found", consider it successful
+      if (error.originalError && error.originalError.statusCode === 404) {
+        console.log(
+          `Item ${itemId} not found after retries, considering deletion successful`
+        );
+        return { success: true };
+      }
+      throw error;
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("Graph API delete error:", {
+      error: error.message,
+      context: error.context,
+      originalError: error.originalError,
+    });
+    throw error;
+  }
+}
+
 serve(async (req) => {
   // Log all incoming request details
   console.log("Request details:", {
@@ -521,6 +629,164 @@ serve(async (req) => {
   try {
     // Log request method
     console.log(`Processing ${req.method} request`);
+
+    // Handle DELETE requests for file deletion
+    if (req.method === "DELETE") {
+      // Verify authorization
+      const authHeader = req.headers.get("authorization");
+      if (!authHeader) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Missing authorization header",
+          }),
+          {
+            status: 401,
+            headers: {
+              ...corsHeaders,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+      }
+
+      // Parse request body
+      let requestData;
+      try {
+        requestData = await req.json();
+        console.log("Received delete request data:", requestData);
+      } catch (e) {
+        console.error("Failed to parse JSON data:", e);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Invalid JSON data",
+          }),
+          {
+            status: 400,
+            headers: {
+              ...corsHeaders,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+      }
+
+      // Validate required fields for deletion
+      const { itemId, documentId, userId, companyId, reportId, reportType } =
+        requestData;
+
+      if (!itemId) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Item ID is required for deletion",
+          }),
+          {
+            status: 400,
+            headers: {
+              ...corsHeaders,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+      }
+
+      if (!documentId) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Document ID is required",
+          }),
+          {
+            status: 400,
+            headers: {
+              ...corsHeaders,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+      }
+
+      if (!userId) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "User ID is required",
+          }),
+          {
+            status: 400,
+            headers: {
+              ...corsHeaders,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+      }
+
+      if (!companyId) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Company ID is required",
+          }),
+          {
+            status: 400,
+            headers: {
+              ...corsHeaders,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+      }
+
+      // Initialize Graph client
+      const graphClient = await initializeGraphClient();
+
+      // Delete file from OneDrive
+      await deleteFileFromOneDrive(graphClient, itemId);
+
+      // Update document record
+      const { document } = await updateDocumentAfterDeletion(
+        documentId,
+        userId,
+        companyId
+      );
+
+      // Update the report to remove the document reference if reportId and reportType are provided
+      if (reportId && reportType) {
+        const { error: reportError } = await supabase
+          .from(reportType)
+          .update({
+            medical_certificate: null,
+            document_id: null,
+            updated_at: new Date().toISOString(), // Use updated_at instead of modified_at
+            // Don't use modified_by as it might not exist
+          })
+          .eq("id", reportId);
+
+        if (reportError) {
+          console.error("Error updating report:", reportError);
+        }
+      }
+
+      // Return success response
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "File deleted successfully",
+          document,
+        }),
+        {
+          status: 200,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+    }
+
     if (req.method !== "POST") {
       return new Response(
         JSON.stringify({
@@ -535,6 +801,8 @@ serve(async (req) => {
         }
       );
     }
+
+    // Original POST request handling for file upload continues here
     // Verify authorization
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {

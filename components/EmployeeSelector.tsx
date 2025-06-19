@@ -313,7 +313,7 @@ const EmployeeSelector = ({
 
   const styles = StyleSheet.create({
     container: {
-      marginBottom: 14,
+      marginBottom: 24,
       backgroundColor: "transparent",
     },
     label: {
@@ -355,9 +355,12 @@ const EmployeeSelector = ({
       flexDirection: "row",
       alignItems: "center",
     },
+    selectedEmployeeIcon: {
+      margin: 0,
+    },
     selectedInfo: {
-      marginLeft: 12,
       flex: 1,
+      marginLeft: 8,
     },
     selectedName: {
       fontSize: 14,
@@ -396,7 +399,8 @@ const EmployeeSelector = ({
       borderRadius: 16,
       maxWidth: 600,
       width: "100%",
-      maxHeight: "80%",
+      maxHeight: "90%",
+      minHeight: 400,
       alignSelf: "center",
       overflow: "hidden",
       elevation: 0,
@@ -413,6 +417,8 @@ const EmployeeSelector = ({
       alignItems: "center",
       padding: 16,
       backgroundColor: "#FFFFFF",
+      borderBottomWidth: 1,
+      borderBottomColor: "#e2e8f0",
     },
     modalTitle: {
       fontSize: 18,
@@ -428,73 +434,27 @@ const EmployeeSelector = ({
     searchInput: {
       backgroundColor: "#FFFFFF",
     },
-    employeeList: {
-      maxHeight: 400,
-    },
     listContainer: {
       flex: 1,
       minHeight: 250,
       backgroundColor: "#FFFFFF",
     },
+    employeeList: {
+      maxHeight: 600,
+    },
     emptyStateContainer: {
       minHeight: 250,
       justifyContent: "center",
       alignItems: "center",
-    },
-    employeeItem: {
-      padding: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: "#e2e8f0",
       backgroundColor: "#FFFFFF",
-    },
-    employeeContent: {
-      flexDirection: "row",
-      alignItems: "center",
-      padding: 12,
-    },
-    employeeItemFocused: {
-      backgroundColor: "#f8fafc",
-    },
-    avatar: {
-      marginRight: 12,
-    },
-    employeeInfo: {
-      flex: 1,
-    },
-    employeeName: {
-      fontSize: 14,
-      color: "#1e293b",
-      fontFamily: "Poppins-Medium",
-    },
-    employeeEmail: {
-      fontSize: 12,
-      color: "#64748b",
-      fontFamily: "Poppins-Regular",
-      marginTop: 2,
-    },
-    jobTitleContainer: {
-      flexDirection: "row",
-      alignItems: "center",
-      marginTop: 2,
-    },
-    jobTitleIcon: {
-      margin: 0,
-      padding: 0,
-    },
-    employeeJobTitle: {
-      fontSize: 12,
-      color: "#94a3b8",
-      fontFamily: "Poppins-Regular",
-      marginLeft: 4,
-    },
-    selectedIcon: {
-      margin: 0,
+      padding: 24,
     },
     errorContainer: {
       padding: 16,
       alignItems: "center",
       minHeight: 250,
       justifyContent: "center",
+      backgroundColor: "#FFFFFF",
     },
     errorText: {
       color: "#dc2626",
@@ -513,6 +473,59 @@ const EmployeeSelector = ({
       color: "#1e293b",
       fontSize: 14,
       fontFamily: "Poppins-Medium",
+    },
+    employeeItem: {
+      padding: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: "#e2e8f0",
+      backgroundColor: "#FFFFFF",
+    },
+    employeeContent: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    employeeItemFocused: {
+      backgroundColor: "#f8fafc",
+    },
+    employeeInfo: {
+      flex: 1,
+    },
+    employeeName: {
+      fontSize: 14,
+      color: "#1e293b",
+      fontFamily: "Poppins-Medium",
+    },
+    employeeEmail: {
+      fontSize: 12,
+      color: "#64748b",
+      fontFamily: "Poppins-Regular",
+      marginTop: 2,
+    },
+    jobTitleContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginTop: 4,
+      backgroundColor: "#f1f5f9",
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 13,
+      borderWidth: 0.5,
+      borderColor: "#e2e8f0",
+      maxWidth: 150,
+    },
+    jobTitleIcon: {
+      margin: 0,
+      padding: 0,
+    },
+    employeeJobTitle: {
+      fontSize: 11,
+      color: "#475569",
+      fontFamily: "Poppins-Regular",
+      marginLeft: 4,
+    },
+    selectedIcon: {
+      margin: 0,
     },
   });
 
@@ -536,6 +549,12 @@ const EmployeeSelector = ({
             <View style={styles.selectedContent}>
               {selectedEmployee ? (
                 <View style={styles.selectedEmployee}>
+                  <IconButton
+                    icon="account"
+                    size={24}
+                    iconColor={theme.colors.primary}
+                    style={styles.selectedEmployeeIcon}
+                  />
                   <View style={styles.selectedInfo}>
                     <Text style={styles.selectedName}>
                       {selectedEmployee.first_name} {selectedEmployee.last_name}
@@ -615,41 +634,43 @@ const EmployeeSelector = ({
               />
             </View>
 
-            {searchError ? (
-              <View style={styles.errorContainer}>
-                <Text style={styles.errorText}>{searchError}</Text>
-                <TouchableOpacity
-                  style={styles.retryButton}
-                  onPress={() =>
-                    searchQuery
-                      ? searchEmployees(searchQuery)
-                      : fetchInitialEmployees()
-                  }
-                >
-                  <Text style={styles.retryButtonText}>Retry</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <ScrollView style={styles.employeeList}>
-                {employees.length === 0 ? (
-                  <View style={styles.emptyStateContainer}>
-                    <EmptyState
-                      icon="account-search"
-                      title="No Employees Found"
-                      message={
-                        searchQuery
-                          ? "Try a different search term"
-                          : "No employees available"
-                      }
-                    />
-                  </View>
-                ) : (
-                  employees.map((employee, index) =>
-                    renderEmployeeItem(employee, index)
-                  )
-                )}
-              </ScrollView>
-            )}
+            <View style={styles.listContainer}>
+              {searchError ? (
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorText}>{searchError}</Text>
+                  <TouchableOpacity
+                    style={styles.retryButton}
+                    onPress={() =>
+                      searchQuery
+                        ? searchEmployees(searchQuery)
+                        : fetchInitialEmployees()
+                    }
+                  >
+                    <Text style={styles.retryButtonText}>Retry</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <ScrollView style={styles.employeeList}>
+                  {employees.length === 0 ? (
+                    <View style={styles.emptyStateContainer}>
+                      <EmptyState
+                        icon="account-search"
+                        title="No Employees Found"
+                        message={
+                          searchQuery
+                            ? "Try a different search term"
+                            : "No employees available"
+                        }
+                      />
+                    </View>
+                  ) : (
+                    employees.map((employee, index) =>
+                      renderEmployeeItem(employee, index)
+                    )
+                  )}
+                </ScrollView>
+              )}
+            </View>
           </KeyboardAvoidingView>
         </Modal>
       </Portal>
@@ -702,9 +723,12 @@ const staticStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
+  selectedEmployeeIcon: {
+    margin: 0,
+  },
   selectedInfo: {
-    marginLeft: 12,
     flex: 1,
+    marginLeft: 8,
   },
   selectedName: {
     fontSize: 14,
@@ -779,9 +803,11 @@ const staticStyles = StyleSheet.create({
     minHeight: 250,
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    padding: 24,
   },
   employeeItem: {
-    padding: 12,
+    padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#e2e8f0",
     backgroundColor: "#FFFFFF",
@@ -789,13 +815,10 @@ const staticStyles = StyleSheet.create({
   employeeContent: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 12,
+    justifyContent: "space-between",
   },
   employeeItemFocused: {
     backgroundColor: "#f8fafc",
-  },
-  avatar: {
-    marginRight: 12,
   },
   employeeInfo: {
     flex: 1,
@@ -814,15 +837,22 @@ const staticStyles = StyleSheet.create({
   jobTitleContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 2,
+    marginTop: 4,
+    backgroundColor: "#f1f5f9",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 13,
+    borderWidth: 0.5,
+    borderColor: "#e2e8f0",
+    maxWidth: 150,
   },
   jobTitleIcon: {
     margin: 0,
     padding: 0,
   },
   employeeJobTitle: {
-    fontSize: 12,
-    color: "#94a3b8",
+    fontSize: 11,
+    color: "#475569",
     fontFamily: "Poppins-Regular",
     marginLeft: 4,
   },
@@ -834,6 +864,7 @@ const staticStyles = StyleSheet.create({
     alignItems: "center",
     minHeight: 250,
     justifyContent: "center",
+    backgroundColor: "#FFFFFF",
   },
   errorText: {
     color: "#dc2626",

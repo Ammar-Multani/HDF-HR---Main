@@ -8,6 +8,9 @@ import {
   Alert,
   Dimensions,
   Linking,
+  TouchableOpacity,
+  ViewStyle,
+  TextStyle,
 } from "react-native";
 import {
   Text,
@@ -78,6 +81,75 @@ interface IllnessReportFormData {
   document_id?: string;
 }
 
+// Update the styles type at the top of the file after imports
+type StylesType = {
+  container: ViewStyle;
+  keyboardAvoidingView: ViewStyle;
+  scrollView: ViewStyle;
+  scrollContent: ViewStyle;
+  headerSection: ViewStyle;
+  pageTitle: TextStyle;
+  gridContainer: ViewStyle;
+  gridColumn: ViewStyle;
+  formCard: ViewStyle;
+  cardHeader: ViewStyle;
+  headerLeft: ViewStyle;
+  iconContainer: ViewStyle;
+  headerIcon: ViewStyle;
+  cardTitle: TextStyle;
+  cardContent: ViewStyle;
+  input: ViewStyle;
+  inputLabel: TextStyle;
+  dateButton: ViewStyle;
+  documentPickerContainer: ViewStyle;
+  documentButton: ViewStyle;
+  errorText: TextStyle;
+  bottomBar: ViewStyle;
+  bottomBarContent: ViewStyle;
+  button: ViewStyle;
+  cancelButton: ViewStyle;
+  submitButton: ViewStyle;
+  webDatePickerModal: ViewStyle;
+  modalSurface: ViewStyle;
+  modalHeader: ViewStyle;
+  modalTitle: TextStyle;
+  webDatePickerContainer: ViewStyle;
+  webDateInputRow: ViewStyle;
+  webDateInputContainer: ViewStyle;
+  webDateInputLabel: TextStyle;
+  webDateInput: ViewStyle;
+  webDatePickerActions: ViewStyle;
+  webDatePickerButton: ViewStyle;
+  snackbar: ViewStyle;
+  documentActions: ViewStyle;
+  documentUploadSection: ViewStyle;
+  dropzone: ViewStyle;
+  dropzoneActive: ViewStyle;
+  dropzoneUploading: ViewStyle;
+  dropzoneIcon: ViewStyle;
+  dropzoneText: TextStyle;
+  dropzoneSubText: TextStyle;
+  uploadPreview: ViewStyle;
+  previewIcon: ViewStyle;
+  previewContent: ViewStyle;
+  fileName: TextStyle;
+  fileInfo: TextStyle;
+  previewActions: ViewStyle;
+  actionButton: ViewStyle;
+  actionButtonDanger: ViewStyle;
+  progressContainer: ViewStyle;
+  uploadProgress: ViewStyle;
+  progressText: TextStyle;
+  errorContainer: ViewStyle;
+  retryButton: ViewStyle;
+  retryButtonText: TextStyle;
+  uploadingContainer: ViewStyle;
+  uploadingText: TextStyle;
+  uploadingSubtext: TextStyle;
+  progressIcon: ViewStyle;
+  progressTextContainer: ViewStyle;
+};
+
 const CreateIllnessReportScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
@@ -99,6 +171,13 @@ const CreateIllnessReportScreen = () => {
     null
   );
   const [sharingLink, setSharingLink] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [fileSize, setFileSize] = useState(0);
+  const [uploadDate, setUploadDate] = useState(new Date());
+  const [isDragActive, setIsDragActive] = useState(false);
+  const [deletingDocument, setDeletingDocument] = useState(false);
+  const [documentItemId, setDocumentItemId] = useState<string | null>(null);
 
   const {
     control,
@@ -150,7 +229,7 @@ const CreateIllnessReportScreen = () => {
     setShowDatePicker(false);
   };
 
-  const handlePickDocument = async () => {
+  const handlePickDocument = async (droppedFile?: File) => {
     if (!selectedEmployee) {
       setSnackbarMessage("Please select an employee first");
       setSnackbarVisible(true);
@@ -159,6 +238,11 @@ const CreateIllnessReportScreen = () => {
 
     try {
       setUploadingDocument(true);
+      setUploadProgress(0);
+      setUploadError(null);
+
+      // Show initial loading progress
+      setUploadProgress(10);
 
       // Validate company ID
       if (!companyId) {
@@ -168,6 +252,7 @@ const CreateIllnessReportScreen = () => {
       // Create illness report first if it doesn't exist
       let reportId = watch("id");
       if (!reportId) {
+        setUploadProgress(20);
         console.log("Creating new illness report...");
         const { data: illnessReport, error: createError } = await supabase
           .from("illness_report")
@@ -198,23 +283,40 @@ const CreateIllnessReportScreen = () => {
         console.log("Created illness report:", illnessReport);
         reportId = illnessReport.id;
         setValue("id", reportId);
+
+        // After successful report creation
+        setUploadProgress(30);
       }
 
-      // Use document picker
-      const result = await DocumentPicker.getDocumentAsync({
-        type: [
-          "application/pdf",
-          "image/*",
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        ],
-        copyToCacheDirectory: true,
-      });
+      let file;
+      if (droppedFile) {
+        // Use the dropped file from drag and drop
+        file = {
+          uri: URL.createObjectURL(droppedFile),
+          name: droppedFile.name,
+          size: droppedFile.size,
+          mimeType: droppedFile.type,
+        };
+        setUploadProgress(40);
+      } else {
+        // Use document picker
+        const result = await DocumentPicker.getDocumentAsync({
+          type: [
+            "application/pdf",
+            "image/*",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          ],
+          copyToCacheDirectory: true,
+        });
 
-      if (result.canceled) {
-        return;
+        if (result.canceled) {
+          setUploadingDocument(false);
+          return;
+        }
+
+        file = result.assets[0];
+        setUploadProgress(40);
       }
-
-      const file = result.assets[0];
 
       // Validate file size (10MB limit)
       const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -252,6 +354,8 @@ const CreateIllnessReportScreen = () => {
       };
       formData.append("metadata", JSON.stringify(metadata));
 
+      setUploadProgress(50);
+
       // Add retry logic for network issues
       const MAX_RETRIES = 3;
       let retryCount = 0;
@@ -286,6 +390,8 @@ const CreateIllnessReportScreen = () => {
         }
       }
 
+      setUploadProgress(70);
+
       if (uploadResponse?.data) {
         console.log("Upload response data:", uploadResponse.data);
 
@@ -303,7 +409,14 @@ const CreateIllnessReportScreen = () => {
           setValue("document_id", responseData.document.id);
         }
 
+        // Store the itemId for later use in deletion
+        if (responseData?.itemId) {
+          setDocumentItemId(responseData.itemId);
+        }
+
         setDocumentName(file.name);
+        setFileSize(file.size);
+        setUploadDate(new Date());
 
         // Store both webUrl and sharingLink
         if (responseData?.webUrl) {
@@ -315,20 +428,157 @@ const CreateIllnessReportScreen = () => {
 
         setSnackbarMessage("Medical certificate uploaded successfully");
         setSnackbarVisible(true);
+
+        // Show almost complete
+        setUploadProgress(90);
+
+        // Finish after a short delay to show the animation
+        setTimeout(() => {
+          setUploadProgress(100);
+
+          // Show success animation for a moment before hiding the loader
+          setTimeout(() => {
+            setUploadingDocument(false);
+          }, 800);
+        }, 500);
       } else {
         console.warn("Upload response missing data:", uploadResponse);
         setSnackbarMessage("Document uploaded but some data was missing");
         setSnackbarVisible(true);
+        setUploadProgress(100);
+        setUploadingDocument(false);
       }
     } catch (error: any) {
       console.error("Error picking document:", error);
-      setSnackbarMessage(
-        error.message || "Failed to upload document. Please try again."
+      setUploadError(
+        error.message || "Error uploading document. Please try again."
       );
+      setSnackbarMessage("Error uploading document. Please try again.");
       setSnackbarVisible(true);
-    } finally {
+      setUploadProgress(0);
       setUploadingDocument(false);
     }
+  };
+
+  const handleRetryUpload = () => {
+    setUploadError(null);
+    handlePickDocument();
+  };
+
+  // Function to get appropriate file icon
+  const getFileIcon = (filename: string | null) => {
+    if (!filename)
+      return <IconButton icon="file" size={24} iconColor="#FF9800" />;
+
+    const extension = filename.split(".").pop()?.toLowerCase();
+
+    switch (extension) {
+      case "pdf":
+        return <IconButton icon="file-pdf-box" size={24} iconColor="#FF9800" />;
+      case "doc":
+      case "docx":
+        return (
+          <IconButton icon="file-word-box" size={24} iconColor="#2196F3" />
+        );
+      case "jpg":
+      case "jpeg":
+      case "png":
+        return <IconButton icon="file-image" size={24} iconColor="#4CAF50" />;
+      default:
+        return <IconButton icon="file" size={24} iconColor="#FF9800" />;
+    }
+  };
+
+  // Add custom drop handler for web
+  const dropRef = React.useRef(null);
+
+  useEffect(() => {
+    if (Platform.OS === "web" && dropRef.current) {
+      const element = dropRef.current as unknown as HTMLElement;
+
+      const handleDragEnter = (e: Event) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragActive(true);
+      };
+
+      const handleDragOver = (e: Event) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragActive(true);
+      };
+
+      const handleDragLeave = (e: Event) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragActive(false);
+      };
+
+      const handleDrop = (e: any) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragActive(false);
+
+        if (
+          e.dataTransfer &&
+          e.dataTransfer.files &&
+          e.dataTransfer.files.length > 0
+        ) {
+          const file = e.dataTransfer.files[0];
+
+          // Check file type
+          const validTypes = [
+            "application/pdf",
+            "image/jpeg",
+            "image/png",
+            "image/jpg",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          ];
+
+          if (!validTypes.includes(file.type)) {
+            setSnackbarMessage(
+              "Invalid file type. Please upload PDF, DOCX, JPG or PNG files."
+            );
+            setSnackbarVisible(true);
+            return;
+          }
+
+          // Check file size (10MB)
+          if (file.size > 10 * 1024 * 1024) {
+            setSnackbarMessage("File is too large. Maximum size is 10MB.");
+            setSnackbarVisible(true);
+            return;
+          }
+
+          handlePickDocument(file);
+        }
+      };
+
+      element.addEventListener("dragenter", handleDragEnter);
+      element.addEventListener("dragover", handleDragOver);
+      element.addEventListener("dragleave", handleDragLeave);
+      element.addEventListener("drop", handleDrop);
+
+      return () => {
+        element.removeEventListener("dragenter", handleDragEnter);
+        element.removeEventListener("dragover", handleDragOver);
+        element.removeEventListener("dragleave", handleDragLeave);
+        element.removeEventListener("drop", handleDrop);
+      };
+    }
+  }, [dropRef, companyId, selectedEmployee]);
+
+  // Helper functions for formatting
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
+
+  const formatDate = (date: Date) => {
+    return format(date, "MMM d, yyyy");
   };
 
   const handleCopyLink = async () => {
@@ -485,6 +735,88 @@ const CreateIllnessReportScreen = () => {
     );
   };
 
+  // Add handleDeleteDocument function
+  const handleDeleteDocument = async () => {
+    try {
+      // Check if we have the necessary information to delete the document
+      const documentId = watch("document_id");
+      const reportId = watch("id");
+
+      // Use the stored itemId directly or try to extract it from sharing link if not available
+      let itemId = documentItemId;
+
+      if (!itemId && sharingLink) {
+        try {
+          // For Microsoft 365 sharing links, try to extract the ID from the URL
+          const urlMatch = sharingLink.match(/\/([a-zA-Z0-9_-]{43})(\/|\?|$)/);
+          if (urlMatch && urlMatch[1]) {
+            itemId = urlMatch[1];
+          } else {
+            // Fallback - try to get ID from query params
+            const url = new URL(sharingLink);
+            const idParam = url.searchParams.get("id");
+            if (idParam) itemId = idParam;
+          }
+        } catch (error) {
+          console.error("Error parsing sharing link:", error);
+        }
+      }
+
+      if (!documentId) {
+        setSnackbarMessage("Cannot delete document: Missing document ID");
+        setSnackbarVisible(true);
+        return;
+      }
+
+      setDeletingDocument(true);
+      setSnackbarMessage("Deleting document...");
+      setSnackbarVisible(true);
+
+      // Call the Edge Function to delete the file
+      const response = await supabase.functions.invoke("onedrive-upload", {
+        method: "DELETE",
+        body: {
+          itemId: itemId || "unknown", // Even without itemId, we'll update the database
+          documentId,
+          userId: user?.id,
+          companyId,
+          reportId,
+          reportType: "illness_report",
+        },
+      });
+
+      console.log("Delete response:", response);
+
+      // Reset document-related state variables even if there was an error
+      // This ensures the UI is cleaned up
+      setDocumentName(null);
+      setSharingLink(null);
+      setDocumentItemId(null);
+      setValue("medical_certificate", "");
+      setValue("document_id", "");
+
+      setSnackbarMessage("Medical certificate deleted successfully");
+      setSnackbarVisible(true);
+    } catch (error: any) {
+      console.error("Error deleting document:", error);
+
+      // Reset document-related state variables even on error
+      // This is important for UX - if deletion fails in the cloud but works in the database
+      setDocumentName(null);
+      setSharingLink(null);
+      setDocumentItemId(null);
+      setValue("medical_certificate", "");
+      setValue("document_id", "");
+
+      setSnackbarMessage(
+        "Document removed from report. " + (error.message || "")
+      );
+      setSnackbarVisible(true);
+    } finally {
+      setDeletingDocument(false);
+    }
+  };
+
   if (!companyId) {
     return <LoadingIndicator />;
   }
@@ -627,47 +959,147 @@ const CreateIllnessReportScreen = () => {
 
                   <View style={styles.cardContent}>
                     <Text style={styles.inputLabel}>Medical Certificate</Text>
-                    <View style={styles.documentPickerContainer}>
-                      <Button
-                        mode="outlined"
-                        onPress={handlePickDocument}
-                        style={styles.documentButton}
-                        icon="file-upload"
-                        loading={uploadingDocument}
-                        disabled={loading || uploadingDocument}
-                        textColor="#FF9800"
-                      >
-                        {documentName || "Upload Medical Certificate"}
-                      </Button>
-                      {documentName && sharingLink && (
-                        <View style={styles.documentActions}>
-                          <Button
-                            mode="outlined"
-                            onPress={() => {
-                              if (Platform.OS === "web") {
-                                window.open(sharingLink, "_blank");
-                              } else {
-                                Linking.openURL(sharingLink);
-                              }
-                            }}
-                            style={styles.documentButton}
-                            icon="file-document"
-                            textColor="#FF9800"
-                          >
-                            Open Document
-                          </Button>
-                          <Button
-                            mode="outlined"
-                            onPress={handleCopyLink}
-                            style={styles.documentButton}
-                            icon="share-variant"
-                            textColor="#FF9800"
-                          >
-                            Copy Link
-                          </Button>
+
+                    {!documentName ? (
+                      <View style={styles.documentUploadSection}>
+                        <TouchableOpacity
+                          ref={dropRef}
+                          style={[
+                            styles.dropzone,
+                            isDragActive && styles.dropzoneActive,
+                            uploadingDocument && styles.dropzoneUploading,
+                          ]}
+                          onPress={() => handlePickDocument()}
+                          disabled={uploadingDocument}
+                        >
+                          {uploadingDocument ? (
+                            <Animated.View style={styles.uploadingContainer}>
+                              <View style={styles.uploadProgress}>
+                                <View style={styles.progressTextContainer}>
+                                  <Text style={styles.uploadingText}>
+                                    Uploading... {uploadProgress}%
+                                  </Text>
+                                </View>
+                              </View>
+                              <Text style={styles.uploadingSubtext}>
+                                Please wait
+                              </Text>
+                            </Animated.View>
+                          ) : (
+                            <>
+                              <IconButton
+                                icon="cloud-upload"
+                                size={48}
+                                iconColor="#FF9800"
+                              />
+                              <Text style={styles.dropzoneText}>
+                                Click to select your medical certificate
+                              </Text>
+                              <Text style={styles.dropzoneSubText}>
+                                Supported formats: PDF, DOCX, JPG, PNG (max
+                                10MB)
+                              </Text>
+                              {Platform.OS === "web" && (
+                                <Text style={styles.dropzoneSubText}>
+                                  Or drag and drop files here
+                                </Text>
+                              )}
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <View style={styles.uploadPreview}>
+                        <View style={styles.previewIcon}>
+                          {getFileIcon(documentName)}
                         </View>
-                      )}
-                    </View>
+
+                        <View style={styles.previewContent}>
+                          <Text style={styles.fileName} numberOfLines={1}>
+                            {documentName}
+                          </Text>
+                          <Text style={styles.fileInfo}>
+                            {formatFileSize(fileSize)} • Uploaded{" "}
+                            {formatDate(uploadDate)}
+                          </Text>
+                        </View>
+
+                        <View style={styles.previewActions}>
+                          {sharingLink && (
+                            <>
+                              <IconButton
+                                icon="eye"
+                                size={20}
+                                onPress={() => {
+                                  if (Platform.OS === "web") {
+                                    window.open(sharingLink, "_blank");
+                                  } else {
+                                    Linking.openURL(sharingLink);
+                                  }
+                                }}
+                                style={styles.actionButton}
+                              />
+                              <IconButton
+                                icon="content-copy"
+                                size={20}
+                                onPress={handleCopyLink}
+                                style={styles.actionButton}
+                              />
+                            </>
+                          )}
+                          {deletingDocument ? (
+                            <IconButton
+                              icon="sync"
+                              size={20}
+                              disabled={true}
+                              style={[
+                                styles.actionButton,
+                                styles.actionButtonDanger,
+                              ]}
+                            />
+                          ) : (
+                            <IconButton
+                              icon="delete"
+                              size={20}
+                              onPress={handleDeleteDocument}
+                              style={[
+                                styles.actionButton,
+                                styles.actionButtonDanger,
+                              ]}
+                            />
+                          )}
+                        </View>
+
+                        {uploadingDocument && (
+                          <View style={styles.progressContainer}>
+                            <View style={styles.uploadProgress}>
+                              <View style={styles.progressTextContainer}>
+                                <Text style={styles.progressText}>
+                                  {uploadProgress}%
+                                </Text>
+                              </View>
+                            </View>
+                          </View>
+                        )}
+                      </View>
+                    )}
+
+                    {uploadError && (
+                      <View style={styles.errorContainer}>
+                        <IconButton
+                          icon="alert-circle"
+                          size={20}
+                          iconColor="#EF4444"
+                        />
+                        <Text style={styles.errorText}>{uploadError}</Text>
+                        <TouchableOpacity
+                          style={styles.retryButton}
+                          onPress={handleRetryUpload}
+                        >
+                          <Text style={styles.retryButtonText}>Retry</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
                   </View>
                 </Surface>
               </Animated.View>
@@ -744,7 +1176,7 @@ const CreateIllnessReportScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create<StylesType>({
   container: {
     flex: 1,
     backgroundColor: "#F8F9FA",
@@ -950,6 +1382,161 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     marginTop: 12,
+  },
+  documentUploadSection: {
+    marginTop: 16,
+  },
+  dropzone: {
+    borderWidth: 2,
+    borderColor: "#E0E0E0",
+    borderStyle: "dashed",
+    borderRadius: 16,
+    padding: 24,
+    backgroundColor: "#FAFAFA",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dropzoneActive: {
+    borderColor: "#FF9800",
+    backgroundColor: "#FFF3E0",
+  },
+  dropzoneUploading: {
+    borderColor: "#FF9800",
+    borderWidth: 2,
+    backgroundColor: "#FFF3E0",
+    opacity: 0.9,
+    transform: [{ scale: 1.01 }],
+  },
+  dropzoneIcon: {
+    width: 48,
+    height: 48,
+    marginBottom: 16,
+  },
+  dropzoneText: {
+    fontSize: 16,
+    color: "#64748B",
+    textAlign: "center",
+    fontFamily: "Poppins-Medium",
+  },
+  dropzoneSubText: {
+    fontSize: 14,
+    color: "#94A3B8",
+    textAlign: "center",
+    marginTop: 8,
+    fontFamily: "Poppins-Regular",
+  },
+  uploadPreview: {
+    marginTop: 24,
+    padding: 16,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+  },
+  previewIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: "#FFF3E0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  previewContent: {
+    flex: 1,
+  },
+  fileName: {
+    fontSize: 14,
+    color: "#1E293B",
+    fontFamily: "Poppins-Medium",
+    marginBottom: 4,
+  },
+  fileInfo: {
+    fontSize: 12,
+    color: "#64748B",
+    fontFamily: "Poppins-Regular",
+  },
+  previewActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  actionButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: "#F8FAFC",
+  },
+  actionButtonDanger: {
+    backgroundColor: "#FEE2E2",
+  },
+  progressContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+  },
+  uploadProgress: {
+    position: "relative",
+  },
+  progressText: {
+    fontSize: 14,
+    fontFamily: "Poppins-Medium",
+    color: "#FF9800",
+  },
+  errorContainer: {
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: "#FEF2F2",
+    borderRadius: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  retryButton: {
+    backgroundColor: "#FEE2E2",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  retryButtonText: {
+    fontSize: 14,
+    color: "#EF4444",
+    fontFamily: "Poppins-Medium",
+  },
+  uploadingContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+    position: "relative",
+    overflow: "hidden",
+  },
+  uploadingText: {
+    fontSize: 16,
+    color: "#FF9800",
+    fontFamily: "Poppins-Medium",
+    textAlign: "center",
+  },
+  uploadingSubtext: {
+    fontSize: 14,
+    color: "#64748B",
+    fontFamily: "Poppins-Regular",
+    marginTop: 8,
+    textAlign: "center",
+  },
+  progressIcon: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    transform: [{ translateX: -16 }, { translateY: -16 }],
+  },
+  progressTextContainer: {
+    position: "relative",
   },
 });
 

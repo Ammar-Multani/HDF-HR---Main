@@ -50,6 +50,7 @@ export const linking = {
       SuperAdminFormDetailsScreen: "admin/form/:id",
       SuperAdminCreateEmployeeAccidentReport: "admin/form/accident/create",
       SuperAdminCreateEmployeeIllnessReport: "admin/form/illness/create",
+      SuperAdminCreateEmployeeStaffDeparture: "admin/form/departure/create",
       CreateReceipt: "admin/receipt/create",
       ReceiptDetails: "admin/receipt/:id",
       EditReceipt: "admin/receipt/:id/edit",
