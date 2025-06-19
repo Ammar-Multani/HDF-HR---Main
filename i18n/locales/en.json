@@ -438,9 +438,6 @@
       "passwordNoRepeatingChars": "Password cannot contain three or more repeating characters",
       "phoneNumberInvalidFormat": "Invalid phone number format. Must be 8-15 digits with optional + prefix"
     },
-
-
-
     "tasks": {
       "title": "Task",
       "company": "Company",
@@ -924,20 +921,48 @@
       }
     },
     "activityLogs": {
-      "title": "Activity Logs",
-      "subtitle": "Track all system activities and changes",
-      "noLogs": "No activity logs found",
+      "title": "Activity Logs for {{companyName}}",
+      "subtitle": "Track all activities and changes related to your company",
+      "noLogs": "No activity logs found for your company",
+      "emptyMessage": "No logs match your search criteria or time period. Try adjusting your filters.",
+      "systemMaintenanceNotice": "System maintenance logs are excluded from view",
       "filters": {
         "all": "All Activities",
         "taskCreation": "Task Creation",
         "taskUpdates": "Task Updates",
         "statusChanges": "Status Changes",
         "comments": "Comments",
-        "userAssignment": "User Assignment"
+        "employeeUpdates": "Employee Updates",
+        "receipts": "Receipts"
       },
       "customDateRange": "Custom Date Range",
       "startDate": "Start Date",
-      "endDate": "End Date"
+      "endDate": "End Date",
+      "activityTypes": {
+        "CREATE_TASK": "Task Creation",
+        "UPDATE_TASK": "Task Update",
+        "UPDATE_TASK_STATUS": "Status Change",
+        "ADD_COMMENT": "Comment Added",
+        "ASSIGN_USER": "User Assigned",
+        "REMOVE_USER": "User Removed",
+        "UPDATE_PROFILE": "Profile Update",
+        "PASSWORD_RESET": "Password Reset",
+        "DATA_EXPORT": "Data Export",
+        "ACCOUNT_DELETION": "Account Deletion",
+        "CREATE_COMPANY": "Company Created",
+        "UPDATE_COMPANY": "Company Updated",
+        "CREATE_SUPER_ADMIN": "Super Admin Created",
+        "UPDATE_SUPER_ADMIN": "Super Admin Updated",
+        "CREATE_COMPANY_ADMIN": "Company Admin Created",
+        "UPDATE_COMPANY_ADMIN": "Company Admin Updated",
+        "CREATE_EMPLOYEE": "Employee Created",
+        "UPDATE_EMPLOYEE": "Employee Updated",
+        "CREATE_RECEIPT": "Receipt Created",
+        "UPDATE_RECEIPT": "Receipt Updated",
+        "MEDICAL_CERTIFICATE_UPLOAD": "Medical Certificate Upload"
+      },
+      "viewAll": "View All Activities",
+      "recentActivities": "Recent Activities"
     }
   },
   "companyAdmin": {
@@ -1138,6 +1163,50 @@
         "countryRequired": "Country is required",
         "countryInvalidChars": "Country can only contain letters, spaces, hyphens, and apostrophes"
       }
+    },
+    "activityLogs": {
+      "title": "Activity Logs for {{companyName}}",
+      "subtitle": "Track all activities and changes related to your company",
+      "noLogs": "No activity logs found for your company",
+      "emptyMessage": "No logs match your search criteria or time period. Try adjusting your filters.",
+      "systemMaintenanceNotice": "System maintenance logs are excluded from view",
+      "filters": {
+        "all": "All Activities",
+        "taskCreation": "Task Creation",
+        "taskUpdates": "Task Updates",
+        "statusChanges": "Status Changes",
+        "comments": "Comments",
+        "employeeUpdates": "Employee Updates",
+        "receipts": "Receipts"
+      },
+      "customDateRange": "Custom Date Range",
+      "startDate": "Start Date",
+      "endDate": "End Date",
+      "activityTypes": {
+        "CREATE_TASK": "Task Creation",
+        "UPDATE_TASK": "Task Update",
+        "UPDATE_TASK_STATUS": "Status Change",
+        "ADD_COMMENT": "Comment Added",
+        "ASSIGN_USER": "User Assigned",
+        "REMOVE_USER": "User Removed",
+        "UPDATE_PROFILE": "Profile Update",
+        "PASSWORD_RESET": "Password Reset",
+        "DATA_EXPORT": "Data Export",
+        "ACCOUNT_DELETION": "Account Deletion",
+        "CREATE_COMPANY": "Company Created",
+        "UPDATE_COMPANY": "Company Updated",
+        "CREATE_SUPER_ADMIN": "Super Admin Created",
+        "UPDATE_SUPER_ADMIN": "Super Admin Updated",
+        "CREATE_COMPANY_ADMIN": "Company Admin Created",
+        "UPDATE_COMPANY_ADMIN": "Company Admin Updated",
+        "CREATE_EMPLOYEE": "Employee Created",
+        "UPDATE_EMPLOYEE": "Employee Updated",
+        "CREATE_RECEIPT": "Receipt Created",
+        "UPDATE_RECEIPT": "Receipt Updated",
+        "MEDICAL_CERTIFICATE_UPLOAD": "Medical Certificate Upload"
+      },
+      "viewAll": "View All Activities",
+      "recentActivities": "Recent Activities"
     }
   },
   "employee": {
@@ -1251,7 +1320,6 @@
     "createEmployeeAccidentReport": "Create Employee Accident Report",
     "activityLog": "Activity Logs"
   },
-
   "receipts": {
     "title": "Receipts",
     "subtitle": "View, add, and update receipts",

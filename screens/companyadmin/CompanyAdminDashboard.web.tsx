@@ -9,7 +9,7 @@ import {
   Platform,
   TouchableOpacity,
 } from "react-native";
-import { useTheme } from "react-native-paper";
+import { useTheme, Surface } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { supabase, isNetworkAvailable } from "../../lib/supabase";
@@ -30,6 +30,8 @@ import Animated, {
   withSequence,
 } from "react-native-reanimated";
 import HelpGuideModal from "../../components/HelpGuideModal";
+import ActivityLogTimeline from "../../components/ActivityLogTimeline";
+import { useTranslation } from "react-i18next";
 
 const { width } = Dimensions.get("window");
 
@@ -112,6 +114,7 @@ const CompanyAdminDashboard = () => {
   const theme = useTheme();
   const navigation = useNavigation();
   const { user, signOut } = useAuth();
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [companyId, setCompanyId] = useState<string | null>(null);
@@ -135,6 +138,7 @@ const CompanyAdminDashboard = () => {
     monthlyForms: [] as number[],
     monthLabels: [] as string[],
     topEmployees: [] as EmployeeData[],
+    latestActivities: [] as any[],
   });
 
   const [windowDimensions, setWindowDimensions] = useState({
@@ -601,6 +605,7 @@ const CompanyAdminDashboard = () => {
         monthlyForms: recentMonthsFormData,
         monthLabels: recentMonthsLabels,
         topEmployees: [],
+        latestActivities: [],
       });
 
       // Fetch top employees by forms count for this company
@@ -705,6 +710,79 @@ const CompanyAdminDashboard = () => {
             topEmployees,
           }));
         }
+      }
+
+      // After fetching all the other data, fetch company-specific activity logs
+      const { data: latestActivities, error: activitiesError } = await supabase
+        .from("activity_logs")
+        .select("*")
+        .or(`company_id.eq.${currentCompanyId},user_id.eq.${user?.id}`)
+        .neq("activity_type", "SYSTEM_MAINTENANCE")
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      if (activitiesError) {
+        console.error("Error fetching latest activities:", activitiesError);
+      }
+
+      // Additional check to filter logs that are specific to this company or its users
+      if (latestActivities) {
+        // Filter logs to ensure they're company-related
+        const companyRelatedLogs = latestActivities.filter((log) => {
+          // Ensure log has a company ID that matches the current company
+          if (log.company_id === currentCompanyId) return true;
+
+          // If company_id is null but user is the actor, keep it only if it's relevant
+          if (!log.company_id && log.user_id === user?.id) {
+            // Keep user's own activity even without company_id
+            return true;
+          }
+
+          // Check metadata for company references
+          if (log.metadata) {
+            // Check if company is referenced in metadata
+            if (
+              log.metadata.company &&
+              log.metadata.company.id === currentCompanyId
+            )
+              return true;
+
+            // Check for user references in metadata that match current user
+            if (
+              log.metadata.created_by &&
+              log.metadata.created_by.id === user?.id
+            )
+              return true;
+
+            if (
+              log.metadata.updated_by &&
+              log.metadata.updated_by.id === user?.id
+            )
+              return true;
+
+            if (
+              log.metadata.company_admin &&
+              log.metadata.company_admin.id === user?.id
+            )
+              return true;
+          }
+
+          // If none of the above conditions match, exclude the log
+          return false;
+        });
+
+        // Limit to 10 most recent logs
+        const recentLogs = companyRelatedLogs.slice(0, 10);
+
+        setStats((prevStats) => ({
+          ...prevStats,
+          latestActivities: recentLogs || [],
+        }));
+      } else {
+        setStats((prevStats) => ({
+          ...prevStats,
+          latestActivities: [],
+        }));
       }
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
@@ -1210,6 +1288,31 @@ const CompanyAdminDashboard = () => {
                 </View>
               </View>
             </View>
+
+            {/* Activity Logs Section */}
+            <View style={styles.activityLogsSection}>
+              <Surface style={styles.activityLogsCard} elevation={0}>
+                {stats.latestActivities && stats.latestActivities.length > 0 ? (
+                  <>
+                    <ActivityLogTimeline
+                      logs={stats.latestActivities}
+                      title="Recent Company Activities"
+                    />
+                  </>
+                ) : (
+                  <View style={styles.emptyState}>
+                    <MaterialCommunityIcons
+                      name="clock-outline"
+                      size={48}
+                      color={theme.colors.outlineVariant}
+                    />
+                    <Text style={styles.emptyStateText}>
+                      No activity logs found
+                    </Text>
+                  </View>
+                )}
+              </Surface>
+            </View>
           </ScrollView>
         </Animated.View>
       </View>
@@ -1472,6 +1575,34 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 16,
     color: "#999",
+  },
+  activityLogsSection: {
+    marginTop: 24,
+    width: "100%",
+  },
+  activityLogsCard: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    borderColor: "#e0e0e0",
+    borderWidth: 1,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+    elevation: 2,
+    minHeight: 400,
+    maxHeight: 600,
+    overflow: "hidden",
+  },
+  systemNotice: {
+    fontSize: 12,
+    color: "#94A3B8",
+    textAlign: "center",
+    padding: 12,
+    fontStyle: "italic",
   },
 });
 

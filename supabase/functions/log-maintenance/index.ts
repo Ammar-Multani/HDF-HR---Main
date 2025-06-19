@@ -27,6 +27,150 @@ async function getSystemUser(supabaseClient: any) {
   return systemUser.id;
 }
 
+// Function to check if logs count exceeds threshold
+async function checkLogsCount(
+  supabaseClient: any,
+  tableName: string,
+  threshold: number
+) {
+  const { count, error } = await supabaseClient
+    .from(tableName)
+    .select("*", { count: "exact", head: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return count > threshold;
+}
+
+// Function to archive logs
+async function archiveLogs(
+  supabaseClient: any,
+  olderThanDate: Date,
+  systemUserId: string
+) {
+  // First, copy old logs to archive
+  const { data: archivedLogs, error: archiveError } = await supabaseClient
+    .from("activity_logs")
+    .select("*")
+    .lt("created_at", olderThanDate.toISOString());
+
+  if (archiveError) {
+    throw archiveError;
+  }
+
+  if (archivedLogs && archivedLogs.length > 0) {
+    // Add archived_at timestamp to each log
+    const logsWithArchiveDate = archivedLogs.map((log) => ({
+      ...log,
+      archived_at: new Date().toISOString(),
+    }));
+
+    // Insert into archive table
+    const { error: insertError } = await supabaseClient
+      .from("activity_logs_archive")
+      .insert(logsWithArchiveDate);
+
+    if (insertError) {
+      throw insertError;
+    }
+
+    // Delete archived logs from original table
+    const { error: deleteError } = await supabaseClient
+      .from("activity_logs")
+      .delete()
+      .lt("created_at", olderThanDate.toISOString());
+
+    if (deleteError) {
+      throw deleteError;
+    }
+
+    // Log the maintenance activity using system user ID
+    const { error: logError } = await supabaseClient
+      .from("activity_logs")
+      .insert({
+        user_id: systemUserId,
+        activity_type: "SYSTEM_MAINTENANCE",
+        description: "Automated log maintenance completed by system",
+        metadata: {
+          archived_count: archivedLogs?.length || 0,
+          archive_date: new Date().toISOString(),
+          maintenance_type: "log_archival_and_deletion",
+        },
+      });
+
+    if (logError) {
+      console.error("Error logging maintenance activity:", logError);
+      throw logError;
+    }
+
+    return archivedLogs.length;
+  }
+
+  return 0;
+}
+
+// Function to handle overflow logs
+async function handleOverflowLogs(
+  supabaseClient: any,
+  tableName: string,
+  threshold: number,
+  systemUserId: string
+) {
+  const { count, error: countError } = await supabaseClient
+    .from(tableName)
+    .select("*", { count: "exact", head: true });
+
+  if (countError) {
+    throw countError;
+  }
+
+  if (count <= threshold) {
+    return 0;
+  }
+
+  // Calculate how many logs to archive (oldest logs)
+  const overflowCount = count - threshold + 100; // Archive extra 100 to avoid frequent maintenance
+
+  // Get the date of the Nth oldest log
+  const { data: oldestLogs, error: oldestError } = await supabaseClient
+    .from(tableName)
+    .select("created_at")
+    .order("created_at", { ascending: true })
+    .limit(overflowCount);
+
+  if (oldestError) {
+    throw oldestError;
+  }
+
+  if (!oldestLogs || oldestLogs.length === 0) {
+    return 0;
+  }
+
+  const cutoffDate = new Date(oldestLogs[oldestLogs.length - 1].created_at);
+
+  if (tableName === "activity_logs") {
+    // Archive logs older than cutoff date
+    return await archiveLogs(supabaseClient, cutoffDate, systemUserId);
+  } else if (tableName === "activity_logs_archive") {
+    // Delete logs from archive that are older than cutoff date
+    const { data: deletedLogs, error: deleteError } = await supabaseClient
+      .from("activity_logs_archive")
+      .delete()
+      .lt("created_at", cutoffDate.toISOString())
+      .select();
+
+    if (deleteError) {
+      throw deleteError;
+    }
+
+    return deletedLogs?.length || 0;
+  }
+
+  return 0;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -49,83 +193,75 @@ serve(async (req) => {
     const systemUserId = await getSystemUser(supabaseClient);
     console.log("Using system user ID:", systemUserId);
 
-    // Archive logs older than 6 months
-    const sixMonthsAgo = new Date();
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    // Archive logs older than 3 months
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
 
-    // First, copy old logs to archive
-    const { data: archivedLogs, error: archiveError } = await supabaseClient
-      .from("activity_logs")
-      .select("*")
-      .lt("created_at", sixMonthsAgo.toISOString());
+    const archivedCount = await archiveLogs(
+      supabaseClient,
+      threeMonthsAgo,
+      systemUserId
+    );
 
-    if (archiveError) {
-      throw archiveError;
-    }
+    // Check if logs count exceeds threshold and handle overflow
+    const mainTableThreshold = 700;
+    const archiveTableThreshold = 1000;
 
-    if (archivedLogs && archivedLogs.length > 0) {
-      // Add archived_at timestamp to each log
-      const logsWithArchiveDate = archivedLogs.map((log) => ({
-        ...log,
-        archived_at: new Date().toISOString(),
-      }));
+    const mainTableOverflowCount = await handleOverflowLogs(
+      supabaseClient,
+      "activity_logs",
+      mainTableThreshold,
+      systemUserId
+    );
 
-      // Insert into archive table
-      const { error: insertError } = await supabaseClient
-        .from("activity_logs_archive")
-        .insert(logsWithArchiveDate);
-
-      if (insertError) {
-        throw insertError;
-      }
-
-      // Delete archived logs from original table
-      const { error: deleteError } = await supabaseClient
-        .from("activity_logs")
-        .delete()
-        .lt("created_at", sixMonthsAgo.toISOString());
-
-      if (deleteError) {
-        throw deleteError;
-      }
-    }
+    const archiveTableOverflowCount = await handleOverflowLogs(
+      supabaseClient,
+      "activity_logs_archive",
+      archiveTableThreshold,
+      systemUserId
+    );
 
     // Delete logs from archive that are older than 1 year
     const oneYearAgo = new Date();
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
-    const { error: deleteOldError } = await supabaseClient
+    const { data: deletedOldLogs, error: deleteOldError } = await supabaseClient
       .from("activity_logs_archive")
       .delete()
-      .lt("created_at", oneYearAgo.toISOString());
+      .lt("created_at", oneYearAgo.toISOString())
+      .select();
 
     if (deleteOldError) {
       throw deleteOldError;
     }
 
-    // Log the maintenance activity using system user ID
-    const { error: logError } = await supabaseClient
+    // Log the final maintenance summary
+    const { error: summaryLogError } = await supabaseClient
       .from("activity_logs")
       .insert({
         user_id: systemUserId,
         activity_type: "SYSTEM_MAINTENANCE",
-        description: "Automated log maintenance completed",
+        description: "Log maintenance summary",
         metadata: {
-          archived_count: archivedLogs?.length || 0,
-          archive_date: new Date().toISOString(),
-          maintenance_type: "log_archival_and_deletion",
+          time_based_archived_count: archivedCount,
+          main_table_overflow_archived: mainTableOverflowCount,
+          archive_table_overflow_deleted: archiveTableOverflowCount,
+          old_archive_deleted_count: deletedOldLogs?.length || 0,
+          maintenance_date: new Date().toISOString(),
         },
       });
 
-    if (logError) {
-      console.error("Error logging maintenance activity:", logError);
-      throw logError;
+    if (summaryLogError) {
+      console.error("Error logging maintenance summary:", summaryLogError);
     }
 
     return new Response(
       JSON.stringify({
         message: "Log maintenance completed successfully",
-        archived_count: archivedLogs?.length || 0,
+        time_based_archived_count: archivedCount,
+        main_table_overflow_archived: mainTableOverflowCount,
+        archive_table_overflow_deleted: archiveTableOverflowCount,
+        old_archive_deleted_count: deletedOldLogs?.length || 0,
         system_user_id: systemUserId,
       }),
       {

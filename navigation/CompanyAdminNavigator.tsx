@@ -42,6 +42,7 @@ import CreateEmployeeStaffDepartureReportScreen from "../screens/companyadmin/Cr
 import CompanyReceiptsListScreen from "../screens/companyadmin/CompanyReceiptsListScreen.web";
 import CreateCompanyReceiptScreen from "../screens/companyadmin/CreateCompanyReceiptScreen.web";
 import CompanyReceiptDetailsScreen from "../screens/companyadmin/CompanyReceiptDetailsScreen.web";
+import CompanyActivityLogsScreen from "../screens/companyadmin/CompanyActivityLogsScreen";
 
 // Stack navigators
 const CompanyAdminStack = createNativeStackNavigator();
@@ -70,6 +71,7 @@ type RootStackParamList = {
   ReceiptsScreen: undefined;
   CreateCompanyReceipt: undefined;
   CompanyReceiptDetails: { id: string };
+  ActivityLogs: undefined;
 };
 
 // Add type for company response
@@ -77,7 +79,7 @@ type CompanyResponse = {
   company_id: string;
   company: {
     can_upload_receipts: boolean;
-  };
+  } | null;
 };
 
 // Add a custom hook for window dimensions
@@ -174,6 +176,10 @@ const ContentArea = () => {
           name="CompanyReceiptDetails"
           component={CompanyReceiptDetailsScreen}
         />
+        <ContentStack.Screen
+          name="ActivityLogs"
+          component={CompanyActivityLogsScreen}
+        />
       </ContentStack.Group>
     </ContentStack.Navigator>
   );
@@ -241,10 +247,11 @@ const WebStackNavigator = () => {
       if (companyUserError) throw companyUserError;
 
       if (companyUser) {
-        const typedCompanyUser = companyUser as CompanyResponse;
-        setCanUploadReceipts(
-          typedCompanyUser.company?.can_upload_receipts ?? false
-        );
+        // Properly access the can_upload_receipts property
+        const can_upload = companyUser.company
+          ? (companyUser.company as any).can_upload_receipts
+          : false;
+        setCanUploadReceipts(can_upload ?? false);
       }
     } catch (error) {
       console.error("Error fetching company permissions:", error);
@@ -339,7 +346,11 @@ const CompanyAdminTabNavigator = () => {
       if (companyUserError) throw companyUserError;
 
       if (companyUser) {
-        setCanUploadReceipts(companyUser.company?.can_upload_receipts || false);
+        // Properly access the can_upload_receipts property
+        const can_upload = companyUser.company
+          ? (companyUser.company as any).can_upload_receipts
+          : false;
+        setCanUploadReceipts(can_upload ?? false);
       }
     } catch (error) {
       console.error("Error fetching company permissions:", error);
@@ -565,6 +576,10 @@ export const CompanyAdminNavigator = () => {
         <CompanyAdminStack.Screen
           name="CompanyReceiptDetails"
           component={CompanyReceiptDetailsScreen}
+        />
+        <CompanyAdminStack.Screen
+          name="ActivityLogs"
+          component={CompanyActivityLogsScreen}
         />
       </CompanyAdminStack.Group>
     </CompanyAdminStack.Navigator>
