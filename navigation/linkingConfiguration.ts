@@ -64,7 +64,11 @@ export const linking = {
           Employees: "employees",
           Tasks: "tasks",
           FormSubmissions: "forms",
+          Receipts: "receipts",
           Profile: "profile",
+          CreateCompanyReceipt: "receipts/create",
+          CompanyReceiptDetails: "receipts/:receiptId",
+          EditCompanyReceipt: "receipts/:receiptId/edit",
         },
       },
 

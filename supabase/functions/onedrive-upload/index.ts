@@ -472,78 +472,78 @@ async function createDocumentAndUpdateReport(
 ) {
   // Handle company receipts differently
   if (reportType === "company_receipt") {
-    // For company receipts, create a document record but don't update any report
-    const { data: document, error: documentError } = await supabase
-      .from("employee_documents")
-      .insert([
-        {
-          company_id: companyId,
-          employee_id: employeeId,
-          document_type: "RECEIPT",
-          reference_type: reportType,
-          reference_id: reportId !== "temp" ? reportId : null,
-          file_path: uploadResult.filePath,
-          drive_id: uploadResult.driveId,
-          item_id: uploadResult.itemId,
-          file_url: uploadResult.sharingLink,
-          file_name: uploadResult.fileName,
-          mime_type: uploadResult.mimeType,
-          uploaded_by: uploadedBy,
-          status: "active",
-        },
-      ])
-      .select()
-      .single();
+    // For receipts, update the receipt record with the sharing link and file details
+    if (reportId && reportId !== "temp") {
+      const { error: updateError } = await supabase
+        .from("receipts")
+        .update({
+          receipt_image_path: uploadResult.sharingLink,
+          updated_at: new Date().toISOString(),
+          // Add any other relevant file details you want to store
+          // but don't use document_id since we're not creating document records for receipts
+        })
+        .eq("id", reportId);
 
-    if (documentError) throw documentError;
+      if (updateError) {
+        console.error("Error updating receipt with file details:", updateError);
+        throw updateError;
+      }
+    }
 
     return {
-      document,
-      report: null, // No report to update for receipts
-    };
-  } else {
-    // Original code for medical certificates
-    const { data: document, error: documentError } = await supabase
-      .from("employee_documents")
-      .insert([
-        {
-          company_id: companyId,
-          employee_id: employeeId,
-          document_type: "MEDICAL_CERTIFICATE",
-          reference_type: reportType,
-          reference_id: reportId,
-          file_path: uploadResult.filePath,
-          drive_id: uploadResult.driveId,
-          item_id: uploadResult.itemId,
-          file_url: uploadResult.sharingLink,
-          file_name: uploadResult.fileName,
-          mime_type: uploadResult.mimeType,
-          uploaded_by: uploadedBy,
-          status: "active",
-        },
-      ])
-      .select()
-      .single();
-    if (documentError) throw documentError;
-
-    // Update the report with the document reference
-    const { data: report, error: reportError } = await supabase
-      .from(reportType)
-      .update({
-        medical_certificate: uploadResult.filePath,
-        modified_at: new Date().toISOString(),
-        modified_by: uploadedBy,
-      })
-      .eq("id", reportId)
-      .select()
-      .single();
-    if (reportError) throw reportError;
-
-    return {
-      document,
-      report,
+      document: {
+        file_path: uploadResult.filePath,
+        file_url: uploadResult.sharingLink,
+        id: null, // No document record needed for receipts
+      },
+      report: null,
     };
   }
+
+  // Handle other document types (medical certificates, etc.)
+  const { data: document, error: documentError } = await supabase
+    .from("employee_documents")
+    .insert([
+      {
+        company_id: companyId,
+        employee_id: employeeId,
+        document_type:
+          reportType === "accident_report"
+            ? "MEDICAL_CERTIFICATE"
+            : "ILLNESS_CERTIFICATE",
+        reference_type: reportType,
+        reference_id: reportId,
+        file_path: uploadResult.filePath,
+        drive_id: uploadResult.driveId,
+        item_id: uploadResult.itemId,
+        file_url: uploadResult.sharingLink,
+        file_name: uploadResult.fileName,
+        mime_type: uploadResult.mimeType,
+        uploaded_by: uploadedBy,
+        status: "active",
+      },
+    ])
+    .select()
+    .single();
+
+  if (documentError) throw documentError;
+
+  // Update the report with the document ID
+  const { data: report, error: reportError } = await supabase
+    .from(reportType)
+    .update({
+      medical_certificate: document.id,
+    })
+    .eq("id", reportId)
+    .select()
+    .single();
+
+  if (reportError) throw reportError;
+
+  return {
+    document,
+    report,
+  };
 }
 
 // Log activity

@@ -171,6 +171,7 @@ export const AppNavigator = ({ initialAuthState = null }) => {
                 Receipts: "receipts",
                 CreateCompanyReceipt: "receipts/create",
                 CompanyReceiptDetails: "receipts/:receiptId",
+                EditCompanyReceipt: "receipts/:receiptId/edit",
               },
             },
             SuperAdmin: {

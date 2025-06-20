@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, CSSProperties } from "react";
 import {
   StyleSheet,
   View,
@@ -10,6 +10,9 @@ import {
   Image,
   Platform,
   Dimensions,
+  ViewStyle,
+  ImageStyle,
+  TextStyle,
 } from "react-native";
 import {
   Text,
@@ -102,8 +105,73 @@ interface Receipt {
 interface LineItem {
   name: string;
   qty: number;
-  price: number;
+  unitPrice: number;
+  totalPrice: number;
 }
+
+type Styles = {
+  container: ViewStyle;
+  scrollView: ViewStyle;
+  scrollContent: ViewStyle;
+  headerSection: ViewStyle;
+  pageTitle: TextStyle;
+  gridContainer: ViewStyle;
+  gridColumn: ViewStyle;
+  detailsCard: ViewStyle;
+  cardHeader: ViewStyle;
+  headerLeft: ViewStyle;
+  iconContainer: ViewStyle;
+  headerIcon: ViewStyle;
+  cardTitle: TextStyle;
+  cardContent: ViewStyle;
+  detailRow: ViewStyle;
+  detailLabel: TextStyle;
+  detailValue: TextStyle;
+  categoryChip: ViewStyle;
+  amountRow: ViewStyle;
+  amountLabel: TextStyle;
+  amountValue: TextStyle;
+  paymentChip: ViewStyle;
+  divider: ViewStyle;
+  itemDivider: ViewStyle;
+  itemsHeaderRow: ViewStyle;
+  itemRow: ViewStyle;
+  itemColumn: TextStyle;
+  itemDescriptionHeader: TextStyle;
+  itemQtyHeader: TextStyle;
+  itemPriceHeader: TextStyle;
+  itemTotalHeader: TextStyle;
+  itemDescription: TextStyle;
+  itemQty: TextStyle;
+  itemPrice: TextStyle;
+  itemTotal: TextStyle;
+  totalRow: ViewStyle;
+  totalLabel: TextStyle;
+  totalValue: TextStyle;
+  notesText: TextStyle;
+  receiptImage: ImageStyle;
+  viewImageButton: ViewStyle;
+  imageLoadingContainer: ViewStyle;
+  imageLoadingText: TextStyle;
+  noImageText: TextStyle;
+  actionButtons: ViewStyle;
+  button: ViewStyle;
+  errorContainer: ViewStyle;
+  imagePreviewContainer: ViewStyle;
+  imageOverlay: ViewStyle;
+  previewHint: TextStyle;
+  imageActions: ViewStyle;
+  imageButton: ViewStyle;
+  documentInfo: ViewStyle;
+  documentText: TextStyle;
+  lineItem: ViewStyle;
+  lineItemHeader: ViewStyle;
+  lineItemName: TextStyle;
+  lineItemTotal: TextStyle;
+  lineItemDetails: ViewStyle;
+  lineItemQuantity: TextStyle;
+  lineItemDivider: ViewStyle;
+};
 
 const ReceiptDetailsScreen = () => {
   const theme = useTheme();
@@ -123,6 +191,9 @@ const ReceiptDetailsScreen = () => {
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [loadingImage, setLoadingImage] = useState(false);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [showCopySuccess, setShowCopySuccess] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
 
   const fetchReceiptDetails = async () => {
     try {
@@ -154,13 +225,9 @@ const ReceiptDetailsScreen = () => {
       if (data?.receipt_image_path) {
         setLoadingImage(true);
         try {
-          const { data: publicUrlData } = supabase.storage
-            .from("receipt-images")
-            .getPublicUrl(data.receipt_image_path);
-
-          setImageUrl(publicUrlData.publicUrl);
+          setImageUrl(data.receipt_image_path);
         } catch (imageError) {
-          console.error("Error getting image URL:", imageError);
+          console.error("Error setting image URL:", imageError);
         } finally {
           setLoadingImage(false);
         }
@@ -184,9 +251,7 @@ const ReceiptDetailsScreen = () => {
 
   const handleViewImage = () => {
     if (imageUrl) {
-      Linking.openURL(imageUrl);
-    } else {
-      Alert.alert("Error", "Receipt image is not available");
+      window.open(imageUrl, "_blank");
     }
   };
 
@@ -196,15 +261,49 @@ const ReceiptDetailsScreen = () => {
     }
   };
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number | undefined | null) => {
+    if (amount === undefined || amount === null || isNaN(amount)) {
+      return "N/A";
+    }
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     }).format(amount);
   };
 
   const calculateItemTotal = (item: LineItem) => {
-    return item.qty * item.price;
+    const quantity = Number(item.qty) || 0;
+    const price = Number(item.unitPrice) || 0;
+    return quantity * price;
+  };
+
+  const handleCopyLink = async () => {
+    if (imageUrl) {
+      try {
+        await navigator.clipboard.writeText(imageUrl);
+        setShowCopySuccess(true);
+        setTimeout(() => setShowCopySuccess(false), 2000);
+      } catch (error) {
+        console.error("Error copying link:", error);
+      }
+    }
+  };
+
+  const overlayStyle: CSSProperties = {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.3)",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    opacity: isHovered ? 1 : 0,
+    cursor: "pointer",
+    transition: "opacity 0.2s ease",
   };
 
   if (loading && !refreshing) {
@@ -303,9 +402,9 @@ const ReceiptDetailsScreen = () => {
                   </View>
 
                   <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Date:</Text>
+                    <Text style={styles.detailLabel}>Uploaded Date:</Text>
                     <Text style={styles.detailValue}>
-                      {format(new Date(receipt.date), "MMMM d, yyyy")}
+                      {format(new Date(receipt.created_at), "MMMM d, yyyy")}
                     </Text>
                   </View>
 
@@ -408,7 +507,7 @@ const ReceiptDetailsScreen = () => {
                     <View style={styles.amountRow}>
                       <Text style={styles.amountLabel}>Subtotal Amount:</Text>
                       <Text style={styles.amountValue}>
-                        {formatCurrency(receipt.subtotal_amount)}
+                        {formatCurrency(Number(receipt.subtotal_amount))}
                       </Text>
                     </View>
                   )}
@@ -416,14 +515,14 @@ const ReceiptDetailsScreen = () => {
                   <View style={styles.amountRow}>
                     <Text style={styles.amountLabel}>Tax Amount:</Text>
                     <Text style={styles.amountValue}>
-                      {formatCurrency(receipt.tax_amount)}
+                      {formatCurrency(Number(receipt.tax_amount))}
                     </Text>
                   </View>
 
                   <View style={styles.amountRow}>
                     <Text style={styles.amountLabel}>Total Amount:</Text>
                     <Text style={styles.amountValue}>
-                      {formatCurrency(receipt.total_amount)}
+                      {formatCurrency(Number(receipt.total_amount))}
                     </Text>
                   </View>
 
@@ -431,7 +530,7 @@ const ReceiptDetailsScreen = () => {
                     <View style={styles.amountRow}>
                       <Text style={styles.amountLabel}>Final Price:</Text>
                       <Text style={styles.amountValue}>
-                        {formatCurrency(receipt.final_price)}
+                        {formatCurrency(Number(receipt.final_price))}
                       </Text>
                     </View>
                   )}
@@ -440,7 +539,7 @@ const ReceiptDetailsScreen = () => {
                     <View style={styles.amountRow}>
                       <Text style={styles.amountLabel}>Paid Amount:</Text>
                       <Text style={styles.amountValue}>
-                        {formatCurrency(receipt.paid_amount)}
+                        {formatCurrency(Number(receipt.paid_amount))}
                       </Text>
                     </View>
                   )}
@@ -449,7 +548,7 @@ const ReceiptDetailsScreen = () => {
                     <View style={styles.amountRow}>
                       <Text style={styles.amountLabel}>Change Amount:</Text>
                       <Text style={styles.amountValue}>
-                        {formatCurrency(receipt.change_amount)}
+                        {formatCurrency(Number(receipt.change_amount))}
                       </Text>
                     </View>
                   )}
@@ -482,128 +581,111 @@ const ReceiptDetailsScreen = () => {
           <View style={styles.gridColumn}>
             <Animated.View entering={FadeIn.delay(200)}>
               {/* Line Items */}
-              {receipt.line_items && receipt.line_items.length > 0 && (
-                <Surface style={styles.detailsCard}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.headerLeft}>
-                      <View style={styles.iconContainer}>
-                        <IconButton
-                          icon="format-list-bulleted"
-                          size={20}
-                          iconColor="#64748b"
-                          style={styles.headerIcon}
-                        />
+              {receipt &&
+                receipt.line_items &&
+                receipt.line_items.length > 0 && (
+                  <Surface style={styles.detailsCard}>
+                    <View style={styles.cardHeader}>
+                      <View style={styles.headerLeft}>
+                        <View style={styles.iconContainer}>
+                          <IconButton
+                            icon="format-list-bulleted"
+                            size={20}
+                            iconColor="#64748b"
+                            style={styles.headerIcon}
+                          />
+                        </View>
+                        <Text style={styles.cardTitle}>Line Items</Text>
                       </View>
-                      <Text style={styles.cardTitle}>Line Items</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.cardContent}>
-                    <View style={styles.itemsHeaderRow}>
-                      <Text
-                        style={[
-                          styles.itemColumn,
-                          styles.itemDescriptionHeader,
-                        ]}
-                      >
-                        Item
-                      </Text>
-                      <Text style={[styles.itemColumn, styles.itemQtyHeader]}>
-                        Qty
-                      </Text>
-                      <Text style={[styles.itemColumn, styles.itemPriceHeader]}>
-                        Price
-                      </Text>
-                      <Text style={[styles.itemColumn, styles.itemTotalHeader]}>
-                        Total
-                      </Text>
                     </View>
 
-                    <Divider style={styles.itemDivider} />
+                    <View style={styles.cardContent}>
+                      {(receipt.line_items as LineItem[]).map(
+                        (item: LineItem, index: number) => (
+                          <View key={index}>
+                            <View style={styles.lineItem}>
+                              <View style={styles.lineItemHeader}>
+                                <Text style={styles.lineItemName}>
+                                  {item.name || "Unnamed Item"}
+                                </Text>
+                                <Text style={styles.lineItemTotal}>
+                                  {formatCurrency(Number(item.totalPrice))}
+                                </Text>
+                              </View>
+                              <View style={styles.lineItemDetails}>
+                                <Text style={styles.lineItemQuantity}>
+                                  {Number(item.qty)} x{" "}
+                                  {formatCurrency(Number(item.unitPrice))}
+                                </Text>
+                              </View>
+                            </View>
+                            {index <
+                              (receipt.line_items as LineItem[]).length - 1 && (
+                              <Divider style={styles.lineItemDivider} />
+                            )}
+                          </View>
+                        )
+                      )}
+                    </View>
+                  </Surface>
+                )}
 
-                    {receipt.line_items.map((item, index) => (
-                      <View key={index}>
-                        <View style={styles.itemRow}>
-                          <Text
-                            style={[styles.itemColumn, styles.itemDescription]}
-                          >
-                            {item.name}
-                          </Text>
-                          <Text style={[styles.itemColumn, styles.itemQty]}>
-                            {item.qty}
-                          </Text>
-                          <Text style={[styles.itemColumn, styles.itemPrice]}>
-                            {formatCurrency(item.price)}
-                          </Text>
-                          <Text style={[styles.itemColumn, styles.itemTotal]}>
-                            {formatCurrency(calculateItemTotal(item))}
+              {/* Receipt Document */}
+              {(receipt.receipt_image_path || imageUrl) && (
+                <Animated.View entering={FadeIn.delay(600)}>
+                  <Surface style={[styles.detailsCard, { marginTop: 24 }]}>
+                    <View style={styles.cardHeader}>
+                      <View style={styles.headerLeft}>
+                        <View style={styles.iconContainer}>
+                          <IconButton
+                            icon="file-cloud"
+                            size={20}
+                            iconColor="#64748b"
+                            style={styles.headerIcon}
+                          />
+                        </View>
+                        <Text style={styles.cardTitle}>Receipt</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.cardContent}>
+                      {loadingImage ? (
+                        <View style={styles.imageLoadingContainer}>
+                          <ActivityIndicator
+                            size="large"
+                            color={theme.colors.primary}
+                          />
+                          <Text style={styles.imageLoadingText}>
+                            Loading receipt...
                           </Text>
                         </View>
-                        <Divider style={styles.itemDivider} />
-                      </View>
-                    ))}
-
-                    <View style={styles.totalRow}>
-                      <Text style={styles.totalLabel}>Total:</Text>
-                      <Text style={styles.totalValue}>
-                        {formatCurrency(receipt.total_amount)}
-                      </Text>
-                    </View>
-                  </View>
-                </Surface>
-              )}
-
-              {/* Receipt Image */}
-              {(receipt.receipt_image_path || imageUrl) && (
-                <Surface style={[styles.detailsCard, { marginTop: 24 }]}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.headerLeft}>
-                      <View style={styles.iconContainer}>
-                        <IconButton
-                          icon="image"
-                          size={20}
-                          iconColor="#64748b"
-                          style={styles.headerIcon}
-                        />
-                      </View>
-                      <Text style={styles.cardTitle}>Receipt Image</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.cardContent}>
-                    {loadingImage ? (
-                      <View style={styles.imageLoadingContainer}>
-                        <ActivityIndicator
-                          size="large"
-                          color={theme.colors.primary}
-                        />
-                        <Text style={styles.imageLoadingText}>
-                          Loading image...
+                      ) : imageUrl ? (
+                        <View style={styles.imageActions}>
+                          <Button
+                            mode="contained"
+                            icon="open-in-new"
+                            onPress={handleViewImage}
+                            style={[styles.imageButton, { marginRight: 8 }]}
+                          >
+                            Open Receipt
+                          </Button>
+                          <Button
+                            mode="outlined"
+                            icon={showCopySuccess ? "check" : "content-copy"}
+                            onPress={handleCopyLink}
+                            style={styles.imageButton}
+                          >
+                            {showCopySuccess ? "Copied!" : "Copy Link"}
+                          </Button>
+                        </View>
+                      ) : (
+                        <Text style={styles.noImageText}>
+                          Receipt document not available
                         </Text>
-                      </View>
-                    ) : imageUrl ? (
-                      <View>
-                        <Image
-                          source={{ uri: imageUrl }}
-                          style={styles.receiptImage}
-                          resizeMode="contain"
-                        />
-                        <Button
-                          mode="outlined"
-                          icon="open-in-new"
-                          onPress={handleViewImage}
-                          style={styles.viewImageButton}
-                        >
-                          View Full Image
-                        </Button>
-                      </View>
-                    ) : (
-                      <Text style={styles.noImageText}>
-                        Receipt image not available
-                      </Text>
-                    )}
-                  </View>
-                </Surface>
+                      )}
+                    </View>
+                  </Surface>
+                </Animated.View>
               )}
             </Animated.View>
           </View>
@@ -613,7 +695,7 @@ const ReceiptDetailsScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create<Styles>({
   container: {
     flex: 1,
     backgroundColor: "#F8F9FA",
@@ -840,12 +922,14 @@ const styles = StyleSheet.create({
   imageLoadingText: {
     marginTop: 12,
     color: "#757575",
+    fontFamily: "Poppins-Regular",
   },
   noImageText: {
     fontStyle: "italic",
     color: "#757575",
     textAlign: "center",
     padding: 20,
+    fontFamily: "Poppins-Regular",
   },
   actionButtons: {
     marginTop: 32,
@@ -861,6 +945,88 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
+  },
+  imagePreviewContainer: {
+    position: "relative",
+    width: "100%",
+    height: 300,
+    borderRadius: 8,
+    overflow: "hidden",
+    backgroundColor: "#f1f5f9",
+  },
+  imageOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.3)",
+    justifyContent: "center",
+    alignItems: "center",
+    opacity: Platform.OS === "web" ? 0 : 1,
+  },
+  previewHint: {
+    color: "#FFFFFF",
+    marginTop: 8,
+    fontSize: 14,
+    fontFamily: "Poppins-Medium",
+  },
+  imageActions: {
+    flexDirection: "row",
+    justifyContent: "flex-start",
+    gap: 12,
+  },
+  imageButton: {
+    flex: 1,
+    maxWidth: 200,
+  },
+  documentInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 16,
+    backgroundColor: "#f8fafc",
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  documentText: {
+    fontSize: 16,
+    color: "#475569",
+    fontFamily: "Poppins-Regular",
+    marginLeft: 8,
+  },
+  lineItem: {
+    marginBottom: 16,
+  },
+  lineItemHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 4,
+  },
+  lineItemName: {
+    fontSize: 16,
+    color: "#1e293b",
+    flex: 1,
+    marginRight: 16,
+    fontFamily: "Poppins-Regular",
+  },
+  lineItemTotal: {
+    fontSize: 16,
+    color: "#1e293b",
+    fontFamily: "Poppins-Medium",
+  },
+  lineItemDetails: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  lineItemQuantity: {
+    fontSize: 14,
+    color: "#64748b",
+    fontFamily: "Poppins-Regular",
+  },
+  lineItemDivider: {
+    marginVertical: 16,
   },
 });
 

@@ -20,6 +20,7 @@ import {
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useRoute } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
@@ -81,9 +82,18 @@ interface Receipt {
   change_amount?: string;
 }
 
+// Define the navigation param list type
+type RootStackParamList = {
+  CompanyReceiptDetails: { receiptId: string };
+  EditCompanyReceipt: { receiptId: string };
+};
+
+type CompanyReceiptDetailsNavigationProp =
+  NativeStackNavigationProp<RootStackParamList>;
+
 const CompanyReceiptDetailsScreen = () => {
   const theme = useTheme();
-  const navigation = useNavigation();
+  const navigation = useNavigation<CompanyReceiptDetailsNavigationProp>();
   const route = useRoute<any>();
   const { receiptId } = route.params;
   const { user } = useAuth();
@@ -97,6 +107,7 @@ const CompanyReceiptDetailsScreen = () => {
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [showImageModal, setShowImageModal] = useState(false);
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [showCopySuccess, setShowCopySuccess] = useState(false);
 
   useEffect(() => {
     fetchCompanyInfo();
@@ -149,34 +160,28 @@ const CompanyReceiptDetailsScreen = () => {
     }
   };
 
-  const renderImageModal = () => {
-    if (!receipt?.receipt_image_path) return null;
+  const handleViewImage = () => {
+    if (receipt?.receipt_image_path) {
+      window.open(receipt.receipt_image_path, "_blank");
+    }
+  };
 
-    return (
-      <Portal>
-        <Modal
-          visible={showImageModal}
-          onDismiss={() => setShowImageModal(false)}
-          contentContainerStyle={styles.imageModal}
-        >
-          <View style={styles.imageModalHeader}>
-            <Text style={styles.imageModalTitle}>Receipt Image</Text>
-            <IconButton
-              icon="close"
-              size={24}
-              onPress={() => setShowImageModal(false)}
-            />
-          </View>
-          <View style={styles.imageModalContent}>
-            <Image
-              source={{ uri: receipt.receipt_image_path }}
-              style={styles.modalImage}
-              resizeMode="contain"
-            />
-          </View>
-        </Modal>
-      </Portal>
-    );
+  const handleCopyLink = async () => {
+    if (receipt?.receipt_image_path) {
+      try {
+        await navigator.clipboard.writeText(receipt.receipt_image_path);
+        setShowCopySuccess(true);
+        setTimeout(() => setShowCopySuccess(false), 2000);
+      } catch (error) {
+        console.error("Error copying link:", error);
+      }
+    }
+  };
+
+  const handleEditReceipt = () => {
+    if (receipt) {
+      navigation.navigate("EditCompanyReceipt", { receiptId: receipt.id });
+    }
   };
 
   if (loading) {
@@ -203,7 +208,7 @@ const CompanyReceiptDetailsScreen = () => {
     <SafeAreaView style={styles.container}>
       <AppHeader
         title="Receipt Details"
-        subtitle={`Receipt #${receipt.receipt_number}`}
+        subtitle="View detailed information about this receipt"
         showBackButton
         showLogo={false}
         absolute={false}
@@ -220,10 +225,17 @@ const CompanyReceiptDetailsScreen = () => {
         ]}
       >
         <View style={styles.headerSection}>
-          <Text style={styles.pageTitle}>Receipt Details</Text>
-          <Text style={styles.pageSubtitle}>
-            View detailed information about this receipt
-          </Text>
+          <Text style={styles.pageTitle}>{`#${receipt.receipt_number}`}</Text>
+          <View style={styles.actionButtons}>
+            <Button
+              mode="contained"
+              icon="pencil"
+              onPress={handleEditReceipt}
+              style={[styles.button, { marginRight: 8 }]}
+            >
+              Edit Receipt
+            </Button>
+          </View>
         </View>
 
         <View style={styles.gridContainer}>
@@ -253,9 +265,9 @@ const CompanyReceiptDetailsScreen = () => {
                   </View>
 
                   <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Date</Text>
+                    <Text style={styles.detailLabel}>Uploaded Date</Text>
                     <Text style={styles.detailValue}>
-                      {format(new Date(receipt.date), "dd/MM/yyyy")}
+                      {format(new Date(receipt.created_at), "dd/MM/yyyy")}
                     </Text>
                   </View>
 
@@ -338,6 +350,69 @@ const CompanyReceiptDetailsScreen = () => {
                 </View>
               </Surface>
             </Animated.View>
+            {receipt.vat_details && (
+              <Animated.View entering={FadeIn.delay(500)}>
+                <Surface style={styles.detailsCard}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="percent"
+                          size={20}
+                          iconColor="#64748b"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>VAT Details</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardContent}>
+                    <Text style={styles.vatDetails}>{receipt.vat_details}</Text>
+                  </View>
+                </Surface>
+              </Animated.View>
+            )}
+            {receipt.receipt_image_path && (
+              <Animated.View entering={FadeIn.delay(600)}>
+                <Surface style={styles.detailsCard}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="file-cloud"
+                          size={20}
+                          iconColor="#64748b"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>Receipt</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardContent}>
+                    <View style={styles.imageActions}>
+                      <Button
+                        mode="contained"
+                        icon="open-in-new"
+                        onPress={handleViewImage}
+                        style={[styles.imageButton, { marginRight: 8 }]}
+                      >
+                        Open Receipt
+                      </Button>
+                      <Button
+                        mode="outlined"
+                        icon={showCopySuccess ? "check" : "content-copy"}
+                        onPress={handleCopyLink}
+                        style={styles.imageButton}
+                      >
+                        {showCopySuccess ? "Copied!" : "Copy Link"}
+                      </Button>
+                    </View>
+                  </View>
+                </Surface>
+              </Animated.View>
+            )}
           </View>
 
           <View style={styles.gridColumn}>
@@ -453,35 +528,9 @@ const CompanyReceiptDetailsScreen = () => {
                 </Surface>
               </Animated.View>
             )}
-
-            {receipt.vat_details && (
-              <Animated.View entering={FadeIn.delay(500)}>
-                <Surface style={styles.detailsCard}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.headerLeft}>
-                      <View style={styles.iconContainer}>
-                        <IconButton
-                          icon="percent"
-                          size={20}
-                          iconColor="#64748b"
-                          style={styles.headerIcon}
-                        />
-                      </View>
-                      <Text style={styles.cardTitle}>VAT Details</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.cardContent}>
-                    <Text style={styles.vatDetails}>{receipt.vat_details}</Text>
-                  </View>
-                </Surface>
-              </Animated.View>
-            )}
           </View>
         </View>
       </ScrollView>
-
-      {renderImageModal()}
     </SafeAreaView>
   );
 };
@@ -499,6 +548,9 @@ const styles = StyleSheet.create({
   },
   headerSection: {
     marginBottom: 32,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   pageTitle: {
     fontSize: Platform.OS === "web" ? 32 : 24,
@@ -531,6 +583,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 8,
     backgroundColor: "#FFFFFF",
+    borderWidth: 0.5,
+    borderColor: "#e2e8f0",
   },
   cardHeader: {
     flexDirection: "row",
@@ -634,39 +688,24 @@ const styles = StyleSheet.create({
     color: "#ef4444",
     fontFamily: "Poppins-Medium",
   },
-  imageModal: {
-    backgroundColor: "white",
-    margin: 0,
-    padding: 0,
-    flex: 1,
-  },
-  imageModalHeader: {
+  imageActions: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
-    backgroundColor: "white",
+    justifyContent: "flex-start",
+    gap: 12,
   },
-  imageModalTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#1e293b",
-    fontFamily: "Poppins-SemiBold",
-  },
-  imageModalContent: {
+  imageButton: {
     flex: 1,
-    backgroundColor: "#f8fafc",
-    justifyContent: "center",
-    alignItems: "center",
+    maxWidth: 200,
   },
-  modalImage: {
-    width: "100%",
-    height: "100%",
-    maxWidth: 1200,
-    maxHeight: "90%",
-  } as ImageStyle,
+  actionButtons: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  button: {
+    flex: 1,
+    maxWidth: 200,
+  },
 });
 
 export default CompanyReceiptDetailsScreen;

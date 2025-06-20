@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   StyleSheet,
   View,
@@ -51,6 +51,7 @@ import Pagination from "../../components/Pagination";
 type RootStackParamList = {
   CompanyReceiptDetails: { receiptId: string };
   CreateCompanyReceipt: undefined;
+  EditCompanyReceipt: { receiptId: string };
 };
 
 type ReceiptsListNavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -81,6 +82,7 @@ interface Receipt {
   final_price?: string;
   paid_amount?: string;
   change_amount?: string;
+  receipt_sequence_id?: number;
 }
 
 // Add TooltipText component
@@ -283,13 +285,14 @@ const createStyles = (theme: MD3Theme) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: theme.colors.background,
+      backgroundColor: "#F8F9FA",
     },
     content: {
       flex: 1,
       padding: 16,
     },
     searchContainer: {
+      marginTop: 16,
       flexDirection: "row",
       marginBottom: 16,
       gap: 8,
@@ -337,75 +340,171 @@ const createStyles = (theme: MD3Theme) =>
       borderRadius: 17,
       height: 56,
     },
-    createButton: {
-      alignSelf: "center",
-    },
     card: {
       flex: 1,
     },
-    modal: {
-      backgroundColor: theme.colors.surface,
-      borderRadius: 8,
+    modalContainer: {
+      backgroundColor: "white",
+      borderRadius: 16,
+      margin: 16,
       overflow: "hidden",
+      maxHeight: "80%",
+      elevation: 5,
     },
-    modalContent: {
-      backgroundColor: theme.colors.surface,
-      padding: 20,
-      margin: 20,
-      borderRadius: 8,
-      maxWidth: 500,
-      alignSelf: "center",
+    modalHeaderContainer: {
+      backgroundColor: "white",
+      borderTopLeftRadius: 16,
+      borderTopRightRadius: 16,
+      zIndex: 1,
     },
     modalHeader: {
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
       padding: 16,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.colors.outline,
     },
     modalTitle: {
-      marginBottom: 16,
+      fontFamily: "Poppins-SemiBold",
+      color: "#212121",
     },
-    modalSection: {
-      marginVertical: 8,
-    },
-    modalActions: {
-      flexDirection: "row",
-      justifyContent: "flex-end",
-      gap: 8,
-      marginTop: 16,
+    modalContent: {
+      maxHeight: 400,
     },
     modalDivider: {
-      marginVertical: 16,
+      height: 1,
+      backgroundColor: "#E0E0E0",
+      marginTop: 16,
     },
-    modalButton: {
-      minWidth: 100,
-    },
-    modalFooter: {
-      flexDirection: "row",
-      justifyContent: "flex-end",
-      padding: 16,
-      gap: 8,
-      borderTopWidth: 1,
-      borderTopColor: theme.colors.outline,
+    modalSection: {
+      marginBottom: 24,
     },
     sectionHeader: {
-      marginBottom: 8,
+      marginBottom: 16,
     },
     sectionTitle: {
       fontSize: 16,
-      fontWeight: "600",
-      color: theme.colors.onSurface,
+      fontFamily: "Poppins-SemiBold",
+      color: "#212121",
     },
     radioItem: {
       flexDirection: "row",
       alignItems: "center",
-      marginBottom: 8,
+      marginVertical: 8,
     },
     radioLabel: {
-      marginLeft: 8,
-      color: theme.colors.onSurface,
+      fontSize: 16,
+      marginLeft: 12,
+      fontFamily: "Poppins-Regular",
+      color: "#424242",
+    },
+    modalFooter: {
+      flexDirection: "row",
+      justifyContent: "flex-end",
+      borderTopWidth: 1,
+      borderTopColor: "#E0E0E0",
+    },
+    footerButton: {
+      borderRadius: 8,
+      marginLeft: 16,
+    },
+    applyButton: {
+      elevation: 2,
+    },
+    clearButtonText: {
+      fontFamily: "Poppins-Medium",
+      color: "#616161",
+    },
+    applyButtonText: {
+      fontFamily: "Poppins-Medium",
+      color: "#FFFFFF",
+    },
+    contentContainer: {
+      flex: 1,
+      paddingBottom: 19,
+    },
+    tableContainer: {
+      flex: 1,
+      backgroundColor: "#fff",
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: "#e0e0e0",
+      overflow: "hidden",
+    },
+    tableHeaderRow: {
+      flexDirection: "row",
+      backgroundColor: "#f8fafc",
+      borderBottomWidth: 1,
+      borderBottomColor: "#e0e0e0",
+      paddingVertical: 16,
+      paddingHorizontal: 26,
+      alignContent: "center",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    tableHeaderCell: {
+      flex: 1,
+      paddingHorizontal: 16,
+      justifyContent: "space-around",
+      paddingLeft: 25,
+      alignItems: "flex-start",
+    },
+    tableHeaderText: {
+      fontSize: 14,
+      color: "#64748b",
+      fontFamily: "Poppins-Medium",
+    },
+    tableRow: {
+      flexDirection: "row",
+      borderBottomWidth: 1,
+      borderBottomColor: "#e0e0e0",
+      paddingVertical: 13,
+      backgroundColor: "#fff",
+      paddingHorizontal: 26,
+      alignItems: "center",
+    },
+    tableCell: {
+      flex: 1,
+      paddingHorizontal: 26,
+      justifyContent: "space-evenly",
+      alignItems: "flex-start",
+    },
+    tableCellText: {
+      fontSize: 14,
+      color: "#334155",
+      fontFamily: "Poppins-Regular",
+    },
+    tableContent: {
+      flexGrow: 1,
+    },
+    actionCell: {
+      flex: 1,
+      flexDirection: "row",
+      justifyContent: "flex-start",
+      alignItems: "center",
+      paddingHorizontal: 26,
+    },
+    actionIcon: {
+      margin: 0,
+      marginRight: 8,
+    },
+    paginationWrapper: {
+      backgroundColor: "#fff",
+      borderWidth: 1,
+      borderColor: "#e0e0e0",
+      borderRadius: 16,
+      marginTop: 5,
+      overflow: "hidden",
+      width: "auto",
+      alignSelf: "center",
+    },
+    searchbar: {
+      flex: 1,
+      elevation: 0,
+      borderRadius: 18,
+      height: 60,
+      backgroundColor: "#fff",
+      borderWidth: 1,
+      borderColor: "#e0e0e0",
     },
     tooltipContainer: {
       position: "relative",
@@ -419,9 +518,6 @@ const createStyles = (theme: MD3Theme) =>
     },
     tooltipText: {
       color: theme.colors.inverseOnSurface,
-    },
-    tableCellText: {
-      color: theme.colors.onSurface,
     },
   });
 
@@ -446,11 +542,12 @@ const CompanyReceiptsListScreen = () => {
     "date" | "merchant_name" | "total_amount"
   >("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [numberOfItemsPerPage] = useState(10);
+  const [page, setPage] = useState(0);
+  const [totalItems, setTotalItems] = useState(0);
+  const PAGE_SIZE = 10;
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [canUploadReceipts, setCanUploadReceipts] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCompanyInfo();
@@ -458,7 +555,7 @@ const CompanyReceiptsListScreen = () => {
 
   useEffect(() => {
     if (companyId) {
-      fetchReceipts();
+      fetchReceipts(true);
     }
   }, [companyId, searchQuery, sortBy, sortOrder, page]);
 
@@ -486,20 +583,24 @@ const CompanyReceiptsListScreen = () => {
     }
   };
 
-  const fetchReceipts = async () => {
+  const fetchReceipts = async (refresh = false) => {
     try {
-      setLoading(true);
-      if (!companyId) return;
+      setError(null);
+      if (refresh) {
+        setPage(0);
+        setLoading(true);
+      }
+
+      const currentPage = refresh ? 0 : page;
+      const from = currentPage * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
 
       let query = supabase
         .from("receipts")
         .select("*", { count: "exact" })
         .eq("company_id", companyId)
         .order(sortBy, { ascending: sortOrder === "asc" })
-        .range(
-          (page - 1) * numberOfItemsPerPage,
-          page * numberOfItemsPerPage - 1
-        );
+        .range(from, to);
 
       if (searchQuery) {
         query = query.or(
@@ -507,16 +608,25 @@ const CompanyReceiptsListScreen = () => {
         );
       }
 
-      const { data, error, count } = await query;
+      const { data, error: supabaseError, count } = await query;
 
-      if (error) throw error;
-
-      if (data) {
-        setReceipts(data);
-        setTotalPages(Math.ceil((count || 0) / numberOfItemsPerPage));
+      if (supabaseError) {
+        throw new Error(supabaseError.message);
       }
+
+      if (count !== null) {
+        setTotalItems(count);
+      }
+
+      setReceipts(data || []);
     } catch (error) {
       console.error("Error fetching receipts:", error);
+      setError(
+        error instanceof Error
+          ? error.message
+          : "An error occurred while fetching receipts"
+      );
+      setReceipts([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -525,7 +635,7 @@ const CompanyReceiptsListScreen = () => {
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
-    fetchReceipts();
+    fetchReceipts(true);
   }, []);
 
   const handleCreateReceipt = () => {
@@ -536,49 +646,37 @@ const CompanyReceiptsListScreen = () => {
     navigation.navigate("CompanyReceiptDetails", { receiptId });
   };
 
-  const applyFilters = () => {
-    setPage(1);
-    setFilterModalVisible(false);
-  };
-
-  const renderShimmerRows = () => {
-    return Array(5)
-      .fill(0)
-      .map((_, index) => (
-        <DataTable.Row key={index}>
-          <DataTable.Cell>
-            <Shimmer width={100} height={20} />
-          </DataTable.Cell>
-          <DataTable.Cell>
-            <Shimmer width={100} height={20} />
-          </DataTable.Cell>
-          <DataTable.Cell>
-            <Shimmer width={150} height={20} />
-          </DataTable.Cell>
-          <DataTable.Cell numeric>
-            <Shimmer width={80} height={20} />
-          </DataTable.Cell>
-          <DataTable.Cell style={{ justifyContent: "flex-end" }}>
-            <Shimmer width={40} height={20} />
-          </DataTable.Cell>
-        </DataTable.Row>
-      ));
-  };
+  const handlePageChange = useCallback(
+    (newPage: number) => {
+      if (newPage >= 0 && newPage < Math.ceil(totalItems / PAGE_SIZE)) {
+        setPage(newPage);
+      }
+    },
+    [totalItems, PAGE_SIZE]
+  );
 
   const hasActiveFilters = () => {
     return sortBy !== "date" || sortOrder !== "desc";
   };
 
   const renderFilterModal = () => {
-    const modalPadding = isLargeScreen ? 32 : isMediumScreen ? 24 : 16;
+    const modalWidth =
+      Platform.OS === "web"
+        ? isLargeScreen
+          ? 600
+          : isMediumScreen
+            ? 500
+            : "90%"
+        : "90%";
 
-    const handleSortByChange = (value: string) => {
-      setSortBy(value as "date" | "merchant_name" | "total_amount");
-    };
-
-    const handleSortOrderChange = (value: string) => {
-      setSortOrder(value as "asc" | "desc");
-    };
+    const modalPadding =
+      Platform.OS === "web"
+        ? isLargeScreen
+          ? 29
+          : isMediumScreen
+            ? 24
+            : 16
+        : 16;
 
     return (
       <Portal>
@@ -586,20 +684,33 @@ const CompanyReceiptsListScreen = () => {
           visible={filterModalVisible}
           onDismiss={() => setFilterModalVisible(false)}
           contentContainerStyle={[
-            styles.modal,
+            styles.modalContainer,
             {
-              width: isLargeScreen ? 480 : isMediumScreen ? 420 : "90%",
+              width: modalWidth,
+              maxWidth: Platform.OS === "web" ? 600 : "100%",
               alignSelf: "center",
             },
           ]}
         >
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Filter Receipts</Text>
-            <IconButton
-              icon="close"
-              size={24}
-              onPress={() => setFilterModalVisible(false)}
-            />
+          <View
+            style={[styles.modalHeaderContainer, { padding: modalPadding }]}
+          >
+            <View style={styles.modalHeader}>
+              <Text
+                style={[
+                  styles.modalTitle,
+                  { fontSize: isLargeScreen ? 24 : isMediumScreen ? 22 : 20 },
+                ]}
+              >
+                Filter Options
+              </Text>
+              <IconButton
+                icon="close"
+                size={isLargeScreen ? 28 : 24}
+                onPress={() => setFilterModalVisible(false)}
+              />
+            </View>
+            <Divider style={styles.modalDivider} />
           </View>
 
           <ScrollView style={[styles.modalContent, { padding: modalPadding }]}>
@@ -608,7 +719,9 @@ const CompanyReceiptsListScreen = () => {
                 <Text style={styles.sectionTitle}>Sort By</Text>
               </View>
               <RadioButton.Group
-                onValueChange={handleSortByChange}
+                onValueChange={(value) => {
+                  setSortBy(value as "date" | "merchant_name" | "total_amount");
+                }}
                 value={sortBy}
               >
                 <View style={styles.radioItem}>
@@ -642,224 +755,478 @@ const CompanyReceiptsListScreen = () => {
                 <Text style={styles.sectionTitle}>Sort Order</Text>
               </View>
               <RadioButton.Group
-                onValueChange={handleSortOrderChange}
+                onValueChange={(value) => setSortOrder(value as "asc" | "desc")}
                 value={sortOrder}
               >
-                <View style={styles.radioItem}>
-                  <RadioButton.Android
-                    value="asc"
-                    color={theme.colors.primary}
-                  />
-                  <Text style={styles.radioLabel}>Ascending</Text>
-                </View>
                 <View style={styles.radioItem}>
                   <RadioButton.Android
                     value="desc"
                     color={theme.colors.primary}
                   />
-                  <Text style={styles.radioLabel}>Descending</Text>
+                  <Text style={styles.radioLabel}>
+                    {sortBy === "total_amount"
+                      ? "Highest First"
+                      : "Newest First"}
+                  </Text>
+                </View>
+                <View style={styles.radioItem}>
+                  <RadioButton.Android
+                    value="asc"
+                    color={theme.colors.primary}
+                  />
+                  <Text style={styles.radioLabel}>
+                    {sortBy === "total_amount"
+                      ? "Lowest First"
+                      : "Oldest First"}
+                  </Text>
                 </View>
               </RadioButton.Group>
             </View>
           </ScrollView>
 
-          <View style={styles.modalFooter}>
-            <Button
-              mode="outlined"
+          <View style={[styles.modalFooter, { padding: modalPadding }]}>
+            <TouchableOpacity
+              style={[
+                styles.footerButton,
+                {
+                  paddingVertical: isLargeScreen
+                    ? 14
+                    : isMediumScreen
+                      ? 12
+                      : 10,
+                  paddingHorizontal: isLargeScreen
+                    ? 28
+                    : isMediumScreen
+                      ? 24
+                      : 20,
+                },
+              ]}
+              onPress={() => {
+                setSortBy("date");
+                setSortOrder("desc");
+                setFilterModalVisible(false);
+              }}
+            >
+              <Text
+                style={[
+                  styles.clearButtonText,
+                  { fontSize: isLargeScreen ? 16 : 14 },
+                ]}
+              >
+                Reset
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.footerButton,
+                styles.applyButton,
+                {
+                  paddingVertical: isLargeScreen
+                    ? 14
+                    : isMediumScreen
+                      ? 12
+                      : 10,
+                  paddingHorizontal: isLargeScreen
+                    ? 28
+                    : isMediumScreen
+                      ? 24
+                      : 20,
+                  backgroundColor: theme.colors.primary,
+                },
+              ]}
               onPress={() => setFilterModalVisible(false)}
-              style={styles.modalButton}
             >
-              Cancel
-            </Button>
-            <Button
-              mode="contained"
-              onPress={applyFilters}
-              style={styles.modalButton}
-            >
-              Apply Filters
-            </Button>
+              <Text
+                style={[
+                  styles.applyButtonText,
+                  { fontSize: isLargeScreen ? 16 : 14 },
+                ]}
+              >
+                Apply
+              </Text>
+            </TouchableOpacity>
           </View>
         </Modal>
       </Portal>
     );
   };
 
-  // Convert sort order to DataTable format
-  const getSortDirection = (
-    currentSortBy: string
-  ): "ascending" | "descending" | undefined => {
-    if (sortBy !== currentSortBy) return undefined;
-    return sortOrder === "asc" ? "ascending" : "descending";
+  const renderTableHeader = () => (
+    <View style={styles.tableHeaderRow}>
+      <View style={[styles.tableHeaderCell, { flex: 0.5 }]}>
+        <Text style={styles.tableHeaderText}>ID</Text>
+      </View>
+      <View style={[styles.tableHeaderCell, { flex: 0.8 }]}>
+        <Text style={styles.tableHeaderText}>Receipt No.</Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Merchant</Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Date</Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Amount</Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text style={styles.tableHeaderText}>Actions</Text>
+      </View>
+    </View>
+  );
+
+  const renderTableRow = (receipt: Receipt) => (
+    <Pressable
+      onPress={() => handleViewReceipt(receipt.id)}
+      style={({ pressed }) => [
+        styles.tableRow,
+        pressed && { backgroundColor: "#f8fafc" },
+      ]}
+    >
+      <View style={[styles.tableCell, { flex: 0.5 }]}>
+        <Text style={styles.tableCellText}>
+          {receipt.receipt_sequence_id || "-"}
+        </Text>
+      </View>
+      <View style={[styles.tableCell, { flex: 0.8 }]}>
+        <TooltipText text={receipt.receipt_number} theme={theme} />
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText text={receipt.merchant_name} theme={theme} />
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText
+          text={format(new Date(receipt.date), "MMM d, yyyy")}
+          theme={theme}
+        />
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText
+          text={`$${receipt.total_amount.toFixed(2)}`}
+          theme={theme}
+        />
+      </View>
+      <View style={styles.actionCell}>
+        <IconButton
+          icon="eye"
+          size={20}
+          onPress={(e) => {
+            e.stopPropagation();
+            handleViewReceipt(receipt.id);
+          }}
+          style={styles.actionIcon}
+        />
+        <IconButton
+          icon="pencil"
+          size={20}
+          onPress={(e) => {
+            e.stopPropagation();
+            navigation.navigate("EditCompanyReceipt", {
+              receiptId: receipt.id,
+            });
+          }}
+          style={styles.actionIcon}
+        />
+      </View>
+    </Pressable>
+  );
+
+  const renderTableSkeleton = () => (
+    <View style={styles.tableContainer}>
+      <View style={styles.tableHeaderRow}>
+        {["ID", "Receipt No.", "Merchant", "Date", "Amount", "Actions"].map(
+          (header, index) => (
+            <View
+              key={header}
+              style={[
+                styles.tableHeaderCell,
+                index === 0 && { flex: 0.5 },
+                index === 1 && { flex: 0.8 },
+              ]}
+            >
+              <Shimmer width={100} height={20} />
+            </View>
+          )
+        )}
+      </View>
+      {Array(5)
+        .fill(0)
+        .map((_, index) => (
+          <View key={`skeleton-${index}`} style={styles.tableRow}>
+            {[100, 150, 200, 120, 100, 80].map((width, cellIndex) => (
+              <View
+                key={`cell-${index}-${cellIndex}`}
+                style={[
+                  styles.tableCell,
+                  cellIndex === 0 && { flex: 0.5 },
+                  cellIndex === 1 && { flex: 0.8 },
+                ]}
+              >
+                <Shimmer width={width} height={16} />
+              </View>
+            ))}
+          </View>
+        ))}
+    </View>
+  );
+
+  const renderContent = () => {
+    if (error) {
+      return (
+        <EmptyState
+          icon="alert-circle"
+          title="Error Loading Receipts"
+          message={error}
+          buttonTitle="Try Again"
+          onButtonPress={() => {
+            setError(null);
+            fetchReceipts(true);
+          }}
+        />
+      );
+    }
+
+    if (receipts.length === 0) {
+      return (
+        <EmptyState
+          icon="receipt"
+          title={t("receipts.noReceiptsFound")}
+          message={
+            searchQuery || hasActiveFilters()
+              ? t("receipts.noReceiptsMatch")
+              : t("receipts.noReceiptsCreated")
+          }
+          buttonTitle={
+            searchQuery || hasActiveFilters()
+              ? t("common.clearFilters")
+              : t("receipts.createReceipt")
+          }
+          onButtonPress={() => {
+            if (searchQuery || hasActiveFilters()) {
+              setSearchQuery("");
+              setSortBy("date");
+              setSortOrder("desc");
+            } else {
+              handleCreateReceipt();
+            }
+          }}
+        />
+      );
+    }
+
+    const totalPages = Math.ceil(totalItems / PAGE_SIZE);
+
+    return (
+      <>
+        <View style={styles.tableContainer}>
+          {renderTableHeader()}
+          <FlatList
+            data={receipts}
+            renderItem={({ item }) => renderTableRow(item)}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.tableContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+          />
+        </View>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              marginLeft: 12,
+              marginTop: 12,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 14,
+                color: "#666",
+                fontFamily: "Poppins-Regular",
+              }}
+            >
+              {t("receipts.totalReceipts")}:
+            </Text>
+            <Text
+              style={{
+                fontSize: 14,
+                color: theme.colors.primary,
+                fontFamily: "Poppins-Medium",
+                marginLeft: 4,
+              }}
+            >
+              {totalItems}
+            </Text>
+          </View>
+          {totalPages > 1 && (
+            <View style={styles.paginationWrapper}>
+              <Pagination
+                currentPage={page}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+              />
+            </View>
+          )}
+        </View>
+      </>
+    );
   };
 
+  if (loading && !refreshing) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: "#F8F9FA" }]}>
+        <AppHeader
+          title={t("receipts.title")}
+          subtitle={t("receipts.subtitle")}
+          showLogo={false}
+        />
+        <View
+          style={[
+            styles.searchContainer,
+            {
+              maxWidth: isLargeScreen ? 1400 : isMediumScreen ? 900 : "100%",
+              alignSelf: "center",
+              width: "100%",
+            },
+          ]}
+        >
+          <View style={styles.searchBarContainer}>
+            <Shimmer
+              width="100%"
+              height={60}
+              style={{
+                borderRadius: 18,
+                marginRight: 8,
+              }}
+            />
+            <Shimmer
+              width={48}
+              height={48}
+              style={{
+                borderRadius: 8,
+                marginRight: 15,
+              }}
+            />
+            <Shimmer
+              width={98}
+              height={48}
+              style={{
+                borderRadius: 8,
+              }}
+            />
+          </View>
+        </View>
+
+        <View
+          style={[
+            styles.contentContainer,
+            {
+              maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
+              alignSelf: "center",
+              width: "100%",
+              flex: 1,
+            },
+          ]}
+        >
+          {renderTableSkeleton()}
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: "#F8F9FA" }]}>
       <AppHeader
         title={t("receipts.title")}
         subtitle={t("receipts.subtitle")}
         showLogo={false}
       />
-      <View style={styles.content}>
-        <View style={styles.searchContainer}>
-          <View style={styles.searchBarContainer}>
-            <Searchbar
-              placeholder={t("receipts.searchPlaceholder")}
-              onChangeText={setSearchQuery}
-              value={searchQuery}
-              style={styles.searchBar}
-              theme={{ colors: { primary: theme.colors.primary } }}
-              clearIcon={() =>
-                searchQuery ? (
-                  <IconButton
-                    icon="close-circle"
-                    size={18}
-                    onPress={() => setSearchQuery("")}
-                  />
-                ) : null
-              }
-              icon="magnify"
-            />
-            <View style={styles.filterButtonContainer}>
-              <IconButton
-                icon="filter-variant"
-                size={30}
-                style={[
-                  styles.filterButton,
-                  hasActiveFilters() && styles.activeFilterButton,
-                ]}
-                iconColor={
-                  hasActiveFilters() ? theme.colors.primary : undefined
-                }
-                onPress={() => setFilterModalVisible(true)}
-              />
-              {hasActiveFilters() && <View style={styles.filterBadge} />}
-            </View>
-          </View>
 
-          {canUploadReceipts && (
-            <FAB
-              icon="plus"
-              label="Add a Receipt"
+      <View
+        style={[
+          styles.searchContainer,
+          {
+            maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
+            alignSelf: "center",
+            width: "100%",
+          },
+        ]}
+      >
+        <View style={styles.searchBarContainer}>
+          <Searchbar
+            placeholder={t("receipts.searchPlaceholder")}
+            onChangeText={setSearchQuery}
+            value={searchQuery}
+            style={styles.searchbar}
+            theme={{ colors: { primary: theme.colors.primary } }}
+            clearIcon={() =>
+              searchQuery ? (
+                <IconButton
+                  icon="close-circle"
+                  size={18}
+                  onPress={() => setSearchQuery("")}
+                />
+              ) : null
+            }
+            icon="magnify"
+          />
+          <View style={styles.filterButtonContainer}>
+            <IconButton
+              icon="filter-variant"
+              size={30}
               style={[
-                styles.fab,
-                {
-                  backgroundColor: theme.colors.primary,
-                  position: "relative",
-                  margin: 0,
-                  marginLeft: 16,
-                },
+                styles.filterButton,
+                hasActiveFilters() && styles.activeFilterButton,
               ]}
-              onPress={handleCreateReceipt}
-              color={theme.colors.surface}
-              mode="flat"
-              theme={{ colors: { accent: theme.colors.surface } }}
+              iconColor={hasActiveFilters() ? theme.colors.primary : undefined}
+              onPress={() => setFilterModalVisible(true)}
             />
-          )}
+            {hasActiveFilters() && <View style={styles.filterBadge} />}
+          </View>
         </View>
 
-        {loading ? (
-          <LoadingIndicator />
-        ) : receipts.length === 0 ? (
-          <EmptyState
-            icon="receipt"
-            title={t("receipts.emptyTitle")}
-            message={t("receipts.emptyDescription")}
-            buttonTitle={canUploadReceipts ? t("receipts.create") : undefined}
-            onButtonPress={canUploadReceipts ? handleCreateReceipt : undefined}
+        {canUploadReceipts && (
+          <FAB
+            icon="plus"
+            label="Add a Receipt"
+            style={[
+              styles.fab,
+              {
+                backgroundColor: theme.colors.primary,
+                position: "relative",
+                margin: 0,
+                marginLeft: 16,
+              },
+            ]}
+            onPress={handleCreateReceipt}
+            color={theme.colors.surface}
+            mode="flat"
+            theme={{ colors: { accent: theme.colors.surface } }}
           />
-        ) : (
-          <Card style={styles.card}>
-            <DataTable>
-              <DataTable.Header>
-                <DataTable.Title
-                  sortDirection={getSortDirection("date")}
-                  onPress={() => {
-                    if (sortBy === "date") {
-                      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-                    } else {
-                      setSortBy("date");
-                      setSortOrder("desc");
-                    }
-                  }}
-                >
-                  {t("receipts.date")}
-                </DataTable.Title>
-                <DataTable.Title>{t("receipts.receiptNumber")}</DataTable.Title>
-                <DataTable.Title
-                  sortDirection={getSortDirection("merchant_name")}
-                  onPress={() => {
-                    if (sortBy === "merchant_name") {
-                      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-                    } else {
-                      setSortBy("merchant_name");
-                      setSortOrder("desc");
-                    }
-                  }}
-                >
-                  {t("receipts.merchantName")}
-                </DataTable.Title>
-                <DataTable.Title
-                  numeric
-                  sortDirection={getSortDirection("total_amount")}
-                  onPress={() => {
-                    if (sortBy === "total_amount") {
-                      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-                    } else {
-                      setSortBy("total_amount");
-                      setSortOrder("desc");
-                    }
-                  }}
-                >
-                  {t("receipts.totalAmount")}
-                </DataTable.Title>
-                <DataTable.Title style={{ justifyContent: "flex-end" }}>
-                  {t("common.actions")}
-                </DataTable.Title>
-              </DataTable.Header>
-
-              {receipts.map((receipt) => (
-                <DataTable.Row key={receipt.id}>
-                  <DataTable.Cell>
-                    {format(new Date(receipt.date), "dd/MM/yyyy")}
-                  </DataTable.Cell>
-                  <DataTable.Cell>
-                    <TooltipText text={receipt.receipt_number} theme={theme} />
-                  </DataTable.Cell>
-                  <DataTable.Cell>
-                    <TooltipText text={receipt.merchant_name} theme={theme} />
-                  </DataTable.Cell>
-                  <DataTable.Cell numeric>
-                    {new Intl.NumberFormat("en-US", {
-                      style: "currency",
-                      currency: "USD",
-                    }).format(receipt.total_amount)}
-                  </DataTable.Cell>
-                  <DataTable.Cell style={{ justifyContent: "flex-end" }}>
-                    <IconButton
-                      icon="eye"
-                      size={20}
-                      onPress={() => handleViewReceipt(receipt.id)}
-                    />
-                  </DataTable.Cell>
-                </DataTable.Row>
-              ))}
-            </DataTable>
-            <DataTable.Pagination
-              page={page - 1}
-              numberOfPages={totalPages}
-              onPageChange={(p) => setPage(p + 1)}
-              label={`${(page - 1) * numberOfItemsPerPage + 1}-${Math.min(
-                page * numberOfItemsPerPage,
-                receipts.length
-              )} of ${receipts.length}`}
-              showFastPaginationControls
-              numberOfItemsPerPage={numberOfItemsPerPage}
-            />
-          </Card>
         )}
       </View>
 
-      <Portal>{renderFilterModal()}</Portal>
+      {renderFilterModal()}
+
+      <View
+        style={[
+          styles.contentContainer,
+          {
+            maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
+            alignSelf: "center",
+            width: "100%",
+            flex: 1,
+          },
+        ]}
+      >
+        {renderContent()}
+      </View>
     </SafeAreaView>
   );
 };

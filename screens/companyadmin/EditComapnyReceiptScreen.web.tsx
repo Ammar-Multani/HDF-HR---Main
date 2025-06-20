@@ -557,7 +557,27 @@ const EditReceiptScreen = () => {
 
                     {Platform.OS === "web" ? (
                       <>
-
+                        <View style={styles.dateInputWrapper}>
+                          <Text style={styles.inputLabel}>Receipt Date</Text>
+                          <View style={styles.webDateInputContainer}>
+                            <input
+                              type="date"
+                              value={format(formData.date, "yyyy-MM-dd")}
+                              onChange={handleDateChange}
+                              style={{
+                                width: "100%",
+                                padding: "12px",
+                                fontSize: "14px",
+                                borderRadius: "8px",
+                                border: "1px solid #e2e8f0",
+                                outline: "none",
+                                backgroundColor: "#f8fafc",
+                                transition: "all 0.2s ease",
+                                cursor: "pointer",
+                              }}
+                            />
+                          </View>
+                        </View>
 
                         <View style={styles.dateInputWrapper}>
                           <Text style={styles.inputLabel}>
@@ -613,22 +633,38 @@ const EditReceiptScreen = () => {
                           {format(formData.transaction_date, "MMMM d, yyyy")}
                         </Button>
 
+                        {showDatePicker && (
+                          <DateTimePicker
+                            value={formData.date}
+                            mode="date"
+                            display="default"
+                            onChange={(event, selectedDate) => {
+                              setShowDatePicker(false);
+                              if (selectedDate) {
+                                setFormData({
+                                  ...formData,
+                                  date: selectedDate,
+                                });
+                              }
+                            }}
+                          />
+                        )}
 
                         {showTransactionDatePicker && (
-                            <DateTimePicker
-                              value={formData.transaction_date}
-                              mode="date"
-                              display="default"
-                              onChange={(event, selectedDate) => {
+                          <DateTimePicker
+                            value={formData.transaction_date}
+                            mode="date"
+                            display="default"
+                            onChange={(event, selectedDate) => {
                               setShowTransactionDatePicker(false);
                               if (selectedDate) {
                                 setFormData({
                                   ...formData,
                                   transaction_date: selectedDate,
                                 });
-                                }
-                              }}
-                            />
+                              }
+                            }}
+                          />
                         )}
                       </>
                     )}
@@ -1182,7 +1218,6 @@ const styles = StyleSheet.create({
   },
   dateInputWrapper: {
     marginBottom: 16,
-    marginRight: 26,
   },
   inputLabel: {
     fontSize: 12,

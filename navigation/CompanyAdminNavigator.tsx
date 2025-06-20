@@ -43,6 +43,7 @@ import CompanyReceiptsListScreen from "../screens/companyadmin/CompanyReceiptsLi
 import CreateCompanyReceiptScreen from "../screens/companyadmin/CreateCompanyReceiptScreen.web";
 import CompanyReceiptDetailsScreen from "../screens/companyadmin/CompanyReceiptDetailsScreen.web";
 import CompanyActivityLogsScreen from "../screens/companyadmin/CompanyActivityLogsScreen";
+import EditCompanyReceiptScreen from "../screens/companyadmin/EditCompanyReceiptScreen.web";
 
 // Stack navigators
 const CompanyAdminStack = createNativeStackNavigator();
@@ -71,6 +72,7 @@ type RootStackParamList = {
   ReceiptsScreen: undefined;
   CreateCompanyReceipt: undefined;
   CompanyReceiptDetails: { id: string };
+  EditCompanyReceipt: { receiptId: string };
   ActivityLogs: undefined;
 };
 
@@ -175,6 +177,10 @@ const ContentArea = () => {
         <ContentStack.Screen
           name="CompanyReceiptDetails"
           component={CompanyReceiptDetailsScreen}
+        />
+        <ContentStack.Screen
+          name="EditCompanyReceipt"
+          component={EditCompanyReceiptScreen}
         />
         <ContentStack.Screen
           name="ActivityLogs"
@@ -576,6 +582,10 @@ export const CompanyAdminNavigator = () => {
         <CompanyAdminStack.Screen
           name="CompanyReceiptDetails"
           component={CompanyReceiptDetailsScreen}
+        />
+        <CompanyAdminStack.Screen
+          name="EditCompanyReceipt"
+          component={EditCompanyReceiptScreen}
         />
         <CompanyAdminStack.Screen
           name="ActivityLogs"

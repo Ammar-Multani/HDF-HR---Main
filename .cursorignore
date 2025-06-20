@@ -12,9 +12,9 @@ build/
 *.ipa
 *.apk
 
-# Environment files
-.env
-.env.*
+# # Environment files
+# .env
+# .env.*
 
 # IDE and editor files
 .idea/

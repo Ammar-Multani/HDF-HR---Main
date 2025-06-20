@@ -1672,7 +1672,6 @@ const CreateCompanyReceiptScreen = () => {
         payment_method: data.payment_method,
         merchant_address: data.merchant_address || null,
         receipt_image_path: oneDriveSharingLink || null,
-        document_id: uploadedDocumentId || null,
         language_hint: data.language_hint || null,
         created_by: user.id,
         merchant_vat: data.merchant_vat || null,
