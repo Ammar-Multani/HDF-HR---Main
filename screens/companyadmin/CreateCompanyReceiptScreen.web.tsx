@@ -460,7 +460,7 @@ const CreateCompanyReceiptScreen = () => {
       formData.append("filename", fileType === "pdf" ? "receipt.pdf" : "receipt.jpg");
 
       // Call the Supabase Edge Function instead of directly calling Taggun API
-      const functionResponse = await supabase.functions.invoke("taggun-ocr", {
+      const functionResponse = await supabase.functions.invoke("ocr-service", {
         body: formData,
       });
 
