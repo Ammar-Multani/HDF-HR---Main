@@ -921,7 +921,7 @@
       }
     },
     "activityLogs": {
-      "title": "Activity Logs for {{companyName}}",
+      "title": "Activity Logs",
       "subtitle": "Track all activities and changes related to your company",
       "noLogs": "No activity logs found for your company",
       "emptyMessage": "No logs match your search criteria or time period. Try adjusting your filters.",
@@ -1165,7 +1165,7 @@
       }
     },
     "activityLogs": {
-      "title": "Activity Logs for {{companyName}}",
+      "title": "Activity Logs",
       "subtitle": "Track all activities and changes related to your company",
       "noLogs": "No activity logs found for your company",
       "emptyMessage": "No logs match your search criteria or time period. Try adjusting your filters.",
