@@ -167,6 +167,11 @@ export const generateJWT = async (userData: {
   email: string;
   role?: string;
 }): Promise<string> => {
+  const jwtSecret = process.env.EXPO_PUBLIC_JWT_SECRET;
+  if (!jwtSecret) {
+    throw new Error('JWT secret is not configured');
+  }
+
   // Create the JWT header
   const header = {
     alg: "HS256",
@@ -180,8 +185,10 @@ export const generateJWT = async (userData: {
     email: userData.email,
     role: userData.role || "user",
     iat: now,
-    exp: now + 60 * 60 * 24 * 7, // Token expires in 7 days (changed from 24 hours)
-    iss: "businessmanagementapp",
+    exp: now + 60 * 60 * 24 * 7, // Token expires in 7 days
+    iss: "hdfhr",
+    aud: "hdfhr",
+    jti: crypto.randomUUID()
   };
 
   // Encode header and payload
@@ -195,24 +202,22 @@ export const generateJWT = async (userData: {
     .replace(/\+/g, "-")
     .replace(/\//g, "_");
 
-  // In a real implementation, you would sign the token with a secret key
-  // For demo purposes, we'll use a simple hash
-  const signatureInput =
-    encodedHeader + "." + encodedPayload + "." + "secretkey";
-
-  // Create signature (this is NOT secure - use a proper JWT library in production!)
-  const signature = await Crypto.digestStringAsync(
+  // Create signature using SHA-256
+  const signatureInput = encodedHeader + "." + encodedPayload;
+  const hash = await Crypto.digestStringAsync(
     Crypto.CryptoDigestAlgorithm.SHA256,
-    signatureInput
+    signatureInput + jwtSecret
   );
-
-  const formattedSignature = signature
+  
+  // Convert the hash to base64URL format
+  const formattedSignature = base64Encode(hash)
     .replace(/=/g, "")
     .replace(/\+/g, "-")
     .replace(/\//g, "_");
 
   // Return the complete JWT
   return `${encodedHeader}.${encodedPayload}.${formattedSignature}`;
+
 };
 
 // Add these interfaces at the top of the file
