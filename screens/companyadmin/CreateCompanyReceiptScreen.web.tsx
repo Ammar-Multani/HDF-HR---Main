@@ -243,7 +243,9 @@ interface NativeDateChangeEvent {
   };
 }
 
-// OCR processing is now handled by the Supabase Edge Function
+// Add these constants after the interfaces
+const TAGGUN_API_KEY = "914c4c5bb7bc42adaeb662b34f2169c5";
+const TAGGUN_API_URL = "https://api.taggun.io/api/receipt/v1/verbose/file";
 
 const CreateCompanyReceiptScreen = () => {
   const theme = useTheme();
@@ -460,7 +462,7 @@ const CreateCompanyReceiptScreen = () => {
       formData.append("filename", fileType === "pdf" ? "receipt.pdf" : "receipt.jpg");
 
       // Call the Supabase Edge Function instead of directly calling Taggun API
-      const functionResponse = await supabase.functions.invoke("ocr-service", {
+      const functionResponse = await supabase.functions.invoke("taggun-ocr", {
         body: formData,
       });
 
@@ -473,7 +475,7 @@ const CreateCompanyReceiptScreen = () => {
       // Keep the raw OCR data for reference if needed
       const ocrData: TaggunResponse = functionResponse.data?.raw_data;
 
-      // Helper function for proper rounding (kept for any additional calculations)
+      // Helper function for proper rounding
       const roundToTwoDecimals = (num: number): number => {
         return Math.round((num + Number.EPSILON) * 100) / 100;
       };
@@ -482,96 +484,226 @@ const CreateCompanyReceiptScreen = () => {
         return roundToTwoDecimals(amount).toFixed(2);
       };
 
-      // Update form with extracted data from the formatted response
-      if (formattedData) {
-        // Basic receipt information
-        if (formattedData.receipt_number) {
-          setValue("receipt_number", formattedData.receipt_number);
-        }
+      // Update form with extracted data
+      if (ocrData.entities?.receiptNumber?.data) {
+        setValue("receipt_number", String(ocrData.entities.receiptNumber.data));
+      }
 
-        if (formattedData.total_amount) {
-          setValue("total_amount", formattedData.total_amount);
-          // Also set final_price if it's not already set
-          if (!getValues("final_price")) {
-            setValue("final_price", formattedData.total_amount);
-          }
-        }
-
-        if (formattedData.tax_amount) {
-          setValue("tax_amount", formattedData.tax_amount);
-        }
-
-        if (formattedData.merchant_name) {
-          setValue("merchant_name", formattedData.merchant_name);
-        }
-
-        if (formattedData.merchant_address) {
-          setValue("merchant_address", formattedData.merchant_address);
-        }
-
-        // Financial details
-        if (formattedData.subtotal_amount) {
-          setValue("subtotal_amount", formattedData.subtotal_amount);
-        }
-
-        if (formattedData.paid_amount) {
-          setValue("paid_amount", formattedData.paid_amount);
-        }
-
-        if (formattedData.change_amount) {
-          setValue("change_amount", formattedData.change_amount);
-        }
-
-        // Additional merchant information
-        if (formattedData.merchant_vat) {
-          setValue("merchant_vat", formattedData.merchant_vat);
-        }
-
-        if (formattedData.merchant_phone) {
-          setValue("merchant_phone", formattedData.merchant_phone);
-        }
-
-        if (formattedData.merchant_website) {
-          setValue("merchant_website", formattedData.merchant_website);
-        }
-
-        // VAT details
-        if (formattedData.vat_details) {
-          setValue("vat_details", formattedData.vat_details);
-        }
-
-        // Handle date
-        if (formattedData.date) {
-          const parsedDate = new Date(formattedData.date);
-          if (!isNaN(parsedDate.getTime())) {
-            setValue("date", parsedDate);
-            setValue("transaction_date", parsedDate);
-          }
-        }
-
-        // Update line items if available
-        if (formattedData.line_items && formattedData.line_items.length > 0) {
-          setLineItems(formattedData.line_items);
+      if (ocrData.totalAmount?.data) {
+        const totalAmount = roundToTwoDecimals(
+          Number(ocrData.totalAmount.data)
+        );
+        setValue("total_amount", formatAmount(totalAmount));
+        // Also set final_price if it's not already set
+        if (!getValues("final_price")) {
+          setValue("final_price", formatAmount(totalAmount));
         }
       }
 
+      if (ocrData.taxAmount?.data) {
+        const taxAmount = roundToTwoDecimals(Number(ocrData.taxAmount.data));
+        setValue("tax_amount", formatAmount(taxAmount));
+      }
+
+      if (ocrData.merchantName?.data) {
+        setValue("merchant_name", String(ocrData.merchantName.data));
+      }
+
+      if (ocrData.merchantAddress?.data) {
+        setValue("merchant_address", String(ocrData.merchantAddress.data));
+      }
+
+      // Handle subtotal amount
+      if (ocrData.entities?.productLineItems?.length > 0) {
+        const subtotal = roundToTwoDecimals(
+          ocrData.entities.productLineItems.reduce(
+            (sum, item) => sum + (Number(item.data.totalPrice?.data) || 0),
+            0
+          )
+        );
+        setValue("subtotal_amount", formatAmount(subtotal));
+      }
+
+      // Handle paid amount and change
+      if (ocrData.paidAmount?.data) {
+        const paidAmount = roundToTwoDecimals(Number(ocrData.paidAmount.data));
+        setValue("paid_amount", formatAmount(paidAmount));
+
+        // Calculate change amount if we have both paid amount and total amount
+        const totalAmount = Number(ocrData.totalAmount?.data || 0);
+        if (!isNaN(paidAmount) && !isNaN(totalAmount) && totalAmount > 0) {
+          const change = roundToTwoDecimals(paidAmount - totalAmount);
+          if (change > 0) {
+            setValue("change_amount", formatAmount(change));
+          }
+        }
+      }
+
+      // Extract VAT number with improved pattern matching
+      const extractVatNumber = (text: string) => {
+        const vatPatterns = [
+          /(?:MWST|USt|VAT|UID)[-.]?(?:Nr\.?|Nummer)?[:\s]*(CHE-?[\d.-]+)/i,
+          /(?:MWST|USt|VAT|UID)[-.]?(?:Nr\.?|Nummer)?[:\s]*([\d.-]{6,})/i,
+          /(CHE-?[\d.-]+)/i,
+          /(?:TVA|MWST|VAT)\s*(?:No\.?|Nr\.?|Nummer)?[:\s]*(\d{3,}(?:[.-]\d+)*)/i,
+        ];
+
+        for (const pattern of vatPatterns) {
+          const match = text?.match(pattern);
+          if (match?.[1]) {
+            return match[1].trim();
+          }
+        }
+
+        return null;
+      };
+
+      // Try to extract merchant VAT number from multiple sources
+      const vatNumber =
+        extractVatNumber(ocrData.text?.text) ||
+        (ocrData.merchantTaxId?.data
+          ? String(ocrData.merchantTaxId.data)
+          : null);
+
+      if (vatNumber) {
+        setValue("merchant_vat", vatNumber);
+      }
+
+      // Extract phone number from text using regex
+      const phoneRegex = /(?:Tel|Phone|T)(?::|.)?[\s-]*([+\d\s-()]{8,})/i;
+      const phoneMatch = ocrData.text?.text.match(phoneRegex);
+      if (phoneMatch && phoneMatch[1]) {
+        setValue("merchant_phone", phoneMatch[1].trim());
+      }
+
+      // Extract website from text using regex
+      const websiteRegex =
+        /(?:www\.[a-zA-Z0-9-]+\.[a-zA-Z]{2,}|https?:\/\/[a-zA-Z0-9-]+\.[a-zA-Z]{2,})/i;
+      const websiteMatch = ocrData.text?.text.match(websiteRegex);
+      if (websiteMatch && websiteMatch[0]) {
+        setValue("merchant_website", websiteMatch[0].trim());
+      }
+
+      // Format VAT details for display with improved formatting and NaN handling
+      if (ocrData.entities?.multiTaxLineItems?.length > 0) {
+        console.log("Raw VAT data:", ocrData.entities.multiTaxLineItems);
+
+        const vatDetailsText = ocrData.entities.multiTaxLineItems
+          .map((vat) => {
+            console.log("Processing VAT entry:", {
+              raw: vat,
+              base: vat.base,
+              rate: vat.rate,
+              data: vat.data,
+            });
+
+            // Try to get values from different possible locations in the data structure
+            const base = roundToTwoDecimals(
+              parseFloat(
+                String(
+                  vat.base ||
+                    vat.data?.base ||
+                    vat.data?.grossAmount?.data ||
+                    "0"
+                )
+              )
+            );
+            const rate = roundToTwoDecimals(
+              parseFloat(
+                String(
+                  vat.rate || vat.data?.rate || vat.data?.taxRate?.data || "0"
+                )
+              ) * (vat.data?.taxRate?.data ? 100 : 1)
+            );
+
+            console.log("Parsed values:", { base, rate });
+
+            if (isNaN(base) || isNaN(rate) || base === 0 || rate === 0) {
+              console.log("Skipping invalid entry:", { base, rate });
+              return null;
+            }
+
+            const vatAmount = roundToTwoDecimals((base * rate) / 100);
+            const total = roundToTwoDecimals(base + vatAmount);
+
+            console.log("Calculated values:", {
+              base: formatAmount(base),
+              rate: rate.toFixed(1),
+              vatAmount: formatAmount(vatAmount),
+              total: formatAmount(total),
+            });
+
+            return `MwSt ${rate.toFixed(1)}%\nBasis: CHF ${formatAmount(base)}\nMwSt: CHF ${formatAmount(vatAmount)}\nTotal: CHF ${formatAmount(total)}`;
+          })
+          .filter(Boolean)
+          .join("\n\n");
+
+        if (vatDetailsText) {
+          setValue("vat_details", vatDetailsText);
+        } else {
+          console.log("No valid VAT details to display");
+
+          // Fallback: Try to calculate VAT from total and tax amounts
+          const total = roundToTwoDecimals(
+            parseFloat(String(ocrData.totalAmount?.data || "0"))
+          );
+          const tax = roundToTwoDecimals(
+            parseFloat(String(ocrData.taxAmount?.data || "0"))
+          );
+
+          if (!isNaN(total) && !isNaN(tax) && total > 0 && tax > 0) {
+            const base = roundToTwoDecimals(total - tax);
+            const rate = roundToTwoDecimals((tax / base) * 100);
+
+            console.log("Fallback VAT calculation:", {
+              total: formatAmount(total),
+              tax: formatAmount(tax),
+              base: formatAmount(base),
+              rate: rate.toFixed(1),
+            });
+
+            const fallbackVatText = `MwSt ${rate.toFixed(1)}%\nBasis: CHF ${formatAmount(base)}\nMwSt: CHF ${formatAmount(tax)}\nTotal: CHF ${formatAmount(total)}`;
+            setValue("vat_details", fallbackVatText);
+          }
+        }
+      }
+
+      // Handle date
+      if (ocrData.date?.data) {
+        const parsedDate = new Date(ocrData.date.data);
+        if (!isNaN(parsedDate.getTime())) {
+          setValue("date", parsedDate);
+          setValue("transaction_date", parsedDate);
+        }
+      }
+
+      // Update line items if available
+      if (ocrData.entities?.productLineItems?.length > 0) {
+        const extractedItems = ocrData.entities.productLineItems.map(
+          (item) => ({
+            name: item.data.name.data,
+            quantity: item.data.quantity.data,
+            unitPrice: item.data.unitPrice.data,
+            totalPrice: item.data.totalPrice.data,
+          })
+        );
+        setLineItems(extractedItems);
+      }
+
       // Update success message with more details
-      const confidenceScore = formattedData?.confidence_level ? 
-        (formattedData.confidence_level * 100).toFixed(1) : 
-        (ocrData?.confidenceLevel ? (ocrData.confidenceLevel * 100).toFixed(1) : "N/A");
-      
+      const confidenceScore = (ocrData.confidenceLevel * 100).toFixed(1);
       let successMessage = `Receipt processed successfully! (${confidenceScore}% confidence)`;
 
       // Add details about what was found
       const extractedFields = [];
-      if (formattedData?.merchant_name) extractedFields.push("merchant name");
-      if (formattedData?.total_amount) extractedFields.push("total amount");
-      if (formattedData?.tax_amount) extractedFields.push("tax amount");
-      if (formattedData?.vat_details) extractedFields.push("VAT details");
-      if (formattedData?.line_items?.length) extractedFields.push("line items");
+      if (ocrData.merchantName?.data) extractedFields.push("merchant name");
+      if (ocrData.totalAmount?.data) extractedFields.push("total amount");
+      if (ocrData.taxAmount?.data) extractedFields.push("tax amount");
+      if (ocrData.entities?.multiTaxLineItems?.length)
+        extractedFields.push("VAT details");
 
       if (extractedFields.length > 0) {
-        successMessage += `\nFound: ${extractedFields.join(", ")}`;      
+        successMessage += `\nFound: ${extractedFields.join(", ")}`;
       }
 
       showSnackbarMessage(successMessage, "success");
@@ -580,20 +712,17 @@ const CreateCompanyReceiptScreen = () => {
 
       // More descriptive error messages
       let errorMessage = "Failed to process receipt. ";
-      if (error.message.includes("API key") || error.message.includes("not configured")) {
-        errorMessage += "OCR service is not properly configured. Please contact support.";
-      } else if (error.message.includes("file size") || error.message.includes("too large")) {
+      if (error.message.includes("API key")) {
+        errorMessage += "API authentication failed. Please contact support.";
+      } else if (error.message.includes("file size")) {
         errorMessage +=
           "File is too large. Please try a smaller file (max 10MB).";
-      } else if (error.message.includes("file type") || error.message.includes("invalid file")) {
+      } else if (error.message.includes("file type")) {
         errorMessage +=
           "Please upload a valid image (JPEG, PNG, HEIC) or PDF file.";
-      } else if (error.message.includes("network") || error.message.includes("connection")) {
+      } else if (error.message.includes("network")) {
         errorMessage +=
           "Network error. Please check your connection and try again.";
-      } else if (error.message.includes("timeout") || error.message.includes("timed out")) {
-        errorMessage +=
-          "The OCR service took too long to respond. Please try again.";
       } else {
         errorMessage += "Please try again or fill in details manually.";
       }
@@ -904,6 +1033,13 @@ const CreateCompanyReceiptScreen = () => {
 
   const pickDocument = async () => {
     try {
+      if (!TAGGUN_API_KEY) {
+        setSnackbarMessage(
+          "OCR service is not configured. Please contact support."
+        );
+        setSnackbarVisible(true);
+        return;
+      }
 
       const result = await DocumentPicker.getDocumentAsync({
         type: ["image/*", "application/pdf"],
