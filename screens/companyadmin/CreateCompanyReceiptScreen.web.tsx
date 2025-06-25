@@ -26,6 +26,7 @@ import {
   Portal,
   Modal,
   ActivityIndicator,
+  ProgressBar,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Theme, useNavigation } from "@react-navigation/native";
@@ -455,19 +456,24 @@ const CreateCompanyReceiptScreen = () => {
         blob,
         fileType === "pdf" ? "receipt.pdf" : "receipt.jpg"
       );
-      
+
       // Add optional parameters
       formData.append("language", "de");
       formData.append("near", "Switzerland");
-      formData.append("filename", fileType === "pdf" ? "receipt.pdf" : "receipt.jpg");
+      formData.append(
+        "filename",
+        fileType === "pdf" ? "receipt.pdf" : "receipt.jpg"
+      );
 
       // Call the Supabase Edge Function instead of directly calling Taggun API
-      const functionResponse = await supabase.functions.invoke("taggun-ocr", {
+      const functionResponse = await supabase.functions.invoke("ocr-service", {
         body: formData,
       });
 
       if (functionResponse.error) {
-        throw new Error(`OCR processing failed: ${functionResponse.error.message}`);
+        throw new Error(
+          `OCR processing failed: ${functionResponse.error.message}`
+        );
       }
 
       // Extract the formatted data from the response
@@ -824,10 +830,7 @@ const CreateCompanyReceiptScreen = () => {
     // Process with Taggun OCR first
     await processReceiptWithOCR(uri);
 
-    // After OCR processing, upload to OneDrive if we have a valid receipt
-    if (companyId && user) {
-      uploadReceiptToOneDrive(uri, droppedFile);
-    }
+
   };
 
   // Add function to upload receipt to OneDrive
@@ -1222,6 +1225,7 @@ const CreateCompanyReceiptScreen = () => {
                         icon="camera"
                         onPress={takePhoto}
                         style={[styles.imageButton, { marginRight: 8 }]}
+                        disabled={isProcessingOCR || uploadingToOneDrive}
                       >
                         Take Photo
                       </Button>
@@ -1230,6 +1234,7 @@ const CreateCompanyReceiptScreen = () => {
                         icon="image"
                         onPress={pickImage}
                         style={styles.imageButton}
+                        disabled={isProcessingOCR || uploadingToOneDrive}
                       >
                         Gallery
                       </Button>
@@ -1240,6 +1245,7 @@ const CreateCompanyReceiptScreen = () => {
                       icon="file-upload"
                       onPress={pickDocument}
                       style={styles.uploadButton}
+                      disabled={isProcessingOCR || uploadingToOneDrive}
                     >
                       Browse Files
                     </Button>
@@ -1249,8 +1255,73 @@ const CreateCompanyReceiptScreen = () => {
             )}
           </TouchableOpacity>
         ) : (
-          renderPreview()
+          <View>
+            {renderPreview()}
+
+            {/* OneDrive Upload Progress */}
+            {uploadingToOneDrive && (
+              <View style={styles.uploadProgressContainer}>
+                <Text style={styles.uploadProgressText}>
+                  Uploading to OneDrive: {oneDriveUploadProgress}%
+                </Text>
+                <ProgressBar
+                  progress={oneDriveUploadProgress / 100}
+                  color={theme.colors.primary}
+                  style={styles.progressBar}
+                />
+              </View>
+            )}
+
+            {/* OneDrive Upload Error */}
+            {oneDriveUploadError && (
+              <View style={styles.uploadErrorContainer}>
+                <Text style={styles.uploadErrorText}>
+                  {oneDriveUploadError}
+                </Text>
+                <Button
+                  mode="text"
+                  onPress={() => setOneDriveUploadError(null)}
+                  style={styles.dismissErrorButton}
+                >
+                  Dismiss
+                </Button>
+              </View>
+            )}
+
+            {/* OneDrive Sharing Link */}
+            {oneDriveSharingLink && (
+              <View style={styles.sharingLinkContainer}>
+                <Text style={styles.sharingLinkLabel}>OneDrive Link:</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    if (Platform.OS === "web") {
+                      window.open(oneDriveSharingLink, "_blank");
+                    }
+                  }}
+                  style={styles.sharingLinkButton}
+                >
+                  <Text style={styles.sharingLinkText} numberOfLines={1}>
+                    {oneDriveSharingLink}
+                  </Text>
+                  <IconButton icon="open-in-new" size={16} />
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
         )}
+
+        {/* Drag & Drop Overlay for Web */}
+        {isDragActive && Platform.OS === "web" && (
+          <View style={styles.dragOverlay}>
+            <IconButton
+              icon="file-upload"
+              size={48}
+              iconColor={theme.colors.primary}
+            />
+            <Text style={styles.dragText}>Drop your receipt file here</Text>
+          </View>
+        )}
+
         {renderDeleteConfirmModal()}
         {renderPreviewModal()}
       </View>
@@ -1604,35 +1675,143 @@ const CreateCompanyReceiptScreen = () => {
 
   const onSubmit = async (data: ReceiptFormData) => {
     try {
-      if (!user || !companyId) {
-        setSnackbarMessage("Missing required information");
+      if (!user) {
+        setSnackbarMessage("User not authenticated");
         setSnackbarVisible(true);
         return;
       }
 
-      if (!canUploadReceipts) {
-        setSnackbarMessage("You don't have permission to upload receipts");
+      if (!companyId) {
+        setSnackbarMessage("Company ID is required");
         setSnackbarVisible(true);
         return;
       }
 
       setLoading(true);
 
-      // Validate required fields
-      const requiredFields = [
-        "receipt_number",
-        "merchant_name",
-        "total_amount",
-        "tax_amount",
-      ];
-      const missingFields = requiredFields.filter((field) => !data[field]);
-      if (missingFields.length > 0) {
-        setSnackbarMessage(
-          `Missing required fields: ${missingFields.join(", ")}`
-        );
-        setSnackbarVisible(true);
+      // First validate if receipt number already exists
+      const { data: existingReceipt, error: checkError } = await supabase
+        .from("receipts")
+        .select("receipt_number")
+        .eq("receipt_number", data.receipt_number)
+        .eq("company_id", companyId)
+        .single();
+
+      if (checkError && checkError.code !== "PGRST116") {
+        // PGRST116 means no rows returned
+        throw checkError;
+      }
+
+      if (existingReceipt) {
         setLoading(false);
+        showSnackbarMessage(
+          `Receipt number "${data.receipt_number}" already exists. Please use a different receipt number.`,
+          "error"
+        );
+        // Focus the receipt number input field
+        const receiptNumberInput = document.querySelector(
+          'input[name="receipt_number"]'
+        );
+        if (receiptNumberInput) {
+          (receiptNumberInput as HTMLInputElement).focus();
+        }
         return;
+      }
+
+      // Variable to store OneDrive sharing link
+      let receiptImagePath = null;
+
+      // Only proceed with OneDrive upload if we have a receipt image
+      if (receiptImage) {
+        try {
+          setUploadingToOneDrive(true);
+          setOneDriveUploadProgress(10);
+          setOneDriveUploadError(null);
+
+          // Create a File object from the image URI
+          let fileObject;
+          let fileName;
+          let mimeType;
+
+          // For camera or gallery images, fetch the blob and create a File
+          const response = await fetch(receiptImage);
+          const blob = await response.blob();
+
+          // Generate a filename based on date and source
+          fileName = `receipt_${Date.now()}.${fileType === "pdf" ? "pdf" : "jpg"}`;
+          mimeType = fileType === "pdf" ? "application/pdf" : "image/jpeg";
+
+          fileObject = new File([blob], fileName, { type: mimeType });
+
+          setOneDriveUploadProgress(20);
+
+          // Create FormData for the upload
+          const formData = new FormData();
+          formData.append("file", fileObject);
+          formData.append("companyId", companyId);
+          formData.append("employeeId", user.id);
+          formData.append("uploadedBy", user.id);
+
+          // Add receipt-specific metadata
+          const metadata = {
+            receiptType: "company_receipt",
+            company_id: companyId,
+            merchant_name: data.merchant_name || "Unknown Merchant",
+            receipt_number: data.receipt_number || `REC-${Date.now()}`,
+            receipt_date: data.date?.toISOString() || new Date().toISOString(),
+            total_amount: data.total_amount || "0.00",
+          };
+
+          formData.append("metadata", JSON.stringify(metadata));
+          formData.append("reportType", "company_receipt");
+          formData.append("reportId", "temp");
+
+          setOneDriveUploadProgress(40);
+
+          // Call the Edge Function to upload to OneDrive
+          const oneDriveResponse = await supabase.functions.invoke(
+            "onedrive-upload",
+            {
+              body: formData,
+            }
+          );
+
+          if (oneDriveResponse.error) {
+            throw new Error(oneDriveResponse.error.message || "Upload failed");
+          }
+
+          setOneDriveUploadProgress(80);
+
+          // Process the response and store the sharing link
+          if (oneDriveResponse.data?.data) {
+            const responseData = oneDriveResponse.data.data;
+            setOneDriveItemId(responseData.itemId);
+            setOneDriveSharingLink(responseData.sharingLink);
+            // Store the sharing link for the receipt
+            receiptImagePath = responseData.sharingLink;
+            if (responseData.document?.id) {
+              setUploadedDocumentId(responseData.document.id);
+            }
+          }
+
+          setOneDriveUploadProgress(100);
+          showSnackbarMessage(
+            "Receipt uploaded to OneDrive successfully",
+            "success"
+          );
+        } catch (error: any) {
+          console.error("Error uploading to OneDrive:", error);
+          setOneDriveUploadError(
+            error.message || "Failed to upload to OneDrive"
+          );
+          showSnackbarMessage(
+            error.message || "Failed to upload to OneDrive",
+            "error"
+          );
+          return;
+        } finally {
+          setUploadingToOneDrive(false);
+        }
       }
 
       // Format line items for storage
@@ -1643,7 +1822,7 @@ const CreateCompanyReceiptScreen = () => {
         totalPrice: item.totalPrice,
       }));
 
-      // Create receipt data
+      // Create receipt with the receipt_image_path
       const receiptData = {
         company_id: companyId,
         receipt_number: data.receipt_number,
@@ -1655,56 +1834,48 @@ const CreateCompanyReceiptScreen = () => {
         tax_amount: parseFloat(data.tax_amount),
         payment_method: data.payment_method,
         merchant_address: data.merchant_address || null,
-        receipt_image_path: oneDriveSharingLink || null,
+        receipt_image_path: receiptImagePath, // Use the stored OneDrive sharing link
         language_hint: data.language_hint || null,
         created_by: user.id,
-        merchant_vat: data.merchant_vat || null,
-        merchant_phone: data.merchant_phone || null,
-        merchant_website: data.merchant_website || null,
-        vat_details: data.vat_details || null,
-        subtotal_amount: data.subtotal_amount || null,
-        final_price: data.final_price || null,
-        paid_amount: data.paid_amount || null,
-        change_amount: data.change_amount || null,
       };
 
-      // Insert receipt
-      const { data: createdReceipt, error: receiptError } = await supabase
+      console.log("Creating receipt with data:", receiptData);
+
+      const { data: createdReceipt, error } = await supabase
         .from("receipts")
         .insert([receiptData])
         .select()
         .single();
 
-      if (receiptError) {
-        console.error("Error creating receipt:", receiptError);
-        throw new Error(receiptError.message);
+      if (error) {
+        throw error;
       }
 
-      // Log activity
-      try {
-        const activityData = {
-          user_id: user.id,
-          activity_type: ActivityType.CREATE_RECEIPT,
-          description: `Receipt "${data.receipt_number}" was created`,
-          company_id: companyId,
-          metadata: {
-            receipt_id: createdReceipt.id,
-            receipt_number: data.receipt_number,
-            merchant_name: data.merchant_name,
-            total_amount: data.total_amount,
-            has_document: !!uploadedDocumentId,
+      // Log the receipt creation activity
+      const activityLogData = {
+        user_id: user.id,
+        activity_type: ActivityType.CREATE_RECEIPT,
+        description: `Receipt "${data.receipt_number}" was created for company by ${user.email}`,
+        company_id: companyId,
+        metadata: {
+          created_by: {
+            id: user.id,
+            email: user.email,
+            role: "company_admin",
           },
-        };
+          company: {
+            id: companyId,
+          },
+        },
+        new_value: receiptData,
+      };
 
-        const { error: activityError } = await supabase
-          .from("activity_logs")
-          .insert([activityData]);
+      const { error: activityLogError } = await supabase
+        .from("activity_logs")
+        .insert([activityLogData]);
 
-        if (activityError) {
-          console.error("Error logging activity:", activityError);
-        }
-      } catch (activityError) {
-        console.error("Error in activity logging:", activityError);
+      if (activityLogError) {
+        console.error("Error logging activity:", activityLogError);
       }
 
       showSnackbarMessage(
@@ -1715,13 +1886,33 @@ const CreateCompanyReceiptScreen = () => {
       setTimeout(() => {
         navigation.goBack();
       }, 1500);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating receipt:", error);
-      const errorMessage =
-        error instanceof Error
-          ? `Failed to create receipt: ${error.message}`
-          : "Failed to create receipt. Please try again.";
-      showSnackbarMessage(errorMessage, "error");
+
+      // Handle specific database errors
+      if (
+        error.code === "23505" &&
+        error.message.includes("unique_receipt_number")
+      ) {
+        showSnackbarMessage(
+          `Receipt number "${data.receipt_number}" already exists. Please use a different receipt number.`,
+          "error"
+        );
+        // Focus the receipt number input field
+        const receiptNumberInput = document.querySelector(
+          'input[name="receipt_number"]'
+        );
+        if (receiptNumberInput) {
+          (receiptNumberInput as HTMLInputElement).focus();
+        }
+      } else {
+        // Handle other errors
+        const errorMessage =
+          error instanceof Error
+            ? `Failed to create receipt: ${error.message}`
+            : "Failed to create receipt. Please try again.";
+        showSnackbarMessage(errorMessage, "error");
+      }
     } finally {
       setLoading(false);
     }
@@ -1839,9 +2030,7 @@ const CreateCompanyReceiptScreen = () => {
               },
             ]}
           >
-            {loading ? (
-              <LoadingIndicator message="Creating receipt..." />
-            ) : (
+: (
               <>
                 <View style={styles.headerSection}>
                   <Text style={styles.pageTitle}>Upload a Receipt</Text>
@@ -3081,6 +3270,90 @@ const styles = StyleSheet.create({
   actionButton: {
     margin: 4,
     backgroundColor: "#F8FAFC",
+  },
+  uploadProgressContainer: {
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: "#f0f9ff",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#bae6fd",
+  },
+  uploadProgressText: {
+    fontSize: 14,
+    marginBottom: 8,
+    color: "#0369a1",
+  },
+  progressBar: {
+    height: 6,
+    borderRadius: 3,
+  },
+  uploadErrorContainer: {
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: "#fef2f2",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#fecaca",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  uploadErrorText: {
+    fontSize: 14,
+    color: "#b91c1c",
+    flex: 1,
+  },
+  dismissErrorButton: {
+    marginLeft: 8,
+  },
+  sharingLinkContainer: {
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: "#f0fdf4",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+  },
+  sharingLinkLabel: {
+    fontSize: 14,
+    fontWeight: "500",
+    marginBottom: 8,
+    color: "#166534",
+  },
+  sharingLinkButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: "#dcfce7",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  sharingLinkText: {
+    fontSize: 14,
+    color: "#0891b2",
+    textDecorationLine: "underline",
+    flex: 1,
+  },
+  dragOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(255, 255, 255, 0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 1000,
+  },
+  dragText: {
+    fontSize: 16,
+    color: "#64748b",
+    fontFamily: "Poppins-Regular",
+    textAlign: "center",
+    marginTop: 16,
   },
 });
 

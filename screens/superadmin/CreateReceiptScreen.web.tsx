@@ -257,11 +257,17 @@ const CreateReceiptScreen = () => {
   // Add OneDrive upload state
   const [uploadingToOneDrive, setUploadingToOneDrive] = useState(false);
   const [oneDriveUploadProgress, setOneDriveUploadProgress] = useState(0);
-  const [oneDriveUploadError, setOneDriveUploadError] = useState<string | null>(null);
+  const [oneDriveUploadError, setOneDriveUploadError] = useState<string | null>(
+    null
+  );
   const [oneDriveItemId, setOneDriveItemId] = useState<string | null>(null);
-  const [oneDriveSharingLink, setOneDriveSharingLink] = useState<string | null>(null);
+  const [oneDriveSharingLink, setOneDriveSharingLink] = useState<string | null>(
+    null
+  );
   const [isDragActive, setIsDragActive] = useState(false);
-  const [uploadedDocumentId, setUploadedDocumentId] = useState<string | null>(null);
+  const [uploadedDocumentId, setUploadedDocumentId] = useState<string | null>(
+    null
+  );
   const [deletingReceipt, setDeletingReceipt] = useState(false);
 
   // Add drop handler for web
@@ -415,11 +421,14 @@ const CreateReceiptScreen = () => {
         blob,
         fileType === "pdf" ? "receipt.pdf" : "receipt.jpg"
       );
-      
+
       // Add optional parameters
       formData.append("language", "de");
       formData.append("near", "Switzerland");
-      formData.append("filename", fileType === "pdf" ? "receipt.pdf" : "receipt.jpg");
+      formData.append(
+        "filename",
+        fileType === "pdf" ? "receipt.pdf" : "receipt.jpg"
+      );
 
       // Call the Supabase Edge Function instead of directly calling Taggun API
       const functionResponse = await supabase.functions.invoke("ocr-service", {
@@ -427,7 +436,9 @@ const CreateReceiptScreen = () => {
       });
 
       if (functionResponse.error) {
-        throw new Error(`OCR processing failed: ${functionResponse.error.message}`);
+        throw new Error(
+          `OCR processing failed: ${functionResponse.error.message}`
+        );
       }
 
       // Extract the formatted data from the response
@@ -443,7 +454,7 @@ const CreateReceiptScreen = () => {
       const formatAmount = (amount: number): string => {
         return roundToTwoDecimals(amount).toFixed(2);
       };
-      
+
       // Update form with extracted data from the formatted response
       if (formattedData) {
         // Basic receipt information
@@ -554,7 +565,10 @@ const CreateReceiptScreen = () => {
           "Found receipt number in receiptNumber field:",
           ocrData.entities.receiptNumber.data
         );
-        receiptNumber = String(ocrData.entities.receiptNumber.data);
+        // Clean the receipt number - remove special characters except - and /
+        receiptNumber = String(ocrData.entities.receiptNumber.data)
+          .replace(/[^a-zA-Z0-9-\/]/g, "")
+          .trim();
       }
 
       // 2. Try from invoice number if receipt number not found
@@ -563,7 +577,10 @@ const CreateReceiptScreen = () => {
           "Found receipt number in invoiceNumber field:",
           ocrData.entities.invoiceNumber.data
         );
-        receiptNumber = String(ocrData.entities.invoiceNumber.data);
+        // Clean the invoice number
+        receiptNumber = String(ocrData.entities.invoiceNumber.data)
+          .replace(/[^a-zA-Z0-9-\/]/g, "")
+          .trim();
       }
 
       // 3. Try extracting from raw text
@@ -571,7 +588,10 @@ const CreateReceiptScreen = () => {
         const extractedNumber = extractReceiptNumber(ocrData.text.text);
         if (extractedNumber) {
           console.log("Found receipt number in raw text:", extractedNumber);
-          receiptNumber = extractedNumber;
+          // Clean the extracted number
+          receiptNumber = extractedNumber
+            .replace(/[^a-zA-Z0-9-\/]/g, "")
+            .trim();
         }
       }
 
@@ -888,11 +908,18 @@ const CreateReceiptScreen = () => {
       } else if (error.message.includes("file type")) {
         errorMessage +=
           "Please upload a valid image (JPEG, PNG, HEIC) or PDF file.";
-      } else if (error.message.includes("network") || error.message.includes("timeout")) {
+      } else if (
+        error.message.includes("network") ||
+        error.message.includes("timeout")
+      ) {
         errorMessage +=
           "Network error. Please check your connection and try again.";
-      } else if (error.message.includes("Edge Function") || error.message.includes("Supabase")) {
-        errorMessage += "OCR service error. Please try again later or contact support.";
+      } else if (
+        error.message.includes("Edge Function") ||
+        error.message.includes("Supabase")
+      ) {
+        errorMessage +=
+          "OCR service error. Please try again later or contact support.";
       } else {
         errorMessage += "Please try again or fill in details manually.";
       }
@@ -902,7 +929,6 @@ const CreateReceiptScreen = () => {
       setIsProcessingOCR(false);
     }
   };
-
 
   useEffect(() => {
     if (Platform.OS === "web" && dropRef.current) {
@@ -991,11 +1017,6 @@ const CreateReceiptScreen = () => {
 
     // Process with OCR first
     await processReceiptWithOCR(uri);
-
-    // After OCR processing, upload to OneDrive if we have a valid receipt and company
-    if (selectedCompany && user) {
-      uploadReceiptToOneDrive(uri, droppedFile);
-    }
   };
 
   const pickImage = async () => {
@@ -1219,16 +1240,131 @@ const CreateReceiptScreen = () => {
 
       setLoading(true);
 
-      // Skip image upload and set imagePath to null
-      const imagePath = null;
+      // First validate if receipt number already exists
+      const { data: existingReceipt, error: checkError } = await supabase
+        .from("receipts")
+        .select("receipt_number")
+        .eq("receipt_number", data.receipt_number)
+        .single();
 
-      // Format line items for storage
-      const formattedLineItems = lineItems.map((item) => ({
-        name: item.name,
-        qty: item.quantity,
-        unitPrice: item.unitPrice,
-        totalPrice: item.totalPrice,
-      }));
+      if (checkError && checkError.code !== "PGRST116") {
+        // PGRST116 means no rows returned
+        throw checkError;
+      }
+
+      if (existingReceipt) {
+        setLoading(false);
+        showSnackbarMessage(
+          `Receipt number "${data.receipt_number}" already exists. Please use a different receipt number.`,
+          "error"
+        );
+        // Focus the receipt number input field
+        const receiptNumberInput = document.querySelector(
+          'input[name="receipt_number"]'
+        );
+        if (receiptNumberInput) {
+          (receiptNumberInput as HTMLInputElement).focus();
+        }
+        return;
+      }
+
+      // Variable to store OneDrive sharing link
+      let receiptImagePath = null;
+
+      // Only proceed with OneDrive upload if we have a receipt image
+      if (receiptImage) {
+        try {
+          setUploadingToOneDrive(true);
+          setOneDriveUploadProgress(10);
+          setOneDriveUploadError(null);
+
+          // Create a File object from the image URI
+          let fileObject;
+          let fileName;
+          let mimeType;
+
+          // For camera or gallery images, fetch the blob and create a File
+          const response = await fetch(receiptImage);
+          const blob = await response.blob();
+
+          // Generate a filename based on date and source
+          fileName = `receipt_${Date.now()}.${fileType === "pdf" ? "pdf" : "jpg"}`;
+          mimeType = fileType === "pdf" ? "application/pdf" : "image/jpeg";
+
+          fileObject = new File([blob], fileName, { type: mimeType });
+
+          setOneDriveUploadProgress(20);
+
+          // Create FormData for the upload
+          const formData = new FormData();
+          formData.append("file", fileObject);
+          formData.append("companyId", selectedCompany.id);
+          formData.append("employeeId", user.id);
+          formData.append("uploadedBy", user.id);
+
+          // Add receipt-specific metadata
+          const metadata = {
+            receiptType: "company_receipt",
+            company_id: selectedCompany.id,
+            merchant_name: data.merchant_name || "Unknown Merchant",
+            receipt_number: data.receipt_number || `REC-${Date.now()}`,
+            receipt_date: data.date?.toISOString() || new Date().toISOString(),
+            total_amount: data.total_amount || "0.00",
+          };
+
+          formData.append("metadata", JSON.stringify(metadata));
+          formData.append("reportType", "company_receipt");
+          formData.append("reportId", "temp");
+
+          setOneDriveUploadProgress(40);
+
+          // Call the Edge Function to upload to OneDrive
+          const oneDriveResponse = await supabase.functions.invoke(
+            "onedrive-upload",
+            {
+              body: formData,
+            }
+          );
+
+          if (oneDriveResponse.error) {
+            throw new Error(oneDriveResponse.error.message || "Upload failed");
+          }
+
+          setOneDriveUploadProgress(80);
+
+          // Process the response and store the sharing link
+          if (oneDriveResponse.data?.data) {
+            const responseData = oneDriveResponse.data.data;
+            setOneDriveItemId(responseData.itemId);
+            setOneDriveSharingLink(responseData.sharingLink);
+            // Store the sharing link for the receipt
+            receiptImagePath = responseData.sharingLink;
+            if (responseData.document?.id) {
+              setUploadedDocumentId(responseData.document.id);
+            }
+          }
+
+          setOneDriveUploadProgress(100);
+          showSnackbarMessage(
+            "Receipt uploaded to OneDrive successfully",
+            "success"
+          );
+        } catch (error: any) {
+          console.error("Error uploading to OneDrive:", error);
+          setOneDriveUploadError(
+            error.message || "Failed to upload receipt to OneDrive"
+          );
+          showSnackbarMessage(
+            "Error uploading to OneDrive: " + error.message,
+            "error"
+          );
+          setLoading(false);
+          setUploadingToOneDrive(false);
+          return; // Stop the submission if OneDrive upload fails
+        } finally {
+          setUploadingToOneDrive(false);
+        }
+      }
 
       // Find a super admin to use as created_by
       console.log("Current user:", user);
@@ -1255,7 +1391,15 @@ const CreateReceiptScreen = () => {
         return;
       }
 
-      // Create receipt
+      // Format line items for storage
+      const formattedLineItems = lineItems.map((item) => ({
+        name: item.name,
+        qty: item.quantity,
+        unitPrice: item.unitPrice,
+        totalPrice: item.totalPrice,
+      }));
+
+      // Create receipt with the receipt_image_path
       const receiptData = {
         company_id: selectedCompany.id,
         receipt_number: data.receipt_number,
@@ -1267,10 +1411,12 @@ const CreateReceiptScreen = () => {
         tax_amount: parseFloat(data.tax_amount),
         payment_method: data.payment_method,
         merchant_address: data.merchant_address || null,
-        receipt_image_path: imagePath,
+        receipt_image_path: receiptImagePath, // Use the stored OneDrive sharing link
         language_hint: data.language_hint || null,
         created_by: adminUser.id,
       };
+
+      console.log("Creating receipt with data:", receiptData);
 
       const { data: createdReceipt, error } = await supabase
         .from("receipts")
@@ -1321,11 +1467,31 @@ const CreateReceiptScreen = () => {
       }, 1500);
     } catch (error: any) {
       console.error("Error creating receipt:", error);
-      const errorMessage =
-        error instanceof Error
-          ? `Failed to create receipt: ${error.message}`
-          : "Failed to create receipt. Please try again.";
-      showSnackbarMessage(errorMessage, "error");
+
+      // Handle specific database errors
+      if (
+        error.code === "23505" &&
+        error.message.includes("unique_receipt_number")
+      ) {
+        showSnackbarMessage(
+          `Receipt number "${data.receipt_number}" already exists. Please use a different receipt number.`,
+          "error"
+        );
+        // Focus the receipt number input field
+        const receiptNumberInput = document.querySelector(
+          'input[name="receipt_number"]'
+        );
+        if (receiptNumberInput) {
+          (receiptNumberInput as HTMLInputElement).focus();
+        }
+      } else {
+        // Handle other errors
+        const errorMessage =
+          error instanceof Error
+            ? `Failed to create receipt: ${error.message}`
+            : "Failed to create receipt. Please try again.";
+        showSnackbarMessage(errorMessage, "error");
+      }
     } finally {
       setLoading(false);
     }
@@ -1644,10 +1810,38 @@ const CreateReceiptScreen = () => {
   };
 
   const handleDeleteReceipt = () => {
+    // If we have OneDrive data, just clean up the local state
+    setOneDriveItemId(null);
+    setOneDriveSharingLink(null);
+    setUploadedDocumentId(null);
+
     setReceiptImage(null);
     setFileType(null);
-    clearOCRFields();
+
+    // Clear all fields that might have been filled by OCR
+    setValue("receipt_number", "");
+    setValue("merchant_name", "");
+    setValue("merchant_address", "");
+    setValue("total_amount", "");
+    setValue("tax_amount", "");
+    setValue("subtotal_amount", "");
+    setValue("final_price", "");
+    setValue("paid_amount", "");
+    setValue("change_amount", "");
+    setValue("merchant_vat", "");
+    setValue("merchant_phone", "");
+    setValue("merchant_website", "");
+    setValue("vat_details", "");
+    setValue("language_hint", "");
+    setLineItems([]);
+
     setShowDeleteConfirmModal(false);
+
+    // Show success message
+    showSnackbarMessage(
+      "Receipt image and auto-filled fields have been cleared",
+      "info"
+    );
   };
 
   // Update the renderDeleteConfirmModal function
@@ -1711,18 +1905,14 @@ const CreateReceiptScreen = () => {
     const dynamicStyles = StyleSheet.create({
       dropzoneActive: {
         borderColor: theme.colors.primary,
-        backgroundColor: "rgba(59, 130, 246, 0.08)",
-        transform: [{ scale: 1.01 }],
+        backgroundColor: "#E3F2FD",
       },
       dropzoneUploading: {
         borderColor: theme.colors.primary,
         borderWidth: 2,
-        backgroundColor: "rgba(59, 130, 246, 0.05)",
-      },
-      uploadingContainer: {
-        padding: 24,
-        alignItems: "center",
-        justifyContent: "center",
+        backgroundColor: "#E3F2FD",
+        opacity: 0.9,
+        transform: [{ scale: 1.01 }],
       },
       uploadingText: {
         fontSize: 16,
@@ -1731,158 +1921,172 @@ const CreateReceiptScreen = () => {
         textAlign: "center",
         marginTop: 16,
       },
-      uploadingSubtext: {
-        fontSize: 14,
-        color: "#64748b",
-        textAlign: "center",
-        marginTop: 8,
-      },
-      dropzoneSubText: {
-        fontSize: 14,
-        color: "#64748b",
-        textAlign: "center",
-        marginTop: 12,
-        fontStyle: "italic",
-      },
     });
 
     return (
       <View>
-        <View 
-          ref={dropRef} 
-          style={[
-            styles.uploadSection, 
-            isDragActive && styles.dragActive,
-            isDragActive && dynamicStyles.dropzoneActive,
-            (isProcessingOCR || uploadingToOneDrive) && dynamicStyles.dropzoneUploading,
-          ]}
-        >
-          <Text style={styles.uploadSectionTitle}>Upload Receipt</Text>
-          <Text style={styles.uploadSectionSubtitle}>
-            Upload a receipt image or PDF to automatically extract information
-          </Text>
-
-          {/* Show processing/uploading state */}
-          {(isProcessingOCR || uploadingToOneDrive) ? (
-            <View style={dynamicStyles.uploadingContainer}>
-              <ActivityIndicator size="large" color={theme.colors.primary} />
-              <Text style={dynamicStyles.uploadingText}>
-                {isProcessingOCR 
-                  ? "Processing receipt..." 
-                  : `Uploading to OneDrive: ${oneDriveUploadProgress}%`}
-              </Text>
-              <Text style={dynamicStyles.uploadingSubtext}>
-                {isProcessingOCR 
-                  ? "Extracting receipt data" 
-                  : "Saving to secure storage"}
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.imageButtonsContainer}>
-              {!isWebPlatform || isMobileWeb ? (
-                <>
-                  <Button
-                    mode="outlined"
-                    icon="camera"
-                    onPress={takePhoto}
-                    style={[styles.imageButton, { marginRight: 8 }]}
-                    disabled={isProcessingOCR || uploadingToOneDrive || !selectedCompany}
-                  >
-                    Take Photo
-                  </Button>
-                  <Button
-                    mode="outlined"
-                    icon="image"
-                    onPress={pickImage}
-                    style={styles.imageButton}
-                    disabled={isProcessingOCR || uploadingToOneDrive || !selectedCompany}
-                  >
-                    Gallery
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button
-                    mode="outlined"
-                    icon="file-upload"
-                    onPress={pickDocument}
-                    style={styles.uploadButton}
-                    disabled={isProcessingOCR || uploadingToOneDrive || !selectedCompany}
-                  >
-                    Upload Image/PDF
-                  </Button>
-                  {isWebPlatform && !isMobileWeb && (
-                    <Text style={dynamicStyles.dropzoneSubText}>
-                      Or drag and drop your receipt file here
-                    </Text>
-                  )}
-                </>
-              )}
-            </View>
-          )}
-
-          {renderPreview()}
-
-          {/* OneDrive Upload Progress */}
-          {uploadingToOneDrive && (
-            <View style={styles.uploadProgressContainer}>
-              <Text style={styles.uploadProgressText}>
-                Uploading to OneDrive: {oneDriveUploadProgress}%
-              </Text>
-              <ProgressBar
-                progress={oneDriveUploadProgress / 100}
-                color={theme.colors.primary}
-                style={styles.progressBar}
-              />
-            </View>
-          )}
-
-          {/* OneDrive Upload Error */}
-          {oneDriveUploadError && (
-            <View style={styles.uploadErrorContainer}>
-              <Text style={styles.uploadErrorText}>{oneDriveUploadError}</Text>
-              <Button
-                mode="text"
-                onPress={() => setOneDriveUploadError(null)}
-                style={styles.dismissErrorButton}
-              >
-                Dismiss
-              </Button>
-            </View>
-          )}
-
-          {/* OneDrive Sharing Link */}
-          {oneDriveSharingLink && (
-            <View style={styles.sharingLinkContainer}>
-              <Text style={styles.sharingLinkLabel}>OneDrive Link:</Text>
-              <TouchableOpacity
-                onPress={() => {
-                  if (Platform.OS === "web") {
-                    window.open(oneDriveSharingLink, "_blank");
-                  }
-                }}
-                style={styles.sharingLinkButton}
-              >
-                <Text style={styles.sharingLinkText} numberOfLines={1}>
-                  {oneDriveSharingLink}
+        {!receiptImage ? (
+          <TouchableOpacity
+            ref={dropRef}
+            style={[
+              styles.dropzone,
+              isDragActive && dynamicStyles.dropzoneActive,
+              (isProcessingOCR || uploadingToOneDrive) &&
+                dynamicStyles.dropzoneUploading,
+            ]}
+            onPress={showImageOptions}
+            disabled={isProcessingOCR || uploadingToOneDrive}
+          >
+            {isProcessingOCR || uploadingToOneDrive ? (
+              <Animated.View style={styles.uploadingContainer}>
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+                <Text style={dynamicStyles.uploadingText}>
+                  {isProcessingOCR
+                    ? "Processing receipt..."
+                    : `Uploading... ${oneDriveUploadProgress}%`}
                 </Text>
-                <IconButton icon="open-in-new" size={16} />
-              </TouchableOpacity>
-            </View>
-          )}
+                <Text style={styles.uploadingSubtext}>
+                  {isProcessingOCR
+                    ? "Extracting receipt data"
+                    : "Saving to secure storage"}
+                </Text>
+              </Animated.View>
+            ) : (
+              <>
+                <IconButton
+                  icon="receipt"
+                  size={48}
+                  iconColor={theme.colors.primary}
+                />
+                <Text style={styles.dropzoneText}>
+                  Click to upload a receipt image or PDF
+                </Text>
+                <Text style={styles.dropzoneSubText}>
+                  Supported formats: PDF, JPG, PNG (max 10MB)
+                </Text>
+                {isWebPlatform && (
+                  <Text style={styles.dropzoneSubText}>
+                    Or drag and drop files here
+                  </Text>
+                )}
 
-          {/* Drag & Drop Overlay for Web */}
-          {isDragActive && Platform.OS === "web" && (
-            <View style={styles.dragOverlay}>
-              <IconButton 
-                icon="file-upload" 
-                size={48} 
-                iconColor={theme.colors.primary}
-              />
-              <Text style={styles.dragText}>Drop your receipt file here</Text>
-            </View>
-          )}
-        </View>
+                <View style={styles.imageButtonsContainer}>
+                  {!isWebPlatform || isMobileWeb ? (
+                    <>
+                      <Button
+                        mode="outlined"
+                        icon="camera"
+                        onPress={takePhoto}
+                        style={[styles.imageButton, { marginRight: 8 }]}
+                        disabled={
+                          isProcessingOCR ||
+                          uploadingToOneDrive ||
+                          !selectedCompany
+                        }
+                      >
+                        Take Photo
+                      </Button>
+                      <Button
+                        mode="outlined"
+                        icon="image"
+                        onPress={pickImage}
+                        style={styles.imageButton}
+                        disabled={
+                          isProcessingOCR ||
+                          uploadingToOneDrive ||
+                          !selectedCompany
+                        }
+                      >
+                        Gallery
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      mode="outlined"
+                      icon="file-upload"
+                      onPress={pickDocument}
+                      style={styles.uploadButton}
+                      disabled={
+                        isProcessingOCR ||
+                        uploadingToOneDrive ||
+                        !selectedCompany
+                      }
+                    >
+                      Browse Files
+                    </Button>
+                  )}
+                </View>
+              </>
+            )}
+          </TouchableOpacity>
+        ) : (
+          <View>
+            {renderPreview()}
+
+            {/* OneDrive Upload Progress */}
+            {uploadingToOneDrive && (
+              <View style={styles.uploadProgressContainer}>
+                <Text style={styles.uploadProgressText}>
+                  Uploading to OneDrive: {oneDriveUploadProgress}%
+                </Text>
+                <ProgressBar
+                  progress={oneDriveUploadProgress / 100}
+                  color={theme.colors.primary}
+                  style={styles.progressBar}
+                />
+              </View>
+            )}
+
+            {/* OneDrive Upload Error */}
+            {oneDriveUploadError && (
+              <View style={styles.uploadErrorContainer}>
+                <Text style={styles.uploadErrorText}>
+                  {oneDriveUploadError}
+                </Text>
+                <Button
+                  mode="text"
+                  onPress={() => setOneDriveUploadError(null)}
+                  style={styles.dismissErrorButton}
+                >
+                  Dismiss
+                </Button>
+              </View>
+            )}
+
+            {/* OneDrive Sharing Link */}
+            {oneDriveSharingLink && (
+              <View style={styles.sharingLinkContainer}>
+                <Text style={styles.sharingLinkLabel}>OneDrive Link:</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    if (Platform.OS === "web") {
+                      window.open(oneDriveSharingLink, "_blank");
+                    }
+                  }}
+                  style={styles.sharingLinkButton}
+                >
+                  <Text style={styles.sharingLinkText} numberOfLines={1}>
+                    {oneDriveSharingLink}
+                  </Text>
+                  <IconButton icon="open-in-new" size={16} />
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Drag & Drop Overlay for Web */}
+        {isDragActive && Platform.OS === "web" && (
+          <View style={styles.dragOverlay}>
+            <IconButton
+              icon="file-upload"
+              size={48}
+              iconColor={theme.colors.primary}
+            />
+            <Text style={styles.dragText}>Drop your receipt file here</Text>
+          </View>
+        )}
+
         {renderDeleteConfirmModal()}
         {renderPreviewModal()}
       </View>
@@ -2610,7 +2814,6 @@ const styles = StyleSheet.create({
     borderColor: "#e2e8f0",
     borderStyle: "solid",
     backgroundColor: "#ffffff",
-    transition: "all 0.2s ease",
   },
   uploadSectionTitle: {
     fontSize: 18,
@@ -3151,6 +3354,46 @@ const styles = StyleSheet.create({
     color: "#0891b2",
     textDecorationLine: "underline",
     flex: 1,
+  },
+  dropzone: {
+    borderWidth: 2,
+    borderColor: "#E0E0E0",
+    borderStyle: "dashed",
+    borderRadius: 16,
+    padding: 24,
+    backgroundColor: "#FAFAFA",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 16,
+  },
+  dropzoneText: {
+    fontSize: 16,
+    color: "#64748B",
+    textAlign: "center",
+    fontFamily: "Poppins-Medium",
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  dropzoneSubText: {
+    fontSize: 14,
+    color: "#94A3B8",
+    textAlign: "center",
+    marginBottom: 16,
+    fontFamily: "Poppins-Regular",
+  },
+  uploadingContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+    position: "relative",
+    overflow: "hidden",
+  },
+  uploadingSubtext: {
+    fontSize: 14,
+    color: "#64748B",
+    fontFamily: "Poppins-Regular",
+    marginTop: 8,
+    textAlign: "center",
   },
 });
 

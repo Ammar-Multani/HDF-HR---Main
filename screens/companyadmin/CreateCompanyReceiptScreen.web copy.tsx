@@ -453,19 +453,24 @@ const CreateCompanyReceiptScreen = () => {
         blob,
         fileType === "pdf" ? "receipt.pdf" : "receipt.jpg"
       );
-      
+
       // Add optional parameters
       formData.append("language", "de");
       formData.append("near", "Switzerland");
-      formData.append("filename", fileType === "pdf" ? "receipt.pdf" : "receipt.jpg");
+      formData.append(
+        "filename",
+        fileType === "pdf" ? "receipt.pdf" : "receipt.jpg"
+      );
 
       // Call the Supabase Edge Function instead of directly calling Taggun API
-      const functionResponse = await supabase.functions.invoke("taggun-ocr", {
+      const functionResponse = await supabase.functions.invoke("ocr-service", {
         body: formData,
       });
 
       if (functionResponse.error) {
-        throw new Error(`OCR processing failed: ${functionResponse.error.message}`);
+        throw new Error(
+          `OCR processing failed: ${functionResponse.error.message}`
+        );
       }
 
       // Extract the formatted data from the response
@@ -556,10 +561,12 @@ const CreateCompanyReceiptScreen = () => {
       }
 
       // Update success message with more details
-      const confidenceScore = formattedData?.confidence_level ? 
-        (formattedData.confidence_level * 100).toFixed(1) : 
-        (ocrData?.confidenceLevel ? (ocrData.confidenceLevel * 100).toFixed(1) : "N/A");
-      
+      const confidenceScore = formattedData?.confidence_level
+        ? (formattedData.confidence_level * 100).toFixed(1)
+        : ocrData?.confidenceLevel
+          ? (ocrData.confidenceLevel * 100).toFixed(1)
+          : "N/A";
+
       let successMessage = `Receipt processed successfully! (${confidenceScore}% confidence)`;
 
       // Add details about what was found
@@ -571,7 +578,7 @@ const CreateCompanyReceiptScreen = () => {
       if (formattedData?.line_items?.length) extractedFields.push("line items");
 
       if (extractedFields.length > 0) {
-        successMessage += `\nFound: ${extractedFields.join(", ")}`;      
+        successMessage += `\nFound: ${extractedFields.join(", ")}`;
       }
 
       showSnackbarMessage(successMessage, "success");
@@ -580,18 +587,34 @@ const CreateCompanyReceiptScreen = () => {
 
       // More descriptive error messages
       let errorMessage = "Failed to process receipt. ";
-      if (error.message.includes("API key") || error.message.includes("not configured")) {
-        errorMessage += "OCR service is not properly configured. Please contact support.";
-      } else if (error.message.includes("file size") || error.message.includes("too large")) {
+      if (
+        error.message.includes("API key") ||
+        error.message.includes("not configured")
+      ) {
+        errorMessage +=
+          "OCR service is not properly configured. Please contact support.";
+      } else if (
+        error.message.includes("file size") ||
+        error.message.includes("too large")
+      ) {
         errorMessage +=
           "File is too large. Please try a smaller file (max 10MB).";
-      } else if (error.message.includes("file type") || error.message.includes("invalid file")) {
+      } else if (
+        error.message.includes("file type") ||
+        error.message.includes("invalid file")
+      ) {
         errorMessage +=
           "Please upload a valid image (JPEG, PNG, HEIC) or PDF file.";
-      } else if (error.message.includes("network") || error.message.includes("connection")) {
+      } else if (
+        error.message.includes("network") ||
+        error.message.includes("connection")
+      ) {
         errorMessage +=
           "Network error. Please check your connection and try again.";
-      } else if (error.message.includes("timeout") || error.message.includes("timed out")) {
+      } else if (
+        error.message.includes("timeout") ||
+        error.message.includes("timed out")
+      ) {
         errorMessage +=
           "The OCR service took too long to respond. Please try again.";
       } else {
@@ -904,7 +927,6 @@ const CreateCompanyReceiptScreen = () => {
 
   const pickDocument = async () => {
     try {
-
       const result = await DocumentPicker.getDocumentAsync({
         type: ["image/*", "application/pdf"],
         multiple: false,
