@@ -214,6 +214,111 @@ interface TaggunTax {
 
 // OCR processing is now handled by the Supabase Edge Function
 
+// Add this helper function outside the component
+const getWebStyles = (isDisabled: boolean) => {
+  if (Platform.OS === "web") {
+    return {
+      cursor: isDisabled ? "not-allowed" : "pointer",
+    } as any; // Using any to bypass type checking for web-specific styles
+  }
+  return {};
+};
+
+const baseStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+  },
+  scrollView: {},
+  contentContainer: {
+    paddingBottom: 24,
+  },
+  dropzoneText: {
+    fontSize: 16,
+    color: "#64748B",
+    fontFamily: "Poppins-Medium",
+    textAlign: "center",
+    marginTop: 16,
+  },
+  dropzoneSubtext: {
+    fontSize: 14,
+    color: "#94A3B8",
+    fontFamily: "Poppins-Regular",
+    textAlign: "center",
+    marginTop: 8,
+  },
+  previewContainer: {
+    width: "100%",
+    height: 200,
+    borderRadius: 16,
+    overflow: "hidden",
+    marginTop: 16,
+  },
+  previewImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  previewOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+    opacity: 0,
+  },
+  previewText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontFamily: "Poppins-Medium",
+  },
+  errorText: {
+    color: "#EF4444",
+    fontSize: 14,
+    fontFamily: "Poppins-Regular",
+    marginTop: 8,
+  },
+  uploadingContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
+  },
+});
+
+// Add this after the imports
+const webSpecificStyles =
+  Platform.OS === "web"
+    ? ({
+        dropzoneTransition: {
+          transition: "all 1s ease",
+        },
+        uploadingOverlayTransition: {
+          backdropFilter: "blur(4px)",
+        },
+        cursorNotAllowed: {
+          cursor: "not-allowed",
+        } as { cursor: "not-allowed" },
+      } as const)
+    : {};
+
+// Utility functions
+const getDisabledStyle = (isDisabled: boolean): { cursor?: "not-allowed" } => {
+  if (Platform.OS === "web" && isDisabled) {
+    return { cursor: "not-allowed" };
+  }
+  return {};
+};
+
+// Web-specific styles that will be applied conditionally
+const webStyles = {
+  disabled: Platform.OS === "web" ? { pointerEvents: "none" as const } : {},
+};
+
 const CreateReceiptScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
@@ -223,6 +328,52 @@ const CreateReceiptScreen = () => {
   // Calculate responsive breakpoints
   const isLargeScreen = dimensions.width >= 1440;
   const isMediumScreen = dimensions.width >= 768 && dimensions.width < 1440;
+
+  // Dynamic styles definition
+  const dynamicStyles = StyleSheet.create({
+    dropzone: {
+      borderWidth: 2,
+      borderColor: "#E0E0E0",
+      borderStyle: "dashed",
+      borderRadius: 16,
+      padding: 24,
+      backgroundColor: "#FAFAFA",
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 16,
+      minHeight: 200,
+      position: "relative",
+      overflow: "hidden",
+      ...(Platform.OS === "web" ? webSpecificStyles.dropzoneTransition : {}),
+    },
+    dropzoneActive: {
+      borderColor: "#FF867E",
+      backgroundColor: "rgba(255, 134, 126, 0.02)",
+    },
+    dropzoneUploading: {
+      borderColor: theme.colors.primary,
+      backgroundColor: "rgba(59, 130, 246, 0.05)",
+      opacity: 0.8,
+    },
+    dropzoneDisabled: {
+      opacity: 0.5,
+      backgroundColor: "#F1F5F9",
+    },
+    uploadingOverlay: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: "rgba(255, 255, 255, 0.95)",
+      justifyContent: "center",
+      alignItems: "center",
+      zIndex: 5,
+      ...(Platform.OS === "web"
+        ? webSpecificStyles.uploadingOverlayTransition
+        : {}),
+    },
+  });
 
   const [loading, setLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -276,38 +427,47 @@ const CreateReceiptScreen = () => {
   useEffect(() => {
     if (Platform.OS === "web" && dropRef.current) {
       const element = dropRef.current as unknown as HTMLElement;
+      let dragCounter = 0;
 
       const handleDragEnter = (e: Event) => {
         e.preventDefault();
         e.stopPropagation();
-        setIsDragActive(true);
+        dragCounter++;
+        if (dragCounter === 1) {
+          setIsDragActive(true);
+        }
       };
 
       const handleDragOver = (e: Event) => {
         e.preventDefault();
         e.stopPropagation();
-        setIsDragActive(true);
       };
 
       const handleDragLeave = (e: Event) => {
         e.preventDefault();
         e.stopPropagation();
-        setIsDragActive(false);
+        dragCounter--;
+        if (dragCounter === 0) {
+          setIsDragActive(false);
+        }
       };
 
-      const handleDrop = (e: any) => {
+      const handleDrop = async (e: any) => {
         e.preventDefault();
         e.stopPropagation();
+        dragCounter = 0;
         setIsDragActive(false);
 
-        if (
-          e.dataTransfer &&
-          e.dataTransfer.files &&
-          e.dataTransfer.files.length > 0
-        ) {
+        if (!selectedCompany) {
+          setSnackbarMessage("Please select a company first");
+          setSnackbarVisible(true);
+          return;
+        }
+
+        if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
           const file = e.dataTransfer.files[0];
 
-          // Check file type
+          // Simple and clear file validation
           const validTypes = [
             "application/pdf",
             "image/jpeg",
@@ -318,20 +478,44 @@ const CreateReceiptScreen = () => {
 
           if (!validTypes.includes(file.type)) {
             setSnackbarMessage(
-              "Invalid file type. Please upload PDF or image files."
+              "Invalid file type. Please upload PDF or image files (JPEG, PNG, HEIC)."
             );
             setSnackbarVisible(true);
             return;
           }
 
-          // Check file size (10MB)
+          // Simple size check
           if (file.size > 10 * 1024 * 1024) {
             setSnackbarMessage("File is too large. Maximum size is 10MB.");
             setSnackbarVisible(true);
             return;
           }
 
-          handleImageSelection(URL.createObjectURL(file), "gallery", file);
+          try {
+            // Clean up previous file URL if it exists
+            if (receiptImage && receiptImage.startsWith("blob:")) {
+              URL.revokeObjectURL(receiptImage);
+            }
+
+            // Set file type and create URL
+            setFileType(file.type.includes("pdf") ? "pdf" : "image");
+            const fileUrl = URL.createObjectURL(file);
+            setReceiptImage(fileUrl);
+
+            // Process with OCR and handle upload
+            await handleImageSelection(fileUrl, "gallery", file);
+          } catch (error) {
+            console.error("Error handling dropped file:", error);
+            setSnackbarMessage("Error processing the file. Please try again.");
+            setSnackbarVisible(true);
+
+            // Clean up on error
+            if (receiptImage && receiptImage.startsWith("blob:")) {
+              URL.revokeObjectURL(receiptImage);
+            }
+            setReceiptImage(null);
+            setFileType(null);
+          }
         }
       };
 
@@ -345,9 +529,14 @@ const CreateReceiptScreen = () => {
         element.removeEventListener("dragover", handleDragOver);
         element.removeEventListener("dragleave", handleDragLeave);
         element.removeEventListener("drop", handleDrop);
+
+        // Clean up any existing blob URLs
+        if (receiptImage && receiptImage.startsWith("blob:")) {
+          URL.revokeObjectURL(receiptImage);
+        }
       };
     }
-  }, [dropRef, selectedCompany]);
+  }, [dropRef, selectedCompany, receiptImage]);
 
   const {
     control,
@@ -400,6 +589,35 @@ const CreateReceiptScreen = () => {
     }
     setSnackbarMessage(`${icon} ${message}`);
     setSnackbarVisible(true);
+  };
+
+  // Add a reusable function to check if a receipt number already exists for the selected company
+  const checkReceiptNumberExists = async (
+    receiptNumber: string
+  ): Promise<boolean> => {
+    if (!receiptNumber || !selectedCompany?.id) return false;
+
+    try {
+      console.log(
+        `Checking if receipt number "${receiptNumber}" exists for company ID "${selectedCompany.id}"`
+      );
+
+      // Only check for duplicates within the same company
+      const { data, error } = await supabase
+        .from("receipts")
+        .select("id, receipt_number")
+        .eq("receipt_number", receiptNumber)
+        .eq("company_id", selectedCompany.id); // This ensures we only check within the selected company
+
+      // If we found any receipts with this number in this company, it's a duplicate
+      const exists = Array.isArray(data) && data.length > 0;
+      console.log(`Receipt exists for this company: ${exists}`, data);
+
+      return exists;
+    } catch (error: any) {
+      console.error("Error checking receipt number:", error);
+      return false;
+    }
   };
 
   const processReceiptWithOCR = async (imageUri: string) => {
@@ -459,7 +677,24 @@ const CreateReceiptScreen = () => {
       if (formattedData) {
         // Basic receipt information
         if (formattedData.receipt_number) {
-          setValue("receipt_number", formattedData.receipt_number);
+          // Check if this receipt number already exists for the selected company
+          if (selectedCompany) {
+            const exists = await checkReceiptNumberExists(
+              formattedData.receipt_number
+            );
+            if (exists) {
+              showSnackbarMessage(
+                `Receipt number "${formattedData.receipt_number}" already exists for this company. Please use a different receipt number.`,
+                "error"
+              );
+              // Still set the value so the user can edit it
+              setValue("receipt_number", formattedData.receipt_number);
+            } else {
+              setValue("receipt_number", formattedData.receipt_number);
+            }
+          } else {
+            setValue("receipt_number", formattedData.receipt_number);
+          }
         }
 
         if (formattedData.total_amount) {
@@ -1240,22 +1475,11 @@ const CreateReceiptScreen = () => {
 
       setLoading(true);
 
-      // First validate if receipt number already exists
-      const { data: existingReceipt, error: checkError } = await supabase
-        .from("receipts")
-        .select("receipt_number")
-        .eq("receipt_number", data.receipt_number)
-        .single();
-
-      if (checkError && checkError.code !== "PGRST116") {
-        // PGRST116 means no rows returned
-        throw checkError;
-      }
-
-      if (existingReceipt) {
-        setLoading(false);
+      // First validate if receipt number already exists for this company
+      const exists = await checkReceiptNumberExists(data.receipt_number);
+      if (exists) {
         showSnackbarMessage(
-          `Receipt number "${data.receipt_number}" already exists. Please use a different receipt number.`,
+          `Receipt number "${data.receipt_number}" already exists for this company. Please use a different receipt number.`,
           "error"
         );
         // Focus the receipt number input field
@@ -1265,7 +1489,8 @@ const CreateReceiptScreen = () => {
         if (receiptNumberInput) {
           (receiptNumberInput as HTMLInputElement).focus();
         }
-        return;
+        setLoading(false);
+        return; // Exit early if duplicate receipt number
       }
 
       // Variable to store OneDrive sharing link
@@ -1471,10 +1696,25 @@ const CreateReceiptScreen = () => {
       // Handle specific database errors
       if (
         error.code === "23505" &&
+        error.message.includes("receipts_receipt_number_key")
+      ) {
+        showSnackbarMessage(
+          `Receipt number "${data.receipt_number}" is already in use by another company. Please use a different receipt number.`,
+          "error"
+        );
+        // Focus the receipt number input field
+        const receiptNumberInput = document.querySelector(
+          'input[name="receipt_number"]'
+        );
+        if (receiptNumberInput) {
+          (receiptNumberInput as HTMLInputElement).focus();
+        }
+      } else if (
+        error.code === "23505" &&
         error.message.includes("unique_receipt_number")
       ) {
         showSnackbarMessage(
-          `Receipt number "${data.receipt_number}" already exists. Please use a different receipt number.`,
+          `Receipt number "${data.receipt_number}" already exists for this company. Please use a different receipt number.`,
           "error"
         );
         // Focus the receipt number input field
@@ -1654,11 +1894,24 @@ const CreateReceiptScreen = () => {
 
   // Add function to upload receipt to OneDrive
   const uploadReceiptToOneDrive = async (uri: string, droppedFile?: File) => {
+    // Check for duplicate receipt number before starting the upload
+    const receiptNumber = watch("receipt_number");
+    if (receiptNumber && selectedCompany) {
+      const exists = await checkReceiptNumberExists(receiptNumber);
+      if (exists) {
+        showSnackbarMessage(
+          `Receipt number "${receiptNumber}" already exists for this company. Please use a different receipt number.`,
+          "error"
+        );
+        return false; // Return false to indicate upload should not proceed
+      }
+    }
+
     try {
       if (!selectedCompany || !user) {
         setSnackbarMessage("Missing required information for upload");
         setSnackbarVisible(true);
-        return;
+        return false;
       }
 
       setUploadingToOneDrive(true);
@@ -1810,38 +2063,61 @@ const CreateReceiptScreen = () => {
   };
 
   const handleDeleteReceipt = () => {
-    // If we have OneDrive data, just clean up the local state
-    setOneDriveItemId(null);
-    setOneDriveSharingLink(null);
-    setUploadedDocumentId(null);
+    try {
+      // Reset OneDrive related states
+      setOneDriveItemId(null);
+      setOneDriveSharingLink(null);
+      setUploadedDocumentId(null);
 
-    setReceiptImage(null);
-    setFileType(null);
+      // Reset file related states
+      setReceiptImage(null);
+      setFileType(null);
+      setImageSource(null);
+      setUploadProgress(0);
+      setOneDriveUploadProgress(0);
+      setOneDriveUploadError(null);
+      setIsProcessingOCR(false);
+      setUploadingToOneDrive(false);
+      setIsDragActive(false);
 
-    // Clear all fields that might have been filled by OCR
-    setValue("receipt_number", "");
-    setValue("merchant_name", "");
-    setValue("merchant_address", "");
-    setValue("total_amount", "");
-    setValue("tax_amount", "");
-    setValue("subtotal_amount", "");
-    setValue("final_price", "");
-    setValue("paid_amount", "");
-    setValue("change_amount", "");
-    setValue("merchant_vat", "");
-    setValue("merchant_phone", "");
-    setValue("merchant_website", "");
-    setValue("vat_details", "");
-    setValue("language_hint", "");
-    setLineItems([]);
+      // Clear all form fields that might have been filled by OCR
+      setValue("receipt_number", "");
+      setValue("merchant_name", "");
+      setValue("merchant_address", "");
+      setValue("total_amount", "");
+      setValue("tax_amount", "");
+      setValue("subtotal_amount", "");
+      setValue("final_price", "");
+      setValue("paid_amount", "");
+      setValue("change_amount", "");
+      setValue("merchant_vat", "");
+      setValue("merchant_phone", "");
+      setValue("merchant_website", "");
+      setValue("vat_details", "");
+      setValue("language_hint", "");
+      setLineItems([]);
 
-    setShowDeleteConfirmModal(false);
+      // Close modals
+      setShowDeleteConfirmModal(false);
+      setShowPreviewModal(false);
 
-    // Show success message
-    showSnackbarMessage(
-      "Receipt image and auto-filled fields have been cleared",
-      "info"
-    );
+      // Revoke object URL if it exists to prevent memory leaks
+      if (receiptImage && receiptImage.startsWith("blob:")) {
+        URL.revokeObjectURL(receiptImage);
+      }
+
+      // Show success message
+      showSnackbarMessage(
+        "Receipt image and auto-filled fields have been cleared",
+        "info"
+      );
+    } catch (error) {
+      console.error("Error clearing receipt:", error);
+      showSnackbarMessage(
+        "There was an error clearing the receipt. Please try again.",
+        "error"
+      );
+    }
   };
 
   // Update the renderDeleteConfirmModal function
@@ -1896,32 +2172,12 @@ const CreateReceiptScreen = () => {
     );
   };
 
-  // Update the renderUploadSection to include the confirmation modal and OneDrive upload status
+  // Add visual feedback styles for drag and drop
   const renderUploadSection = () => {
     const isWebPlatform = Platform.OS === "web";
     const isMobileWeb = isWebPlatform && dimensions.width < 768;
-
-    // Define dynamic styles for better visual feedback
-    const dynamicStyles = StyleSheet.create({
-      dropzoneActive: {
-        borderColor: theme.colors.primary,
-        backgroundColor: "#E3F2FD",
-      },
-      dropzoneUploading: {
-        borderColor: theme.colors.primary,
-        borderWidth: 2,
-        backgroundColor: "#E3F2FD",
-        opacity: 0.9,
-        transform: [{ scale: 1.01 }],
-      },
-      uploadingText: {
-        fontSize: 16,
-        color: theme.colors.primary,
-        fontFamily: "Poppins-Medium",
-        textAlign: "center",
-        marginTop: 16,
-      },
-    });
+    const isDisabled =
+      !selectedCompany || isProcessingOCR || uploadingToOneDrive;
 
     return (
       <View>
@@ -1929,162 +2185,79 @@ const CreateReceiptScreen = () => {
           <TouchableOpacity
             ref={dropRef}
             style={[
-              styles.dropzone,
+              dynamicStyles.dropzone,
               isDragActive && dynamicStyles.dropzoneActive,
               (isProcessingOCR || uploadingToOneDrive) &&
                 dynamicStyles.dropzoneUploading,
+              isDisabled && dynamicStyles.dropzoneDisabled,
+              isDisabled && webStyles.disabled,
             ]}
             onPress={showImageOptions}
-            disabled={isProcessingOCR || uploadingToOneDrive}
+            disabled={isDisabled}
           >
-            {isProcessingOCR || uploadingToOneDrive ? (
-              <Animated.View style={styles.uploadingContainer}>
-                <ActivityIndicator size="large" color={theme.colors.primary} />
-                <Text style={dynamicStyles.uploadingText}>
-                  {isProcessingOCR
-                    ? "Processing receipt..."
-                    : `Uploading... ${oneDriveUploadProgress}%`}
-                </Text>
-                <Text style={styles.uploadingSubtext}>
-                  {isProcessingOCR
-                    ? "Extracting receipt data"
-                    : "Saving to secure storage"}
-                </Text>
-              </Animated.View>
-            ) : (
-              <>
-                <IconButton
-                  icon="receipt"
-                  size={48}
-                  iconColor={theme.colors.primary}
-                />
-                <Text style={styles.dropzoneText}>
-                  Click to upload a receipt image or PDF
-                </Text>
-                <Text style={styles.dropzoneSubText}>
-                  Supported formats: PDF, JPG, PNG (max 10MB)
-                </Text>
-                {isWebPlatform && (
-                  <Text style={styles.dropzoneSubText}>
-                    Or drag and drop files here
-                  </Text>
-                )}
-
-                <View style={styles.imageButtonsContainer}>
-                  {!isWebPlatform || isMobileWeb ? (
-                    <>
-                      <Button
-                        mode="outlined"
-                        icon="camera"
-                        onPress={takePhoto}
-                        style={[styles.imageButton, { marginRight: 8 }]}
-                        disabled={
-                          isProcessingOCR ||
-                          uploadingToOneDrive ||
-                          !selectedCompany
-                        }
-                      >
-                        Take Photo
-                      </Button>
-                      <Button
-                        mode="outlined"
-                        icon="image"
-                        onPress={pickImage}
-                        style={styles.imageButton}
-                        disabled={
-                          isProcessingOCR ||
-                          uploadingToOneDrive ||
-                          !selectedCompany
-                        }
-                      >
-                        Gallery
-                      </Button>
-                    </>
-                  ) : (
-                    <Button
-                      mode="outlined"
-                      icon="file-upload"
-                      onPress={pickDocument}
-                      style={styles.uploadButton}
-                      disabled={
-                        isProcessingOCR ||
-                        uploadingToOneDrive ||
-                        !selectedCompany
-                      }
-                    >
-                      Browse Files
-                    </Button>
-                  )}
-                </View>
-              </>
+            <IconButton
+              icon={isDragActive ? "file-upload" : "receipt"}
+              size={48}
+              iconColor={isDragActive ? "#F44336" : theme.colors.primary}
+            />
+            <Text
+              style={[
+                styles.dropzoneText,
+                isDragActive && { color: "#F44336" },
+              ]}
+            >
+              {!selectedCompany
+                ? "Please select a company first"
+                : isDragActive
+                  ? "Drop your receipt here"
+                  : "Click to upload a receipt image or PDF"}
+            </Text>
+            <Text style={styles.dropzoneSubtext}>
+              Supported formats: PDF, JPG, PNG (max 10MB)
+            </Text>
+            {isWebPlatform && !isMobileWeb && (
+              <Text style={styles.dropzoneSubtext}>
+                Or drag and drop files here
+              </Text>
             )}
+
+            <View style={styles.uploadButtonContainer}>
+              {!isWebPlatform || isMobileWeb ? (
+                <>
+                  <Button
+                    mode="outlined"
+                    icon="camera"
+                    onPress={takePhoto}
+                    style={[styles.uploadButtonPrimary, { marginRight: 8 }]}
+                    disabled={isDisabled}
+                  >
+                    Take Photo
+                  </Button>
+                  <Button
+                    mode="outlined"
+                    icon="image"
+                    onPress={pickImage}
+                    style={styles.uploadButtonPrimary}
+                    disabled={isDisabled}
+                  >
+                    Gallery
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  mode="outlined"
+                  icon="file-upload"
+                  onPress={pickDocument}
+                  style={styles.uploadButtonSecondary}
+                  disabled={isDisabled}
+                >
+                  Browse Files
+                </Button>
+              )}
+            </View>
           </TouchableOpacity>
         ) : (
-          <View>
-            {renderPreview()}
-
-            {/* OneDrive Upload Progress */}
-            {uploadingToOneDrive && (
-              <View style={styles.uploadProgressContainer}>
-                <Text style={styles.uploadProgressText}>
-                  Uploading to OneDrive: {oneDriveUploadProgress}%
-                </Text>
-                <ProgressBar
-                  progress={oneDriveUploadProgress / 100}
-                  color={theme.colors.primary}
-                  style={styles.progressBar}
-                />
-              </View>
-            )}
-
-            {/* OneDrive Upload Error */}
-            {oneDriveUploadError && (
-              <View style={styles.uploadErrorContainer}>
-                <Text style={styles.uploadErrorText}>
-                  {oneDriveUploadError}
-                </Text>
-                <Button
-                  mode="text"
-                  onPress={() => setOneDriveUploadError(null)}
-                  style={styles.dismissErrorButton}
-                >
-                  Dismiss
-                </Button>
-              </View>
-            )}
-
-            {/* OneDrive Sharing Link */}
-            {oneDriveSharingLink && (
-              <View style={styles.sharingLinkContainer}>
-                <Text style={styles.sharingLinkLabel}>OneDrive Link:</Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    if (Platform.OS === "web") {
-                      window.open(oneDriveSharingLink, "_blank");
-                    }
-                  }}
-                  style={styles.sharingLinkButton}
-                >
-                  <Text style={styles.sharingLinkText} numberOfLines={1}>
-                    {oneDriveSharingLink}
-                  </Text>
-                  <IconButton icon="open-in-new" size={16} />
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* Drag & Drop Overlay for Web */}
-        {isDragActive && Platform.OS === "web" && (
-          <View style={styles.dragOverlay}>
-            <IconButton
-              icon="file-upload"
-              size={48}
-              iconColor={theme.colors.primary}
-            />
-            <Text style={styles.dragText}>Drop your receipt file here</Text>
-          </View>
+          renderPreview()
         )}
 
         {renderDeleteConfirmModal()}
@@ -2149,9 +2322,9 @@ const CreateReceiptScreen = () => {
           ]}
         >
           <View style={styles.headerSection}>
-            <Text style={styles.pageTitle}>Add a Receipt</Text>
+            <Text style={styles.pageTitle}>Upload a Receipt</Text>
             <Text style={styles.pageSubtitle}>
-              Follow the steps below to add a new receipt
+              Follow the steps below to upload a new receipt
             </Text>
           </View>
           <View style={styles.gridContainer}>
@@ -2803,55 +2976,55 @@ const CreateReceiptScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f8fafc",
+    backgroundColor: "#FFFFFF",
   },
-  uploadSection: {
-    position: "relative",
-    borderRadius: 8,
-    padding: 24,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderStyle: "solid",
-    backgroundColor: "#ffffff",
+  dropzoneText: {
+    fontSize: 16,
+    color: "#64748B",
+    fontFamily: "Poppins-Medium",
+    textAlign: "center",
+    marginTop: 16,
   },
-  uploadSectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1e293b",
-    marginBottom: 8,
-    fontFamily: "Poppins-SemiBold",
+  uploadingText: {
+    fontSize: 16,
+    color: "#64748B",
+    fontFamily: "Poppins-Medium",
+    textAlign: "center",
+    marginTop: 16,
   },
-  uploadSectionSubtitle: {
-    fontSize: 14,
-    color: "#64748b",
-    marginBottom: 24,
+  previewContainer: {
+    width: "100%",
+    height: 200,
+    borderRadius: 16,
+    overflow: "hidden",
+    marginTop: 16,
   },
-  dragActive: {
-    borderWidth: 2,
-    borderColor: "#3b82f6",
-    borderStyle: "dashed",
-    backgroundColor: "rgba(59, 130, 246, 0.05)",
-    transform: [{ scale: 1.01 }],
+  previewImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
   },
-  dragOverlay: {
+  previewOverlay: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(59, 130, 246, 0.1)",
-    borderRadius: 8,
+    backgroundColor: "rgba(0, 0, 0, 0.3)",
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 10,
+    opacity: Platform.OS === "web" ? 0 : 1,
   },
-  dragText: {
-    fontSize: 18,
-    fontWeight: "500",
-    color: "#3b82f6",
-    marginTop: 8,
+  previewText: {
+    color: "#FFFFFF",
+    fontSize: 16,
     fontFamily: "Poppins-Medium",
+  },
+  errorText: {
+    color: "#EF4444",
+    fontSize: 14,
+    fontFamily: "Poppins-Regular",
+    marginTop: 8,
   },
   scrollView: {
     flex: 1,
@@ -3303,8 +3476,10 @@ const styles = StyleSheet.create({
     color: "#0369a1",
   },
   progressBar: {
-    height: 6,
-    borderRadius: 3,
+    width: "80%",
+    height: 4,
+    borderRadius: 2,
+    marginTop: 16,
   },
   uploadErrorContainer: {
     marginTop: 16,
@@ -3355,26 +3530,7 @@ const styles = StyleSheet.create({
     textDecorationLine: "underline",
     flex: 1,
   },
-  dropzone: {
-    borderWidth: 2,
-    borderColor: "#E0E0E0",
-    borderStyle: "dashed",
-    borderRadius: 16,
-    padding: 24,
-    backgroundColor: "#FAFAFA",
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 16,
-  },
-  dropzoneText: {
-    fontSize: 16,
-    color: "#64748B",
-    textAlign: "center",
-    fontFamily: "Poppins-Medium",
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  dropzoneSubText: {
+  dropzoneSubtext: {
     fontSize: 14,
     color: "#94A3B8",
     textAlign: "center",
@@ -3390,23 +3546,57 @@ const styles = StyleSheet.create({
   },
   uploadingSubtext: {
     fontSize: 14,
-    color: "#64748B",
+    color: "#94A3B8",
     fontFamily: "Poppins-Regular",
     marginTop: 8,
     textAlign: "center",
+  },
+  imageButtonsContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: 16,
+    width: "100%",
+    maxWidth: 400,
+  },
+  imageButton: {
+    flex: 1,
+    maxWidth: 160,
+  },
+  uploadButton: {
+    width: "100%",
+    maxWidth: 320,
+  },
+  uploadButtonContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: 16,
+    width: "100%",
+    maxWidth: 400,
+  },
+  uploadButtonPrimary: {
+    flex: 1,
+    maxWidth: 160,
+  },
+  uploadButtonSecondary: {
+    width: "100%",
+    maxWidth: 320,
   },
 });
 
 // Add web-specific hover styles
 if (Platform.OS === "web") {
-  const styleSheet = document.createElement("style");
-  styleSheet.textContent = `
-    .previewTouchable:hover .previewOverlay {
-      opacity: 1 !important;
-      transition: opacity 0.2s ease;
-    }
-  `;
-  document.head.appendChild(styleSheet);
+  const existingStyleTag = document.getElementById("receipt-screen-styles");
+  if (!existingStyleTag) {
+    const styleSheet = document.createElement("style");
+    styleSheet.id = "receipt-screen-styles";
+    styleSheet.textContent = `
+      .previewTouchable:hover .previewOverlay {
+        opacity: 1 !important;
+        transition: opacity 0.2s ease;
+      }
+    `;
+    document.head.appendChild(styleSheet);
+  }
 }
 
 export default CreateReceiptScreen;

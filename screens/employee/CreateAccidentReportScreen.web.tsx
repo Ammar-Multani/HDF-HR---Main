@@ -547,25 +547,25 @@ const CreateAccidentReportScreen = () => {
     if (Platform.OS === "web" && dropRef.current) {
       const element = dropRef.current as unknown as HTMLElement;
 
-      const handleDragEnter = (e: Event) => {
+      const handleDragEnter = (e: DragEvent) => {
         e.preventDefault();
         e.stopPropagation();
         setIsDragActive(true);
       };
 
-      const handleDragOver = (e: Event) => {
+      const handleDragOver = (e: DragEvent) => {
         e.preventDefault();
         e.stopPropagation();
         setIsDragActive(true);
       };
 
-      const handleDragLeave = (e: Event) => {
+      const handleDragLeave = (e: DragEvent) => {
         e.preventDefault();
         e.stopPropagation();
         setIsDragActive(false);
       };
 
-      const handleDrop = (e: any) => {
+      const handleDrop = (e: DragEvent) => {
         e.preventDefault();
         e.stopPropagation();
         setIsDragActive(false);
@@ -605,19 +605,28 @@ const CreateAccidentReportScreen = () => {
         }
       };
 
-      element.addEventListener("dragenter", handleDragEnter);
-      element.addEventListener("dragover", handleDragOver);
-      element.addEventListener("dragleave", handleDragLeave);
-      element.addEventListener("drop", handleDrop);
+      element.addEventListener("dragenter", handleDragEnter as EventListener);
+      element.addEventListener("dragover", handleDragOver as EventListener);
+      element.addEventListener("dragleave", handleDragLeave as EventListener);
+      element.addEventListener("drop", handleDrop as EventListener);
 
       return () => {
-        element.removeEventListener("dragenter", handleDragEnter);
-        element.removeEventListener("dragover", handleDragOver);
-        element.removeEventListener("dragleave", handleDragLeave);
-        element.removeEventListener("drop", handleDrop);
+        element.removeEventListener(
+          "dragenter",
+          handleDragEnter as EventListener
+        );
+        element.removeEventListener(
+          "dragover",
+          handleDragOver as EventListener
+        );
+        element.removeEventListener(
+          "dragleave",
+          handleDragLeave as EventListener
+        );
+        element.removeEventListener("drop", handleDrop as EventListener);
       };
     }
-  }, [dropRef, companyId, user?.id]);
+  }, [dropRef, companyId, user?.id, documentName]);
 
   // Helper functions for formatting
   const formatFileSize = (bytes: number) => {

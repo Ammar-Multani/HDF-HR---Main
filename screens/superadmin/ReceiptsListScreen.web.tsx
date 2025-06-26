@@ -710,8 +710,8 @@ const ReceiptsListScreen = () => {
 
       // Apply sorting based on sortBy
       if (appliedFilters.sortBy === "none") {
-        // Default sort by date desc (newest first)
-        query = query.order("date", { ascending: false });
+        // Default sort by created_at desc (newest first)
+        query = query.order("created_at", { ascending: false });
       } else {
         query = query.order(appliedFilters.sortBy, {
           ascending: appliedFilters.sortOrder === "asc",

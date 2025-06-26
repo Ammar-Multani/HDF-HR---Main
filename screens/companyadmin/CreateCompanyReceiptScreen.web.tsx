@@ -244,9 +244,20 @@ interface NativeDateChangeEvent {
   };
 }
 
-// Add these constants after the interfaces
-const TAGGUN_API_KEY = "914c4c5bb7bc42adaeb662b34f2169c5";
-const TAGGUN_API_URL = "https://api.taggun.io/api/receipt/v1/verbose/file";
+const webSpecificStyles =
+  Platform.OS === "web"
+    ? ({
+        dropzoneTransition: {
+          transition: "all 1s ease",
+        },
+        uploadingOverlayTransition: {
+          backdropFilter: "blur(4px)",
+        },
+        cursorNotAllowed: {
+          cursor: "not-allowed",
+        } as { cursor: "not-allowed" },
+      } as const)
+    : {};
 
 const CreateCompanyReceiptScreen = () => {
   const theme = useTheme();
@@ -416,6 +427,35 @@ const CreateCompanyReceiptScreen = () => {
     }
   };
 
+  // Add a reusable function to check if a receipt number already exists
+  const checkReceiptNumberExists = async (
+    receiptNumber: string
+  ): Promise<boolean> => {
+    if (!receiptNumber || !companyId) return false;
+
+    try {
+      console.log(
+        `Checking if receipt number "${receiptNumber}" exists for company ID "${companyId}"`
+      );
+
+      // Only check for duplicates within the same company
+      const { data, error } = await supabase
+        .from("receipts")
+        .select("id, receipt_number")
+        .eq("receipt_number", receiptNumber)
+        .eq("company_id", companyId); // This ensures we only check within the current company
+
+      // If we found any receipts with this number in this company, it's a duplicate
+      const exists = Array.isArray(data) && data.length > 0;
+      console.log(`Receipt exists for this company: ${exists}`, data);
+
+      return exists;
+    } catch (error: any) {
+      console.error("Error checking receipt number:", error);
+      return false;
+    }
+  };
+
   const processReceiptWithOCR = async (imageUri: string) => {
     try {
       // Update snackbar message handling
@@ -492,7 +532,22 @@ const CreateCompanyReceiptScreen = () => {
 
       // Update form with extracted data
       if (ocrData.entities?.receiptNumber?.data) {
-        setValue("receipt_number", String(ocrData.entities.receiptNumber.data));
+        const extractedReceiptNumber = String(
+          ocrData.entities.receiptNumber.data
+        );
+
+        // Check if this receipt number already exists
+        const exists = await checkReceiptNumberExists(extractedReceiptNumber);
+        if (exists) {
+          showSnackbarMessage(
+            `Receipt number "${extractedReceiptNumber}" already exists for this company. Please use a different receipt number.`,
+            "error"
+          );
+          // Still set the value so the user can edit it
+          setValue("receipt_number", extractedReceiptNumber);
+        } else {
+          setValue("receipt_number", extractedReceiptNumber);
+        }
       }
 
       if (ocrData.totalAmount?.data) {
@@ -816,7 +871,7 @@ const CreateCompanyReceiptScreen = () => {
         element.removeEventListener("drop", handleDrop);
       };
     }
-  }, [dropRef, companyId]);
+  }, [dropRef, companyId, receiptImage]); // Added receiptImage to dependencies
 
   // Update handleImageSelection to accept an optional File parameter
   const handleImageSelection = async (
@@ -829,17 +884,28 @@ const CreateCompanyReceiptScreen = () => {
 
     // Process with Taggun OCR first
     await processReceiptWithOCR(uri);
-
-
   };
 
   // Add function to upload receipt to OneDrive
   const uploadReceiptToOneDrive = async (uri: string, droppedFile?: File) => {
+    // Check for duplicate receipt number before starting the upload
+    const receiptNumber = watch("receipt_number");
+    if (receiptNumber) {
+      const exists = await checkReceiptNumberExists(receiptNumber);
+      if (exists) {
+        showSnackbarMessage(
+          `Receipt number "${receiptNumber}" already exists for this company. Please use a different receipt number.`,
+          "error"
+        );
+        return false; // Return false to indicate upload should not proceed
+      }
+    }
+
     try {
       if (!companyId || !user) {
         setSnackbarMessage("Missing required information for upload");
         setSnackbarVisible(true);
-        return;
+        return false;
       }
 
       setUploadingToOneDrive(true);
@@ -931,6 +997,8 @@ const CreateCompanyReceiptScreen = () => {
       setTimeout(() => {
         setUploadingToOneDrive(false);
       }, 800);
+
+      return true; // Upload was successful
     } catch (error: any) {
       console.error("Error uploading to OneDrive:", error);
       setOneDriveUploadError(
@@ -939,6 +1007,7 @@ const CreateCompanyReceiptScreen = () => {
       setSnackbarMessage("Error uploading to OneDrive: " + error.message);
       setSnackbarVisible(true);
       setUploadingToOneDrive(false);
+      return false; // Upload failed
     }
   };
 
@@ -960,7 +1029,7 @@ const CreateCompanyReceiptScreen = () => {
           itemId: oneDriveItemId || "unknown",
           documentId: uploadedDocumentId,
           userId: user?.id,
-          companyId,
+          companyId: companyId,
           reportType: "company_receipt",
         },
       });
@@ -1036,14 +1105,7 @@ const CreateCompanyReceiptScreen = () => {
 
   const pickDocument = async () => {
     try {
-      if (!TAGGUN_API_KEY) {
-        setSnackbarMessage(
-          "OCR service is not configured. Please contact support."
-        );
-        setSnackbarVisible(true);
-        return;
-      }
-
+      // Skip the OCR service availability check and directly proceed with document picking
       const result = await DocumentPicker.getDocumentAsync({
         type: ["image/*", "application/pdf"],
         multiple: false,
@@ -1055,8 +1117,7 @@ const CreateCompanyReceiptScreen = () => {
 
         // Check file size (limit to 10MB)
         if (file.size && file.size > 10 * 1024 * 1024) {
-          setSnackbarMessage("File size must be less than 10MB");
-          setSnackbarVisible(true);
+          showSnackbarMessage("File size must be less than 10MB", "error");
           return;
         }
 
@@ -1068,10 +1129,10 @@ const CreateCompanyReceiptScreen = () => {
           "application/pdf",
         ];
         if (file.mimeType && !validTypes.includes(file.mimeType)) {
-          setSnackbarMessage(
-            "Please upload a valid image (JPEG, PNG, HEIC) or PDF file"
+          showSnackbarMessage(
+            "Please upload a valid image (JPEG, PNG, HEIC) or PDF file",
+            "error"
           );
-          setSnackbarVisible(true);
           return;
         }
 
@@ -1080,8 +1141,7 @@ const CreateCompanyReceiptScreen = () => {
       }
     } catch (error) {
       console.error("Error picking document:", error);
-      setSnackbarMessage("Failed to pick document");
-      setSnackbarVisible(true);
+      showSnackbarMessage("Failed to pick document", "error");
     }
   };
 
@@ -1146,30 +1206,54 @@ const CreateCompanyReceiptScreen = () => {
 
   // Define styles inside the component to access theme
   const dynamicStyles = StyleSheet.create({
+    dropzone: {
+      borderWidth: 2,
+      borderColor: "#E0E0E0",
+      borderStyle: "dashed",
+      borderRadius: 16,
+      padding: 24,
+      backgroundColor: "#FAFAFA",
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 16,
+      minHeight: 200,
+      position: "relative",
+      overflow: "hidden",
+      ...(Platform.OS === "web" ? webSpecificStyles.dropzoneTransition : {}),
+    },
     dropzoneActive: {
-      borderColor: theme.colors.primary,
-      backgroundColor: "#E3F2FD",
+      borderColor: "#FF867E",
+      backgroundColor: "rgba(255, 134, 126, 0.02)",
     },
     dropzoneUploading: {
       borderColor: theme.colors.primary,
-      borderWidth: 2,
-      backgroundColor: "#E3F2FD",
-      opacity: 0.9,
-      transform: [{ scale: 1.01 }],
+      backgroundColor: "rgba(59, 130, 246, 0.05)",
+      opacity: 0.8,
     },
-    uploadingText: {
-      fontSize: 16,
-      color: theme.colors.primary,
-      fontFamily: "Poppins-Medium",
-      textAlign: "center",
-      marginTop: 16,
+    dropzoneDisabled: {
+      opacity: 0.5,
+      backgroundColor: "#F1F5F9",
+    },
+    uploadingOverlay: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: "rgba(255, 255, 255, 0.95)",
+      justifyContent: "center",
+      alignItems: "center",
+      zIndex: 5,
+      ...(Platform.OS === "web"
+        ? webSpecificStyles.uploadingOverlayTransition
+        : {}),
     },
   });
 
   const renderUploadSection = () => {
     const isWebPlatform = Platform.OS === "web";
     const isMobileWeb = isWebPlatform && dimensions.width < 768;
-
+    const isDisabled = isProcessingOCR || uploadingToOneDrive;
     return (
       <View>
         {!receiptImage ? (
@@ -1184,142 +1268,62 @@ const CreateCompanyReceiptScreen = () => {
             onPress={showImageOptions}
             disabled={isProcessingOCR || uploadingToOneDrive}
           >
-            {isProcessingOCR || uploadingToOneDrive ? (
-              <Animated.View style={styles.uploadingContainer}>
-                <ActivityIndicator size="large" color={theme.colors.primary} />
-                <Text style={dynamicStyles.uploadingText}>
-                  {isProcessingOCR
-                    ? "Processing receipt..."
-                    : `Uploading... ${oneDriveUploadProgress}%`}
-                </Text>
-                <Text style={styles.uploadingSubtext}>
-                  {isProcessingOCR
-                    ? "Extracting receipt data"
-                    : "Saving to secure storage"}
-                </Text>
-              </Animated.View>
-            ) : (
-              <>
-                <IconButton
-                  icon="receipt"
-                  size={48}
-                  iconColor={theme.colors.primary}
-                />
-                <Text style={styles.dropzoneText}>
-                  Click to upload a receipt image or PDF
-                </Text>
-                <Text style={styles.dropzoneSubText}>
-                  Supported formats: PDF, JPG, PNG (max 10MB)
-                </Text>
-                {isWebPlatform && (
-                  <Text style={styles.dropzoneSubText}>
-                    Or drag and drop files here
-                  </Text>
-                )}
-
-                <View style={styles.imageButtonsContainer}>
-                  {!isWebPlatform || isMobileWeb ? (
-                    <>
-                      <Button
-                        mode="outlined"
-                        icon="camera"
-                        onPress={takePhoto}
-                        style={[styles.imageButton, { marginRight: 8 }]}
-                        disabled={isProcessingOCR || uploadingToOneDrive}
-                      >
-                        Take Photo
-                      </Button>
-                      <Button
-                        mode="outlined"
-                        icon="image"
-                        onPress={pickImage}
-                        style={styles.imageButton}
-                        disabled={isProcessingOCR || uploadingToOneDrive}
-                      >
-                        Gallery
-                      </Button>
-                    </>
-                  ) : (
-                    <Button
-                      mode="outlined"
-                      icon="file-upload"
-                      onPress={pickDocument}
-                      style={styles.uploadButton}
-                      disabled={isProcessingOCR || uploadingToOneDrive}
-                    >
-                      Browse Files
-                    </Button>
-                  )}
-                </View>
-              </>
-            )}
-          </TouchableOpacity>
-        ) : (
-          <View>
-            {renderPreview()}
-
-            {/* OneDrive Upload Progress */}
-            {uploadingToOneDrive && (
-              <View style={styles.uploadProgressContainer}>
-                <Text style={styles.uploadProgressText}>
-                  Uploading to OneDrive: {oneDriveUploadProgress}%
-                </Text>
-                <ProgressBar
-                  progress={oneDriveUploadProgress / 100}
-                  color={theme.colors.primary}
-                  style={styles.progressBar}
-                />
-              </View>
-            )}
-
-            {/* OneDrive Upload Error */}
-            {oneDriveUploadError && (
-              <View style={styles.uploadErrorContainer}>
-                <Text style={styles.uploadErrorText}>
-                  {oneDriveUploadError}
-                </Text>
-                <Button
-                  mode="text"
-                  onPress={() => setOneDriveUploadError(null)}
-                  style={styles.dismissErrorButton}
-                >
-                  Dismiss
-                </Button>
-              </View>
-            )}
-
-            {/* OneDrive Sharing Link */}
-            {oneDriveSharingLink && (
-              <View style={styles.sharingLinkContainer}>
-                <Text style={styles.sharingLinkLabel}>OneDrive Link:</Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    if (Platform.OS === "web") {
-                      window.open(oneDriveSharingLink, "_blank");
-                    }
-                  }}
-                  style={styles.sharingLinkButton}
-                >
-                  <Text style={styles.sharingLinkText} numberOfLines={1}>
-                    {oneDriveSharingLink}
-                  </Text>
-                  <IconButton icon="open-in-new" size={16} />
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* Drag & Drop Overlay for Web */}
-        {isDragActive && Platform.OS === "web" && (
-          <View style={styles.dragOverlay}>
             <IconButton
-              icon="file-upload"
+              icon="receipt"
               size={48}
               iconColor={theme.colors.primary}
             />
-            <Text style={styles.dragText}>Drop your receipt file here</Text>
-          </View>
+            <Text style={styles.dropzoneText}>
+              {isDragActive
+                ? "Drop your receipt here"
+                : "Click to upload a receipt image or PDF"}
+            </Text>
+            <Text style={styles.dropzoneSubText}>
+              Supported formats: PDF, JPG, PNG (max 10MB)
+            </Text>
+            {isWebPlatform && (
+              <Text style={styles.dropzoneSubText}>
+                Or drag and drop files here
+              </Text>
+            )}
+
+            <View style={styles.imageButtonsContainer}>
+              {!isWebPlatform || isMobileWeb ? (
+                <>
+                  <Button
+                    mode="outlined"
+                    icon="camera"
+                    onPress={takePhoto}
+                    style={[styles.uploadButtonPrimary, { marginRight: 8 }]}
+                    disabled={isDisabled}
+                  >
+                    Take Photo
+                  </Button>
+                  <Button
+                    mode="outlined"
+                    icon="image"
+                    onPress={pickImage}
+                    style={styles.uploadButtonPrimary}
+                    disabled={isDisabled}
+                  >
+                    Gallery
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  mode="outlined"
+                  icon="file-upload"
+                  onPress={pickDocument}
+                  style={styles.uploadButton}
+                  disabled={isProcessingOCR || uploadingToOneDrive}
+                >
+                  Browse Files
+                </Button>
+              )}
+            </View>
+          </TouchableOpacity>
+        ) : (
+          renderPreview()
         )}
 
         {renderDeleteConfirmModal()}
@@ -1563,13 +1567,61 @@ const CreateCompanyReceiptScreen = () => {
   };
 
   const handleDeleteReceipt = () => {
-    setReceiptImage(null);
-    setFileType(null);
-    clearOCRFields();
-    setShowDeleteConfirmModal(false);
-    setOneDriveItemId(null);
-    setOneDriveSharingLink(null);
-    setUploadedDocumentId(null);
+    try {
+      // Reset OneDrive related states
+      setOneDriveItemId(null);
+      setOneDriveSharingLink(null);
+      setUploadedDocumentId(null);
+
+      // Reset file related states
+      setReceiptImage(null);
+      setFileType(null);
+      setImageSource(null);
+      setUploadProgress(0);
+      setOneDriveUploadProgress(0);
+      setOneDriveUploadError(null);
+      setIsProcessingOCR(false);
+      setUploadingToOneDrive(false);
+      setIsDragActive(false);
+
+      // Clear all form fields that might have been filled by OCR
+      setValue("receipt_number", "");
+      setValue("merchant_name", "");
+      setValue("merchant_address", "");
+      setValue("total_amount", "");
+      setValue("tax_amount", "");
+      setValue("subtotal_amount", "");
+      setValue("final_price", "");
+      setValue("paid_amount", "");
+      setValue("change_amount", "");
+      setValue("merchant_vat", "");
+      setValue("merchant_phone", "");
+      setValue("merchant_website", "");
+      setValue("vat_details", "");
+      setValue("language_hint", "");
+      setLineItems([]);
+
+      // Close modals
+      setShowDeleteConfirmModal(false);
+      setShowPreviewModal(false);
+
+      // Revoke object URL if it exists to prevent memory leaks
+      if (receiptImage && receiptImage.startsWith("blob:")) {
+        URL.revokeObjectURL(receiptImage);
+      }
+
+      // Show success message
+      showSnackbarMessage(
+        "Receipt image and auto-filled fields have been cleared",
+        "info"
+      );
+    } catch (error) {
+      console.error("Error clearing receipt:", error);
+      showSnackbarMessage(
+        "There was an error clearing the receipt. Please try again.",
+        "error"
+      );
+    }
   };
 
   const renderDeleteConfirmModal = () => {
@@ -1596,17 +1648,13 @@ const CreateCompanyReceiptScreen = () => {
             <Text style={styles.confirmModalTitle}>Delete Receipt?</Text>
             <Text style={styles.confirmModalText}>
               This will remove the uploaded receipt image and clear all
-              automatically filled fields.{" "}
-              {oneDriveItemId &&
-                "The receipt will also be removed from cloud storage."}{" "}
-              This action cannot be undone.
+              automatically filled fields. This action cannot be undone.
             </Text>
             <View style={styles.confirmModalButtons}>
               <Button
                 mode="outlined"
                 onPress={() => setShowDeleteConfirmModal(false)}
                 style={[styles.confirmButton, styles.confirmCancelButton]}
-                disabled={deletingReceipt}
               >
                 Cancel
               </Button>
@@ -1690,22 +1738,10 @@ const CreateCompanyReceiptScreen = () => {
       setLoading(true);
 
       // First validate if receipt number already exists
-      const { data: existingReceipt, error: checkError } = await supabase
-        .from("receipts")
-        .select("receipt_number")
-        .eq("receipt_number", data.receipt_number)
-        .eq("company_id", companyId)
-        .single();
-
-      if (checkError && checkError.code !== "PGRST116") {
-        // PGRST116 means no rows returned
-        throw checkError;
-      }
-
-      if (existingReceipt) {
-        setLoading(false);
+      const exists = await checkReceiptNumberExists(data.receipt_number);
+      if (exists) {
         showSnackbarMessage(
-          `Receipt number "${data.receipt_number}" already exists. Please use a different receipt number.`,
+          `Receipt number "${data.receipt_number}" already exists for this company. Please use a different receipt number.`,
           "error"
         );
         // Focus the receipt number input field
@@ -1715,7 +1751,8 @@ const CreateCompanyReceiptScreen = () => {
         if (receiptNumberInput) {
           (receiptNumberInput as HTMLInputElement).focus();
         }
-        return;
+        setLoading(false);
+        return; // Exit early if duplicate receipt number
       }
 
       // Variable to store OneDrive sharing link
@@ -1805,10 +1842,13 @@ const CreateCompanyReceiptScreen = () => {
             error.message || "Failed to upload to OneDrive"
           );
           showSnackbarMessage(
-            error.message || "Failed to upload to OneDrive",
+            "Error uploading to OneDrive: " +
+              (error.message || "Unknown error"),
             "error"
           );
-          return;
+          setLoading(false);
+          setUploadingToOneDrive(false);
+          return; // Exit early if OneDrive upload fails
         } finally {
           setUploadingToOneDrive(false);
         }
@@ -1840,6 +1880,37 @@ const CreateCompanyReceiptScreen = () => {
       };
 
       console.log("Creating receipt with data:", receiptData);
+
+      // Double-check receipt number uniqueness before final insert
+      // This prevents race conditions where another receipt with the same number might have been created
+      // between our initial check and now
+      const exists2 = await checkReceiptNumberExists(data.receipt_number);
+      if (exists2) {
+        // If a receipt with this number now exists, we need to delete the OneDrive file and abort
+        if (oneDriveItemId) {
+          try {
+            await supabase.functions.invoke("onedrive-upload", {
+              method: "DELETE",
+              body: {
+                itemId: oneDriveItemId,
+                documentId: uploadedDocumentId,
+                userId: user?.id,
+                companyId: companyId,
+                reportType: "company_receipt",
+              },
+            });
+          } catch (deleteError) {
+            console.error("Error cleaning up OneDrive file:", deleteError);
+          }
+        }
+
+        setLoading(false);
+        showSnackbarMessage(
+          `Receipt number "${data.receipt_number}" already exists for this company. Please use a different receipt number.`,
+          "error"
+        );
+        return;
+      }
 
       const { data: createdReceipt, error } = await supabase
         .from("receipts")
@@ -1889,13 +1960,34 @@ const CreateCompanyReceiptScreen = () => {
     } catch (error: any) {
       console.error("Error creating receipt:", error);
 
+      // Clean up OneDrive file if database operation fails
+      if (oneDriveItemId) {
+        try {
+          await supabase.functions.invoke("onedrive-upload", {
+            method: "DELETE",
+            body: {
+              itemId: oneDriveItemId,
+              documentId: uploadedDocumentId,
+              userId: user?.id,
+              companyId: companyId,
+              reportType: "company_receipt",
+            },
+          });
+        } catch (deleteError) {
+          console.error(
+            "Error cleaning up OneDrive file after error:",
+            deleteError
+          );
+        }
+      }
+
       // Handle specific database errors
       if (
         error.code === "23505" &&
         error.message.includes("unique_receipt_number")
       ) {
         showSnackbarMessage(
-          `Receipt number "${data.receipt_number}" already exists. Please use a different receipt number.`,
+          `Receipt number "${data.receipt_number}" already exists for this company. Please use a different receipt number.`,
           "error"
         );
         // Focus the receipt number input field
@@ -2030,555 +2122,526 @@ const CreateCompanyReceiptScreen = () => {
               },
             ]}
           >
-: (
-              <>
-                <View style={styles.headerSection}>
-                  <Text style={styles.pageTitle}>Upload a Receipt</Text>
-                  <Text style={styles.pageSubtitle}>
-                    Upload a receipt image or PDF for automatic data extraction
-                  </Text>
-                </View>
+            <>
+              <View style={styles.headerSection}>
+                <Text style={styles.pageTitle}>Upload a Receipt</Text>
+                <Text style={styles.pageSubtitle}>
+                  Upload a receipt image or PDF for automatic data extraction
+                </Text>
+              </View>
 
-                <View style={styles.gridContainer}>
-                  <View style={styles.gridColumn}>
-                    <Animated.View
-                      entering={FadeIn.delay(200)}
-                      style={styles.stepContainer}
-                    >
-                      <Surface style={[styles.formCard, styles.stepCard]}>
-                        <View style={styles.stepHeader}>
-                          <View style={styles.stepNumberContainer}>
-                            <Text style={styles.stepNumber}>1</Text>
-                          </View>
-                          <Text style={styles.stepTitle}>Upload Here</Text>
+              <View style={styles.gridContainer}>
+                <View style={styles.gridColumn}>
+                  <Animated.View
+                    entering={FadeIn.delay(200)}
+                    style={styles.stepContainer}
+                  >
+                    <Surface style={[styles.formCard, styles.stepCard]}>
+                      <View style={styles.stepHeader}>
+                        <View style={styles.stepNumberContainer}>
+                          <Text style={styles.stepNumber}>1</Text>
                         </View>
-                        <View style={styles.cardContent}>
-                          <Text style={styles.stepDescription}>
-                            Upload a receipt image or PDF
+                        <Text style={styles.stepTitle}>Upload Here</Text>
+                      </View>
+                      <View style={styles.cardContent}>
+                        <Text style={styles.stepDescription}>
+                          Upload a receipt image or PDF
+                        </Text>
+                        {renderUploadSection()}
+                      </View>
+                    </Surface>
+                  </Animated.View>
+                  <Animated.View entering={FadeIn.delay(200)}>
+                    {/* Line Items */}
+                    <Surface style={[styles.formCard, { marginTop: 0 }]}>
+                      <View style={styles.cardHeader}>
+                        <View style={styles.headerLeft}>
+                          <View style={styles.iconContainer}>
+                            <IconButton
+                              icon="format-list-bulleted"
+                              size={20}
+                              iconColor="#64748b"
+                              style={styles.headerIcon}
+                            />
+                          </View>
+                          <Text style={styles.cardTitle}>
+                            Receipt Line Items
                           </Text>
-                          {renderUploadSection()}
                         </View>
-                      </Surface>
-                    </Animated.View>
-                    <Animated.View entering={FadeIn.delay(200)}>
-                      {/* Line Items */}
-                      <Surface style={[styles.formCard, { marginTop: 0 }]}>
-                        <View style={styles.cardHeader}>
-                          <View style={styles.headerLeft}>
-                            <View style={styles.iconContainer}>
-                              <IconButton
-                                icon="format-list-bulleted"
-                                size={20}
-                                iconColor="#64748b"
-                                style={styles.headerIcon}
-                              />
-                            </View>
-                            <Text style={styles.cardTitle}>
-                              Receipt Line Items
-                            </Text>
+                      </View>
+
+                      <View style={styles.cardContent}>
+                        {lineItems.map((item, index) => (
+                          <View key={index} style={styles.lineItem}>
+                            <TextInput
+                              label="Item Name"
+                              value={item.name}
+                              onChangeText={(text) => {
+                                const updatedItems = [...lineItems];
+                                updatedItems[index].name = text;
+                                setLineItems(updatedItems);
+                              }}
+                              style={[styles.input, styles.lineItemInput]}
+                              mode="outlined"
+                            />
+                            <TextInput
+                              label="Qty"
+                              value={item.quantity.toString()}
+                              onChangeText={(text) => {
+                                const updatedItems = [...lineItems];
+                                updatedItems[index].quantity =
+                                  Number(text) || 0;
+                                // Update total price when quantity changes
+                                updatedItems[index].totalPrice =
+                                  updatedItems[index].unitPrice * Number(text);
+                                setLineItems(updatedItems);
+                              }}
+                              keyboardType="numeric"
+                              style={[styles.input, styles.qtyInput]}
+                              mode="outlined"
+                            />
+                            <TextInput
+                              label="Unit Price"
+                              value={item.unitPrice.toString()}
+                              onChangeText={(text) => {
+                                const updatedItems = [...lineItems];
+                                updatedItems[index].unitPrice =
+                                  Number(text) || 0;
+                                // Update total price when unit price changes
+                                updatedItems[index].totalPrice =
+                                  updatedItems[index].quantity * Number(text);
+                                setLineItems(updatedItems);
+                              }}
+                              keyboardType="decimal-pad"
+                              style={[styles.input, styles.priceInput]}
+                              mode="outlined"
+                              left={<TextInput.Affix text="CHF" />}
+                            />
+                            <TextInput
+                              label="Total Price"
+                              value={item.totalPrice.toString()}
+                              editable={false}
+                              style={[styles.input, styles.priceInput]}
+                              mode="outlined"
+                              left={<TextInput.Affix text="CHF" />}
+                            />
+                            <IconButton
+                              icon="delete"
+                              size={24}
+                              onPress={() => removeLineItem(index)}
+                              iconColor={theme.colors.error}
+                            />
                           </View>
-                        </View>
+                        ))}
 
-                        <View style={styles.cardContent}>
-                          {lineItems.map((item, index) => (
-                            <View key={index} style={styles.lineItem}>
-                              <TextInput
-                                label="Item Name"
-                                value={item.name}
-                                onChangeText={(text) => {
-                                  const updatedItems = [...lineItems];
-                                  updatedItems[index].name = text;
-                                  setLineItems(updatedItems);
-                                }}
-                                style={[styles.input, styles.lineItemInput]}
-                                mode="outlined"
-                              />
-                              <TextInput
-                                label="Qty"
-                                value={item.quantity.toString()}
-                                onChangeText={(text) => {
-                                  const updatedItems = [...lineItems];
-                                  updatedItems[index].quantity =
-                                    Number(text) || 0;
-                                  // Update total price when quantity changes
-                                  updatedItems[index].totalPrice =
-                                    updatedItems[index].unitPrice *
-                                    Number(text);
-                                  setLineItems(updatedItems);
-                                }}
-                                keyboardType="numeric"
-                                style={[styles.input, styles.qtyInput]}
-                                mode="outlined"
-                              />
-                              <TextInput
-                                label="Unit Price"
-                                value={item.unitPrice.toString()}
-                                onChangeText={(text) => {
-                                  const updatedItems = [...lineItems];
-                                  updatedItems[index].unitPrice =
-                                    Number(text) || 0;
-                                  // Update total price when unit price changes
-                                  updatedItems[index].totalPrice =
-                                    updatedItems[index].quantity * Number(text);
-                                  setLineItems(updatedItems);
-                                }}
-                                keyboardType="decimal-pad"
-                                style={[styles.input, styles.priceInput]}
-                                mode="outlined"
-                                left={<TextInput.Affix text="CHF" />}
-                              />
-                              <TextInput
-                                label="Total Price"
-                                value={item.totalPrice.toString()}
-                                editable={false}
-                                style={[styles.input, styles.priceInput]}
-                                mode="outlined"
-                                left={<TextInput.Affix text="CHF" />}
-                              />
-                              <IconButton
-                                icon="delete"
-                                size={24}
-                                onPress={() => removeLineItem(index)}
-                                iconColor={theme.colors.error}
-                              />
-                            </View>
-                          ))}
-
-                          <Button
-                            mode="outlined"
-                            onPress={() =>
-                              setLineItems([
-                                ...lineItems,
-                                {
-                                  name: "",
-                                  quantity: 1,
-                                  unitPrice: 0,
-                                  totalPrice: 0,
-                                },
-                              ])
-                            }
-                            style={styles.addItemButton}
-                            icon="plus"
-                          >
-                            Add Line Item
-                          </Button>
-                        </View>
-                      </Surface>
-                    </Animated.View>
-                    <Animated.View entering={FadeIn.delay(200)}>
-                      {/* Financial Details */}
-                      <Surface style={[styles.formCard]}>
-                        <View style={styles.cardHeader}>
-                          <View style={styles.headerLeft}>
-                            <View style={styles.iconContainer}>
-                              <IconButton
-                                icon="cash-multiple"
-                                size={20}
-                                iconColor="#64748b"
-                                style={styles.headerIcon}
-                              />
-                            </View>
-                            <Text style={styles.cardTitle}>
-                              Receipt Financial Details
-                            </Text>
+                        <Button
+                          mode="outlined"
+                          onPress={() =>
+                            setLineItems([
+                              ...lineItems,
+                              {
+                                name: "",
+                                quantity: 1,
+                                unitPrice: 0,
+                                totalPrice: 0,
+                              },
+                            ])
+                          }
+                          style={styles.addItemButton}
+                          icon="plus"
+                        >
+                          Add Line Item
+                        </Button>
+                      </View>
+                    </Surface>
+                  </Animated.View>
+                  <Animated.View entering={FadeIn.delay(200)}>
+                    {/* Financial Details */}
+                    <Surface style={[styles.formCard]}>
+                      <View style={styles.cardHeader}>
+                        <View style={styles.headerLeft}>
+                          <View style={styles.iconContainer}>
+                            <IconButton
+                              icon="cash-multiple"
+                              size={20}
+                              iconColor="#64748b"
+                              style={styles.headerIcon}
+                            />
                           </View>
+                          <Text style={styles.cardTitle}>
+                            Receipt Financial Details
+                          </Text>
                         </View>
+                      </View>
 
-                        <View style={styles.cardContent}>
-                          {/* Subtotal Amount */}
-                          <Controller
-                            control={control}
-                            render={({
-                              field: { onChange, onBlur, value },
-                            }) => (
-                              <TextInput
-                                label="Subtotal Amount"
-                                mode="outlined"
-                                value={value}
-                                onChangeText={onChange}
-                                onBlur={onBlur}
-                                style={styles.input}
-                                keyboardType="decimal-pad"
-                                disabled={loading}
-                                left={<TextInput.Affix text="CHF" />}
-                              />
-                            )}
-                            name="subtotal_amount"
-                          />
+                      <View style={styles.cardContent}>
+                        {/* Subtotal Amount */}
+                        <Controller
+                          control={control}
+                          render={({ field: { onChange, onBlur, value } }) => (
+                            <TextInput
+                              label="Subtotal Amount"
+                              mode="outlined"
+                              value={value}
+                              onChangeText={onChange}
+                              onBlur={onBlur}
+                              style={styles.input}
+                              keyboardType="decimal-pad"
+                              disabled={loading}
+                              left={<TextInput.Affix text="CHF" />}
+                            />
+                          )}
+                          name="subtotal_amount"
+                        />
 
-                          {/* Final Price */}
-                          <Controller
-                            control={control}
-                            render={({
-                              field: { onChange, onBlur, value },
-                            }) => (
-                              <TextInput
-                                label="Final Price"
-                                mode="outlined"
-                                value={value}
-                                onChangeText={onChange}
-                                onBlur={onBlur}
-                                style={styles.input}
-                                keyboardType="decimal-pad"
-                                disabled={loading}
-                                left={<TextInput.Affix text="CHF" />}
-                              />
-                            )}
-                            name="final_price"
-                          />
+                        {/* Final Price */}
+                        <Controller
+                          control={control}
+                          render={({ field: { onChange, onBlur, value } }) => (
+                            <TextInput
+                              label="Final Price"
+                              mode="outlined"
+                              value={value}
+                              onChangeText={onChange}
+                              onBlur={onBlur}
+                              style={styles.input}
+                              keyboardType="decimal-pad"
+                              disabled={loading}
+                              left={<TextInput.Affix text="CHF" />}
+                            />
+                          )}
+                          name="final_price"
+                        />
 
-                          {/* Total Amount (existing) */}
-                          <Controller
-                            control={control}
-                            rules={{ required: "Total amount is required" }}
-                            render={({
-                              field: { onChange, onBlur, value },
-                            }) => (
-                              <>
-                                <TextInput
-                                  label="Total Amount *"
-                                  mode="outlined"
-                                  value={value}
-                                  onChangeText={onChange}
-                                  onBlur={onBlur}
-                                  error={!!errors.total_amount}
-                                  style={styles.input}
-                                  keyboardType="decimal-pad"
-                                  disabled={loading}
-                                  left={<TextInput.Affix text="CHF" />}
-                                />
-                                <HelperText
-                                  type="error"
-                                  visible={!!errors.total_amount}
-                                >
-                                  {errors.total_amount?.message}
-                                </HelperText>
-                              </>
-                            )}
-                            name="total_amount"
-                          />
-
-                          {/* Tax Amount (existing) */}
-                          <Controller
-                            control={control}
-                            rules={{ required: "Tax amount is required" }}
-                            render={({
-                              field: { onChange, onBlur, value },
-                            }) => (
-                              <>
-                                <TextInput
-                                  label="Tax Amount *"
-                                  mode="outlined"
-                                  value={value}
-                                  onChangeText={onChange}
-                                  onBlur={onBlur}
-                                  error={!!errors.tax_amount}
-                                  style={styles.input}
-                                  keyboardType="decimal-pad"
-                                  disabled={loading}
-                                  left={<TextInput.Affix text="CHF" />}
-                                />
-                                <HelperText
-                                  type="error"
-                                  visible={!!errors.tax_amount}
-                                >
-                                  {errors.tax_amount?.message}
-                                </HelperText>
-                              </>
-                            )}
-                            name="tax_amount"
-                          />
-
-                          {/* Paid Amount */}
-                          <Controller
-                            control={control}
-                            render={({
-                              field: { onChange, onBlur, value },
-                            }) => (
-                              <TextInput
-                                label="Paid Amount"
-                                mode="outlined"
-                                value={value}
-                                onChangeText={onChange}
-                                onBlur={onBlur}
-                                style={styles.input}
-                                keyboardType="decimal-pad"
-                                disabled={loading}
-                                left={<TextInput.Affix text="CHF" />}
-                              />
-                            )}
-                            name="paid_amount"
-                          />
-
-                          {/* Change Amount */}
-                          <Controller
-                            control={control}
-                            render={({
-                              field: { onChange, onBlur, value },
-                            }) => (
-                              <TextInput
-                                label="Change"
-                                mode="outlined"
-                                value={value}
-                                onChangeText={onChange}
-                                onBlur={onBlur}
-                                style={styles.input}
-                                keyboardType="decimal-pad"
-                                disabled={loading}
-                                left={<TextInput.Affix text="CHF" />}
-                              />
-                            )}
-                            name="change_amount"
-                          />
-
-                          {/* Payment Method (existing) */}
-                          <Button
-                            mode="outlined"
-                            onPress={() => setShowPaymentMethodModal(true)}
-                            style={styles.selectButton}
-                            icon="credit-card"
-                          >
-                            {getPaymentMethodButtonText()}
-                          </Button>
-                        </View>
-                      </Surface>
-                    </Animated.View>
-                  </View>
-                  <View style={styles.gridColumn}>
-                    <Animated.View entering={FadeIn.delay(100)}>
-                      {/* Basic Information */}
-                      <Surface style={styles.formCard}>
-                        <View style={styles.cardHeader}>
-                          <View style={styles.headerLeft}>
-                            <View style={styles.iconContainer}>
-                              <IconButton
-                                icon="receipt"
-                                size={20}
-                                iconColor="#64748b"
-                                style={styles.headerIcon}
-                              />
-                            </View>
-                            <Text style={styles.cardTitle}>
-                              Basic Receipt Information
-                            </Text>
-                          </View>
-                        </View>
-
-                        <View style={styles.cardContent}>
-                          <Controller
-                            control={control}
-                            rules={{ required: "Receipt number is required" }}
-                            render={({
-                              field: { onChange, onBlur, value },
-                            }) => (
-                              <>
-                                <TextInput
-                                  label="Receipt Number *"
-                                  mode="outlined"
-                                  value={value}
-                                  onChangeText={onChange}
-                                  onBlur={onBlur}
-                                  error={!!errors.receipt_number}
-                                  style={styles.input}
-                                  disabled={loading}
-                                  placeholder="e.g., WF-2024-01-15-1234"
-                                />
-                                <HelperText
-                                  type="error"
-                                  visible={!!errors.receipt_number}
-                                >
-                                  {errors.receipt_number?.message}
-                                </HelperText>
-                              </>
-                            )}
-                            name="receipt_number"
-                          />
-
-                          {Platform.OS === "web" ? (
-                            <View style={styles.dateInputWrapper}>
-                              <Text style={styles.inputLabel}>
-                                Transaction Date *
-                              </Text>
-                              <View style={styles.webDateInputContainer}>
-                                <input
-                                  type="date"
-                                  value={format(transaction_date, "yyyy-MM-dd")}
-                                  onChange={(e) =>
-                                    handleDateChange(e, "transaction")
-                                  }
-                                  style={{
-                                    width: "100%",
-                                    padding: "12px",
-                                    fontSize: "14px",
-                                    borderRadius: "8px",
-                                    border: "1px solid #e2e8f0",
-                                    outline: "none",
-                                    backgroundColor: "#f8fafc",
-                                    transition: "all 0.2s ease",
-                                    cursor: "pointer",
-                                  }}
-                                />
-                              </View>
-                            </View>
-                          ) : (
+                        {/* Total Amount (existing) */}
+                        <Controller
+                          control={control}
+                          rules={{ required: "Total amount is required" }}
+                          render={({ field: { onChange, onBlur, value } }) => (
                             <>
-                              <Text style={styles.inputLabel}>
-                                Transaction Date *
-                              </Text>
-                              <Button
+                              <TextInput
+                                label="Total Amount *"
                                 mode="outlined"
-                                onPress={() => {
-                                  setDatePickerType("transaction");
-                                  setShowTransactionDatePicker(true);
-                                }}
-                                style={styles.dateButton}
-                                icon="calendar"
+                                value={value}
+                                onChangeText={onChange}
+                                onBlur={onBlur}
+                                error={!!errors.total_amount}
+                                style={styles.input}
+                                keyboardType="decimal-pad"
+                                disabled={loading}
+                                left={<TextInput.Affix text="CHF" />}
+                              />
+                              <HelperText
+                                type="error"
+                                visible={!!errors.total_amount}
                               >
-                                {format(transaction_date, "MMMM d, yyyy")}
-                              </Button>
-
-                              {showTransactionDatePicker && (
-                                <DateTimePicker
-                                  value={transaction_date}
-                                  mode="date"
-                                  display="default"
-                                  onChange={(e) =>
-                                    handleDateChange(e, "transaction")
-                                  }
-                                />
-                              )}
+                                {errors.total_amount?.message}
+                              </HelperText>
                             </>
                           )}
+                          name="total_amount"
+                        />
 
-                          <Controller
-                            control={control}
-                            rules={{ required: "Merchant name is required" }}
-                            render={({
-                              field: { onChange, onBlur, value },
-                            }) => (
-                              <>
-                                <TextInput
-                                  label="Merchant Name *"
-                                  mode="outlined"
-                                  value={value}
-                                  onChangeText={onChange}
-                                  onBlur={onBlur}
-                                  error={!!errors.merchant_name}
-                                  style={styles.input}
-                                  disabled={loading}
-                                />
-                                <HelperText
-                                  type="error"
-                                  visible={!!errors.merchant_name}
-                                >
-                                  {errors.merchant_name?.message}
-                                </HelperText>
-                              </>
-                            )}
-                            name="merchant_name"
-                          />
-
-                          <Controller
-                            control={control}
-                            render={({
-                              field: { onChange, onBlur, value },
-                            }) => (
+                        {/* Tax Amount (existing) */}
+                        <Controller
+                          control={control}
+                          rules={{ required: "Tax amount is required" }}
+                          render={({ field: { onChange, onBlur, value } }) => (
+                            <>
                               <TextInput
-                                label="Merchant Address (Optional)"
+                                label="Tax Amount *"
                                 mode="outlined"
                                 value={value}
                                 onChangeText={onChange}
                                 onBlur={onBlur}
+                                error={!!errors.tax_amount}
                                 style={styles.input}
-                                multiline
-                                numberOfLines={3}
+                                keyboardType="decimal-pad"
                                 disabled={loading}
+                                left={<TextInput.Affix text="CHF" />}
                               />
-                            )}
-                            name="merchant_address"
-                          />
+                              <HelperText
+                                type="error"
+                                visible={!!errors.tax_amount}
+                              >
+                                {errors.tax_amount?.message}
+                              </HelperText>
+                            </>
+                          )}
+                          name="tax_amount"
+                        />
 
-                          <Controller
-                            control={control}
-                            render={({
-                              field: { onChange, onBlur, value },
-                            }) => (
-                              <TextInput
-                                label="Phone Number"
-                                mode="outlined"
-                                value={value}
-                                onChangeText={onChange}
-                                onBlur={onBlur}
-                                style={styles.input}
-                                disabled={loading}
-                              />
-                            )}
-                            name="merchant_phone"
-                          />
+                        {/* Paid Amount */}
+                        <Controller
+                          control={control}
+                          render={({ field: { onChange, onBlur, value } }) => (
+                            <TextInput
+                              label="Paid Amount"
+                              mode="outlined"
+                              value={value}
+                              onChangeText={onChange}
+                              onBlur={onBlur}
+                              style={styles.input}
+                              keyboardType="decimal-pad"
+                              disabled={loading}
+                              left={<TextInput.Affix text="CHF" />}
+                            />
+                          )}
+                          name="paid_amount"
+                        />
 
-                          {/* Merchant Website */}
-                          <Controller
-                            control={control}
-                            render={({
-                              field: { onChange, onBlur, value },
-                            }) => (
-                              <TextInput
-                                label="Website"
-                                mode="outlined"
-                                value={value}
-                                onChangeText={onChange}
-                                onBlur={onBlur}
-                                style={styles.input}
-                                disabled={loading}
-                              />
-                            )}
-                            name="merchant_website"
-                          />
-                          <Controller
-                            control={control}
-                            render={({
-                              field: { onChange, onBlur, value },
-                            }) => (
-                              <TextInput
-                                label="Merchant VAT Number"
-                                mode="outlined"
-                                value={value}
-                                onChangeText={onChange}
-                                onBlur={onBlur}
-                                style={styles.input}
-                                disabled={loading}
-                              />
-                            )}
-                            name="merchant_vat"
-                          />
+                        {/* Change Amount */}
+                        <Controller
+                          control={control}
+                          render={({ field: { onChange, onBlur, value } }) => (
+                            <TextInput
+                              label="Change"
+                              mode="outlined"
+                              value={value}
+                              onChangeText={onChange}
+                              onBlur={onBlur}
+                              style={styles.input}
+                              keyboardType="decimal-pad"
+                              disabled={loading}
+                              left={<TextInput.Affix text="CHF" />}
+                            />
+                          )}
+                          name="change_amount"
+                        />
 
-                          {/* VAT Details */}
-                          <Controller
-                            control={control}
-                            render={({
-                              field: { onChange, onBlur, value },
-                            }) => (
-                              <TextInput
-                                label="VAT Breakdown"
-                                mode="outlined"
-                                value={value}
-                                onChangeText={onChange}
-                                onBlur={onBlur}
-                                style={styles.input}
-                                multiline
-                                numberOfLines={4}
-                                disabled={loading}
-                              />
-                            )}
-                            name="vat_details"
-                          />
-                        </View>
-                      </Surface>
-                    </Animated.View>
-                  </View>
+                        {/* Payment Method (existing) */}
+                        <Button
+                          mode="outlined"
+                          onPress={() => setShowPaymentMethodModal(true)}
+                          style={styles.selectButton}
+                          icon="credit-card"
+                        >
+                          {getPaymentMethodButtonText()}
+                        </Button>
+                      </View>
+                    </Surface>
+                  </Animated.View>
                 </View>
-              </>
-            )}
+                <View style={styles.gridColumn}>
+                  <Animated.View entering={FadeIn.delay(100)}>
+                    {/* Basic Information */}
+                    <Surface style={styles.formCard}>
+                      <View style={styles.cardHeader}>
+                        <View style={styles.headerLeft}>
+                          <View style={styles.iconContainer}>
+                            <IconButton
+                              icon="receipt"
+                              size={20}
+                              iconColor="#64748b"
+                              style={styles.headerIcon}
+                            />
+                          </View>
+                          <Text style={styles.cardTitle}>
+                            Basic Receipt Information
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.cardContent}>
+                        <Controller
+                          control={control}
+                          rules={{ required: "Receipt number is required" }}
+                          render={({ field: { onChange, onBlur, value } }) => (
+                            <>
+                              <TextInput
+                                label="Receipt Number *"
+                                mode="outlined"
+                                value={value}
+                                onChangeText={onChange}
+                                onBlur={onBlur}
+                                error={!!errors.receipt_number}
+                                style={styles.input}
+                                disabled={loading}
+                                placeholder="e.g., WF-2024-01-15-1234"
+                              />
+                              <HelperText
+                                type="error"
+                                visible={!!errors.receipt_number}
+                              >
+                                {errors.receipt_number?.message}
+                              </HelperText>
+                            </>
+                          )}
+                          name="receipt_number"
+                        />
+
+                        {Platform.OS === "web" ? (
+                          <View style={styles.dateInputWrapper}>
+                            <Text style={styles.inputLabel}>
+                              Transaction Date *
+                            </Text>
+                            <View style={styles.webDateInputContainer}>
+                              <input
+                                type="date"
+                                value={format(transaction_date, "yyyy-MM-dd")}
+                                onChange={(e) =>
+                                  handleDateChange(e, "transaction")
+                                }
+                                style={{
+                                  width: "100%",
+                                  padding: "12px",
+                                  fontSize: "14px",
+                                  borderRadius: "8px",
+                                  border: "1px solid #e2e8f0",
+                                  outline: "none",
+                                  backgroundColor: "#f8fafc",
+                                  transition: "all 0.2s ease",
+                                  cursor: "pointer",
+                                }}
+                              />
+                            </View>
+                          </View>
+                        ) : (
+                          <>
+                            <Text style={styles.inputLabel}>
+                              Transaction Date *
+                            </Text>
+                            <Button
+                              mode="outlined"
+                              onPress={() => {
+                                setDatePickerType("transaction");
+                                setShowTransactionDatePicker(true);
+                              }}
+                              style={styles.dateButton}
+                              icon="calendar"
+                            >
+                              {format(transaction_date, "MMMM d, yyyy")}
+                            </Button>
+
+                            {showTransactionDatePicker && (
+                              <DateTimePicker
+                                value={transaction_date}
+                                mode="date"
+                                display="default"
+                                onChange={(e) =>
+                                  handleDateChange(e, "transaction")
+                                }
+                              />
+                            )}
+                          </>
+                        )}
+
+                        <Controller
+                          control={control}
+                          rules={{ required: "Merchant name is required" }}
+                          render={({ field: { onChange, onBlur, value } }) => (
+                            <>
+                              <TextInput
+                                label="Merchant Name *"
+                                mode="outlined"
+                                value={value}
+                                onChangeText={onChange}
+                                onBlur={onBlur}
+                                error={!!errors.merchant_name}
+                                style={styles.input}
+                                disabled={loading}
+                              />
+                              <HelperText
+                                type="error"
+                                visible={!!errors.merchant_name}
+                              >
+                                {errors.merchant_name?.message}
+                              </HelperText>
+                            </>
+                          )}
+                          name="merchant_name"
+                        />
+
+                        <Controller
+                          control={control}
+                          render={({ field: { onChange, onBlur, value } }) => (
+                            <TextInput
+                              label="Merchant Address (Optional)"
+                              mode="outlined"
+                              value={value}
+                              onChangeText={onChange}
+                              onBlur={onBlur}
+                              style={styles.input}
+                              multiline
+                              numberOfLines={3}
+                              disabled={loading}
+                            />
+                          )}
+                          name="merchant_address"
+                        />
+
+                        <Controller
+                          control={control}
+                          render={({ field: { onChange, onBlur, value } }) => (
+                            <TextInput
+                              label="Phone Number"
+                              mode="outlined"
+                              value={value}
+                              onChangeText={onChange}
+                              onBlur={onBlur}
+                              style={styles.input}
+                              disabled={loading}
+                            />
+                          )}
+                          name="merchant_phone"
+                        />
+
+                        {/* Merchant Website */}
+                        <Controller
+                          control={control}
+                          render={({ field: { onChange, onBlur, value } }) => (
+                            <TextInput
+                              label="Website"
+                              mode="outlined"
+                              value={value}
+                              onChangeText={onChange}
+                              onBlur={onBlur}
+                              style={styles.input}
+                              disabled={loading}
+                            />
+                          )}
+                          name="merchant_website"
+                        />
+                        <Controller
+                          control={control}
+                          render={({ field: { onChange, onBlur, value } }) => (
+                            <TextInput
+                              label="Merchant VAT Number"
+                              mode="outlined"
+                              value={value}
+                              onChangeText={onChange}
+                              onBlur={onBlur}
+                              style={styles.input}
+                              disabled={loading}
+                            />
+                          )}
+                          name="merchant_vat"
+                        />
+
+                        {/* VAT Details */}
+                        <Controller
+                          control={control}
+                          render={({ field: { onChange, onBlur, value } }) => (
+                            <TextInput
+                              label="VAT Breakdown"
+                              mode="outlined"
+                              value={value}
+                              onChangeText={onChange}
+                              onBlur={onBlur}
+                              style={styles.input}
+                              multiline
+                              numberOfLines={4}
+                              disabled={loading}
+                            />
+                          )}
+                          name="vat_details"
+                        />
+                      </View>
+                    </Surface>
+                  </Animated.View>
+                </View>
+              </View>
+            </>
           </ScrollView>
           <Surface style={styles.bottomBar}>
             <View style={styles.bottomBarContent}>
@@ -2600,7 +2663,7 @@ const CreateCompanyReceiptScreen = () => {
                 {loading ? (
                   <ActivityIndicator color={theme.colors.surface} />
                 ) : (
-                  "Add a Receipt"
+                  "Add Receipt"
                 )}
               </Button>
             </View>
@@ -2667,17 +2730,13 @@ const CreateCompanyReceiptScreen = () => {
             <Text style={styles.confirmModalTitle}>Delete Receipt?</Text>
             <Text style={styles.confirmModalText}>
               This will remove the uploaded receipt image and clear all
-              automatically filled fields.{" "}
-              {oneDriveItemId &&
-                "The receipt will also be removed from cloud storage."}{" "}
-              This action cannot be undone.
+              automatically filled fields. This action cannot be undone.
             </Text>
             <View style={styles.confirmModalButtons}>
               <Button
                 mode="outlined"
                 onPress={() => setShowDeleteConfirmModal(false)}
                 style={[styles.confirmButton, styles.confirmCancelButton]}
-                disabled={deletingReceipt}
               >
                 Cancel
               </Button>
@@ -2889,6 +2948,7 @@ const styles = StyleSheet.create({
   cardContent: {
     padding: 24,
   },
+
   input: {
     marginBottom: 8,
     backgroundColor: "#FFFFFF",
@@ -3010,6 +3070,14 @@ const styles = StyleSheet.create({
     color: "#64748b",
     fontFamily: "Poppins-Regular",
     textAlign: "center",
+  },
+  uploadButtonPrimary: {
+    flex: 1,
+    maxWidth: 160,
+  },
+  uploadButtonSecondary: {
+    width: "100%",
+    maxWidth: 320,
   },
   uploadButton: {
     flex: 1,
