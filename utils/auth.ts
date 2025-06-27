@@ -12,8 +12,8 @@ export const hashPassword = async (password: string): Promise<string> => {
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 
-  // Use PBKDF2 with SHA-256 and 200 iterations
-  const iterations = 200;
+  // Use PBKDF2 with SHA-256 and 1000 iterations
+  const iterations = 1000;
 
   // Hash with optimized PBKDF2
   const derivedKey = await pbkdf2(password, salt, iterations, 32);
@@ -169,7 +169,7 @@ export const generateJWT = async (userData: {
 }): Promise<string> => {
   const jwtSecret = process.env.EXPO_PUBLIC_JWT_SECRET;
   if (!jwtSecret) {
-    throw new Error('JWT secret is not configured');
+    throw new Error("JWT secret is not configured");
   }
 
   // Create the JWT header
@@ -177,6 +177,12 @@ export const generateJWT = async (userData: {
     alg: "HS256",
     typ: "JWT",
   };
+
+  // Generate a random UUID using expo-crypto
+  const randomBytes = await Crypto.getRandomBytesAsync(16);
+  const jti = Array.from(randomBytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 
   // Create the JWT payload with standard claims
   const now = Math.floor(Date.now() / 1000);
@@ -188,7 +194,7 @@ export const generateJWT = async (userData: {
     exp: now + 60 * 60 * 24 * 7, // Token expires in 7 days
     iss: "hdfhr",
     aud: "hdfhr",
-    jti: crypto.randomUUID()
+    jti: jti, // Use our generated UUID
   };
 
   // Encode header and payload
@@ -208,7 +214,7 @@ export const generateJWT = async (userData: {
     Crypto.CryptoDigestAlgorithm.SHA256,
     signatureInput + jwtSecret
   );
-  
+
   // Convert the hash to base64URL format
   const formattedSignature = base64Encode(hash)
     .replace(/=/g, "")
@@ -217,7 +223,6 @@ export const generateJWT = async (userData: {
 
   // Return the complete JWT
   return `${encodedHeader}.${encodedPayload}.${formattedSignature}`;
-
 };
 
 // Add these interfaces at the top of the file

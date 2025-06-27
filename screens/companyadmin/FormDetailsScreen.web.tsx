@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
@@ -158,7 +159,7 @@ const FormDetailsScreen = () => {
   const fetchFormDetails = async () => {
     try {
       setLoading(true);
-      console.log(
+      logDebug(
         "Fetching form details for formId:",
         formId,
         "type:",
@@ -183,15 +184,15 @@ const FormDetailsScreen = () => {
 
         formData = data;
         employeeData = data.employee;
-        console.log("Fetched accident report:", formData);
-        console.log(
+        logDebug("Fetched accident report:", formData);
+        logDebug(
           "Medical certificate field value:",
           formData.medical_certificate
         );
 
         // Get document details if medical certificate exists
         if (formData.medical_certificate) {
-          console.log(
+          logDebug(
             "Medical certificate exists, fetching document details..."
           );
 
@@ -203,17 +204,17 @@ const FormDetailsScreen = () => {
             .eq("reference_id", formId)
             .eq("document_type", "MEDICAL_CERTIFICATE");
 
-          console.log("Document query result:", { docData, documentError });
+          logDebug("Document query result:", { docData, documentError });
 
           if (documentError) {
             console.error("Error fetching document details:", documentError);
           } else if (docData && docData.length > 0) {
             const doc = docData[0];
-            console.log("Found document with URL:", doc.file_url);
+            logDebug("Found document with URL:", doc.file_url);
             formData.document_url = doc.file_url;
           } else {
             // If not found by reference, try to find by file_path
-            console.log(
+            logDebug(
               "Trying to find document by file path:",
               formData.medical_certificate
             );
@@ -222,7 +223,7 @@ const FormDetailsScreen = () => {
               .select("*")
               .eq("file_path", formData.medical_certificate);
 
-            console.log("Path-based document query result:", {
+            logDebug("Path-based document query result:", {
               pathDocData,
               pathError,
             });
@@ -231,10 +232,10 @@ const FormDetailsScreen = () => {
               console.error("Error fetching document by path:", pathError);
             } else if (pathDocData && pathDocData.length > 0) {
               const doc = pathDocData[0];
-              console.log("Found document by path with URL:", doc.file_url);
+              logDebug("Found document by path with URL:", doc.file_url);
               formData.document_url = doc.file_url;
             } else {
-              console.log(
+              logDebug(
                 "No document found in employee_documents table for this accident report"
               );
               // Let's check if there are any documents for this employee
@@ -245,7 +246,7 @@ const FormDetailsScreen = () => {
                   .eq("employee_id", formData.employee_id)
                   .eq("document_type", "MEDICAL_CERTIFICATE");
 
-              console.log(
+              logDebug(
                 "All medical certificates for this employee:",
                 employeeDocs
               );
@@ -272,15 +273,15 @@ const FormDetailsScreen = () => {
 
         formData = data;
         employeeData = data.employee;
-        console.log("Fetched illness report:", formData);
-        console.log(
+        logDebug("Fetched illness report:", formData);
+        logDebug(
           "Medical certificate field value:",
           formData.medical_certificate
         );
 
         // Get document details if medical certificate exists
         if (formData.medical_certificate) {
-          console.log(
+          logDebug(
             "Medical certificate exists, fetching document details..."
           );
 
@@ -292,17 +293,17 @@ const FormDetailsScreen = () => {
             .eq("reference_id", formId)
             .eq("document_type", "MEDICAL_CERTIFICATE");
 
-          console.log("Document query result:", { docData, documentError });
+          logDebug("Document query result:", { docData, documentError });
 
           if (documentError) {
             console.error("Error fetching document details:", documentError);
           } else if (docData && docData.length > 0) {
             const doc = docData[0];
-            console.log("Found document with URL:", doc.file_url);
+            logDebug("Found document with URL:", doc.file_url);
             formData.document_url = doc.file_url;
           } else {
             // If not found by reference, try to find by file_path
-            console.log(
+            logDebug(
               "Trying to find document by file path:",
               formData.medical_certificate
             );
@@ -311,7 +312,7 @@ const FormDetailsScreen = () => {
               .select("*")
               .eq("file_path", formData.medical_certificate);
 
-            console.log("Path-based document query result:", {
+            logDebug("Path-based document query result:", {
               pathDocData,
               pathError,
             });
@@ -320,10 +321,10 @@ const FormDetailsScreen = () => {
               console.error("Error fetching document by path:", pathError);
             } else if (pathDocData && pathDocData.length > 0) {
               const doc = pathDocData[0];
-              console.log("Found document by path with URL:", doc.file_url);
+              logDebug("Found document by path with URL:", doc.file_url);
               formData.document_url = doc.file_url;
             } else {
-              console.log(
+              logDebug(
                 "No document found in employee_documents table for this illness report"
               );
               // Let's check if there are any documents for this employee
@@ -334,7 +335,7 @@ const FormDetailsScreen = () => {
                   .eq("employee_id", formData.employee_id)
                   .eq("document_type", "MEDICAL_CERTIFICATE");
 
-              console.log(
+              logDebug(
                 "All medical certificates for this employee:",
                 employeeDocs
               );
@@ -366,7 +367,7 @@ const FormDetailsScreen = () => {
       setForm(formData);
       setEmployee(employeeData);
       setComments(formData?.comments || "");
-      console.log("Final form data with document URL:", formData?.document_url);
+      logDebug("Final form data with document URL:", formData?.document_url);
     } catch (error) {
       console.error("Error in fetchFormDetails:", error);
     } finally {
@@ -442,7 +443,7 @@ const FormDetailsScreen = () => {
 
   const handleCopyLink = async () => {
     if (form?.document_url) {
-      console.log("Copying document URL:", form.document_url);
+      logDebug("Copying document URL:", form.document_url);
       try {
         await navigator.clipboard.writeText(form.document_url);
         setSnackbarMessage("Link copied to clipboard");
@@ -556,7 +557,7 @@ const FormDetailsScreen = () => {
               <Button
                 mode="outlined"
                 onPress={() => {
-                  console.log("Opening document URL:", form.document_url);
+                  logDebug("Opening document URL:", form.document_url);
                   if (form.document_url) {
                     if (Platform.OS === "web") {
                       window.open(form.document_url, "_blank");
@@ -628,7 +629,7 @@ const FormDetailsScreen = () => {
               <Button
                 mode="outlined"
                 onPress={() => {
-                  console.log("Opening document URL:", form.document_url);
+                  logDebug("Opening document URL:", form.document_url);
                   if (form.document_url) {
                     if (Platform.OS === "web") {
                       window.open(form.document_url, "_blank");

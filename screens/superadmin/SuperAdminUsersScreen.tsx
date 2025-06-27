@@ -1,14 +1,18 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
-  FlatList,
   TouchableOpacity,
   RefreshControl,
   ScrollView,
   Platform,
   Animated,
   TouchableWithoutFeedback,
+  Pressable,
+  Dimensions,
+  PressableStateCallbackType,
+  Switch,
 } from "react-native";
 import {
   Card,
@@ -28,12 +32,16 @@ import {
   Modal,
   Portal,
   RadioButton,
+  Theme,
+  MD3Theme,
+  Banner,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   useNavigation,
   NavigationProp,
   ParamListBase,
+  useFocusEffect,
 } from "@react-navigation/native";
 import { supabase } from "../../lib/supabase";
 import AppHeader from "../../components/AppHeader";
@@ -41,18 +49,31 @@ import LoadingIndicator from "../../components/LoadingIndicator";
 import EmptyState from "../../components/EmptyState";
 import Text from "../../components/Text";
 import { LinearGradient } from "expo-linear-gradient";
+import StatusBadge from "../../components/StatusBadge";
+import { UserStatus } from "../../types";
+import {
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
+import { useTranslation } from "react-i18next";
+import FilterModal from "../../components/FilterModal";
+import {
+  FilterSection,
+  RadioFilterGroup,
+  FilterDivider,
+  PillFilterGroup,
+} from "../../components/FilterSections";
+import { formatDate } from "../../utils/dateUtils";
+import Pagination from "../../components/Pagination";
+import { FlashList } from "@shopify/flash-list";
 
 // User list types
 enum UserListType {
   SUPER_ADMIN = "super_admin",
   COMPANY_ADMIN = "company_admin",
   EMPLOYEE = "employee",
-}
-
-// User status enum
-enum UserStatus {
-  ACTIVE = "active",
-  INACTIVE = "inactive",
 }
 
 // Date sort options
@@ -69,6 +90,7 @@ interface Admin {
   status?: string | boolean;
   role: string;
   created_at: string;
+  admin_sequence_id?: number;
 }
 
 // Company type
@@ -89,13 +111,1074 @@ interface CompanyUser {
   role: string;
   active_status?: string | boolean;
   job_title?: string;
+  created_at: string;
+  company_user_sequence_id?: number;
 }
+
+// Add this component after the imports and before other components
+const TooltipText = React.memo(
+  ({
+    text,
+    numberOfLines = 1,
+    styles,
+  }: {
+    text: string;
+    numberOfLines?: number;
+    styles: ReturnType<typeof getStyles>;
+  }) => {
+    const [isHovered, setIsHovered] = useState(false);
+    const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+    const containerRef = useRef<View>(null);
+
+    const updateTooltipPosition = () => {
+      if (Platform.OS === "web" && containerRef.current) {
+        // @ts-ignore - web specific
+        const rect = containerRef.current.getBoundingClientRect();
+        const windowHeight = window.innerHeight;
+        const spaceAbove = rect.top;
+        const spaceBelow = windowHeight - rect.bottom;
+
+        // Calculate horizontal position to prevent overflow
+        const windowWidth = window.innerWidth;
+        let xPos = rect.left;
+
+        // Ensure tooltip doesn't overflow right edge
+        if (xPos + 300 > windowWidth) {
+          // 300 is max tooltip width
+          xPos = windowWidth - 310; // Add some padding
+        }
+
+        // Position vertically based on available space
+        let yPos;
+        if (spaceBelow >= 100) {
+          // If enough space below
+          yPos = rect.bottom + window.scrollY + 5;
+        } else if (spaceAbove >= 100) {
+          // If enough space above
+          yPos = rect.top + window.scrollY - 5;
+        } else {
+          // If neither, position it where there's more space
+          yPos =
+            spaceAbove > spaceBelow
+              ? rect.top + window.scrollY - 5
+              : rect.bottom + window.scrollY + 5;
+        }
+
+        setTooltipPosition({ x: xPos, y: yPos });
+      }
+    };
+
+    useEffect(() => {
+      if (isHovered) {
+        updateTooltipPosition();
+        // Add scroll and resize listeners
+        if (Platform.OS === "web") {
+          window.addEventListener("scroll", updateTooltipPosition);
+          window.addEventListener("resize", updateTooltipPosition);
+
+          return () => {
+            window.removeEventListener("scroll", updateTooltipPosition);
+            window.removeEventListener("resize", updateTooltipPosition);
+          };
+        }
+      }
+    }, [isHovered]);
+
+    if (Platform.OS !== "web") {
+      return (
+        <Text style={styles.tableCellText} numberOfLines={numberOfLines}>
+          {text}
+        </Text>
+      );
+    }
+
+    return (
+      <View
+        ref={containerRef}
+        style={styles.tooltipContainer}
+        // @ts-ignore - web specific props
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <Text style={styles.tableCellText} numberOfLines={numberOfLines}>
+          {text}
+        </Text>
+        {isHovered && (
+          <Portal>
+            <View
+              style={[
+                styles.tooltip,
+                {
+                  position: "absolute",
+                  left: tooltipPosition.x,
+                  top: tooltipPosition.y,
+                },
+              ]}
+            >
+              <Text style={styles.tooltipText}>{text}</Text>
+            </View>
+          </Portal>
+        )}
+      </View>
+    );
+  }
+);
+
+// Add Shimmer component after TooltipText component
+interface ShimmerProps {
+  width: number | string;
+  height: number;
+  style?: any;
+}
+
+const Shimmer: React.FC<ShimmerProps> = ({ width, height, style }) => {
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        {
+          translateX: withRepeat(
+            withSequence(
+              withTiming(typeof width === "number" ? -width : -200, {
+                duration: 800,
+              }),
+              withTiming(typeof width === "number" ? width : 200, {
+                duration: 800,
+              })
+            ),
+            -1
+          ),
+        },
+      ],
+    };
+  });
+
+  return (
+    <View
+      style={[
+        {
+          width,
+          height,
+          backgroundColor: "#E8E8E8",
+          overflow: "hidden",
+          borderRadius: 4,
+        },
+        style,
+      ]}
+    >
+      <Animated.View
+        style={[
+          {
+            width: "100%",
+            height: "100%",
+            position: "absolute",
+            backgroundColor: "transparent",
+          },
+          animatedStyle,
+        ]}
+      >
+        <LinearGradient
+          colors={["transparent", "rgba(255, 255, 255, 0.4)", "transparent"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{ width: "100%", height: "100%" }}
+        />
+      </Animated.View>
+    </View>
+  );
+};
+
+const getStyles = (theme: MD3Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      minHeight: 100, // Ensure minimum height
+    },
+    contentContainer: {
+      flex: 1,
+      paddingHorizontal: Platform.OS === "web" ? 24 : 16,
+    },
+    filterCard: {
+      marginBottom: 12,
+      borderRadius: 12,
+      elevation: 2,
+      overflow: "hidden",
+      borderColor: "#E0E0E0",
+      borderWidth: 1,
+    },
+    filterHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 12,
+    },
+    filterLabel: {
+      fontSize: 14,
+      marginBottom: 0,
+      fontWeight: "bold",
+    },
+    filterRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 12,
+    },
+    companyFilterContainer: {
+      flex: 1,
+      marginRight: 8,
+    },
+    searchContainer: {
+      padding: Platform.OS === "web" ? 24 : 16,
+      paddingTop: 10,
+      paddingBottom: 8,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    searchBarContainer: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    searchbar: {
+      elevation: 0,
+      borderRadius: 18,
+      height: 56,
+      backgroundColor: "#fff",
+      borderWidth: 1,
+      borderColor: "#e0e0e0",
+      flex: 1,
+    },
+    filterButtonContainer: {
+      position: "relative",
+      marginLeft: 8,
+    },
+    filterButton: {
+      borderWidth: 1,
+      borderColor: "#e0e0e0",
+      borderRadius: 8,
+      backgroundColor: "#fff",
+    },
+    inputContainer: {
+      height: 40,
+      paddingHorizontal: 8,
+    },
+    tabCount: {
+      fontSize: 12,
+      color: "#1a73e8",
+      fontFamily: "Poppins-Medium",
+    },
+    card: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: "#F0F0F0",
+      elevation: 0,
+      backgroundColor: "#FFFFFF",
+      marginBottom: 0,
+      marginHorizontal: 0,
+    },
+    cardHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+    },
+    cardContent: {
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+    },
+    cardContainer: {
+      marginBottom: 12,
+      marginHorizontal: 2,
+    },
+    userInfo: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      flex: 1,
+    },
+    userTextContainer: {
+      marginLeft: 16,
+      flex: 1,
+    },
+    userName: {
+      fontSize: 16,
+      fontFamily: "Poppins-SemiBold",
+      marginBottom: 4,
+      color: "#212121",
+    },
+    userEmail: {
+      fontSize: 14,
+      color: "#757575",
+      fontFamily: "Poppins-Regular",
+      marginBottom: 8,
+    },
+    userRole: {
+      fontSize: 12,
+      color: "#1a73e8",
+      fontFamily: "Poppins-Medium",
+      marginTop: 2,
+    },
+    userCompany: {
+      fontSize: 12,
+      color: "#616161",
+      fontFamily: "Poppins-Medium",
+      marginTop: 2,
+    },
+    jobTitle: {
+      fontSize: 12,
+      color: "#616161",
+      fontFamily: "Poppins-Regular",
+      marginTop: 2,
+    },
+    employeeDetails: {
+      marginTop: 2,
+    },
+    listContent: {
+      padding: 16,
+      paddingTop: 8,
+      paddingBottom: 100,
+      backgroundColor: "#fff",
+    },
+    listContainer: {
+      flex: 1,
+      marginTop: 4,
+      marginBottom: 18,
+    },
+    listHeaderContainer: {
+      backgroundColor: "#FFFFFF",
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      marginBottom: 10,
+      borderRadius: 12,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      elevation: 2,
+      borderWidth: 1,
+      borderColor: "#F0F0F0",
+      marginHorizontal: 2,
+    },
+    listHeaderTitle: {
+      fontSize: 18,
+      fontFamily: "Poppins-Medium",
+      color: "#212121",
+    },
+    listHeaderCount: {
+      color: "#1a73e8",
+      fontSize: 16,
+      fontFamily: "Poppins-Regular",
+    },
+    activeFilterButton: {
+      backgroundColor: "#E8F0FE",
+      borderWidth: 1,
+      borderColor: "#1a73e8",
+    },
+    clearFilterButtonLabel: {
+      fontSize: 12,
+      color: "#1a73e8",
+    },
+    dropdownContainer: {
+      // marginBottom: 8,
+    },
+    dropdownButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      borderWidth: 1,
+      borderColor: "#E0E0E0",
+      borderRadius: 12,
+      paddingLeft: 4,
+      paddingRight: 8,
+      paddingVertical: 6,
+      backgroundColor: "#FFFFFF",
+    },
+    dropdownContent: {
+      flexDirection: "row",
+      alignItems: "center",
+      flex: 1,
+    },
+    dropdownLeadingIcon: {
+      margin: 0,
+      padding: 0,
+    },
+    dropdownButtonText: {
+      fontFamily: "Poppins-Regular",
+      color: "#424242",
+      flex: 1,
+      fontSize: 14,
+    },
+    dropdownIcon: {
+      margin: 0,
+      padding: 0,
+    },
+    modalContainer: {
+      backgroundColor: "white",
+      borderRadius: 16,
+      margin: 16,
+      overflow: "hidden",
+      maxHeight: "100%",
+      elevation: 5,
+      maxWidth: "40%",
+      justifyContent: "center",
+    },
+    modalHeaderContainer: {
+      backgroundColor: "white",
+      borderTopLeftRadius: 16,
+      borderTopRightRadius: 16,
+      zIndex: 1,
+    },
+    modalHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 16,
+      paddingVertical: 16,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontFamily: "Poppins-SemiBold",
+      color: "#212121",
+    },
+    modalContent: {
+      padding: 16,
+    },
+    modalFooter: {
+      flexDirection: "row",
+      justifyContent: "flex-end",
+      padding: 16,
+      borderTopWidth: 1,
+      borderTopColor: "#E0E0E0",
+      backgroundColor: "#FFFFFF",
+    },
+    modalButton: {
+      marginLeft: 12,
+      borderRadius: 8,
+    },
+    modalDivider: {
+      height: 1,
+      backgroundColor: "#E0E0E0",
+    },
+    modalSection: {
+      marginBottom: 14,
+    },
+    sectionHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 12,
+    },
+    selectionBadge: {
+      backgroundColor: "#F5F5F5",
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 16,
+    },
+    selectionHint: {
+      fontSize: 12,
+      color: "#616161",
+      fontFamily: "Poppins-Medium",
+    },
+    sectionTitle: {
+      fontSize: 16,
+      fontFamily: "Poppins-SemiBold",
+      color: "#212121",
+      marginBottom: 0,
+    },
+    activeDropdownButton: {
+      borderColor: "#1a73e8",
+      backgroundColor: "#F0F7FF",
+    },
+    activeFilterSection: {
+      marginBottom: 16,
+      backgroundColor: "#F5F5F5",
+      borderRadius: 12,
+      padding: 12,
+    },
+    activeFilterHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 8,
+    },
+    activeFilterTitle: {
+      fontSize: 14,
+      fontFamily: "Poppins-Medium",
+      color: "#424242",
+    },
+    activeFilterContainer: {
+      flexDirection: "column",
+      marginTop: 8,
+    },
+    activeFiltersContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "flex-start",
+      flexWrap: "wrap",
+      paddingHorizontal: 14,
+      paddingBottom: 12,
+    },
+    activeFiltersText: {
+      fontSize: 14,
+      fontFamily: "Poppins-Regular",
+      color: "#616161",
+      marginRight: 8,
+    },
+    filtersScrollView: {
+      flexGrow: 0,
+      marginVertical: 4,
+    },
+    clearAllButton: {
+      marginVertical: 0,
+      height: 30,
+      justifyContent: "center",
+      paddingBottom: 5,
+    },
+    menuHeader: {
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      backgroundColor: "#F5F5F5",
+    },
+    menuTitle: {
+      fontSize: 14,
+      fontFamily: "Poppins-Medium",
+      color: "#212121",
+    },
+    menuSubtitle: {
+      fontSize: 12,
+      fontFamily: "Poppins-Regular",
+      color: "#616161",
+      marginTop: 2,
+    },
+    menuContainer: {
+      borderRadius: 8,
+      width: 280,
+      marginTop: 4,
+      elevation: 3,
+    },
+    menuItemStyle: {
+      height: 48,
+      justifyContent: "center",
+      borderBottomWidth: 1,
+      borderColor: "#E0E0E0",
+    },
+    menuItemText: {
+      fontFamily: "Poppins-Regular",
+      fontSize: 14,
+      color: "#424242",
+    },
+    menuItemSelected: {
+      color: "#1a73e8",
+      fontFamily: "Poppins-Medium",
+      paddingRight: 12,
+    },
+    resultSummary: {
+      alignItems: "center",
+      padding: 8,
+      backgroundColor: "#e8f4fd",
+      borderRadius: 8,
+      marginTop: 12,
+    },
+    resultSummaryText: {
+      color: "#0066cc",
+      fontWeight: "500",
+      fontSize: 14,
+    },
+    resultsText: {
+      textAlign: "center",
+      fontSize: 14,
+      opacity: 0.7,
+    },
+    fab: {
+      borderRadius: 27,
+      height: 56,
+      elevation: 0,
+    },
+    avatarContainer: {
+      width: 50,
+      height: 50,
+      borderRadius: 25,
+      overflow: "hidden",
+    },
+    avatarGradient: {
+      width: "100%",
+      height: "100%",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingTop: 3,
+    },
+    avatarText: {
+      color: "#FFFFFF",
+      fontSize: 18,
+      fontFamily: "Poppins-Bold",
+    },
+    filterBadge: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: "#ff5252",
+      position: "absolute",
+      top: 8,
+      right: 8,
+      zIndex: 2,
+    },
+    statusContainer: {
+      flexDirection: "column",
+      alignItems: "flex-end",
+      justifyContent: "flex-start",
+    },
+    menuButton: {
+      margin: 0,
+      marginTop: -5,
+    },
+    superAdminAvatar: {
+      backgroundColor: "rgba(54,105,157,0.9)",
+    },
+    companyAdminAvatar: {
+      backgroundColor: "rgba(140,82,255,0.9)",
+    },
+    employeeAvatar: {
+      backgroundColor: "rgba(76,175,80,0.9)",
+    },
+    badgeContainer: {
+      flexDirection: "column",
+      marginTop: 2,
+    },
+    roleBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: "#1a73e8",
+      borderRadius: 16,
+      paddingRight: 8,
+      marginBottom: 4,
+      alignSelf: "flex-start",
+    },
+    employeeRoleBadge: {
+      backgroundColor: "#4CAF50",
+    },
+    roleIcon: {
+      margin: 0,
+      padding: 0,
+    },
+    roleBadgeText: {
+      color: "#FFFFFF",
+      fontSize: 12,
+      fontFamily: "Poppins-Medium",
+    },
+    companyBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: "#F5F5F5",
+      borderRadius: 16,
+      paddingRight: 8,
+      marginBottom: 4,
+      alignSelf: "flex-start",
+    },
+    companyIcon: {
+      margin: 0,
+      padding: 0,
+    },
+    companyBadgeText: {
+      color: "#616161",
+      fontSize: 12,
+      fontFamily: "Poppins-Regular",
+    },
+    jobTitleBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: "#F5F5F5",
+      borderRadius: 16,
+      paddingRight: 8,
+      alignSelf: "flex-start",
+    },
+    jobTitleIcon: {
+      margin: 0,
+      padding: 0,
+    },
+    jobTitleBadgeText: {
+      color: "#616161",
+      fontSize: 12,
+      fontFamily: "Poppins-Regular",
+    },
+    footerButton: {
+      paddingVertical: 10,
+      paddingHorizontal: 20,
+      borderRadius: 8,
+      marginLeft: 12,
+    },
+    clearButtonText: {
+      fontSize: 14,
+      fontFamily: "Poppins-Medium",
+      color: "#616161",
+    },
+    applyButton: {
+      elevation: 2,
+    },
+    applyButtonText: {
+      fontSize: 14,
+      fontFamily: "Poppins-Medium",
+      color: "#FFFFFF",
+    },
+    radioItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginVertical: 4,
+    },
+    radioLabel: {
+      fontSize: 16,
+      marginLeft: 8,
+      fontFamily: "Poppins-Regular",
+      color: "#424242",
+    },
+    searchTips: {
+      backgroundColor: "#e8f4fd",
+      padding: 12,
+      borderRadius: 8,
+      marginBottom: 12,
+    },
+    searchTipsText: {
+      color: "#0066cc",
+      fontWeight: "500",
+      fontSize: 14,
+    },
+    searchResultsContainer: {
+      backgroundColor: "#e8f4fd",
+      padding: 12,
+      borderRadius: 8,
+      marginBottom: 12,
+    },
+    searchResultsText: {
+      color: "#0066cc",
+      fontWeight: "500",
+      fontSize: 14,
+    },
+    userTypeDropdownContainer: {
+      marginBottom: 10,
+      zIndex: 10,
+    },
+    userTypeDropdown: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      borderWidth: 1.5,
+      borderColor: "#E0E0E0",
+      borderRadius: 15,
+      paddingVertical: 6,
+      paddingLeft: 6,
+      paddingRight: 8,
+      backgroundColor: "#FFFFFF",
+      elevation: 2,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.1,
+      shadowRadius: 2,
+      paddingHorizontal: 10,
+    },
+    userTypeDropdownContent: {
+      flexDirection: "row",
+      alignItems: "center",
+      flex: 1,
+    },
+    iconContainer: {
+      borderRadius: 12,
+      marginRight: 4,
+      padding: 2,
+    },
+    userTypeDropdownText: {
+      fontFamily: "Poppins-Medium",
+      color: "#424242",
+      flex: 1,
+      fontSize: 16,
+      marginLeft: 4,
+    },
+    menuBackdrop: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: "rgba(0, 0, 0, 0.01)",
+    },
+    enhancedMenuContainer: {
+      backgroundColor: "#FFFFFF",
+      borderRadius: 15,
+      paddingVertical: 8,
+      elevation: 6,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 6,
+      overflow: "hidden",
+      width: "100%",
+      maxWidth: 350,
+    },
+    userTypeMenuHeader: {
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: "#F0F0F0",
+    },
+    userTypeMenuTitle: {
+      fontSize: 16,
+      fontFamily: "Poppins-Medium",
+      color: "#333333",
+    },
+    enhancedMenuItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: "#F0F0F0",
+    },
+    selectedMenuItem: {
+      backgroundColor: "#F8F8F8",
+    },
+    menuIconContainer: {
+      borderRadius: 12,
+      padding: 2,
+      width: 44,
+      height: 44,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    menuIcon: {
+      margin: 0,
+      padding: 0,
+    },
+    menuItemContent: {
+      flex: 1,
+      marginLeft: 12,
+    },
+    menuItemTitleText: {
+      fontSize: 16,
+      fontFamily: "Poppins-Medium",
+      color: "#333333",
+      marginBottom: 2,
+    },
+    menuItemDescription: {
+      fontSize: 12,
+      fontFamily: "Poppins-Regular",
+      color: "#757575",
+    },
+    checkIconContainer: {
+      marginLeft: 8,
+    },
+    tabsContainer: {},
+    tabsWrapper: {
+      flexDirection: "row",
+      alignItems: "center",
+      maxWidth: 400,
+    },
+    tab: {
+      paddingVertical: 12,
+      paddingHorizontal: 10,
+      borderWidth: 0.5,
+      borderRadius: 25,
+      marginHorizontal: 5,
+    },
+    activeTab: {},
+    tabText: {
+      fontSize: 14,
+      fontFamily: "Poppins-Medium",
+      color: "#616161",
+    },
+    activeTabText: {
+      color: "#1a73e8",
+    },
+    tableContainer: {
+      flex: 1,
+      minHeight: 100, // Ensure minimum height
+      backgroundColor: "#fff",
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: "#e0e0e0",
+      overflow: "hidden",
+    },
+    tableHeader: {
+      flexDirection: "row",
+      backgroundColor: "#f8fafc",
+      borderBottomWidth: 1,
+      borderBottomColor: "#e0e0e0",
+      paddingVertical: 16,
+      paddingHorizontal: 26,
+      alignContent: "center",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    tableHeaderCell: {
+      flex: 1,
+      paddingHorizontal: 16,
+      justifyContent: "space-around",
+      paddingLeft: 25,
+      alignItems: "flex-start",
+    },
+    tableHeaderText: {
+      fontSize: 14,
+      color: "#64748b",
+    },
+    tableRow: {
+      flexDirection: "row",
+      borderBottomWidth: 1,
+      borderBottomColor: "#e0e0e0",
+      paddingVertical: 16,
+      backgroundColor: "#fff",
+      paddingHorizontal: 26,
+      alignItems: "center",
+    },
+    tableCell: {
+      flex: 1,
+      paddingHorizontal: 26,
+      justifyContent: "space-evenly",
+      alignItems: "flex-start",
+    },
+    receiptIdLink: {
+      color: "#1a73e8",
+      cursor: "pointer",
+      fontSize: 14,
+      fontFamily: "Poppins-Regular",
+    },
+    tableCellText: {
+      fontSize: 14,
+      color: "#334155",
+    },
+    tableContent: {
+      padding: 8,
+      paddingBottom: 50,
+      backgroundColor: "#fff",
+    },
+    actionCell: {
+      flex: 1,
+      flexDirection: "row",
+      justifyContent: "flex-start",
+      alignItems: "center",
+      paddingHorizontal: 26,
+    },
+    actionIcon: {
+      margin: 0,
+      marginRight: 8,
+    },
+    tooltipContainer: {
+      position: "relative",
+      flex: 1,
+      maxWidth: "100%",
+      zIndex: 10, // Higher z-index to appear above table header
+    },
+    tooltip: {
+      backgroundColor: "rgba(255, 255, 255, 0.95)",
+      padding: 8,
+      marginLeft: 30,
+      borderRadius: 4,
+      borderWidth: 1,
+      borderColor: "#e0e0e0",
+      maxWidth: 300,
+      shadowColor: "#000",
+      shadowOffset: {
+        width: 0,
+        height: 2,
+      },
+      shadowOpacity: 0.25,
+      shadowRadius: 3.84,
+      elevation: 5,
+      zIndex: 9999,
+      ...(Platform.OS === "web"
+        ? {
+            // @ts-ignore - web specific style
+            willChange: "transform",
+            // @ts-ignore - web specific style
+            isolation: "isolate",
+          }
+        : {}),
+    },
+    tooltipText: {
+      color: "#000",
+      fontSize: 12,
+      fontFamily: "Poppins-Regular",
+      lineHeight: 16,
+    },
+    skeleton: {
+      backgroundColor: "#F3F4F6",
+      borderRadius: 4,
+      overflow: "hidden",
+    },
+    skeletonCard: {
+      backgroundColor: "#FFFFFF",
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: "#F0F0F0",
+      padding: 16,
+      marginBottom: 16,
+    },
+    activeFilterChip: {
+      margin: 4,
+      backgroundColor: "rgba(26, 115, 232, 0.1)",
+      borderColor: "#1a73e8",
+    },
+    paginationWrapper: {
+      marginTop: 5,
+      overflow: "hidden",
+      width: "auto",
+      alignSelf: "center",
+    },
+    totalCountContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    totalCountText: {
+      fontSize: 11,
+      color: "#666",
+      fontFamily: "Poppins-Regular",
+    },
+    totalCountValue: {
+      fontSize: 14,
+      color: theme.colors.primary,
+      fontFamily: "Poppins-Medium",
+      marginLeft: 4,
+    },
+    switchContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: 8,
+      paddingHorizontal: 4,
+    },
+    switchLabel: {
+      fontSize: 14,
+      color: "#424242",
+      fontFamily: "Poppins-Regular",
+      flex: 1,
+      marginRight: 16,
+    },
+    userNameContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "flex-start",
+      marginBottom: 4,
+    },
+    sequenceId: {
+      fontSize: 14,
+      color: "#757575",
+      marginLeft: 8,
+      fontFamily: "Poppins-Regular",
+    },
+  });
 
 const SuperAdminUsersScreen = () => {
   const theme = useTheme();
+  const styles = React.useMemo(() => getStyles(theme), [theme]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [menuVisible, setMenuVisible] = useState(false);
+
+  // Add pagination state
+  const PAGE_SIZE = 10;
+  const [page, setPage] = useState(0);
+
+  // Add separate count states for each user type
+  const [superAdminCount, setSuperAdminCount] = useState(0);
+  const [companyAdminCount, setCompanyAdminCount] = useState(0);
+  const [employeeCount, setEmployeeCount] = useState(0);
+  const [totalItems, setTotalItems] = useState(0);
 
   // State for different user types
   const [superAdmins, setSuperAdmins] = useState<Admin[]>([]);
@@ -113,7 +1196,6 @@ const SuperAdminUsersScreen = () => {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<string[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>("all");
-  const [menuVisible, setMenuVisible] = useState(false);
 
   // Date sort filter
   const [sortOrder, setSortOrder] = useState<string>(
@@ -144,7 +1226,7 @@ const SuperAdminUsersScreen = () => {
   const localStyles = {
     activeFilterChip: {
       margin: 4,
-      backgroundColor: theme.colors.primary + "15",
+      backgroundColor: "rgba(26, 115, 232, 0.1)",
       borderColor: theme.colors.primary,
     },
   };
@@ -169,16 +1251,40 @@ const SuperAdminUsersScreen = () => {
     }
   };
 
-  // Fetch super admins
+  // Fetch super admins with pagination
   const fetchSuperAdmins = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("admin")
-        .select("*")
+        .select("*", { count: "exact" })
         .eq("role", "superadmin")
-        .order("created_at", {
-          ascending: sortOrder === DateSortOrder.OLDEST_FIRST,
-        });
+        .order("created_at", { ascending: false });
+
+      // Apply status filter
+      if (statusFilter === "deleted") {
+        query = query.not("deleted_at", "is", null);
+      } else {
+        query = query.is("deleted_at", null);
+        if (statusFilter === "active") {
+          query = query.eq("status", true);
+        } else if (statusFilter === "inactive") {
+          query = query.eq("status", false);
+        }
+      }
+
+      // Apply search filter
+      if (searchQuery && searchQuery.length >= 3) {
+        query = query.or(
+          `name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`
+        );
+      }
+
+      // Apply pagination
+      const from = page * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+      query = query.range(from, to);
+
+      const { data, error, count } = await query;
 
       if (error) {
         console.error("Error fetching super admins:", error);
@@ -187,30 +1293,53 @@ const SuperAdminUsersScreen = () => {
 
       setSuperAdmins(data || []);
       setFilteredSuperAdmins(data || []);
+      if (count !== null) {
+        setSuperAdminCount(count);
+        setTotalItems(count);
+      }
     } catch (error) {
-      console.error("Error fetching super admins:", error);
+      console.error("Error in fetchSuperAdmins:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  // Fetch company admins
+  // Fetch company admins with pagination
   const fetchCompanyAdmins = async () => {
     try {
       let query = supabase
         .from("company_user")
-        .select("*, company:company_id(company_name)")
+        .select("*, company:company_id(company_name)", { count: "exact" })
         .eq("role", "admin")
-        .order("created_at", {
-          ascending: sortOrder === DateSortOrder.OLDEST_FIRST,
-        });
+        .order("created_at", { ascending: false })
+        .order("company_user_sequence_id", { ascending: true });
 
-      // Apply company filter if selected
-      if (selectedCompanyIds.length > 0) {
-        query = query.in("company_id", selectedCompanyIds);
-      } else if (selectedCompanyId !== "all") {
-        query = query.eq("company_id", selectedCompanyId);
+      // Apply status filter
+      if (statusFilter === "deleted") {
+        query = query.not("deleted_at", "is", null);
+      } else {
+        query = query.is("deleted_at", null);
+        if (statusFilter === "active") {
+          query = query.eq("active_status", "active");
+        } else if (statusFilter === "inactive") {
+          query = query.eq("active_status", "inactive");
+        }
       }
 
-      const { data, error } = await query;
+      // Apply search filter
+      if (searchQuery && searchQuery.length >= 3) {
+        query = query.or(
+          `first_name.ilike.%${searchQuery}%,last_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`
+        );
+      }
+
+      // Apply pagination
+      const from = page * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+      query = query.range(from, to);
+
+      const { data, error, count } = await query;
 
       if (error) {
         console.error("Error fetching company admins:", error);
@@ -219,31 +1348,53 @@ const SuperAdminUsersScreen = () => {
 
       setCompanyAdmins(data || []);
       setFilteredCompanyAdmins(data || []);
+      if (count !== null) {
+        setCompanyAdminCount(count);
+        setTotalItems(count);
+      }
     } catch (error) {
-      console.error("Error fetching company admins:", error);
+      console.error("Error in fetchCompanyAdmins:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  // Fetch employees
+  // Fetch employees with pagination
   const fetchEmployees = async () => {
     try {
       let query = supabase
         .from("company_user")
-        .select("*, company:company_id(company_name)")
+        .select("*, company:company_id(company_name)", { count: "exact" })
         .eq("role", "employee")
-        .order("created_at", {
-          ascending: sortOrder === DateSortOrder.OLDEST_FIRST,
-        })
-        .limit(100); // Limit to 100 employees for better performance
+        .order("created_at", { ascending: false })
+        .order("company_user_sequence_id", { ascending: true });
 
-      // Apply company filter if selected
-      if (selectedCompanyIds.length > 0) {
-        query = query.in("company_id", selectedCompanyIds);
-      } else if (selectedCompanyId !== "all") {
-        query = query.eq("company_id", selectedCompanyId);
+      // Apply status filter
+      if (statusFilter === "deleted") {
+        query = query.not("deleted_at", "is", null);
+      } else {
+        query = query.is("deleted_at", null);
+        if (statusFilter === "active") {
+          query = query.eq("active_status", "active");
+        } else if (statusFilter === "inactive") {
+          query = query.eq("active_status", "inactive");
+        }
       }
 
-      const { data, error } = await query;
+      // Apply search filter
+      if (searchQuery && searchQuery.length >= 3) {
+        query = query.or(
+          `first_name.ilike.%${searchQuery}%,last_name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`
+        );
+      }
+
+      // Apply pagination
+      const from = page * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+      query = query.range(from, to);
+
+      const { data, error, count } = await query;
 
       if (error) {
         console.error("Error fetching employees:", error);
@@ -252,8 +1403,15 @@ const SuperAdminUsersScreen = () => {
 
       setEmployees(data || []);
       setFilteredEmployees(data || []);
+      if (count !== null) {
+        setEmployeeCount(count);
+        setTotalItems(count);
+      }
     } catch (error) {
-      console.error("Error fetching employees:", error);
+      console.error("Error in fetchEmployees:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -369,20 +1527,178 @@ const SuperAdminUsersScreen = () => {
 
   const onRefresh = () => {
     setRefreshing(true);
-    // Reset company filter on refresh
-    setSelectedCompanyIds([]);
-    setSelectedCompanyId("all");
+    setPage(0);
     fetchAllUsers();
   };
 
+  // Update useEffect for fetching data when filters change
+  useEffect(() => {
+    if (selectedTab === UserListType.SUPER_ADMIN) {
+      fetchSuperAdmins();
+    } else if (selectedTab === UserListType.COMPANY_ADMIN) {
+      fetchCompanyAdmins();
+    } else if (selectedTab === UserListType.EMPLOYEE) {
+      fetchEmployees();
+    }
+  }, [
+    selectedTab,
+    statusFilter,
+    page,
+    selectedCompanyIds,
+    selectedCompanyId,
+    searchQuery,
+  ]);
+
+  // Update the applyFiltersDirect function
+  const applyFiltersDirect = async () => {
+    setFilterModalVisible(false);
+    setLoading(true);
+    setPage(0); // Reset page when applying filters
+
+    try {
+      if (selectedTab === UserListType.SUPER_ADMIN) {
+        let query = supabase
+          .from("admin")
+          .select("*", { count: "exact" })
+          .eq("role", "superadmin")
+          .order("created_at", { ascending: false });
+
+        // Apply status filter
+        if (statusFilter === "deleted") {
+          query = query.not("deleted_at", "is", null);
+        } else {
+          query = query.is("deleted_at", null);
+          if (statusFilter === "active") {
+            query = query.eq("status", true);
+          } else if (statusFilter === "inactive") {
+            query = query.eq("status", false);
+          }
+        }
+
+        const { data, error, count } = await query.range(0, PAGE_SIZE - 1);
+
+        if (error) throw error;
+        if (data) {
+          setSuperAdmins(data);
+          setFilteredSuperAdmins(data);
+          if (count !== null) {
+            setTotalItems(count);
+          }
+        }
+      } else if (selectedTab === UserListType.COMPANY_ADMIN) {
+        let query = supabase
+          .from("company_user")
+          .select("*, company:company_id(company_name)", { count: "exact" })
+          .eq("role", "admin")
+          .order("created_at", { ascending: false });
+
+        // Apply status filter
+        if (statusFilter === "deleted") {
+          query = query.not("deleted_at", "is", null);
+        } else {
+          query = query.is("deleted_at", null);
+          if (statusFilter === "active") {
+            query = query.eq("active_status", "active");
+          } else if (statusFilter === "inactive") {
+            query = query.eq("active_status", "inactive");
+          }
+        }
+
+        // Apply company filter
+        if (selectedCompanyIds.length > 0) {
+          query = query.in("company_id", selectedCompanyIds);
+        } else if (selectedCompanyId !== "all") {
+          query = query.eq("company_id", selectedCompanyId);
+        }
+
+        const { data, error, count } = await query.range(0, PAGE_SIZE - 1);
+
+        if (error) throw error;
+        if (data) {
+          setCompanyAdmins(data);
+          setFilteredCompanyAdmins(data);
+          if (count !== null) {
+            setTotalItems(count);
+          }
+        }
+      } else if (selectedTab === UserListType.EMPLOYEE) {
+        let query = supabase
+          .from("company_user")
+          .select("*, company:company_id(company_name)", { count: "exact" })
+          .eq("role", "employee")
+          .order("created_at", { ascending: false });
+
+        // Apply status filter
+        if (statusFilter === "deleted") {
+          query = query.not("deleted_at", "is", null);
+        } else {
+          query = query.is("deleted_at", null);
+          if (statusFilter === "active") {
+            query = query.eq("active_status", "active");
+          } else if (statusFilter === "inactive") {
+            query = query.eq("active_status", "inactive");
+          }
+        }
+
+        // Apply company filter
+        if (selectedCompanyIds.length > 0) {
+          query = query.in("company_id", selectedCompanyIds);
+        } else if (selectedCompanyId !== "all") {
+          query = query.eq("company_id", selectedCompanyId);
+        }
+
+        const { data, error, count } = await query.range(0, PAGE_SIZE - 1);
+
+        if (error) throw error;
+        if (data) {
+          setEmployees(data);
+          setFilteredEmployees(data);
+          if (count !== null) {
+            setTotalItems(count);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error applying filters:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  // Update handleClearFilters to ensure proper state reset
   const handleClearFilters = () => {
+    setFilterModalVisible(false);
     setSelectedCompanyIds([]);
     setSelectedCompanyId("all");
-    setSortOrder(DateSortOrder.NEWEST_FIRST);
-    setSearchQuery("");
+    setStatusFilter("");
+    setPage(0);
+    setLoading(true);
 
-    // Use our direct approach for more reliable updates
+    // Immediately fetch fresh data after clearing filters
     applyFiltersDirect();
+  };
+
+  // Update handleClearIndividualFilter to ensure proper refresh
+  const handleClearIndividualFilter = async (
+    filterType: "status" | "company" | "deleted"
+  ) => {
+    setLoading(true);
+    try {
+      if (filterType === "deleted" || filterType === "status") {
+        setStatusFilter("");
+      } else {
+        setSelectedCompanyIds([]);
+        setSelectedCompanyId("all");
+      }
+      setPage(0);
+      // Immediately fetch fresh data after clearing individual filter
+      await applyFiltersDirect();
+    } catch (error) {
+      console.error("Error clearing filter:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getInitials = (name: string, email: string) => {
@@ -407,54 +1723,6 @@ const SuperAdminUsersScreen = () => {
     return (
       (firstName ? firstName.charAt(0).toUpperCase() : "") +
       (lastName ? lastName.charAt(0).toUpperCase() : "")
-    );
-  };
-
-  // Render a status chip
-  const renderStatusChip = (status?: UserStatus | string | boolean) => {
-    if (status === undefined) return null;
-
-    let color;
-    let displayText;
-
-    // Handle boolean values
-    if (typeof status === "boolean") {
-      if (status === true) {
-        color = "#4CAF50"; // Green
-        displayText = "Active";
-      } else {
-        color = "#757575"; // Grey
-        displayText = "Inactive";
-      }
-    } else {
-      // Handle string values
-      switch (status) {
-        case UserStatus.ACTIVE:
-        case "active":
-          color = "#4CAF50"; // Green
-          displayText = "Active";
-          break;
-        case UserStatus.INACTIVE:
-        case "inactive":
-          color = "#757575"; // Grey
-          displayText = "Inactive";
-          break;
-        default:
-          color = theme.colors.primary;
-          displayText =
-            typeof status === "string" && status.length > 0
-              ? status.charAt(0).toUpperCase() + status.slice(1).toLowerCase()
-              : "Unknown";
-      }
-    }
-
-    return (
-      <Chip
-        style={{ backgroundColor: color }}
-        textStyle={{ color: color, fontFamily: "Poppins-Medium" }}
-      >
-        {displayText}
-      </Chip>
     );
   };
 
@@ -515,7 +1783,7 @@ const SuperAdminUsersScreen = () => {
   const renderSuperAdminItem = ({ item }: { item: Admin }) => (
     <TouchableOpacity
       onPress={() => {
-        console.log("Super Admin selected:", item.id);
+        logDebug("Super Admin selected:", item.id);
         navigation.navigate("SuperAdminDetailsScreen", {
           adminId: item.id,
           adminType: "super",
@@ -532,16 +1800,32 @@ const SuperAdminUsersScreen = () => {
                 "super"
               )}
               <View style={styles.userTextContainer}>
-                <Text variant="bold" style={styles.userName} numberOfLines={1}>
-                  {item.name || "Unnamed Admin"}
-                </Text>
+                <View style={styles.userNameContainer}>
+                  <Text
+                    variant="bold"
+                    style={styles.userName}
+                    numberOfLines={1}
+                  >
+                    {item.name || "Unnamed Admin"}
+                  </Text>
+                  <Text style={styles.sequenceId}>
+                    #{item.admin_sequence_id || "-"}
+                  </Text>
+                </View>
                 <Text style={styles.userEmail} numberOfLines={1}>
                   {item.email}
                 </Text>
               </View>
             </View>
             <View style={styles.statusContainer}>
-              {renderStatusChip(item.status)}
+              <StatusBadge
+                status={
+                  item.status === true || item.status === "active"
+                    ? UserStatus.ACTIVE
+                    : UserStatus.INACTIVE
+                }
+                size="small"
+              />
             </View>
           </View>
         </Card.Content>
@@ -552,7 +1836,7 @@ const SuperAdminUsersScreen = () => {
   const renderCompanyAdminItem = ({ item }: { item: CompanyUser }) => (
     <TouchableOpacity
       onPress={() => {
-        console.log("Company Admin selected:", item.id);
+        logDebug("Company Admin selected:", item.id);
         navigation.navigate("CompanyAdminDetailsScreen", {
           adminId: item.id,
           adminType: "company",
@@ -573,10 +1857,19 @@ const SuperAdminUsersScreen = () => {
                 "company"
               )}
               <View style={styles.userTextContainer}>
-                <Text variant="bold" style={styles.userName} numberOfLines={1}>
-                  {`${item.first_name || ""} ${item.last_name || ""}`.trim() ||
-                    "Unnamed Admin"}
-                </Text>
+                <View style={styles.userNameContainer}>
+                  <Text
+                    variant="bold"
+                    style={styles.userName}
+                    numberOfLines={1}
+                  >
+                    {`${item.first_name || ""} ${item.last_name || ""}`.trim() ||
+                      "Unnamed Admin"}
+                  </Text>
+                  <Text style={styles.sequenceId}>
+                    #{item.company_user_sequence_id || "-"}
+                  </Text>
+                </View>
                 <Text style={styles.userEmail} numberOfLines={1}>
                   {item.email}
                 </Text>
@@ -596,7 +1889,14 @@ const SuperAdminUsersScreen = () => {
               </View>
             </View>
             <View style={styles.statusContainer}>
-              {renderStatusChip(item.active_status)}
+              <StatusBadge
+                status={
+                  item.active_status === true || item.active_status === "active"
+                    ? UserStatus.ACTIVE
+                    : UserStatus.INACTIVE
+                }
+                size="small"
+              />
             </View>
           </View>
         </Card.Content>
@@ -607,8 +1907,8 @@ const SuperAdminUsersScreen = () => {
   const renderEmployeeItem = ({ item }: { item: CompanyUser }) => (
     <TouchableOpacity
       onPress={() => {
-        console.log("Employee selected:", item.id);
-        navigation.navigate("EmployeeDetailedScreen", {
+        logDebug("Employee selected:", item.id);
+        navigation.navigate("EmployeeDetails", {
           employeeId: item.id,
           companyId: item.company_id,
         });
@@ -628,10 +1928,19 @@ const SuperAdminUsersScreen = () => {
                 "employee"
               )}
               <View style={styles.userTextContainer}>
-                <Text variant="bold" style={styles.userName} numberOfLines={1}>
-                  {`${item.first_name || ""} ${item.last_name || ""}`.trim() ||
-                    "Unnamed Employee"}
-                </Text>
+                <View style={styles.userNameContainer}>
+                  <Text
+                    variant="bold"
+                    style={styles.userName}
+                    numberOfLines={1}
+                  >
+                    {`${item.first_name || ""} ${item.last_name || ""}`.trim() ||
+                      "Unnamed Employee"}
+                  </Text>
+                  <Text style={styles.sequenceId}>
+                    #{item.company_user_sequence_id || "-"}
+                  </Text>
+                </View>
                 <Text style={styles.userEmail} numberOfLines={1}>
                   {item.email}
                 </Text>
@@ -651,7 +1960,14 @@ const SuperAdminUsersScreen = () => {
               </View>
             </View>
             <View style={styles.statusContainer}>
-              {renderStatusChip(item.active_status)}
+              <StatusBadge
+                status={
+                  item.active_status === true || item.active_status === "active"
+                    ? UserStatus.ACTIVE
+                    : UserStatus.INACTIVE
+                }
+                size="small"
+              />
             </View>
           </View>
         </Card.Content>
@@ -659,9 +1975,15 @@ const SuperAdminUsersScreen = () => {
     </TouchableOpacity>
   );
 
-  // Indicator for active filters
+  // Update the renderActiveFilterIndicator function
   const renderActiveFilterIndicator = () => {
     if (!hasActiveFilters()) return null;
+
+    const chipStyle = {
+      margin: 4,
+      backgroundColor: "rgba(26, 115, 232, 0.1)",
+      borderColor: theme.colors.primary,
+    };
 
     return (
       <View style={styles.activeFiltersContainer}>
@@ -671,35 +1993,29 @@ const SuperAdminUsersScreen = () => {
           showsHorizontalScrollIndicator={false}
           style={styles.filtersScrollView}
         >
+          {statusFilter && (
+            <Chip
+              mode="outlined"
+              onClose={() => handleClearIndividualFilter("status")}
+              style={chipStyle}
+              textStyle={{ color: theme.colors.primary }}
+            >
+              Status:{" "}
+              {statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}
+            </Chip>
+          )}
+
           {(selectedCompanyIds.length > 0 || selectedCompanyId !== "all") && (
             <Chip
               mode="outlined"
-              onClose={() => {
-                setSelectedCompanyIds([]);
-                setSelectedCompanyId("all");
-                applyFiltersDirect();
-              }}
-              style={localStyles.activeFilterChip}
+              onClose={() => handleClearIndividualFilter("company")}
+              style={chipStyle}
               textStyle={{ color: theme.colors.primary }}
             >
               {selectedCompanyIds.length > 0
                 ? `${selectedCompanyIds.length} Companies`
                 : companies.find((c) => c.id === selectedCompanyId)
                     ?.company_name || "Company"}
-            </Chip>
-          )}
-
-          {sortOrder !== DateSortOrder.NEWEST_FIRST && (
-            <Chip
-              mode="outlined"
-              onClose={() => {
-                setSortOrder(DateSortOrder.NEWEST_FIRST);
-                applyFiltersDirect();
-              }}
-              style={localStyles.activeFilterChip}
-              textStyle={{ color: theme.colors.primary }}
-            >
-              Date: Oldest first
             </Chip>
           )}
         </ScrollView>
@@ -714,27 +2030,83 @@ const SuperAdminUsersScreen = () => {
     let buttonTitle = "Clear Filters";
     let icon = "account-off";
 
+    // If there are active filters, show filter-specific message
+    if (
+      statusFilter ||
+      selectedCompanyIds.length > 0 ||
+      selectedCompanyId !== "all"
+    ) {
+      title = "No Results Found";
+      message = `No ${
+        currentTab === UserListType.SUPER_ADMIN
+          ? "HDF users"
+          : currentTab === UserListType.COMPANY_ADMIN
+            ? "company admins"
+            : "employees"
+      } match your filter criteria.`;
+      buttonTitle = "Clear Filters";
+      return (
+        <EmptyState
+          icon={icon}
+          title={title}
+          message={message}
+          buttonTitle={buttonTitle}
+          onButtonPress={handleClearFilters}
+        />
+      );
+    }
+
     // Add search length guidance if search query is short
     if (searchQuery && searchQuery.length < 3) {
       message = "Try typing at least 3 characters for better search results.";
-    } else if (
-      searchQuery === "" &&
-      selectedCompanyIds.length === 0 &&
-      selectedCompanyId === "all"
-    ) {
-      if (currentTab === UserListType.SUPER_ADMIN) {
-        title = "No Super Admins Found";
-        message = "You haven't added any super admins yet.";
-        buttonTitle = "Add Super Admin";
-      } else if (currentTab === UserListType.COMPANY_ADMIN) {
-        title = "No Company Admins Found";
-        message = "You haven't added any company admins yet.";
-        buttonTitle = "Add Company Admin";
-      } else {
-        title = "No Employees Found";
-        message = "No employees have been added to the system yet.";
-        buttonTitle = "View Companies";
-      }
+      return (
+        <EmptyState
+          icon={icon}
+          title={title}
+          message={message}
+          buttonTitle="Clear Search"
+          onButtonPress={() => setSearchQuery("")}
+        />
+      );
+    }
+
+    // If there's a search query but no filters
+    if (searchQuery) {
+      message = `No ${
+        currentTab === UserListType.SUPER_ADMIN
+          ? "HDF users"
+          : currentTab === UserListType.COMPANY_ADMIN
+            ? "company admins"
+            : "employees"
+      } match your search term "${searchQuery}".`;
+      buttonTitle = "Clear Search";
+      return (
+        <EmptyState
+          icon={icon}
+          title={title}
+          message={message}
+          buttonTitle={buttonTitle}
+          onButtonPress={() => setSearchQuery("")}
+        />
+      );
+    }
+
+    // Default empty states for each tab when no data exists
+    if (currentTab === UserListType.SUPER_ADMIN) {
+      title = "No HDF Users Found";
+      message = "You haven't added any HDF users yet.";
+      buttonTitle = "Add HDF User";
+      icon = "shield-account-outline";
+    } else if (currentTab === UserListType.COMPANY_ADMIN) {
+      title = "No Company Admins Found";
+      message = "You haven't added any company admins yet.";
+      buttonTitle = "Add Company Admin";
+      icon = "office-building-outline";
+    } else {
+      title = "No Employees Found";
+      message = "No employees have been added to the system yet.";
+      buttonTitle = "View Companies";
+      icon = "account-group-outline";
     }
 
     return (
@@ -744,11 +2116,7 @@ const SuperAdminUsersScreen = () => {
         message={message}
         buttonTitle={buttonTitle}
         onButtonPress={() => {
-          if (
-            searchQuery ||
-            selectedCompanyIds.length > 0 ||
-            selectedCompanyId !== "all"
-          ) {
+          if (searchQuery || hasActiveFilters()) {
             handleClearFilters();
           } else if (currentTab === UserListType.SUPER_ADMIN) {
             navigation.navigate("CreateSuperAdmin");
@@ -762,10 +2130,455 @@ const SuperAdminUsersScreen = () => {
     );
   };
 
+  // Add table header components
+  const SuperAdminTableHeader = () => (
+    <View style={styles.tableHeader}>
+      <View style={[styles.tableHeaderCell, { flex: 0.6 }]}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          ID
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Name
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Email
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Role
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Created Date
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Status
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Actions
+        </Text>
+      </View>
+    </View>
+  );
+
+  const CompanyAdminTableHeader = () => (
+    <View style={styles.tableHeader}>
+      <View style={[styles.tableHeaderCell, { flex: 0.6 }]}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Admin ID
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Name
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Email
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Company
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Created Date
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Status
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Actions
+        </Text>
+      </View>
+    </View>
+  );
+
+  const EmployeeTableHeader = () => (
+    <View style={styles.tableHeader}>
+      <View style={[styles.tableHeaderCell, { flex: 0.6 }]}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Employee ID
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Name
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Email
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Company
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Job Title
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Status
+        </Text>
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Text variant="medium" style={styles.tableHeaderText}>
+          Actions
+        </Text>
+      </View>
+    </View>
+  );
+
+  // Add table row components
+  const SuperAdminTableRow = ({ item }: { item: Admin }) => (
+    <Pressable
+      onPress={() => {
+        navigation.navigate("SuperAdminDetailsScreen", {
+          adminId: item.id,
+          adminType: "super",
+        });
+      }}
+      style={({ pressed }: PressableStateCallbackType) => [
+        styles.tableRow,
+        pressed && { backgroundColor: "#f8fafc" },
+      ]}
+    >
+      <View style={[styles.tableCell, { flex: 0.6 }]}>
+        <TouchableOpacity
+          onPress={() => {
+            navigation.navigate("SuperAdminDetailsScreen", {
+              adminId: item.id,
+              adminType: "super",
+            });
+          }}
+        >
+          <Text style={styles.receiptIdLink}>
+            {item.admin_sequence_id || "-"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText text={item.name || "Unnamed Admin"} styles={styles} />
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText text={item.email} styles={styles} />
+      </View>
+      <View style={styles.tableCell}>
+        <Text style={styles.tableCellText}>Super Admin</Text>
+      </View>
+      <View style={styles.tableCell}>
+        <Text style={styles.tableCellText}>
+          {formatDate(item.created_at || "", { type: "long" })}
+        </Text>
+      </View>
+      <View style={styles.tableCell}>
+        <StatusBadge
+          status={
+            item.status === true || item.status === "active"
+              ? UserStatus.ACTIVE
+              : UserStatus.INACTIVE
+          }
+          size="small"
+        />
+      </View>
+      <View style={styles.actionCell}>
+        <IconButton
+          icon="pencil"
+          size={20}
+          onPress={(e) => {
+            e.stopPropagation();
+            navigation.navigate("EditSuperAdmin", { adminId: item.id });
+          }}
+          style={styles.actionIcon}
+        />
+        <IconButton
+          icon="eye"
+          size={20}
+          onPress={(e) => {
+            e.stopPropagation();
+            navigation.navigate("SuperAdminDetailsScreen", {
+              adminId: item.id,
+              adminType: "super",
+            });
+          }}
+          style={styles.actionIcon}
+        />
+      </View>
+    </Pressable>
+  );
+
+  const CompanyAdminTableRow = ({ item }: { item: CompanyUser }) => (
+    <Pressable
+      onPress={() => {
+        navigation.navigate("CompanyAdminDetailsScreen", {
+          adminId: item.id,
+          adminType: "company",
+        });
+      }}
+      style={({ pressed }: PressableStateCallbackType) => [
+        styles.tableRow,
+        pressed && { backgroundColor: "#f8fafc" },
+      ]}
+    >
+      <View style={[styles.tableCell, { flex: 0.6 }]}>
+        <Text style={styles.receiptIdLink}>
+          {item.company_user_sequence_id || "-"}
+        </Text>
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText
+          text={
+            `${item.first_name || ""} ${item.last_name || ""}`.trim() ||
+            "Unnamed Admin"
+          }
+          styles={styles}
+        />
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText text={item.email} styles={styles} />
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText
+          text={(item as any).company?.company_name || "Unknown Company"}
+          styles={styles}
+        />
+      </View>
+      <View style={styles.tableCell}>
+        <Text style={styles.tableCellText}>
+          {formatDate(item.created_at || "", { type: "long" })}
+        </Text>
+      </View>
+      <View style={styles.tableCell}>
+        <StatusBadge
+          status={
+            item.active_status === true || item.active_status === "active"
+              ? UserStatus.ACTIVE
+              : UserStatus.INACTIVE
+          }
+          size="small"
+        />
+      </View>
+      <View style={styles.actionCell}>
+        <IconButton
+          icon="pencil"
+          size={20}
+          onPress={(e) => {
+            e.stopPropagation();
+            navigation.navigate("EditCompanyAdmin", { adminId: item.id });
+          }}
+          style={styles.actionIcon}
+        />
+        <IconButton
+          icon="eye"
+          size={20}
+          onPress={(e) => {
+            e.stopPropagation();
+            navigation.navigate("CompanyAdminDetailsScreen", {
+              adminId: item.id,
+              adminType: "company",
+            });
+          }}
+          style={styles.actionIcon}
+        />
+      </View>
+    </Pressable>
+  );
+
+  const EmployeeTableRow = ({ item }: { item: CompanyUser }) => (
+    <Pressable
+      onPress={() => {
+        navigation.navigate("EmployeeDetails", {
+          employeeId: item.id,
+          companyId: item.company_id,
+        });
+      }}
+      style={({ pressed }: PressableStateCallbackType) => [
+        styles.tableRow,
+        pressed && { backgroundColor: "#f8fafc" },
+      ]}
+    >
+      <View style={[styles.tableCell, { flex: 0.6 }]}>
+        <Text style={styles.receiptIdLink}>
+          {item.company_user_sequence_id || "-"}
+        </Text>
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText
+          text={
+            `${item.first_name || ""} ${item.last_name || ""}`.trim() ||
+            "Unnamed Employee"
+          }
+          styles={styles}
+        />
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText text={item.email} styles={styles} />
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText
+          text={(item as any).company?.company_name || "Unknown Company"}
+          styles={styles}
+        />
+      </View>
+      <View style={styles.tableCell}>
+        <TooltipText text={item.job_title || "-"} styles={styles} />
+      </View>
+      <View style={styles.tableCell}>
+        <StatusBadge
+          status={
+            item.active_status === true || item.active_status === "active"
+              ? UserStatus.ACTIVE
+              : UserStatus.INACTIVE
+          }
+          size="small"
+        />
+      </View>
+      <View style={styles.actionCell}>
+        <IconButton
+          icon="eye"
+          size={20}
+          onPress={(e) => {
+            e.stopPropagation();
+            navigation.navigate("EmployeeDetails", {
+              employeeId: item.id,
+              companyId: item.company_id,
+            });
+          }}
+          style={styles.actionIcon}
+        />
+      </View>
+    </Pressable>
+  );
+  const windowWidth = Dimensions.get("window").width;
+  const isLargeScreen = windowWidth >= 1440;
+  const isMediumScreen = windowWidth >= 768 && windowWidth < 1440;
+  const useTableLayout = isLargeScreen || isMediumScreen;
+
   const renderCurrentList = () => {
     if (loading && !refreshing) {
-      return <LoadingIndicator />;
+      return (
+        <FlashList
+          estimatedItemSize={74}
+          data={Array(6)}
+          renderItem={() => (
+            <View style={styles.cardContainer}>
+              <Card style={[styles.card]} elevation={0}>
+                <Card.Content style={styles.cardContent}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.userInfo}>
+                      <Shimmer
+                        width={40}
+                        height={40}
+                        style={{ borderRadius: 20 }}
+                      />
+                      <View style={styles.userTextContainer}>
+                        <Shimmer
+                          width={150}
+                          height={20}
+                          style={{ marginBottom: 4 }}
+                        />
+                        <Shimmer width={120} height={16} />
+                      </View>
+                    </View>
+                    <View style={styles.statusContainer}>
+                      <Shimmer
+                        width={80}
+                        height={24}
+                        style={{ borderRadius: 12 }}
+                      />
+                    </View>
+                  </View>
+                </Card.Content>
+              </Card>
+            </View>
+          )}
+          keyExtractor={(_, index) => `skeleton-${index}`}
+          contentContainerStyle={styles.listContent}
+        />
+      );
     }
+
+    const totalPages = Math.ceil(totalItems / PAGE_SIZE);
+
+    const renderTotalCount = () => (
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            marginLeft: 12,
+            paddingTop: 16,
+          }}
+        >
+          <Text
+            style={{
+              fontSize: 14,
+              color: "#666",
+              fontFamily: "Poppins-Regular",
+            }}
+          >
+            Total{" "}
+            {selectedTab === UserListType.SUPER_ADMIN
+              ? "HDF Users"
+              : selectedTab === UserListType.COMPANY_ADMIN
+                ? "Company Admins"
+                : "Employees"}
+            :
+          </Text>
+          <Text
+            style={{
+              fontSize: 14,
+              color: theme.colors.primary,
+              fontFamily: "Poppins-Medium",
+              marginLeft: 4,
+            }}
+          >
+            {selectedTab === UserListType.SUPER_ADMIN
+              ? superAdminCount
+              : selectedTab === UserListType.COMPANY_ADMIN
+                ? companyAdminCount
+                : employeeCount}
+          </Text>
+        </View>
+        {totalPages > 1 && (
+          <View style={styles.paginationWrapper}>
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              onPageChange={handlePageChange}
+            />
+          </View>
+        )}
+      </View>
+    );
 
     switch (selectedTab) {
       case UserListType.SUPER_ADMIN:
@@ -774,15 +2587,46 @@ const SuperAdminUsersScreen = () => {
         }
         return (
           <>
-            <FlatList
-              data={filteredSuperAdmins}
-              renderItem={renderSuperAdminItem}
-              keyExtractor={(item) => `super-${item.id}`}
-              contentContainerStyle={styles.listContent}
-              refreshControl={
-                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-              }
-            />
+            {useTableLayout ? (
+              <>
+                <View style={styles.tableContainer}>
+                  <SuperAdminTableHeader />
+                  <FlashList
+                    estimatedItemSize={74}
+                    data={filteredSuperAdmins}
+                    renderItem={({ item }) => (
+                      <SuperAdminTableRow item={item} />
+                    )}
+                    keyExtractor={(item) => `super-${item.id}`}
+                    contentContainerStyle={styles.tableContent}
+                    refreshControl={
+                      <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                      />
+                    }
+                  />
+                </View>
+                {renderTotalCount()}
+              </>
+            ) : (
+              <>
+                <FlashList
+                  estimatedItemSize={74}
+                  data={filteredSuperAdmins}
+                  renderItem={renderSuperAdminItem}
+                  keyExtractor={(item) => `super-${item.id}`}
+                  contentContainerStyle={styles.listContent}
+                  refreshControl={
+                    <RefreshControl
+                      refreshing={refreshing}
+                      onRefresh={onRefresh}
+                    />
+                  }
+                />
+                {renderTotalCount()}
+              </>
+            )}
           </>
         );
 
@@ -792,15 +2636,46 @@ const SuperAdminUsersScreen = () => {
         }
         return (
           <>
-            <FlatList
-              data={filteredCompanyAdmins}
-              renderItem={renderCompanyAdminItem}
-              keyExtractor={(item) => `admin-${item.id}`}
-              contentContainerStyle={styles.listContent}
-              refreshControl={
-                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-              }
-            />
+            {useTableLayout ? (
+              <>
+                <View style={styles.tableContainer}>
+                  <CompanyAdminTableHeader />
+                  <FlashList
+                    estimatedItemSize={74}
+                    data={filteredCompanyAdmins}
+                    renderItem={({ item }) => (
+                      <CompanyAdminTableRow item={item} />
+                    )}
+                    keyExtractor={(item) => `admin-${item.id}`}
+                    contentContainerStyle={styles.tableContent}
+                    refreshControl={
+                      <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                      />
+                    }
+                  />
+                </View>
+                {renderTotalCount()}
+              </>
+            ) : (
+              <>
+                <FlashList
+                  estimatedItemSize={74}
+                  data={filteredCompanyAdmins}
+                  renderItem={renderCompanyAdminItem}
+                  keyExtractor={(item) => `admin-${item.id}`}
+                  contentContainerStyle={styles.listContent}
+                  refreshControl={
+                    <RefreshControl
+                      refreshing={refreshing}
+                      onRefresh={onRefresh}
+                    />
+                  }
+                />
+                {renderTotalCount()}
+              </>
+            )}
           </>
         );
 
@@ -810,15 +2685,44 @@ const SuperAdminUsersScreen = () => {
         }
         return (
           <>
-            <FlatList
-              data={filteredEmployees}
-              renderItem={renderEmployeeItem}
-              keyExtractor={(item) => `emp-${item.id}`}
-              contentContainerStyle={styles.listContent}
-              refreshControl={
-                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-              }
-            />
+            {useTableLayout ? (
+              <>
+                <View style={styles.tableContainer}>
+                  <EmployeeTableHeader />
+                  <FlashList
+                    estimatedItemSize={74}
+                    data={filteredEmployees}
+                    renderItem={({ item }) => <EmployeeTableRow item={item} />}
+                    keyExtractor={(item) => `emp-${item.id}`}
+                    contentContainerStyle={styles.tableContent}
+                    refreshControl={
+                      <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                      />
+                    }
+                  />
+                </View>
+                {renderTotalCount()}
+              </>
+            ) : (
+              <>
+                <FlashList
+                  estimatedItemSize={74}
+                  data={filteredEmployees}
+                  renderItem={renderEmployeeItem}
+                  keyExtractor={(item) => `emp-${item.id}`}
+                  contentContainerStyle={styles.listContent}
+                  refreshControl={
+                    <RefreshControl
+                      refreshing={refreshing}
+                      onRefresh={onRefresh}
+                    />
+                  }
+                />
+                {renderTotalCount()}
+              </>
+            )}
           </>
         );
 
@@ -829,110 +2733,39 @@ const SuperAdminUsersScreen = () => {
 
   // Filter modal component
   const renderFilterModal = () => {
-    // Create a ref for the company dropdown
-    const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
-    const dropdownRef = React.useRef(null);
-
-    const showMenu = () => {
-      if (dropdownRef.current) {
-        // @ts-ignore - Getting layout measurements
-        dropdownRef.current.measure((x, y, width, height, pageX, pageY) => {
-          setMenuPosition({ x: pageX, y: pageY + height });
-          setMenuVisible(true);
-        });
-      }
-    };
-
-    // Menu container style with theme
-    const menuContainerStyle = {
-      borderRadius: 12,
-      width: 300,
-      marginTop: 4,
-      elevation: 4,
-      backgroundColor: "#FFFFFF",
-      borderWidth: 1,
-      borderColor: "#E0E0E0",
-    };
-
-    // Get display text for selected companies
-    const getSelectedCompaniesText = () => {
-      if (selectedCompanyIds.length > 0) {
-        if (selectedCompanyIds.length === 1) {
-          const company = companies.find((c) => c.id === selectedCompanyIds[0]);
-          return company?.company_name || "1 Company";
-        }
-        return `${selectedCompanyIds.length} Companies`;
-      } else if (selectedCompanyId !== "all") {
-        const company = companies.find((c) => c.id === selectedCompanyId);
-        return company?.company_name || "Select Company";
-      }
-      return "All Companies";
-    };
+    const statusOptions = [
+      { label: "All Status", value: "" },
+      { label: "Active", value: "active" },
+      { label: "Inactive", value: "inactive" },
+      { label: "Deleted", value: "deleted" },
+    ];
 
     return (
-      <Portal>
-        <Modal
-          visible={filterModalVisible}
-          onDismiss={() => setFilterModalVisible(false)}
-          contentContainerStyle={styles.modalContainer}
-        >
-          <View style={styles.modalHeaderContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Filter Options</Text>
-              <IconButton
-                icon="close"
-                size={24}
-                onPress={() => setFilterModalVisible(false)}
-              />
-            </View>
+      <FilterModal
+        visible={filterModalVisible}
+        onDismiss={() => setFilterModalVisible(false)}
+        title="Filter Options"
+        onClear={handleClearFilters}
+        onApply={applyFiltersDirect}
+        isLargeScreen={isLargeScreen}
+        isMediumScreen={isMediumScreen}
+      >
+        <FilterSection title="Status">
+          <PillFilterGroup
+            options={statusOptions}
+            value={statusFilter}
+            onValueChange={(value: string) => {
+              setStatusFilter(value);
+              // No need to call applyFiltersDirect here as it will be handled by useEffect
+            }}
+          />
+        </FilterSection>
 
-            <Divider style={styles.modalDivider} />
-          </View>
-
-          <ScrollView style={styles.modalContent}>
-            {/* Date Sort Section - Available for all tabs */}
-            <View style={styles.modalSection}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Sort by creation date</Text>
-              </View>
-              <RadioButton.Group
-                onValueChange={(value) => setSortOrder(value)}
-                value={sortOrder}
-              >
-                <View style={styles.radioItem}>
-                  <RadioButton.Android
-                    value={DateSortOrder.NEWEST_FIRST}
-                    color={theme.colors.primary}
-                  />
-                  <Text style={styles.radioLabel}>Newest first</Text>
-                </View>
-                <View style={styles.radioItem}>
-                  <RadioButton.Android
-                    value={DateSortOrder.OLDEST_FIRST}
-                    color={theme.colors.primary}
-                  />
-                  <Text style={styles.radioLabel}>Oldest first</Text>
-                </View>
-              </RadioButton.Group>
-            </View>
-
-            {/* Company section - only for Company Admin and Employee tabs */}
-            {selectedTab !== UserListType.SUPER_ADMIN && (
-              <View style={styles.modalSection}>
-                <Divider style={[styles.modalDivider, { marginBottom: 10 }]} />
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Companies</Text>
-                  <View style={styles.selectionBadge}>
-                    <Text style={styles.selectionHint}>
-                      {selectedCompanyIds.length > 0
-                        ? `${selectedCompanyIds.length} selected`
-                        : selectedCompanyId !== "all"
-                          ? "1 selected"
-                          : "All"}
-                    </Text>
-                  </View>
-                </View>
-
+        {/* {selectedTab !== UserListType.SUPER_ADMIN && (
+          <>
+            <FilterDivider />
+            <FilterSection title="Companies">
+              <View style={styles.dropdownContainer}>
                 <TouchableOpacity
                   ref={dropdownRef}
                   style={[
@@ -982,167 +2815,10 @@ const SuperAdminUsersScreen = () => {
                   />
                 </TouchableOpacity>
               </View>
-            )}
-
-            {/* Selected Companies Section */}
-            {(selectedCompanyIds.length > 0 || selectedCompanyId !== "all") && (
-              <View style={styles.activeFilterSection}>
-                <View style={styles.activeFilterHeader}>
-                  <Text style={styles.activeFilterTitle}>
-                    Selected Companies
-                  </Text>
-                  <IconButton
-                    icon="delete"
-                    size={20}
-                    onPress={() => {
-                      // Clear company filters directly
-                      setSelectedCompanyIds([]);
-                      setSelectedCompanyId("all");
-                      // Don't dismiss modal yet - user can still apply
-                    }}
-                    iconColor={theme.colors.primary}
-                    style={styles.clearAllButton}
-                  />
-                </View>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.filtersScrollView}
-                >
-                  {selectedCompanyIds.length > 0 ? (
-                    companies
-                      .filter((company) =>
-                        selectedCompanyIds.includes(company.id)
-                      )
-                      .map((company) => (
-                        <Chip
-                          key={company.id}
-                          mode="outlined"
-                          onClose={() => toggleCompanySelection(company.id)}
-                          style={localStyles.activeFilterChip}
-                          textStyle={{ color: theme.colors.primary }}
-                        >
-                          {company.company_name}
-                        </Chip>
-                      ))
-                  ) : selectedCompanyId !== "all" ? (
-                    <Chip
-                      mode="outlined"
-                      onClose={() => setSelectedCompanyId("all")}
-                      style={localStyles.activeFilterChip}
-                      textStyle={{ color: theme.colors.primary }}
-                    >
-                      {companies.find((c) => c.id === selectedCompanyId)
-                        ?.company_name || "Company"}
-                    </Chip>
-                  ) : null}
-                </ScrollView>
-              </View>
-            )}
-          </ScrollView>
-
-          <View style={styles.modalFooter}>
-            <TouchableOpacity
-              style={styles.footerButton}
-              onPress={() => {
-                setSelectedCompanyIds([]);
-                setSelectedCompanyId("all");
-                setSortOrder(DateSortOrder.NEWEST_FIRST);
-                setFilterModalVisible(false);
-                // Use the direct fetch approach to refresh the list
-                // with cleared filters
-                applyFiltersDirect();
-                setMenuVisible(false);
-              }}
-            >
-              <Text style={styles.clearButtonText}>Clear Filters</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.footerButton,
-                styles.applyButton,
-                { backgroundColor: theme.colors.primary },
-              ]}
-              onPress={() => {
-                // Use our new direct filter approach that works on first click
-                applyFiltersDirect();
-              }}
-            >
-              <Text style={styles.applyButtonText}>Apply</Text>
-            </TouchableOpacity>
-          </View>
-        </Modal>
-
-        <Menu
-          visible={menuVisible}
-          onDismiss={() => setMenuVisible(false)}
-          anchor={menuPosition}
-          contentStyle={menuContainerStyle}
-        >
-          <View style={styles.menuHeader}>
-            <Text style={styles.menuTitle}>Select Companies</Text>
-            {selectedCompanyIds.length > 0 && (
-              <Text style={styles.menuSubtitle}>
-                {selectedCompanyIds.length} selected
-              </Text>
-            )}
-          </View>
-          <Divider />
-          <ScrollView style={{ maxHeight: 400 }}>
-            <Menu.Item
-              title="All Companies"
-              onPress={() => {
-                setSelectedCompanyIds([]);
-                setSelectedCompanyId("all");
-                setMenuVisible(false);
-                // Apply the changes immediately using our direct approach
-                applyFiltersDirect();
-              }}
-              style={styles.menuItemStyle}
-              titleStyle={[
-                styles.menuItemText,
-                selectedCompanyId === "all" &&
-                  selectedCompanyIds.length === 0 &&
-                  styles.menuItemSelected,
-              ]}
-              leadingIcon="earth"
-              trailingIcon={
-                selectedCompanyId === "all" && selectedCompanyIds.length === 0
-                  ? "check"
-                  : undefined
-              }
-            />
-            <Divider />
-            {companies.map((company) => (
-              <Menu.Item
-                key={company.id}
-                title={company.company_name}
-                onPress={() => {
-                  // For multi-select mode
-                  toggleCompanySelection(company.id);
-                  setMenuVisible(false);
-                  // Apply the changes immediately using our direct approach
-                  applyFiltersDirect();
-                }}
-                style={styles.menuItemStyle}
-                titleStyle={[
-                  styles.menuItemText,
-                  (selectedCompanyIds.includes(company.id) ||
-                    selectedCompanyId === company.id) &&
-                    styles.menuItemSelected,
-                ]}
-                leadingIcon="office-building"
-                trailingIcon={
-                  selectedCompanyIds.includes(company.id) ||
-                  selectedCompanyId === company.id
-                    ? "check"
-                    : undefined
-                }
-              />
-            ))}
-          </ScrollView>
-        </Menu>
-      </Portal>
+            </FilterSection>
+          </>
+        )} */}
+      </FilterModal>
     );
   };
 
@@ -1159,155 +2835,12 @@ const SuperAdminUsersScreen = () => {
     setSelectedCompanyId("all");
   };
 
-  // Apply filters directly, similar to the improved approach used in CompanyListScreen
-  const applyFiltersDirect = () => {
-    // Close modal first
-    setFilterModalVisible(false);
-
-    // Force complete reset and refresh with new filters
-    setLoading(true);
-
-    // This approach directly fetches data with current filter values
-    // without relying on state updates to propagate first
-    const fetchWithCurrentFilters = async () => {
-      try {
-        // Based on the current tab, fetch the appropriate data
-        if (selectedTab === UserListType.SUPER_ADMIN) {
-          // Super admins aren't filtered by company, but can be sorted by date
-          let query = supabase
-            .from("admin")
-            .select("*")
-            .eq("role", "superadmin")
-            .order("created_at", {
-              ascending: sortOrder === DateSortOrder.OLDEST_FIRST,
-            });
-
-          const { data, error } = await query;
-
-          if (error) {
-            console.error("Error fetching super admins:", error);
-            return;
-          }
-
-          setSuperAdmins(data || []);
-
-          // Apply search filter if present
-          if (searchQuery.trim() === "") {
-            setFilteredSuperAdmins(data || []);
-          } else {
-            const query = searchQuery.toLowerCase();
-            const filteredAdmins = (data || []).filter(
-              (admin) =>
-                admin.name?.toLowerCase().includes(query) ||
-                admin.email.toLowerCase().includes(query)
-            );
-            setFilteredSuperAdmins(filteredAdmins);
-          }
-        } else if (selectedTab === UserListType.COMPANY_ADMIN) {
-          // Fetch company admins with current filters
-          let query = supabase
-            .from("company_user")
-            .select("*, company:company_id(company_name)")
-            .eq("role", "admin")
-            .order("created_at", {
-              ascending: sortOrder === DateSortOrder.OLDEST_FIRST,
-            });
-
-          // Apply company filter using the current selection values
-          if (selectedCompanyIds.length > 0) {
-            query = query.in("company_id", selectedCompanyIds);
-          } else if (selectedCompanyId !== "all") {
-            query = query.eq("company_id", selectedCompanyId);
-          }
-
-          const { data, error } = await query;
-
-          if (error) {
-            console.error("Error fetching company admins:", error);
-            return;
-          }
-
-          setCompanyAdmins(data || []);
-
-          // Apply search filter if present
-          if (searchQuery.trim() === "") {
-            setFilteredCompanyAdmins(data || []);
-          } else {
-            const query = searchQuery.toLowerCase();
-            const filteredAdmins = (data || []).filter(
-              (admin) =>
-                admin.first_name?.toLowerCase().includes(query) ||
-                admin.last_name?.toLowerCase().includes(query) ||
-                admin.email.toLowerCase().includes(query) ||
-                (admin as any).company?.company_name
-                  ?.toLowerCase()
-                  .includes(query)
-            );
-            setFilteredCompanyAdmins(filteredAdmins);
-          }
-        } else if (selectedTab === UserListType.EMPLOYEE) {
-          // Fetch employees with current filters
-          let query = supabase
-            .from("company_user")
-            .select("*, company:company_id(company_name)")
-            .eq("role", "employee")
-            .order("created_at", {
-              ascending: sortOrder === DateSortOrder.OLDEST_FIRST,
-            })
-            .limit(100);
-
-          // Apply company filter using the current selection values
-          if (selectedCompanyIds.length > 0) {
-            query = query.in("company_id", selectedCompanyIds);
-          } else if (selectedCompanyId !== "all") {
-            query = query.eq("company_id", selectedCompanyId);
-          }
-
-          const { data, error } = await query;
-
-          if (error) {
-            console.error("Error fetching employees:", error);
-            return;
-          }
-
-          setEmployees(data || []);
-
-          // Apply search filter if present
-          if (searchQuery.trim() === "") {
-            setFilteredEmployees(data || []);
-          } else {
-            const query = searchQuery.toLowerCase();
-            const filteredEmps = (data || []).filter(
-              (emp) =>
-                emp.first_name?.toLowerCase().includes(query) ||
-                emp.last_name?.toLowerCase().includes(query) ||
-                emp.email.toLowerCase().includes(query) ||
-                emp.job_title?.toLowerCase().includes(query) ||
-                (emp as any).company?.company_name
-                  ?.toLowerCase()
-                  .includes(query)
-            );
-            setFilteredEmployees(filteredEmps);
-          }
-        }
-      } catch (error) {
-        console.error("Error applying filters:", error);
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    };
-
-    // Execute the fetch immediately
-    fetchWithCurrentFilters();
-  };
-
   // Check if any filters are active
   const hasActiveFilters = () => {
     return (
       selectedCompanyIds.length > 0 ||
       selectedCompanyId !== "all" ||
-      sortOrder !== DateSortOrder.NEWEST_FIRST
+      statusFilter !== ""
     );
   };
 
@@ -1661,25 +3194,63 @@ const SuperAdminUsersScreen = () => {
     );
   };
 
+  // Add these lines
+  const dropdownRef = useRef(null);
+  const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
+
+  // Add the showMenu function
+  const showMenu = () => {
+    if (dropdownRef.current) {
+      // @ts-ignore - Getting layout measurements
+      dropdownRef.current.measure((x, y, width, height, pageX, pageY) => {
+        setMenuPosition({ x: pageX, y: pageY + height });
+        setMenuVisible(true);
+      });
+    }
+  };
+
+  // Add the getSelectedCompaniesText function
+  const getSelectedCompaniesText = () => {
+    if (selectedCompanyIds.length > 0) {
+      if (selectedCompanyIds.length === 1) {
+        const company = companies.find((c) => c.id === selectedCompanyIds[0]);
+        return company?.company_name || "1 Company";
+      }
+      return `${selectedCompanyIds.length} Companies`;
+    } else if (selectedCompanyId !== "all") {
+      const company = companies.find((c) => c.id === selectedCompanyId);
+      return company?.company_name || "Select Company";
+    }
+    return "All Companies";
+  };
+
+  // Add page change handler
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+    setLoading(true);
+    // The fetch functions will be called via useEffect when page changes
+  };
+
   return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
+    <SafeAreaView style={[styles.container]}>
       <AppHeader
         title="All Users"
-        showBackButton={false}
+        showBackButton={true}
         showHelpButton={true}
         showLogo={false}
         subtitle="Manage all system users"
       />
-
       <View
         style={[
-          styles.mainContent,
-          { backgroundColor: theme.colors.backgroundSecondary },
+          styles.searchContainer,
+          {
+            maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
+            alignSelf: "center",
+            width: "100%",
+          },
         ]}
       >
-        <View style={styles.searchContainer}>
+        <View style={styles.searchBarContainer}>
           <Searchbar
             placeholder="Search users..."
             onChangeText={setSearchQuery}
@@ -1698,7 +3269,6 @@ const SuperAdminUsersScreen = () => {
             }
             icon="magnify"
           />
-          {/* Enable filter button for all tabs */}
           <View style={styles.filterButtonContainer}>
             <IconButton
               icon="filter-variant"
@@ -1714,727 +3284,226 @@ const SuperAdminUsersScreen = () => {
           </View>
         </View>
 
-        {searchQuery && searchQuery.length > 0 && searchQuery.length < 3 && (
-          <View style={styles.searchTips}>
-            <Text style={styles.searchTipsText}>
-              Type at least 3 characters for better search results.
-            </Text>
-          </View>
-        )}
+        <FAB
+          icon="plus"
+          style={[
+            styles.fab,
+            {
+              backgroundColor: theme.colors.primary,
+              position: "relative",
+              margin: 0,
+              marginLeft: 16,
+              elevation: 0,
+              shadowColor: "transparent",
+            },
+          ]}
+          onPress={() => {
+            if (selectedTab === UserListType.SUPER_ADMIN) {
+              navigation.navigate("CreateSuperAdmin");
+            } else if (selectedTab === UserListType.COMPANY_ADMIN) {
+              navigation.navigate("CreateCompanyAdmin");
+            } else {
+              navigation.navigate("CreateEmployee");
+            }
+          }}
+          color={theme.colors.surface}
+        />
+      </View>
 
-        {renderEnhancedDropdown()}
+      {searchQuery && searchQuery.length > 0 && searchQuery.length < 3 && (
+        <View style={styles.searchTips}>
+          <Text style={styles.searchTipsText}>
+            Type at least 3 characters for better search results.
+          </Text>
+        </View>
+      )}
 
-        {renderUserTypeMenu()}
-
+      <View
+        style={[
+          styles.contentContainer,
+          {
+            maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
+            alignSelf: "center",
+            width: "100%",
+            flex: 1,
+          },
+        ]}
+      >
         {renderActiveFilterIndicator()}
-        {renderFilterModal()}
-
-        {searchQuery && searchQuery.length > 0 && (
-          <View style={styles.searchResultsContainer}>
-            <Text style={styles.searchResultsText}>
-              Found:{" "}
-              {selectedTab === UserListType.SUPER_ADMIN
-                ? `${filteredSuperAdmins.length} super admins`
-                : selectedTab === UserListType.COMPANY_ADMIN
-                  ? `${filteredCompanyAdmins.length} company admins`
-                  : `${filteredEmployees.length} employees`}
-            </Text>
+        <View style={styles.tabsContainer}>
+          <View style={styles.tabsWrapper}>
+            <TouchableOpacity
+              style={[
+                styles.tab,
+                selectedTab === UserListType.SUPER_ADMIN && {
+                  borderColor: theme.colors.primary,
+                  borderWidth: 0.5,
+                },
+              ]}
+              onPress={() => {
+                setSelectedTab(UserListType.SUPER_ADMIN);
+                setSelectedCompanyIds([]);
+                setSelectedCompanyId("all");
+                if (searchQuery) setSearchQuery("");
+              }}
+            >
+              <Text
+                style={[
+                  styles.tabText,
+                  selectedTab === UserListType.SUPER_ADMIN && {
+                    color: theme.colors.primary,
+                  },
+                ]}
+              >
+                HDF Users
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.tab,
+                selectedTab === UserListType.COMPANY_ADMIN && {
+                  borderColor: theme.colors.primary,
+                  borderWidth: 0.5,
+                },
+              ]}
+              onPress={() => {
+                setSelectedTab(UserListType.COMPANY_ADMIN);
+                if (searchQuery) setSearchQuery("");
+              }}
+            >
+              <Text
+                style={[
+                  styles.tabText,
+                  selectedTab === UserListType.COMPANY_ADMIN && {
+                    color: theme.colors.primary,
+                  },
+                ]}
+              >
+                Company Users
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.tab,
+                selectedTab === UserListType.EMPLOYEE && {
+                  borderColor: theme.colors.primary,
+                  borderWidth: 0.5,
+                },
+              ]}
+              onPress={() => {
+                setSelectedTab(UserListType.EMPLOYEE);
+                if (searchQuery) setSearchQuery("");
+              }}
+            >
+              <Text
+                style={[
+                  styles.tabText,
+                  selectedTab === UserListType.EMPLOYEE && {
+                    color: theme.colors.primary,
+                  },
+                ]}
+              >
+                Company Employees
+              </Text>
+            </TouchableOpacity>
           </View>
-        )}
-
+        </View>
         <View style={styles.listContainer}>{renderCurrentList()}</View>
       </View>
 
-      <FAB
-        icon="plus"
-        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
-        onPress={() => {
-          if (selectedTab === UserListType.SUPER_ADMIN) {
-            navigation.navigate("CreateSuperAdmin");
-          } else if (selectedTab === UserListType.COMPANY_ADMIN) {
-            navigation.navigate("CreateCompanyAdmin");
-          } else {
-            // Show company list to add employees
-            navigation.navigate("CreateEmployee");
-          }
+      {renderUserTypeMenu()}
+
+      {renderFilterModal()}
+
+      {searchQuery && searchQuery.length > 0 && (
+        <View style={styles.searchResultsContainer}>
+          <Text style={styles.searchResultsText}>
+            Found:{" "}
+            {selectedTab === UserListType.SUPER_ADMIN
+              ? `${filteredSuperAdmins.length} super admins`
+              : selectedTab === UserListType.COMPANY_ADMIN
+                ? `${filteredCompanyAdmins.length} company admins`
+                : `${filteredEmployees.length} employees`}
+          </Text>
+        </View>
+      )}
+
+      <Menu
+        visible={menuVisible}
+        onDismiss={() => setMenuVisible(false)}
+        anchor={menuPosition}
+        contentStyle={{
+          borderRadius: 12,
+          width: 300,
+          marginTop: 4,
+          elevation: 4,
+          backgroundColor: "#FFFFFF",
+          borderWidth: 1,
+          borderColor: "#E0E0E0",
         }}
-        color={theme.colors.surface}
-      />
+      >
+        <View style={styles.menuHeader}>
+          <Text style={styles.menuTitle}>Select Companies</Text>
+          {selectedCompanyIds.length > 0 && (
+            <Text style={styles.menuSubtitle}>
+              {selectedCompanyIds.length} selected
+            </Text>
+          )}
+        </View>
+        <Divider />
+        <ScrollView style={{ maxHeight: 400 }}>
+          <Menu.Item
+            title="All Companies"
+            onPress={() => {
+              setSelectedCompanyIds([]);
+              setSelectedCompanyId("all");
+              setMenuVisible(false);
+              applyFiltersDirect();
+            }}
+            style={styles.menuItemStyle}
+            titleStyle={[
+              styles.menuItemText,
+              selectedCompanyId === "all" &&
+                selectedCompanyIds.length === 0 &&
+                styles.menuItemSelected,
+            ]}
+            leadingIcon="earth"
+            trailingIcon={
+              selectedCompanyId === "all" && selectedCompanyIds.length === 0
+                ? "check"
+                : undefined
+            }
+          />
+          <Divider />
+          {companies.map((company) => (
+            <Menu.Item
+              key={company.id}
+              title={company.company_name}
+              onPress={() => {
+                toggleCompanySelection(company.id);
+                setMenuVisible(false);
+                applyFiltersDirect();
+              }}
+              style={styles.menuItemStyle}
+              titleStyle={[
+                styles.menuItemText,
+                (selectedCompanyIds.includes(company.id) ||
+                  selectedCompanyId === company.id) &&
+                  styles.menuItemSelected,
+              ]}
+              leadingIcon="office-building"
+              trailingIcon={
+                selectedCompanyIds.includes(company.id) ||
+                selectedCompanyId === company.id
+                  ? "check"
+                  : undefined
+              }
+            />
+          ))}
+        </ScrollView>
+      </Menu>
     </SafeAreaView>
   );
 };
-
-// Global styles outside component
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F5F7F9",
-  },
-  mainContent: {
-    flex: 1,
-    paddingHorizontal: 16,
-    // marginBottom: 76,
-  },
-  contentContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-  },
-  filterCard: {
-    marginBottom: 12,
-    borderRadius: 12,
-    elevation: 2,
-    overflow: "hidden",
-    borderColor: "#E0E0E0",
-    borderWidth: 1,
-  },
-  filterHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  filterLabel: {
-    fontSize: 14,
-    marginBottom: 0,
-    fontWeight: "bold",
-  },
-  filterRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  companyFilterContainer: {
-    flex: 1,
-    marginRight: 8,
-  },
-  searchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    height: 60,
-    marginTop: 8,
-    marginBottom: 8,
-  },
-  searchbar: {
-    flex: 1,
-    elevation: 1,
-    borderRadius: 18,
-    height: 60,
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    fontSize: 16,
-  },
-  filterButtonContainer: {
-    position: "relative",
-    marginLeft: 8,
-  },
-  filterButton: {
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    borderRadius: 8,
-    backgroundColor: "#fff",
-  },
-  inputContainer: {
-    height: 40,
-    paddingHorizontal: 8,
-  },
-  tabCount: {
-    fontSize: 12,
-    color: "#1a73e8",
-    fontFamily: "Poppins-Medium",
-  },
-  card: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#F0F0F0",
-    elevation: 0,
-    backgroundColor: "#FFFFFF",
-    marginBottom: 0,
-    marginHorizontal: 0,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-  },
-  cardContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  cardContainer: {
-    marginBottom: 12,
-    marginHorizontal: 2,
-  },
-  userInfo: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    flex: 1,
-  },
-  userTextContainer: {
-    marginLeft: 16,
-    flex: 1,
-  },
-  userName: {
-    fontSize: 16,
-    fontFamily: "Poppins-SemiBold",
-    marginBottom: 4,
-    color: "#212121",
-  },
-  userEmail: {
-    fontSize: 14,
-    color: "#757575",
-    fontFamily: "Poppins-Regular",
-    marginBottom: 8,
-  },
-  userRole: {
-    fontSize: 12,
-    color: "#1a73e8",
-    fontFamily: "Poppins-Medium",
-    marginTop: 2,
-  },
-  userCompany: {
-    fontSize: 12,
-    color: "#616161",
-    fontFamily: "Poppins-Medium",
-    marginTop: 2,
-  },
-  jobTitle: {
-    fontSize: 12,
-    color: "#616161",
-    fontFamily: "Poppins-Regular",
-    marginTop: 2,
-  },
-  employeeDetails: {
-    marginTop: 2,
-  },
-  listContent: {
-    paddingVertical: 8,
-    paddingHorizontal: 2,
-  },
-  listContainer: {
-    flex: 1,
-    marginTop: 4,
-    marginBottom: 76,
-  },
-  listHeaderContainer: {
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginBottom: 10,
-    borderRadius: 12,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: "#F0F0F0",
-    marginHorizontal: 2,
-  },
-  listHeaderTitle: {
-    fontSize: 18,
-    fontFamily: "Poppins-Medium",
-    color: "#212121",
-  },
-  listHeaderCount: {
-    color: "#1a73e8",
-    fontSize: 16,
-    fontFamily: "Poppins-Regular",
-  },
-  activeFilterButton: {
-    backgroundColor: "#E8F0FE",
-    borderWidth: 1,
-    borderColor: "#1a73e8",
-  },
-  clearFilterButtonLabel: {
-    fontSize: 12,
-    color: "#1a73e8",
-  },
-  dropdownContainer: {
-    marginBottom: 8,
-  },
-  dropdownButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
-    borderRadius: 12,
-    paddingLeft: 4,
-    paddingRight: 8,
-    paddingVertical: 6,
-    backgroundColor: "#FFFFFF",
-  },
-  dropdownContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  dropdownLeadingIcon: {
-    margin: 0,
-    padding: 0,
-  },
-  dropdownButtonText: {
-    fontFamily: "Poppins-Regular",
-    color: "#424242",
-    flex: 1,
-    fontSize: 14,
-  },
-  dropdownIcon: {
-    margin: 0,
-    padding: 0,
-  },
-  modalContainer: {
-    backgroundColor: "white",
-    borderRadius: 16,
-    margin: 16,
-    overflow: "hidden",
-    maxHeight: "80%",
-    elevation: 5,
-  },
-  modalHeaderContainer: {
-    backgroundColor: "white",
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    zIndex: 1,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontFamily: "Poppins-SemiBold",
-    color: "#212121",
-  },
-  modalContent: {
-    padding: 16,
-  },
-  modalFooter: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: "#E0E0E0",
-    backgroundColor: "#FFFFFF",
-  },
-  modalButton: {
-    marginLeft: 12,
-    borderRadius: 8,
-  },
-  modalDivider: {
-    height: 1,
-    backgroundColor: "#E0E0E0",
-  },
-  modalSection: {
-    marginBottom: 14,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  selectionBadge: {
-    backgroundColor: "#F5F5F5",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 16,
-  },
-  selectionHint: {
-    fontSize: 12,
-    color: "#616161",
-    fontFamily: "Poppins-Medium",
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontFamily: "Poppins-SemiBold",
-    color: "#212121",
-    marginBottom: 0,
-  },
-  activeDropdownButton: {
-    borderColor: "#1a73e8",
-    backgroundColor: "#F0F7FF",
-  },
-  activeFilterSection: {
-    marginBottom: 16,
-    backgroundColor: "#F5F5F5",
-    borderRadius: 12,
-    padding: 12,
-  },
-  activeFilterHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  activeFilterTitle: {
-    fontSize: 14,
-    fontFamily: "Poppins-Medium",
-    color: "#424242",
-  },
-  activeFilterContainer: {
-    flexDirection: "column",
-    marginTop: 8,
-  },
-  activeFiltersContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
-    marginBottom: 12,
-    paddingHorizontal: 4,
-  },
-  activeFiltersText: {
-    fontSize: 14,
-    fontFamily: "Poppins-Regular",
-    color: "#616161",
-    marginRight: 8,
-  },
-  filtersScrollView: {
-    flexGrow: 0,
-    marginVertical: 4,
-  },
-  clearAllButton: {
-    marginVertical: 0,
-    height: 30,
-    justifyContent: "center",
-    paddingBottom: 5,
-  },
-  menuHeader: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: "#F5F5F5",
-  },
-  menuTitle: {
-    fontSize: 14,
-    fontFamily: "Poppins-Medium",
-    color: "#212121",
-  },
-  menuSubtitle: {
-    fontSize: 12,
-    fontFamily: "Poppins-Regular",
-    color: "#616161",
-    marginTop: 2,
-  },
-  menuContainer: {
-    borderRadius: 8,
-    width: 280,
-    marginTop: 4,
-    elevation: 3,
-  },
-  menuItemStyle: {
-    height: 48,
-    justifyContent: "center",
-    borderBottomWidth: 1,
-    borderColor: "#E0E0E0",
-  },
-  menuItemText: {
-    fontFamily: "Poppins-Regular",
-    fontSize: 14,
-    color: "#424242",
-  },
-  menuItemSelected: {
-    color: "#1a73e8",
-    fontFamily: "Poppins-Medium",
-    paddingRight: 12,
-  },
-  resultSummary: {
-    alignItems: "center",
-    padding: 8,
-    backgroundColor: "#e8f4fd",
-    borderRadius: 8,
-    marginTop: 12,
-  },
-  resultSummaryText: {
-    color: "#0066cc",
-    fontWeight: "500",
-    fontSize: 14,
-  },
-  resultsText: {
-    textAlign: "center",
-    fontSize: 14,
-    opacity: 0.7,
-  },
-  fab: {
-    position: "absolute",
-    margin: 16,
-    right: 0,
-    bottom: Platform.OS === "web" ? 0 : 80,
-    borderRadius: 28,
-  },
-  avatarContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    overflow: "hidden",
-  },
-  avatarGradient: {
-    width: "100%",
-    height: "100%",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingTop: 3,
-  },
-  avatarText: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontFamily: "Poppins-Bold",
-  },
-  filterBadge: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#ff5252",
-    position: "absolute",
-    top: 8,
-    right: 8,
-    zIndex: 2,
-  },
-  statusContainer: {
-    flexDirection: "column",
-    alignItems: "flex-end",
-    justifyContent: "flex-start",
-  },
-  menuButton: {
-    margin: 0,
-    marginTop: -5,
-  },
-  superAdminAvatar: {
-    backgroundColor: "rgba(54,105,157,0.9)",
-  },
-  companyAdminAvatar: {
-    backgroundColor: "rgba(140,82,255,0.9)",
-  },
-  employeeAvatar: {
-    backgroundColor: "rgba(76,175,80,0.9)",
-  },
-  badgeContainer: {
-    flexDirection: "column",
-    marginTop: 2,
-  },
-  roleBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#1a73e8",
-    borderRadius: 16,
-    paddingRight: 8,
-    marginBottom: 4,
-    alignSelf: "flex-start",
-  },
-  employeeRoleBadge: {
-    backgroundColor: "#4CAF50",
-  },
-  roleIcon: {
-    margin: 0,
-    padding: 0,
-  },
-  roleBadgeText: {
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontFamily: "Poppins-Medium",
-  },
-  companyBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F5F5F5",
-    borderRadius: 16,
-    paddingRight: 8,
-    marginBottom: 4,
-    alignSelf: "flex-start",
-  },
-  companyIcon: {
-    margin: 0,
-    padding: 0,
-  },
-  companyBadgeText: {
-    color: "#616161",
-    fontSize: 12,
-    fontFamily: "Poppins-Regular",
-  },
-  jobTitleBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F5F5F5",
-    borderRadius: 16,
-    paddingRight: 8,
-    alignSelf: "flex-start",
-  },
-  jobTitleIcon: {
-    margin: 0,
-    padding: 0,
-  },
-  jobTitleBadgeText: {
-    color: "#616161",
-    fontSize: 12,
-    fontFamily: "Poppins-Regular",
-  },
-  footerButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    marginLeft: 12,
-  },
-  clearButtonText: {
-    fontSize: 14,
-    fontFamily: "Poppins-Medium",
-    color: "#616161",
-  },
-  applyButton: {
-    elevation: 2,
-  },
-  applyButtonText: {
-    fontSize: 14,
-    fontFamily: "Poppins-Medium",
-    color: "#FFFFFF",
-  },
-  radioItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: 4,
-  },
-  radioLabel: {
-    fontSize: 16,
-    marginLeft: 8,
-    fontFamily: "Poppins-Regular",
-    color: "#424242",
-  },
-  searchTips: {
-    backgroundColor: "#e8f4fd",
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  searchTipsText: {
-    color: "#0066cc",
-    fontWeight: "500",
-    fontSize: 14,
-  },
-  searchResultsContainer: {
-    backgroundColor: "#e8f4fd",
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  searchResultsText: {
-    color: "#0066cc",
-    fontWeight: "500",
-    fontSize: 14,
-  },
-  userTypeDropdownContainer: {
-    marginBottom: 10,
-    zIndex: 10,
-  },
-  userTypeDropdown: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderWidth: 1.5,
-    borderColor: "#E0E0E0",
-    borderRadius: 15,
-    paddingVertical: 6,
-    paddingLeft: 6,
-    paddingRight: 8,
-    backgroundColor: "#FFFFFF",
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    paddingHorizontal: 10,
-  },
-  userTypeDropdownContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  iconContainer: {
-    borderRadius: 12,
-    marginRight: 4,
-    padding: 2,
-  },
-  userTypeDropdownText: {
-    fontFamily: "Poppins-Medium",
-    color: "#424242",
-    flex: 1,
-    fontSize: 16,
-    marginLeft: 4,
-  },
-  menuBackdrop: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0, 0, 0, 0.01)",
-  },
-  enhancedMenuContainer: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 15,
-    paddingVertical: 8,
-    elevation: 6,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    overflow: "hidden",
-    width: "100%",
-    maxWidth: 350,
-  },
-  userTypeMenuHeader: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
-  },
-  userTypeMenuTitle: {
-    fontSize: 16,
-    fontFamily: "Poppins-Medium",
-    color: "#333333",
-  },
-  enhancedMenuItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
-  },
-  selectedMenuItem: {
-    backgroundColor: "#F8F8F8",
-  },
-  menuIconContainer: {
-    borderRadius: 12,
-    padding: 2,
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  menuIcon: {
-    margin: 0,
-    padding: 0,
-  },
-  menuItemContent: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  menuItemTitleText: {
-    fontSize: 16,
-    fontFamily: "Poppins-Medium",
-    color: "#333333",
-    marginBottom: 2,
-  },
-  menuItemDescription: {
-    fontSize: 12,
-    fontFamily: "Poppins-Regular",
-    color: "#757575",
-  },
-  checkIconContainer: {
-    marginLeft: 8,
-  },
-});
 
 export default SuperAdminUsersScreen;

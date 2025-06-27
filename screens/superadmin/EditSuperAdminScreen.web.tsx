@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
@@ -259,7 +260,7 @@ const EditSuperAdminScreen = () => {
 
       // Define the async function to fetch admin data
       const fetchAdminData = async () => {
-        console.log(`Fetching admin data for ID: ${adminId}`);
+        logDebug(`Fetching admin data for ID: ${adminId}`);
         const { data, error } = await supabase
           .from("admin")
           .select("*")

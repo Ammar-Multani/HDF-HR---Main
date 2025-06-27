@@ -6,8 +6,9 @@ import {
   Platform,
   ScrollView,
   ImageBackground,
+  Dimensions,
 } from "react-native";
-import { useTheme, Surface, Divider } from "react-native-paper";
+import { useTheme, Surface } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -15,6 +16,14 @@ import AppHeader from "../../components/AppHeader";
 import Text from "../../components/Text";
 import { useTranslation } from "react-i18next";
 import { LinearGradient } from "expo-linear-gradient";
+
+// Get screen dimensions
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const CARD_MARGIN = 10;
+const CARD_WIDTH =
+  Platform.OS === "web"
+    ? Math.min(450, (SCREEN_WIDTH - CARD_MARGIN * 4) / 2) // 2 columns on web
+    : SCREEN_WIDTH - CARD_MARGIN * 2; // 1 column on mobile
 
 // Define the type for utility card items
 interface UtilityCard {
@@ -71,6 +80,17 @@ const SuperAdminUtilitiesScreen = () => {
       screen: "ReceiptsListScreen",
       badge: "Scanner",
     },
+    {
+      id: "users",
+      title: "Users",
+      description:
+        "Manage and oversee all user accounts, roles and permissions across companies",
+      icon: "account-group",
+      color: "#9C27B0",
+      gradientColors: ["#9C27B0", "#BA68C8"] as const,
+      screen: "UsersList",
+      badge: "Analytics",
+    },
     // {
     //   id: "reports",
     //   title: "Analytics Dashboard",
@@ -98,16 +118,27 @@ const SuperAdminUtilitiesScreen = () => {
     return (
       <Surface
         key={card.id}
-        style={[styles.card, { backgroundColor: "#FFFFFF", borderWidth: 0.5, borderColor: "#e0e0e0", elevation: 0.3 }]}
+        style={[
+          styles.card,
+          {
+            backgroundColor: "#FFFFFF",
+            borderWidth: 0.5,
+            borderColor: "#e0e0e0",
+            width: CARD_WIDTH,
+            margin: CARD_MARGIN / 2,
+          },
+        ]}
         elevation={0}
       >
         <TouchableOpacity
           style={styles.cardTouchable}
           onPress={() => {
-            // Navigate to the selected screen when the card is pressed
             if (card.id === "receipt") {
               //@ts-ignore
               navigation.navigate("ReceiptsListScreen");
+            } else if (card.id === "users") {
+              //@ts-ignore
+              navigation.navigate("UsersList");
             } else {
               //@ts-ignore
               navigation.navigate(card.screen);
@@ -115,7 +146,14 @@ const SuperAdminUtilitiesScreen = () => {
           }}
         >
           <View style={styles.badgeContainer}>
-            <Text style={styles.badgeText}>{card.badge}</Text>
+            <LinearGradient
+              colors={["rgba(255,255,255,0.9)", "rgba(255,255,255,0.7)"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.badgeGradient}
+            >
+              <Text style={styles.badgeText}>{card.badge}</Text>
+            </LinearGradient>
           </View>
 
           <View style={styles.cardMainContent}>
@@ -136,7 +174,9 @@ const SuperAdminUtilitiesScreen = () => {
               <Text variant="bold" style={styles.cardTitle}>
                 {card.title}
               </Text>
-              <Text style={styles.cardDescription}>{card.description}</Text>
+              <Text style={styles.cardDescription} numberOfLines={2}>
+                {card.description}
+              </Text>
             </View>
           </View>
 
@@ -155,8 +195,8 @@ const SuperAdminUtilitiesScreen = () => {
 
   return (
     <SafeAreaView
-    style={[styles.container, { backgroundColor: theme.colors.background }]}
-  >
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
       <AppHeader
         title={t("superAdmin.utilities.title") || "Utilities"}
         subtitle="Manage and access essential system tools"
@@ -167,23 +207,19 @@ const SuperAdminUtilitiesScreen = () => {
         showTitle={true}
       />
 
-      <ScrollView
-        style={[styles.scrollView, { backgroundColor: theme.colors.backgroundSecondary }]}
-        contentContainerStyle={styles.content}
-      >
-        {/* <View style={styles.headerSection}>
-          <Text variant="bold" style={styles.pageTitle}>
-            {t("superAdmin.utilities.selectOption") || "System Utilities"}
-          </Text>
-          <Text style={styles.pageSubtitle}>
-            Manage and access essential system tools
-          </Text>
-        </View> */}
-
-        <View style={styles.cardsContainer}>
-          {utilityCards.map((card, index) => renderUtilityCard(card, index))}
-        </View>
-      </ScrollView>
+      <View style={styles.mainContainer}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          bounces={true}
+          overScrollMode="always"
+        >
+          <View style={styles.cardsContainer}>
+            {utilityCards.map((card, index) => renderUtilityCard(card, index))}
+          </View>
+        </ScrollView>
+      </View>
     </SafeAreaView>
   );
 };
@@ -193,42 +229,50 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F8F9FA",
   },
+  mainContainer: {
+    flex: 1,
+    width: "100%",
+  },
   scrollView: {
     flex: 1,
+    width: "100%",
+    backgroundColor: "#F8F9FA",
   },
   content: {
-    padding: 16,
-    paddingTop: 8,
-  },
-  headerSection: {
-    marginBottom: 2,
-    marginLeft: 8,
-  },
-  pageTitle: {
-    fontSize: 17,
-    color: "#E91E63",
-    marginBottom: 0,
-  },
-  pageSubtitle: {
-    fontSize: 16,
-    color: "#757575",
-    marginBottom: 10,
+    padding: CARD_MARGIN / 2,
+    paddingTop: CARD_MARGIN,
+    minHeight: "100%",
   },
   cardsContainer: {
-    marginBottom: 24,
-    flexDirection: "column",
+    flexDirection: Platform.OS === "web" ? "row" : "column",
+    flexWrap: "wrap",
+    justifyContent: "flex-start",
+    alignItems: "center",
     width: "100%",
-    justifyContent: "space-between",
-    marginTop: 10,
   },
   card: {
     borderRadius: 16,
-    marginBottom: 16,
-    width: "100%",
     height: 150,
     overflow: "hidden",
-    borderWidth: Platform.OS === "ios" ? 0 : 1,
-    borderColor: "#EEEEEE",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.05)",
+    backgroundColor: "#FFFFFF",
+    width: CARD_WIDTH,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+      },
+      android: {},
+      web: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+      },
+    }),
   },
   cardTouchable: {
     padding: 20,
@@ -242,11 +286,14 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 15,
     right: 15,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
-    backgroundColor: "#F1F3F4",
     zIndex: 1,
+  },
+  badgeGradient: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(19, 19, 19, 0.13)",
   },
   badgeText: {
     fontSize: 11,
@@ -278,7 +325,7 @@ const styles = StyleSheet.create({
   cardDescription: {
     fontSize: 14,
     color: "#757575",
-    lineHeight: 22,
+    lineHeight: 20,
   },
   cardFooter: {
     position: "absolute",
@@ -287,6 +334,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "flex-start",
     alignItems: "center",
+    marginTop: 16,
   },
   viewText: {
     fontSize: 13,

@@ -5,10 +5,10 @@ import React, {
   useRef,
   useMemo,
 } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
-  FlatList,
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
@@ -70,6 +70,7 @@ import {
   PillFilterGroup,
 } from "../../components/FilterSections";
 import Pagination from "../../components/Pagination";
+import { FlashList } from "@shopify/flash-list";
 
 // Update the Company interface to extend the imported one
 interface ExtendedCompany extends Company {
@@ -355,7 +356,6 @@ const TableSkeleton = () => (
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
   },
   mainContent: {
     flex: 1,
@@ -581,7 +581,8 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins-Regular",
   },
   tableContent: {
-    flexGrow: 1,
+    paddingTop: 8,
+    paddingBottom: 50,
   },
   actionCell: {
     flex: 1,
@@ -996,7 +997,7 @@ const CompanyListScreen = () => {
 
   const fetchCompanies = async (refresh = false) => {
     try {
-      console.log("Fetching companies...", {
+      logDebug("Fetching companies...", {
         refresh,
         page,
         searchQuery,
@@ -1012,7 +1013,7 @@ const CompanyListScreen = () => {
       const from = page * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      console.log("Query params:", { from, to });
+      logDebug("Query params:", { from, to });
 
       const fetchData = async () => {
         let query = supabase
@@ -1053,7 +1054,7 @@ const CompanyListScreen = () => {
       };
 
       const result = await fetchData();
-      console.log("Query result:", {
+      logDebug("Query result:", {
         data: result.data,
         count: result.count,
         error: result.error,
@@ -1070,7 +1071,7 @@ const CompanyListScreen = () => {
 
       // Cast the data to ExtendedCompany[] type
       const typedData = (data || []) as ExtendedCompany[];
-      console.log("Setting companies:", { length: typedData.length });
+      logDebug("Setting companies:", { length: typedData.length });
       setCompanies(typedData);
       setFilteredCompanies(typedData);
 
@@ -1098,7 +1099,7 @@ const CompanyListScreen = () => {
 
   // Update renderContent to include pagination
   const renderContent = () => {
-    console.log("Rendering content:", {
+    logDebug("Rendering content:", {
       companiesLength: companies.length,
       filteredCompaniesLength: filteredCompanies.length,
       loading,
@@ -1108,12 +1109,13 @@ const CompanyListScreen = () => {
 
     // Show skeleton loaders when initially loading
     if (loading && filteredCompanies.length === 0) {
-      console.log("Showing skeleton loader");
+      logDebug("Showing skeleton loader");
       if (isMediumScreen || isLargeScreen) {
         return <TableSkeleton />;
       }
       return (
-        <FlatList
+        <FlashList
+          estimatedItemSize={74}
           data={Array(3).fill(0)}
           renderItem={() => <CompanyItemSkeleton />}
           keyExtractor={(_, index) => `skeleton-${index}`}
@@ -1124,7 +1126,7 @@ const CompanyListScreen = () => {
 
     // Show empty state when no results and not loading
     if (filteredCompanies.length === 0 && !loading && !refreshing) {
-      console.log("Showing empty state");
+      logDebug("Showing empty state");
       return (
         <EmptyState
           icon="domain-off"
@@ -1154,13 +1156,14 @@ const CompanyListScreen = () => {
     }
 
     // Show the actual data
-    console.log("Showing data table/list");
+    logDebug("Showing data table/list");
     if (isMediumScreen || isLargeScreen) {
       return (
         <>
           <View style={styles.tableContainer}>
             <TableHeader />
-            <FlatList
+            <FlashList
+              estimatedItemSize={74}
               data={filteredCompanies}
               renderItem={({ item }) => <TableRow item={item} />}
               keyExtractor={(item) => item.id}
@@ -1175,6 +1178,8 @@ const CompanyListScreen = () => {
               flexDirection: "row",
               alignItems: "center",
               justifyContent: "space-between",
+              marginTop: 12,
+              minHeight: 33,
             }}
           >
             <View
@@ -1220,7 +1225,8 @@ const CompanyListScreen = () => {
 
     return (
       <>
-        <FlatList
+        <FlashList
+          estimatedItemSize={74}
           data={filteredCompanies}
           renderItem={renderCompanyItem}
           keyExtractor={(item) => item.id}
@@ -1620,7 +1626,12 @@ const CompanyListScreen = () => {
   }, [searchQuery, networkStatus]);
 
   return (
-    <SafeAreaView style={[styles.container]}>
+    <SafeAreaView
+      style={[
+        styles.container,
+        { backgroundColor: theme.colors.backgroundSecondary },
+      ]}
+    >
       <AppHeader
         showLogo={false}
         showBackButton={false}

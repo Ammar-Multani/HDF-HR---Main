@@ -7,6 +7,13 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+const logDebug = (...args: unknown[]) => {
+  const env = Deno.env.get("NODE_ENV") || "production";
+  if (env !== "production") {
+    console.log(...args);
+  }
+};
+
 // Function to get system user
 async function getSystemUser(supabaseClient: any) {
   const systemEmail = "system@maintenance.internal";
@@ -191,7 +198,7 @@ serve(async (req) => {
 
     // Get system user ID
     const systemUserId = await getSystemUser(supabaseClient);
-    console.log("Using system user ID:", systemUserId);
+    logDebug("Using system user ID:", systemUserId);
 
     // Archive logs older than 3 months
     const threeMonthsAgo = new Date();

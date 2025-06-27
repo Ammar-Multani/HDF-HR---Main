@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
-  FlatList,
   TouchableOpacity,
   RefreshControl,
   ScrollView,
@@ -32,7 +32,6 @@ import {
   Modal,
   Portal,
   RadioButton,
-  Theme,
   MD3Theme,
   Banner,
 } from "react-native-paper";
@@ -67,6 +66,7 @@ import {
 } from "../../components/FilterSections";
 import { formatDate } from "../../utils/dateUtils";
 import Pagination from "../../components/Pagination";
+import { FlashList } from "@shopify/flash-list";
 
 // User list types
 enum UserListType {
@@ -290,11 +290,12 @@ const getStyles = (theme: MD3Theme) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: "#F5F7F9",
+      minHeight: 100,
     },
     contentContainer: {
       flex: 1,
       paddingHorizontal: Platform.OS === "web" ? 24 : 16,
+      minHeight: 200, // Ensure minimum height
     },
     filterCard: {
       marginBottom: 12,
@@ -431,13 +432,17 @@ const getStyles = (theme: MD3Theme) =>
       marginTop: 2,
     },
     listContent: {
-      paddingVertical: 8,
-      paddingHorizontal: 2,
+      padding: 8,
+      paddingTop: 8,
+      paddingBottom: 50,
+      backgroundColor: "#fff",
+      minHeight: 200, // Add minimum height
     },
     listContainer: {
       flex: 1,
       marginTop: 4,
       marginBottom: 18,
+      minHeight: 200, // Add minimum height
     },
     listHeaderContainer: {
       backgroundColor: "#FFFFFF",
@@ -985,6 +990,7 @@ const getStyles = (theme: MD3Theme) =>
     },
     tableContainer: {
       flex: 1,
+      minHeight: 200, // Increased minimum height
       backgroundColor: "#fff",
       borderRadius: 16,
       borderWidth: 1,
@@ -1039,7 +1045,9 @@ const getStyles = (theme: MD3Theme) =>
       color: "#334155",
     },
     tableContent: {
-      flexGrow: 1,
+      paddingBottom: 50,
+      backgroundColor: "#fff",
+      minHeight: 200, // Add minimum height
     },
     actionCell: {
       flex: 1,
@@ -1780,7 +1788,7 @@ const SuperAdminUsersScreen = () => {
   const renderSuperAdminItem = ({ item }: { item: Admin }) => (
     <TouchableOpacity
       onPress={() => {
-        console.log("Super Admin selected:", item.id);
+        logDebug("Super Admin selected:", item.id);
         navigation.navigate("SuperAdminDetailsScreen", {
           adminId: item.id,
           adminType: "super",
@@ -1833,7 +1841,7 @@ const SuperAdminUsersScreen = () => {
   const renderCompanyAdminItem = ({ item }: { item: CompanyUser }) => (
     <TouchableOpacity
       onPress={() => {
-        console.log("Company Admin selected:", item.id);
+        logDebug("Company Admin selected:", item.id);
         navigation.navigate("CompanyAdminDetailsScreen", {
           adminId: item.id,
           adminType: "company",
@@ -1904,7 +1912,7 @@ const SuperAdminUsersScreen = () => {
   const renderEmployeeItem = ({ item }: { item: CompanyUser }) => (
     <TouchableOpacity
       onPress={() => {
-        console.log("Employee selected:", item.id);
+        logDebug("Employee selected:", item.id);
         navigation.navigate("EmployeeDetails", {
           employeeId: item.id,
           companyId: item.company_id,
@@ -2476,43 +2484,46 @@ const SuperAdminUsersScreen = () => {
   const renderCurrentList = () => {
     if (loading && !refreshing) {
       return (
-        <FlatList
-          data={Array(6)}
-          renderItem={() => (
-            <View style={styles.cardContainer}>
-              <Card style={[styles.card]} elevation={0}>
-                <Card.Content style={styles.cardContent}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.userInfo}>
-                      <Shimmer
-                        width={40}
-                        height={40}
-                        style={{ borderRadius: 20 }}
-                      />
-                      <View style={styles.userTextContainer}>
+        <View style={{ flex: 1, minHeight: 200 }}>
+          <FlashList
+            estimatedItemSize={74}
+            data={Array(6)}
+            renderItem={() => (
+              <View style={styles.cardContainer}>
+                <Card style={[styles.card]} elevation={0}>
+                  <Card.Content style={styles.cardContent}>
+                    <View style={styles.cardHeader}>
+                      <View style={styles.userInfo}>
                         <Shimmer
-                          width={150}
-                          height={20}
-                          style={{ marginBottom: 4 }}
+                          width={40}
+                          height={40}
+                          style={{ borderRadius: 20 }}
                         />
-                        <Shimmer width={120} height={16} />
+                        <View style={styles.userTextContainer}>
+                          <Shimmer
+                            width={150}
+                            height={20}
+                            style={{ marginBottom: 4 }}
+                          />
+                          <Shimmer width={120} height={16} />
+                        </View>
+                      </View>
+                      <View style={styles.statusContainer}>
+                        <Shimmer
+                          width={80}
+                          height={24}
+                          style={{ borderRadius: 12 }}
+                        />
                       </View>
                     </View>
-                    <View style={styles.statusContainer}>
-                      <Shimmer
-                        width={80}
-                        height={24}
-                        style={{ borderRadius: 12 }}
-                      />
-                    </View>
-                  </View>
-                </Card.Content>
-              </Card>
-            </View>
-          )}
-          keyExtractor={(_, index) => `skeleton-${index}`}
-          contentContainerStyle={styles.listContent}
-        />
+                  </Card.Content>
+                </Card>
+              </View>
+            )}
+            keyExtractor={(_, index) => `skeleton-${index}`}
+            contentContainerStyle={styles.listContent}
+          />
+        </View>
       );
     }
 
@@ -2587,7 +2598,8 @@ const SuperAdminUsersScreen = () => {
               <>
                 <View style={styles.tableContainer}>
                   <SuperAdminTableHeader />
-                  <FlatList
+                  <FlashList
+                    estimatedItemSize={74}
                     data={filteredSuperAdmins}
                     renderItem={({ item }) => (
                       <SuperAdminTableRow item={item} />
@@ -2606,7 +2618,8 @@ const SuperAdminUsersScreen = () => {
               </>
             ) : (
               <>
-                <FlatList
+                <FlashList
+                  estimatedItemSize={74}
                   data={filteredSuperAdmins}
                   renderItem={renderSuperAdminItem}
                   keyExtractor={(item) => `super-${item.id}`}
@@ -2634,7 +2647,8 @@ const SuperAdminUsersScreen = () => {
               <>
                 <View style={styles.tableContainer}>
                   <CompanyAdminTableHeader />
-                  <FlatList
+                  <FlashList
+                    estimatedItemSize={74}
                     data={filteredCompanyAdmins}
                     renderItem={({ item }) => (
                       <CompanyAdminTableRow item={item} />
@@ -2653,7 +2667,8 @@ const SuperAdminUsersScreen = () => {
               </>
             ) : (
               <>
-                <FlatList
+                <FlashList
+                  estimatedItemSize={74}
                   data={filteredCompanyAdmins}
                   renderItem={renderCompanyAdminItem}
                   keyExtractor={(item) => `admin-${item.id}`}
@@ -2681,7 +2696,8 @@ const SuperAdminUsersScreen = () => {
               <>
                 <View style={styles.tableContainer}>
                   <EmployeeTableHeader />
-                  <FlatList
+                  <FlashList
+                    estimatedItemSize={74}
                     data={filteredEmployees}
                     renderItem={({ item }) => <EmployeeTableRow item={item} />}
                     keyExtractor={(item) => `emp-${item.id}`}
@@ -2698,7 +2714,8 @@ const SuperAdminUsersScreen = () => {
               </>
             ) : (
               <>
-                <FlatList
+                <FlashList
+                  estimatedItemSize={74}
                   data={filteredEmployees}
                   renderItem={renderEmployeeItem}
                   keyExtractor={(item) => `emp-${item.id}`}
@@ -3222,7 +3239,12 @@ const SuperAdminUsersScreen = () => {
   };
 
   return (
-    <SafeAreaView style={[styles.container]}>
+    <SafeAreaView
+      style={[
+        styles.container,
+        { backgroundColor: theme.colors.backgroundSecondary },
+      ]}
+    >
       <AppHeader
         title="All Users"
         showBackButton={false}

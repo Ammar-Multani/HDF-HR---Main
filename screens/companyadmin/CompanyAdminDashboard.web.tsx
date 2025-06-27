@@ -1,39 +1,28 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import {
-  StyleSheet,
   View,
   ScrollView,
   RefreshControl,
   StatusBar,
-  Dimensions,
   Platform,
   TouchableOpacity,
 } from "react-native";
-import { useTheme, Surface } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
-import { supabase, isNetworkAvailable } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import { TaskStatus, FormStatus } from "../../types";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Text from "../../components/Text";
-import { globalStyles, createTextStyle } from "../../utils/globalStyles";
 import DynamicChart from "../../components/DynamicChart";
-import { LinearGradient } from "expo-linear-gradient";
-import Animated, {
-  FadeIn,
-  useAnimatedStyle,
-  withRepeat,
-  withTiming,
-  withSequence,
-} from "react-native-reanimated";
+import Animated, { FadeIn } from "react-native-reanimated";
 import HelpGuideModal from "../../components/HelpGuideModal";
 import ActivityLogTimeline from "../../components/ActivityLogTimeline";
 import { useTranslation } from "react-i18next";
-
-const { width } = Dimensions.get("window");
+import Shimmer from "../../components/Shimmer";
+import useDashboardData from "./hooks/useDashboardData";
+import dashboardStyles from "./styles/companyAdminDashboardStyles";
+import { Surface, useTheme } from "react-native-paper";
 
 // Add this interface above the component
 interface CompanyData {
@@ -47,766 +36,28 @@ interface EmployeeData {
   forms_count: number;
 }
 
-// Add Shimmer component
-interface ShimmerProps {
-  width: number | string;
-  height: number;
-  style?: any;
-}
-
-const Shimmer: React.FC<ShimmerProps> = ({ width, height, style }) => {
-  const animatedStyle = useAnimatedStyle(() => {
-    return {
-      transform: [
-        {
-          translateX: withRepeat(
-            withSequence(
-              withTiming(typeof width === "number" ? -width : -200, {
-                duration: 800,
-              }),
-              withTiming(typeof width === "number" ? width : 200, {
-                duration: 800,
-              })
-            ),
-            -1
-          ),
-        },
-      ],
-    };
-  });
-
-  return (
-    <View
-      style={[
-        {
-          width,
-          height,
-          backgroundColor: "#E8E8E8",
-          overflow: "hidden",
-          borderRadius: 4,
-        },
-        style,
-      ]}
-    >
-      <Animated.View
-        style={[
-          {
-            width: "100%",
-            height: "100%",
-            position: "absolute",
-            backgroundColor: "transparent",
-          },
-          animatedStyle,
-        ]}
-      >
-        <LinearGradient
-          colors={["transparent", "rgba(255, 255, 255, 0.4)", "transparent"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={{ width: "100%", height: "100%" }}
-        />
-      </Animated.View>
-    </View>
-  );
-};
-
 const CompanyAdminDashboard = () => {
   const theme = useTheme();
-  const navigation = useNavigation();
   const { user, signOut } = useAuth();
-  const { t } = useTranslation();
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [companyId, setCompanyId] = useState<string | null>(null);
-  const [companyName, setCompanyName] = useState<string>("");
-  const [networkStatus, setNetworkStatus] = useState<boolean | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [showAllEmployees, setShowAllEmployees] = useState(false);
-  const [stats, setStats] = useState({
-    totalEmployees: 0,
-    activeEmployees: 0,
-    employeeGrowth: "+0%",
-    totalTasks: 0,
-    pendingTasks: 0,
-    completedTasks: 0,
-    overdueTasks: 0,
-    tasksGrowth: "+0%",
-    totalForms: 0,
-    pendingForms: 0,
-    formsGrowth: "+0%",
-    monthlyEmployees: [] as number[],
-    monthlyForms: [] as number[],
-    monthLabels: [] as string[],
-    topEmployees: [] as EmployeeData[],
-    latestActivities: [] as any[],
-  });
-
-  const [windowDimensions, setWindowDimensions] = useState({
-    width: Dimensions.get("window").width,
-    height: Dimensions.get("window").height,
-  });
-
-  const [helpModalVisible, setHelpModalVisible] = useState(false);
-
-  // Define help guide content
-  const helpGuideSteps = [
-    {
-      title: "Overview Statistics",
-      icon: "chart-box",
-      description:
-        "View key metrics including total employees, tasks, and forms. Growth percentages show changes from the previous period.",
-    },
-    {
-      title: "Employee Analytics",
-      icon: "account-group",
-      description:
-        "Track employee onboarding trends with monthly charts and view top performing employees based on form submissions.",
-    },
-    {
-      title: "Task Management",
-      icon: "clipboard-check",
-      description:
-        "Monitor task statuses including pending, completed, and overdue tasks. Keep track of task progress and deadlines.",
-    },
-    {
-      title: "Form Analytics",
-      icon: "file-document",
-      description:
-        "Analyze form submission trends over time, including accident reports, illness reports, and departure forms.",
-    },
-  ];
-
-  const helpGuideNote = {
-    title: "Important Notes",
-    content: [
-      "All statistics are updated in real-time when refreshing",
-      "Growth percentages compare current numbers with previous period",
-      "Charts show data for the last 5 months",
-      "Top employees are ranked by total form submissions",
-      "Task statistics are color-coded by status for easy tracking",
-    ],
-  };
-
-  // Add window resize listener
-  useEffect(() => {
-    if (Platform.OS === "web") {
-      const handleResize = () => {
-        setWindowDimensions({
-          width: Dimensions.get("window").width,
-          height: Dimensions.get("window").height,
-        });
-      };
-
-      window.addEventListener("resize", handleResize);
-
-      // Cleanup
-      return () => window.removeEventListener("resize", handleResize);
-    }
-  }, []);
-
-  // Use windowDimensions.width instead of direct width reference
-  const isLargeScreen = windowDimensions.width >= 1440;
-  const isMediumScreen =
-    windowDimensions.width >= 768 && windowDimensions.width < 1440;
-
-  const checkNetworkStatus = async () => {
-    const isAvailable = await isNetworkAvailable();
-    setNetworkStatus(isAvailable);
-    return isAvailable;
-  };
-
-  const fetchCompanyId = async () => {
-    if (!user) return null;
-
-    try {
-      const { data, error } = await supabase
-        .from("company_user")
-        .select("company_id, company:company_id(company_name)")
-        .eq("id", user.id)
-        .single();
-
-      if (error) {
-        console.error("Error fetching company ID:", error);
-        return null;
-      }
-
-      // Check if company data exists and set the company name
-      if (data && data.company) {
-        // @ts-ignore - The company object structure is verified in CompanyAdminProfileScreen
-        setCompanyName(data.company.company_name || "");
-      }
-
-      return data?.company_id || null;
-    } catch (error) {
-      console.error("Error fetching company ID:", error);
-      return null;
-    }
-  };
-
-  const fetchDashboardData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      // Check network status
-      const networkAvailable = await checkNetworkStatus();
-      if (!networkAvailable) {
-        setError("You're offline. Dashboard data may be outdated.");
-      }
-
-      // Get company ID if not already set
-      const currentCompanyId = companyId || (await fetchCompanyId());
-      if (!currentCompanyId) {
-        console.error("No company ID found");
-        setLoading(false);
-        return;
-      }
-
-      setCompanyId(currentCompanyId);
-
-      // Get today's date and reset hours to start of day
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      // Get current month and year
-      const currentMonth = today.getMonth();
-      const currentYear = today.getFullYear();
-
-      // Calculate the starting month index to show 5 months of data
-      const startMonthIndex =
-        currentMonth >= 4 ? currentMonth - 4 : 12 + (currentMonth - 4);
-
-      // Create array of the 5 most recent months to display
-      const recentMonths: number[] = [];
-      for (let i = 0; i < 5; i++) {
-        // Calculate month index (handling year wraparound)
-        const monthIndex = (startMonthIndex + i) % 12;
-        recentMonths.push(monthIndex);
-      }
-
-      const monthNames = [
-        "Jan",
-        "Feb",
-        "Mar",
-        "Apr",
-        "May",
-        "Jun",
-        "Jul",
-        "Aug",
-        "Sep",
-        "Oct",
-        "Nov",
-        "Dec",
-      ];
-
-      // Run all main dashboard queries in parallel for better performance
-      const [
-        { count: totalEmployees, error: employeesError },
-        { count: todayEmployees, error: todayEmployeesError },
-        { count: activeEmployees, error: activeEmployeesError },
-        { count: totalTasks, error: tasksError },
-        { count: todayTasks, error: todayTasksError },
-        { count: pendingTasks, error: pendingTasksError },
-        { count: completedTasks, error: completedTasksError },
-        { count: overdueTasks, error: overdueTasksError },
-        { count: accidentReports, error: accidentError },
-        { count: illnessReports, error: illnessError },
-        { count: departureReports, error: departureError },
-        { count: todayAccidentReports, error: todayAccidentError },
-        { count: todayIllnessReports, error: todayIllnessError },
-        { count: todayDepartureReports, error: todayDepartureError },
-        { count: pendingAccidentReports, error: pendingAccidentError },
-        { count: pendingIllnessReports, error: pendingIllnessError },
-        { count: pendingDepartureReports, error: pendingDepartureError },
-      ] = await Promise.all([
-        // Fetch employees count
-        supabase
-          .from("company_user")
-          .select("*", { count: "exact", head: true })
-          .eq("company_id", currentCompanyId),
-
-        // Today's employees count
-        supabase
-          .from("company_user")
-          .select("*", { count: "exact", head: true })
-          .eq("company_id", currentCompanyId)
-          .gte("created_at", today.toISOString()),
-
-        // Fetch active employees count
-        supabase
-          .from("company_user")
-          .select("*", { count: "exact", head: true })
-          .eq("company_id", currentCompanyId)
-          .eq("active_status", "active"),
-
-        // Fetch tasks count
-        supabase
-          .from("tasks")
-          .select("*", { count: "exact", head: true })
-          .eq("company_id", currentCompanyId),
-
-        // Today's tasks count
-        supabase
-          .from("tasks")
-          .select("*", { count: "exact", head: true })
-          .eq("company_id", currentCompanyId)
-          .gte("created_at", today.toISOString()),
-
-        // Fetch pending tasks count (open + in progress + awaiting response)
-        supabase
-          .from("tasks")
-          .select("*", { count: "exact", head: true })
-          .eq("company_id", currentCompanyId)
-          .in("status", [
-            TaskStatus.OPEN,
-            TaskStatus.IN_PROGRESS,
-            TaskStatus.AWAITING_RESPONSE,
-          ]),
-
-        // Fetch completed tasks count
-        supabase
-          .from("tasks")
-          .select("*", { count: "exact", head: true })
-          .eq("company_id", currentCompanyId)
-          .eq("status", TaskStatus.COMPLETED),
-
-        // Fetch overdue tasks count
-        supabase
-          .from("tasks")
-          .select("*", { count: "exact", head: true })
-          .eq("company_id", currentCompanyId)
-          .eq("status", TaskStatus.OVERDUE),
-
-        // Fetch accident reports count
-        supabase
-          .from("accident_report")
-          .select("*", { count: "exact", head: true })
-          .eq("company_id", currentCompanyId),
-
-        // Fetch illness reports count
-        supabase
-          .from("illness_report")
-          .select("*", { count: "exact", head: true })
-          .eq("company_id", currentCompanyId),
-
-        // Fetch departure reports count
-        supabase
-          .from("staff_departure_report")
-          .select("*", { count: "exact", head: true })
-          .eq("company_id", currentCompanyId),
-
-        // Today's accident reports
-        supabase
-          .from("accident_report")
-          .select("*", { count: "exact", head: true })
-          .eq("company_id", currentCompanyId)
-          .gte("created_at", today.toISOString()),
-
-        // Today's illness reports
-        supabase
-          .from("illness_report")
-          .select("*", { count: "exact", head: true })
-          .eq("company_id", currentCompanyId)
-          .gte("submission_date", today.toISOString()),
-
-        // Today's departure reports
-        supabase
-          .from("staff_departure_report")
-          .select("*", { count: "exact", head: true })
-          .eq("company_id", currentCompanyId)
-          .gte("created_at", today.toISOString()),
-
-        // Pending accident reports
-        supabase
-          .from("accident_report")
-          .select("*", { count: "exact", head: true })
-          .eq("company_id", currentCompanyId)
-          .in("status", [FormStatus.DRAFT, FormStatus.PENDING]),
-
-        // Pending illness reports
-        supabase
-          .from("illness_report")
-          .select("*", { count: "exact", head: true })
-          .eq("company_id", currentCompanyId)
-          .in("status", [FormStatus.DRAFT, FormStatus.PENDING]),
-
-        // Pending departure reports
-        supabase
-          .from("staff_departure_report")
-          .select("*", { count: "exact", head: true })
-          .eq("company_id", currentCompanyId)
-          .in("status", [FormStatus.DRAFT, FormStatus.PENDING]),
-      ]);
-
-      // Calculate totals and growth percentages
-      const totalForms =
-        (accidentReports || 0) +
-        (illnessReports || 0) +
-        (departureReports || 0);
-
-      const todayForms =
-        (todayAccidentReports || 0) +
-        (todayIllnessReports || 0) +
-        (todayDepartureReports || 0);
-
-      const pendingForms =
-        (pendingAccidentReports || 0) +
-        (pendingIllnessReports || 0) +
-        (pendingDepartureReports || 0);
-
-      // Calculate employee growth percentage
-      let employeeGrowth = "+0%";
-      if (totalEmployees && todayEmployees) {
-        if (totalEmployees === todayEmployees) {
-          employeeGrowth = "+100%";
-        } else {
-          const previousEmployees = totalEmployees - todayEmployees;
-          const growthRate =
-            previousEmployees > 0
-              ? (todayEmployees / previousEmployees) * 100
-              : 0;
-          employeeGrowth =
-            (growthRate > 0 ? "+" : "") + growthRate.toFixed(1) + "%";
-        }
-      }
-
-      // Calculate tasks growth percentage
-      let tasksGrowth = "+0%";
-      if (totalTasks && todayTasks) {
-        if (totalTasks === todayTasks) {
-          tasksGrowth = "+100%";
-        } else {
-          const previousTasks = totalTasks - todayTasks;
-          const growthRate =
-            previousTasks > 0 ? (todayTasks / previousTasks) * 100 : 0;
-          tasksGrowth =
-            (growthRate > 0 ? "+" : "") + growthRate.toFixed(1) + "%";
-        }
-      }
-
-      // Calculate forms growth percentage
-      let formsGrowth = "+0%";
-      if (totalForms && todayForms) {
-        if (totalForms === todayForms) {
-          formsGrowth = "+100%";
-        } else {
-          const previousForms = totalForms - todayForms;
-          const growthRate =
-            previousForms > 0 ? (todayForms / previousForms) * 100 : 0;
-          formsGrowth =
-            (growthRate > 0 ? "+" : "") + growthRate.toFixed(1) + "%";
-        }
-      }
-
-      // Prepare monthly data fetch operations for employees and forms
-      const allMonthsEmployeeData = new Array(12).fill(0);
-      const allMonthsFormData = new Array(12).fill(0);
-
-      // Create arrays of promises for each month's data
-      const monthlyEmployeePromises = [];
-      const monthlyAccidentFormPromises = [];
-      const monthlyIllnessFormPromises = [];
-      const monthlyDepartureFormPromises = [];
-
-      for (let month = 0; month < 12; month++) {
-        // Calculate the proper date range - handle year wraparound
-        const dateYear = currentMonth >= month ? currentYear : currentYear - 1;
-        const monthStart = new Date(dateYear, month, 1);
-        const monthEnd = new Date(dateYear, month + 1, 0);
-
-        // Employee data promise
-        monthlyEmployeePromises.push(
-          supabase
-            .from("company_user")
-            .select("*", { count: "exact", head: true })
-            .eq("company_id", currentCompanyId)
-            .gte("created_at", monthStart.toISOString())
-            .lte("created_at", monthEnd.toISOString())
-        );
-
-        // Form data promises
-        monthlyAccidentFormPromises.push(
-          supabase
-            .from("accident_report")
-            .select("*", { count: "exact", head: true })
-            .eq("company_id", currentCompanyId)
-            .gte("created_at", monthStart.toISOString())
-            .lte("created_at", monthEnd.toISOString())
-        );
-
-        monthlyIllnessFormPromises.push(
-          supabase
-            .from("illness_report")
-            .select("*", { count: "exact", head: true })
-            .eq("company_id", currentCompanyId)
-            .gte("submission_date", monthStart.toISOString())
-            .lte("submission_date", monthEnd.toISOString())
-        );
-
-        monthlyDepartureFormPromises.push(
-          supabase
-            .from("staff_departure_report")
-            .select("*", { count: "exact", head: true })
-            .eq("company_id", currentCompanyId)
-            .gte("created_at", monthStart.toISOString())
-            .lte("created_at", monthEnd.toISOString())
-        );
-      }
-
-      // Execute all monthly data promises in parallel
-      const [
-        monthlyEmployeeResults,
-        monthlyAccidentResults,
-        monthlyIllnessResults,
-        monthlyDepartureResults,
-      ] = await Promise.all([
-        Promise.all(monthlyEmployeePromises),
-        Promise.all(monthlyAccidentFormPromises),
-        Promise.all(monthlyIllnessFormPromises),
-        Promise.all(monthlyDepartureFormPromises),
-      ]);
-
-      // Process monthly results
-      for (let month = 0; month < 12; month++) {
-        // Process employee data
-        allMonthsEmployeeData[month] = monthlyEmployeeResults[month].count || 0;
-
-        // Process form data
-        const monthAccidentCount = monthlyAccidentResults[month].count || 0;
-        const monthIllnessCount = monthlyIllnessResults[month].count || 0;
-        const monthDepartureCount = monthlyDepartureResults[month].count || 0;
-
-        allMonthsFormData[month] =
-          monthAccidentCount + monthIllnessCount + monthDepartureCount;
-      }
-
-      // Extract data for recent months only
-      const recentMonthsEmployeeData = recentMonths.map(
-        (index) => allMonthsEmployeeData[index]
-      );
-      const recentMonthsFormData = recentMonths.map(
-        (index) => allMonthsFormData[index]
-      );
-      const recentMonthsLabels = recentMonths.map((index) => monthNames[index]);
-
-      setStats({
-        totalEmployees: totalEmployees || 0,
-        activeEmployees: activeEmployees || 0,
-        employeeGrowth: employeeGrowth,
-        totalTasks: totalTasks || 0,
-        pendingTasks: pendingTasks || 0,
-        completedTasks: completedTasks || 0,
-        overdueTasks: overdueTasks || 0,
-        tasksGrowth: tasksGrowth,
-        totalForms: totalForms,
-        pendingForms: pendingForms,
-        formsGrowth: formsGrowth,
-        monthlyEmployees: recentMonthsEmployeeData,
-        monthlyForms: recentMonthsFormData,
-        monthLabels: recentMonthsLabels,
-        topEmployees: [],
-        latestActivities: [],
-      });
-
-      // Fetch top employees by forms count for this company
-      const [
-        { data: accidentForms, error: accidentFormsError },
-        { data: illnessForms, error: illnessFormsError },
-        { data: departureForms, error: departureFormsError },
-        { data: companyEmployees, error: companyEmployeesError },
-      ] = await Promise.all([
-        supabase
-          .from("accident_report")
-          .select("employee_id")
-          .eq("company_id", currentCompanyId)
-          .neq("status", FormStatus.DRAFT),
-        supabase
-          .from("illness_report")
-          .select("employee_id")
-          .eq("company_id", currentCompanyId)
-          .neq("status", FormStatus.DRAFT),
-        supabase
-          .from("staff_departure_report")
-          .select("employee_id")
-          .eq("company_id", currentCompanyId)
-          .neq("status", FormStatus.DRAFT),
-        supabase
-          .from("company_user")
-          .select("id, first_name, last_name")
-          .eq("company_id", currentCompanyId)
-          .eq("role", "employee")
-          .limit(100),
-      ]);
-
-      if (
-        accidentFormsError ||
-        illnessFormsError ||
-        departureFormsError ||
-        companyEmployeesError
-      ) {
-        console.error("Error fetching forms or employees data:", {
-          accidentFormsError,
-          illnessFormsError,
-          departureFormsError,
-          companyEmployeesError,
-        });
-      } else {
-        // Count forms per employee
-        const employeeFormCounts: Record<string, number> = {};
-
-        // Initialize all employees with 0 forms
-        if (companyEmployees) {
-          companyEmployees.forEach((employee) => {
-            employeeFormCounts[employee.id] = 0;
-          });
-        }
-
-        // Count accident reports
-        if (accidentForms) {
-          accidentForms.forEach((form) => {
-            if (form.employee_id) {
-              employeeFormCounts[form.employee_id] =
-                (employeeFormCounts[form.employee_id] || 0) + 1;
-            }
-          });
-        }
-
-        // Count illness reports
-        if (illnessForms) {
-          illnessForms.forEach((form) => {
-            if (form.employee_id) {
-              employeeFormCounts[form.employee_id] =
-                (employeeFormCounts[form.employee_id] || 0) + 1;
-            }
-          });
-        }
-
-        // Count departure reports
-        if (departureForms) {
-          departureForms.forEach((form) => {
-            if (form.employee_id) {
-              employeeFormCounts[form.employee_id] =
-                (employeeFormCounts[form.employee_id] || 0) + 1;
-            }
-          });
-        }
-
-        // Process all employees with their form counts
-        if (companyEmployees) {
-          const employeesWithFormCounts = companyEmployees.map((employee) => ({
-            id: employee.id,
-            name: `${employee.first_name || ""} ${employee.last_name || ""}`.trim(),
-            forms_count: employeeFormCounts[employee.id] || 0,
-          }));
-
-          // Sort by form count (highest first)
-          const topEmployees = employeesWithFormCounts.sort(
-            (a, b) => b.forms_count - a.forms_count
-          );
-
-          // Update stats with top employees
-          setStats((prevStats) => ({
-            ...prevStats,
-            topEmployees,
-          }));
-        }
-      }
-
-      // After fetching all the other data, fetch company-specific activity logs
-      const { data: latestActivities, error: activitiesError } = await supabase
-        .from("activity_logs")
-        .select("*")
-        .or(`company_id.eq.${currentCompanyId},user_id.eq.${user?.id}`)
-        .neq("activity_type", "SYSTEM_MAINTENANCE")
-        .order("created_at", { ascending: false })
-        .limit(20);
-
-      if (activitiesError) {
-        console.error("Error fetching latest activities:", activitiesError);
-      }
-
-      // Additional check to filter logs that are specific to this company or its users
-      if (latestActivities) {
-        // Filter logs to ensure they're company-related
-        const companyRelatedLogs = latestActivities.filter((log) => {
-          // Ensure log has a company ID that matches the current company
-          if (log.company_id === currentCompanyId) return true;
-
-          // If company_id is null but user is the actor, keep it only if it's relevant
-          if (!log.company_id && log.user_id === user?.id) {
-            // Keep user's own activity even without company_id
-            return true;
-          }
-
-          // Check metadata for company references
-          if (log.metadata) {
-            // Check if company is referenced in metadata
-            if (
-              log.metadata.company &&
-              log.metadata.company.id === currentCompanyId
-            )
-              return true;
-
-            // Check for user references in metadata that match current user
-            if (
-              log.metadata.created_by &&
-              log.metadata.created_by.id === user?.id
-            )
-              return true;
-
-            if (
-              log.metadata.updated_by &&
-              log.metadata.updated_by.id === user?.id
-            )
-              return true;
-
-            if (
-              log.metadata.company_admin &&
-              log.metadata.company_admin.id === user?.id
-            )
-              return true;
-          }
-
-          // If none of the above conditions match, exclude the log
-          return false;
-        });
-
-        // Limit to 10 most recent logs
-        const recentLogs = companyRelatedLogs.slice(0, 10);
-
-        setStats((prevStats) => ({
-          ...prevStats,
-          latestActivities: recentLogs || [],
-        }));
-      } else {
-        setStats((prevStats) => ({
-          ...prevStats,
-          latestActivities: [],
-        }));
-      }
-    } catch (error) {
-      console.error("Error fetching dashboard data:", error);
-      setError("Error fetching dashboard data");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchDashboardData();
-  }, [user]);
-
-  const onRefresh = async () => {
-    const isConnected = await checkNetworkStatus();
-    if (!isConnected) {
-      setError("Cannot refresh while offline");
-      return;
-    }
-
-    setRefreshing(true);
-    fetchDashboardData();
-  };
+  const {
+    loading,
+    refreshing,
+    companyName,
+    networkStatus,
+    error,
+    stats,
+    helpModalVisible,
+    setHelpModalVisible,
+    showAllEmployees,
+    setShowAllEmployees,
+    isLargeScreen,
+    isMediumScreen,
+    windowDimensions,
+    onRefresh,
+    helpGuideSteps,
+    helpGuideNote,
+  } = useDashboardData(user);
+  const styles = dashboardStyles;
 
   if (loading && !refreshing) {
     return (
@@ -902,12 +153,132 @@ const CompanyAdminDashboard = () => {
                   />
                   <Shimmer
                     width="90%"
-                    height={200}
-                    style={{ marginHorizontal: "5%" }}
+                    height={250}
+                    style={{ marginHorizontal: "5%", marginBottom: 24 }}
                   />
                 </View>
               </View>
             ))}
+          </View>
+
+          {/* Add Shimmer for Top Employees and Task Status */}
+          <View
+            style={[
+              styles.gridContainer,
+              { flexDirection: isLargeScreen ? "row" : "column" },
+            ]}
+          >
+            {/* Top Employees Shimmer */}
+            <View
+              style={[
+                styles.gridItem,
+                {
+                  flex: isLargeScreen ? 1 : undefined,
+                  width: "100%",
+                  maxWidth: isLargeScreen ? "50%" : 1000,
+                  marginBottom: isLargeScreen ? 0 : 24,
+                },
+              ]}
+            >
+              <View style={styles.listCard}>
+                <Shimmer
+                  width={200}
+                  height={24}
+                  style={{ marginBottom: 24, marginLeft: 24, marginTop: 24 }}
+                />
+                {[1, 2, 3].map((_, index) => (
+                  <View key={index} style={styles.employeeCard}>
+                    <View style={styles.employeeInfo}>
+                      <Shimmer
+                        width={150}
+                        height={20}
+                        style={{ marginBottom: 8 }}
+                      />
+                    </View>
+                    <View style={styles.formsCountContainer}>
+                      <Shimmer width={40} height={20} />
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            {/* Task Status Shimmer */}
+            <View
+              style={[
+                styles.gridItem,
+                {
+                  flex: isLargeScreen ? 1 : undefined,
+                  width: "100%",
+                  maxWidth: isLargeScreen ? "50%" : 1000,
+                },
+              ]}
+            >
+              <View style={styles.taskCardsWrapper}>
+                <View style={styles.taskCardsGrid}>
+                  {[1, 2, 3].map((_, index) => (
+                    <View
+                      key={index}
+                      style={[
+                        styles.statCardSmall,
+                        { width: "100%", marginBottom: index === 2 ? 0 : 16 },
+                      ]}
+                    >
+                      <Shimmer
+                        width={120}
+                        height={20}
+                        style={{ marginBottom: 12 }}
+                      />
+                      <Shimmer
+                        width={60}
+                        height={28}
+                        style={{ marginBottom: 8 }}
+                      />
+                      <Shimmer
+                        width={24}
+                        height={24}
+                        style={{ borderRadius: 12 }}
+                      />
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* Activity Logs Shimmer */}
+          <View style={styles.activityLogsSection}>
+            <Surface style={styles.activityLogsCard} elevation={0}>
+              <Shimmer
+                width={200}
+                height={24}
+                style={{ marginBottom: 24, marginLeft: 24, marginTop: 24 }}
+              />
+              {[1, 2, 3, 4].map((_, index) => (
+                <View
+                  key={index}
+                  style={{
+                    padding: 16,
+                    flexDirection: "row",
+                    alignItems: "center",
+                  }}
+                >
+                  <Shimmer
+                    width={24}
+                    height={24}
+                    style={{ borderRadius: 12, marginRight: 16 }}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Shimmer
+                      width="80%"
+                      height={16}
+                      style={{ marginBottom: 8 }}
+                    />
+                    <Shimmer width="40%" height={14} />
+                  </View>
+                </View>
+              ))}
+            </Surface>
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -1319,291 +690,5 @@ const CompanyAdminDashboard = () => {
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f5f7fa",
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: Platform.OS === "web" ? (width >= 768 ? 24 : 16) : 16,
-    paddingVertical: Platform.OS === "web" ? (width >= 768 ? 24 : 16) : 16,
-    paddingBottom: 90,
-    maxWidth: Platform.OS === "web" ? 1400 : undefined,
-    alignSelf: "center",
-    width: "100%",
-  },
-  welcomeHeader: {
-    marginBottom: Platform.OS === "web" ? 24 : 16,
-    marginTop: Platform.OS === "web" ? 8 : 5,
-    marginLeft: 5,
-  },
-  welcomeTitle: {
-    ...createTextStyle({
-      fontWeight: "600",
-      fontSize: Platform.OS === "web" ? (width >= 768 ? 28 : 22) : 22,
-    }),
-    color: "#333",
-    paddingBottom: 3,
-  },
-  welcomeSubtitle: {
-    ...createTextStyle({
-      fontWeight: "400",
-      fontSize: Platform.OS === "web" ? (width >= 768 ? 16 : 14) : 14,
-    }),
-    color: "#666",
-  },
-  statsGridContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    width: "100%",
-    marginBottom: 24,
-    justifyContent: "space-between",
-  },
-  statsGridItem: {
-    // Base styles only, dynamic values applied inline
-  },
-  statsCard: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    height: "100%",
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  skeletonStatsCard: {
-    padding: Platform.OS === "web" ? 24 : 20,
-    minHeight: 120,
-  },
-  statRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    width: "100%",
-  },
-  statLabel: {
-    ...createTextStyle({
-      fontWeight: "500",
-      fontSize: Platform.OS === "web" ? (width >= 768 ? 14 : 13) : 13,
-    }),
-    color: "#333",
-    right: 5,
-    paddingRight: 3,
-  },
-  statGrowth: {
-    fontSize: 10,
-    color: "#4CAF50",
-  },
-  negativeGrowth: {
-    color: "#F44336",
-  },
-  statValue: {
-    ...createTextStyle({
-      fontWeight: "600",
-      fontSize: Platform.OS === "web" ? (width >= 768 ? 32 : 25) : 25,
-    }),
-    color: "#111",
-    marginTop: Platform.OS === "web" ? 16 : 8,
-  },
-  chartsContainer: {
-    flexDirection: width >= 1440 ? "row" : "column",
-    gap: 24,
-    marginBottom: 24,
-    width: "100%",
-    alignItems: "center",
-  },
-  chartWrapper: {
-    flex: width >= 1440 ? 1 : undefined,
-    width: "100%",
-    maxWidth: width >= 1440 ? "50%" : 1000,
-    marginBottom: width >= 1440 ? 0 : 24,
-  },
-  chartCard: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 0,
-    marginBottom: Platform.OS === "web" ? 0 : 1,
-    minHeight: width >= 768 ? 290 : 290,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    flex: 1,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-    overflow: "hidden",
-  },
-  sectionTitle: {
-    ...createTextStyle({
-      fontWeight: "600",
-      fontSize: Platform.OS === "web" ? (width >= 768 ? 18 : 16) : 16,
-    }),
-    marginBottom: Platform.OS === "web" ? (width >= 768 ? 20 : 16) : 16,
-    color: "#374151",
-    paddingHorizontal: Platform.OS === "web" ? 24 : 16,
-    paddingTop: Platform.OS === "web" ? 24 : 16,
-  },
-  gridContainer: {
-    gap: 24,
-    width: "100%",
-    marginBottom: 24,
-  },
-  gridItem: {
-    flex: 1,
-  },
-  taskCardsWrapper: {},
-  taskCardsGrid: {
-    width: "100%",
-  },
-  statCardSmall: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: Platform.OS === "web" ? (width >= 768 ? 24 : 20) : 20,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  statCardLabel: {
-    fontSize: Platform.OS === "web" ? (width >= 768 ? 14 : 13) : 13,
-    color: "#555",
-    marginBottom: 8,
-  },
-  statCardValue: {
-    fontSize: Platform.OS === "web" ? (width >= 768 ? 24 : 20) : 20,
-    color: "#111",
-    marginBottom: 8,
-  },
-  skeleton: {
-    backgroundColor: "#F3F4F6",
-    borderRadius: 4,
-    overflow: "hidden",
-  },
-  skeletonTitle: {
-    marginBottom: 8,
-  },
-  skeletonSubtitle: {
-    marginBottom: 24,
-  },
-  listCard: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: Platform.OS === "web" ? (width >= 768 ? 24 : 16) : 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  employeeCard: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    padding: Platform.OS === "web" ? (width >= 768 ? 20 : 16) : 16,
-    marginBottom: 5,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
-  },
-  employeeInfo: {
-    flex: 1,
-  },
-  employeeName: {
-    ...createTextStyle({
-      fontWeight: "600",
-      fontSize: Platform.OS === "web" ? (width >= 768 ? 16 : 14) : 14,
-    }),
-    color: "#333",
-  },
-  formsCountContainer: {
-    alignItems: "center",
-  },
-  formsCount: {
-    fontSize: 18,
-    color: "#3b82f6",
-  },
-  formsLabel: {
-    fontSize: 12,
-    color: "#666",
-  },
-  showMoreButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  showMoreText: {
-    color: "#3b82f6",
-    fontSize: 14,
-    fontFamily: "Poppins-Medium",
-    marginRight: 5,
-  },
-  emptyState: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 40,
-  },
-  emptyStateText: {
-    marginTop: 8,
-    fontSize: 16,
-    color: "#999",
-  },
-  activityLogsSection: {
-    marginTop: 24,
-    width: "100%",
-  },
-  activityLogsCard: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    borderColor: "#e0e0e0",
-    borderWidth: 1,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
-    elevation: 2,
-    minHeight: 400,
-    maxHeight: 600,
-    overflow: "hidden",
-  },
-  systemNotice: {
-    fontSize: 12,
-    color: "#94A3B8",
-    textAlign: "center",
-    padding: 12,
-    fontStyle: "italic",
-  },
-});
 
 export default CompanyAdminDashboard;

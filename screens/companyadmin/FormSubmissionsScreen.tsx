@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   StyleSheet,
   View,
-  FlatList,
   TouchableOpacity,
   RefreshControl,
   ScrollView,
@@ -38,6 +37,7 @@ import EmptyState from "../../components/EmptyState";
 import StatusBadge from "../../components/StatusBadge";
 import { FormStatus } from "../../types";
 import { Icon } from "react-native-elements";
+import { FlashList } from "@shopify/flash-list";
 
 // Enhanced FormSubmission interface with additional fields
 interface FormSubmission {
@@ -878,7 +878,7 @@ const FormSubmissionsScreen = () => {
             />
           </View>
         </View>
-        <FlatList
+        <FlashList estimatedItemSize={74}
           data={Array(3).fill(0)}
           renderItem={() => <FormItemSkeleton />}
           keyExtractor={(_, index) => `skeleton-${index}`}
@@ -958,7 +958,7 @@ const FormSubmissionsScreen = () => {
           }
         />
       ) : (
-        <FlatList
+        <FlashList estimatedItemSize={74}
           data={filteredForms}
           renderItem={renderFormItem}
           keyExtractor={(item) => `${item.type}-${item.id}`}

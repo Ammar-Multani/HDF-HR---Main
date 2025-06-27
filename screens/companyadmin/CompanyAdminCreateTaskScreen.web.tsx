@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
@@ -408,7 +409,7 @@ const CompanyAdminCreateTaskScreen = () => {
   const fetchUsers = async () => {
     try {
       setLoadingUsers(true);
-      console.log("=== Starting fetchUsers ===");
+      logDebug("=== Starting fetchUsers ===");
 
       // Get the company admin's ID from company_user table
       const { data: companyUserData, error: companyUserError } = await supabase
@@ -456,7 +457,7 @@ const CompanyAdminCreateTaskScreen = () => {
         });
       }
 
-      console.log("Fetched users:", formattedUsers);
+      logDebug("Fetched users:", formattedUsers);
       setAvailableUsers(formattedUsers);
     } catch (error) {
       console.error("Error in fetchUsers:", error);
@@ -469,7 +470,7 @@ const CompanyAdminCreateTaskScreen = () => {
 
   useEffect(() => {
     const initializeData = async () => {
-      console.log("=== Starting initializeData ===");
+      logDebug("=== Starting initializeData ===");
       setLoading(true);
       try {
         const compId = await fetchCompanyId();

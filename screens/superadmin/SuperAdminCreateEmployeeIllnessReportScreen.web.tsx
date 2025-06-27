@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
@@ -318,7 +319,7 @@ const CreateIllnessReportScreen = () => {
         },
       });
 
-      console.log("Delete response:", response);
+      logDebug("Delete response:", response);
 
       // Reset document-related state variables even if there was an error
       // This ensures the UI is cleaned up
@@ -385,7 +386,7 @@ const CreateIllnessReportScreen = () => {
       let reportId = watch("id");
       if (!reportId) {
         setUploadProgress(20);
-        console.log("Creating new illness report...");
+        logDebug("Creating new illness report...");
         const { data: illnessReport, error: createError } = await supabase
           .from("illness_report")
           .insert([
@@ -412,7 +413,7 @@ const CreateIllnessReportScreen = () => {
           throw new Error("Failed to create illness report - no data returned");
         }
 
-        console.log("Created illness report:", illnessReport);
+        logDebug("Created illness report:", illnessReport);
         reportId = illnessReport.id;
         setValue("id", reportId);
 
@@ -496,12 +497,12 @@ const CreateIllnessReportScreen = () => {
 
       while (retryCount < MAX_RETRIES && !uploadSuccess) {
         try {
-          console.log("Attempting to upload file...");
+          logDebug("Attempting to upload file...");
           const response = await supabase.functions.invoke("onedrive-upload", {
             body: formData,
           });
 
-          console.log("Raw upload response:", response);
+          logDebug("Raw upload response:", response);
 
           if (response.error) {
             throw new Error(response.error.message);
@@ -525,11 +526,11 @@ const CreateIllnessReportScreen = () => {
       setUploadProgress(70);
 
       if (uploadResponse?.data) {
-        console.log("Upload response data:", uploadResponse.data);
+        logDebug("Upload response data:", uploadResponse.data);
 
         // The actual data is nested inside data.data
         const responseData = uploadResponse.data.data;
-        console.log("Processed response data:", responseData);
+        logDebug("Processed response data:", responseData);
 
         // Update form with file path if available
         if (responseData?.filePath) {
@@ -552,7 +553,7 @@ const CreateIllnessReportScreen = () => {
 
         // Store both webUrl and sharingLink
         if (responseData?.webUrl) {
-          console.log("Original webUrl:", responseData.webUrl);
+          logDebug("Original webUrl:", responseData.webUrl);
           setSharingLink(responseData.sharingLink);
         } else {
           console.warn("No webUrl in response data:", responseData);

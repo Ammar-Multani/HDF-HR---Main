@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
@@ -29,6 +30,7 @@ import {
   ProgressBar,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
+import createCompanyReceiptStyles from "./styles/createCompanyReceiptStyles";
 import { Theme, useNavigation } from "@react-navigation/native";
 import { useForm, Controller } from "react-hook-form";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -264,6 +266,7 @@ const CreateCompanyReceiptScreen = () => {
   const navigation = useNavigation();
   const { user } = useAuth();
   const dimensions = useWindowDimensions();
+  const styles = createCompanyReceiptStyles;
 
   // Calculate responsive breakpoints
   const isLargeScreen = dimensions.width >= 1440;
@@ -434,7 +437,7 @@ const CreateCompanyReceiptScreen = () => {
     if (!receiptNumber || !companyId) return false;
 
     try {
-      console.log(
+      logDebug(
         `Checking if receipt number "${receiptNumber}" exists for company ID "${companyId}"`
       );
 
@@ -447,7 +450,7 @@ const CreateCompanyReceiptScreen = () => {
 
       // If we found any receipts with this number in this company, it's a duplicate
       const exists = Array.isArray(data) && data.length > 0;
-      console.log(`Receipt exists for this company: ${exists}`, data);
+      logDebug(`Receipt exists for this company: ${exists}`, data);
 
       return exists;
     } catch (error: any) {
@@ -647,11 +650,11 @@ const CreateCompanyReceiptScreen = () => {
 
       // Format VAT details for display with improved formatting and NaN handling
       if (ocrData.entities?.multiTaxLineItems?.length > 0) {
-        console.log("Raw VAT data:", ocrData.entities.multiTaxLineItems);
+        logDebug("Raw VAT data:", ocrData.entities.multiTaxLineItems);
 
         const vatDetailsText = ocrData.entities.multiTaxLineItems
           .map((vat) => {
-            console.log("Processing VAT entry:", {
+            logDebug("Processing VAT entry:", {
               raw: vat,
               base: vat.base,
               rate: vat.rate,
@@ -677,17 +680,17 @@ const CreateCompanyReceiptScreen = () => {
               ) * (vat.data?.taxRate?.data ? 100 : 1)
             );
 
-            console.log("Parsed values:", { base, rate });
+            logDebug("Parsed values:", { base, rate });
 
             if (isNaN(base) || isNaN(rate) || base === 0 || rate === 0) {
-              console.log("Skipping invalid entry:", { base, rate });
+              logDebug("Skipping invalid entry:", { base, rate });
               return null;
             }
 
             const vatAmount = roundToTwoDecimals((base * rate) / 100);
             const total = roundToTwoDecimals(base + vatAmount);
 
-            console.log("Calculated values:", {
+            logDebug("Calculated values:", {
               base: formatAmount(base),
               rate: rate.toFixed(1),
               vatAmount: formatAmount(vatAmount),
@@ -702,7 +705,7 @@ const CreateCompanyReceiptScreen = () => {
         if (vatDetailsText) {
           setValue("vat_details", vatDetailsText);
         } else {
-          console.log("No valid VAT details to display");
+          logDebug("No valid VAT details to display");
 
           // Fallback: Try to calculate VAT from total and tax amounts
           const total = roundToTwoDecimals(
@@ -716,7 +719,7 @@ const CreateCompanyReceiptScreen = () => {
             const base = roundToTwoDecimals(total - tax);
             const rate = roundToTwoDecimals((tax / base) * 100);
 
-            console.log("Fallback VAT calculation:", {
+            logDebug("Fallback VAT calculation:", {
               total: formatAmount(total),
               tax: formatAmount(tax),
               base: formatAmount(base),
@@ -966,7 +969,7 @@ const CreateCompanyReceiptScreen = () => {
         body: formData,
       });
 
-      console.log("OneDrive upload response:", response);
+      logDebug("OneDrive upload response:", response);
 
       if (response.error) {
         throw new Error(response.error.message || "Upload failed");
@@ -1034,7 +1037,7 @@ const CreateCompanyReceiptScreen = () => {
         },
       });
 
-      console.log("Delete response:", response);
+      logDebug("Delete response:", response);
 
       // Reset OneDrive-related state
       setOneDriveItemId(null);
@@ -1200,7 +1203,7 @@ const CreateCompanyReceiptScreen = () => {
   };
 
   const handlePreviewClick = () => {
-    console.log("Opening preview modal...");
+    logDebug("Opening preview modal...");
     setShowPreviewModal(true);
   };
 
@@ -1879,7 +1882,7 @@ const CreateCompanyReceiptScreen = () => {
         created_by: user.id,
       };
 
-      console.log("Creating receipt with data:", receiptData);
+      logDebug("Creating receipt with data:", receiptData);
 
       // Double-check receipt number uniqueness before final insert
       // This prevents race conditions where another receipt with the same number might have been created
@@ -2789,651 +2792,4 @@ const CreateCompanyReceiptScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F8F9FA",
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingVertical: 32,
-    alignSelf: "center",
-    width: "100%",
-  },
-  headerSection: {
-    marginBottom: 32,
-  },
-  pageTitle: {
-    fontSize: Platform.OS === "web" ? 32 : 24,
-    fontWeight: "600",
-    color: "#1e293b",
-    fontFamily: "Poppins-SemiBold",
-  },
-  pageSubtitle: {
-    fontSize: 16,
-    color: "#64748b",
-    marginTop: 8,
-    fontFamily: "Poppins-Regular",
-  },
-  gridContainer: {
-    flexDirection: "row",
-    gap: 24,
-    flexWrap: "wrap",
-  },
-  gridColumn: {
-    flex: 1,
-    minWidth: 320,
-    gap: 24,
-  },
-  receiptGridContainer: {
-    flexDirection: "row",
-    gap: 24,
-    flexWrap: "wrap",
-    marginTop: 24,
-    marginBottom: 24,
-  },
-  stepContainer: {},
-  formCard: {
-    borderRadius: 16,
-    overflow: "hidden",
-    elevation: 1,
-    shadowColor: "rgba(0,0,0,0.1)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  stepCard: {
-    overflow: "visible",
-  },
-  stepHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
-    gap: 16,
-  },
-  stepNumberContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#f1f5f9",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  stepNumber: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1e293b",
-    fontFamily: "Poppins-SemiBold",
-  },
-  stepTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#1e293b",
-    fontFamily: "Poppins-SemiBold",
-  },
-  stepDescription: {
-    fontSize: 14,
-    color: "#64748b",
-    marginBottom: 24,
-    fontFamily: "Poppins-Regular",
-  },
-  detailsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 24,
-    width: "100%",
-  },
-  detailsCard: {
-    flex: 1,
-    minWidth: 300,
-    borderRadius: 12,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-  },
-  detailsCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
-    backgroundColor: "#f8fafc",
-  },
-  detailsCardTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1e293b",
-    fontFamily: "Poppins-SemiBold",
-  },
-  detailsCardContent: {
-    padding: 16,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
-  },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  iconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: "#f1f5f9",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerIcon: {
-    margin: 0,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1e293b",
-    fontFamily: "Poppins-SemiBold",
-  },
-  cardContent: {
-    padding: 24,
-  },
-
-  input: {
-    marginBottom: 8,
-    backgroundColor: "#FFFFFF",
-  },
-  dateButton: {
-    marginVertical: 8,
-  },
-  selectButton: {
-    marginVertical: 8,
-  },
-  lineItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 16,
-    gap: 8,
-  },
-  lineItemInput: {
-    flex: 2,
-  },
-  qtyInput: {
-    flex: 0.5,
-  },
-  priceInput: {
-    flex: 1,
-  },
-  addItemButton: {
-    marginTop: 16,
-  },
-  imageButtonsContainer: {
-    flexDirection: "row",
-    marginBottom: 16,
-  },
-  imageButton: {
-    flex: 1,
-  },
-  imagePreviewContainer: {
-    marginTop: 16,
-    width: "100%",
-    position: "relative",
-    borderRadius: 8,
-    overflow: "hidden",
-  },
-  imagePreview: {
-    width: "100%",
-    height: 200,
-    borderRadius: 4,
-    objectFit: "contain",
-  } as ImageStyle,
-  deleteImageButton: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    backgroundColor: "rgba(255, 255, 255, 0.7)",
-  },
-  bottomBar: {
-    backgroundColor: "#FFFFFF",
-    borderTopWidth: 1,
-    borderTopColor: "#e2e8f0",
-    padding: 16,
-  },
-  bottomBarContent: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 12,
-    maxWidth: 1400,
-    marginHorizontal: "auto",
-    width: "100%",
-  },
-  button: {
-    minWidth: 120,
-  },
-  cancelButton: {
-    borderColor: "#e2e8f0",
-  },
-  saveButton: {},
-  modal: {
-    backgroundColor: "white",
-    borderRadius: 16,
-    padding: 24,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    marginBottom: 16,
-    color: "#1e293b",
-    fontFamily: "Poppins-SemiBold",
-  },
-  webDateInputContainer: {
-    marginTop: 10,
-    width: "20%",
-    marginBottom: 10,
-  },
-  dateInputWrapper: {
-    marginBottom: 16,
-  },
-  inputLabel: {
-    fontSize: 12,
-    color: "#1e293b",
-    fontFamily: "Poppins-regular",
-  },
-  ocrLoadingOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(255, 255, 255, 0.8)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  ocrLoadingText: {
-    marginTop: 8,
-    fontSize: 14,
-    color: "#1e293b",
-  },
-  ocrLoadingSubtext: {
-    marginTop: 8,
-    fontSize: 14,
-    color: "#64748b",
-    fontFamily: "Poppins-Regular",
-    textAlign: "center",
-  },
-  uploadButtonPrimary: {
-    flex: 1,
-    maxWidth: 160,
-  },
-  uploadButtonSecondary: {
-    width: "100%",
-    maxWidth: 320,
-  },
-  uploadButton: {
-    flex: 1,
-    height: 48,
-  } as const,
-  pdfPreview: {
-    width: "100%",
-    height: 200,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#f8fafc",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderStyle: "dashed",
-  },
-  pdfPreviewPlaceholder: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-  },
-  pdfPreviewText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: "#64748b",
-    textAlign: "center",
-    fontWeight: "600",
-  },
-  previewModal: {
-    margin: 0,
-    padding: 0,
-    backgroundColor: "#FFFFFF",
-  },
-  previewModalContainer: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-    width: "100%",
-    height: "100%",
-    borderRadius: 0,
-  },
-  previewModalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
-    backgroundColor: "#FFFFFF",
-    zIndex: 1,
-  },
-  previewModalHeaderLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  previewModalTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1e293b",
-    fontFamily: "Poppins-SemiBold",
-  },
-  previewModalActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  previewModalContent: {
-    flex: 1,
-    backgroundColor: "#f8fafc",
-    position: "relative",
-  },
-  imagePreviewWrapper: {
-    width: "100%",
-    height: "100%",
-    position: "relative",
-    backgroundColor: "#f8fafc",
-  },
-  previewModalImage: {
-    width: "100%",
-    height: "100%",
-    maxWidth: 1200,
-    maxHeight: "90%",
-    objectFit: "contain",
-  } as ImageStyle,
-  previewTouchable: {
-    width: "100%",
-    position: "relative",
-    cursor: Platform.OS === "web" ? ("pointer" as const) : undefined,
-  },
-  previewOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0, 0, 0, 0.3)",
-    justifyContent: "center",
-    alignItems: "center",
-    opacity: Platform.OS === "web" ? 0 : 1,
-    borderRadius: 8,
-  },
-  previewHint: {
-    color: "#64748b",
-    fontSize: 14,
-    marginTop: 8,
-    textAlign: "center",
-    fontWeight: "300",
-  },
-  snackbar: {
-    marginBottom: 16,
-    elevation: 6,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    shadowOpacity: 0.27,
-    shadowRadius: 4.65,
-  },
-  confirmModal: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: 24,
-  },
-  confirmModalContent: {
-    alignItems: "center",
-  },
-  confirmModalIcon: {
-    marginBottom: 16,
-    backgroundColor: "#FEF2F2",
-    borderRadius: 40,
-    padding: 8,
-  },
-  confirmModalTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#1e293b",
-    marginBottom: 12,
-    fontFamily: "Poppins-SemiBold",
-  },
-  confirmModalText: {
-    fontSize: 14,
-    color: "#64748b",
-    textAlign: "center",
-    marginBottom: 24,
-    lineHeight: 20,
-  },
-  confirmModalButtons: {
-    flexDirection: "row",
-    gap: 12,
-    width: "100%",
-  },
-  confirmButton: {
-    flex: 1,
-  },
-  confirmCancelButton: {
-    borderColor: "#e2e8f0",
-  },
-  confirmDeleteButton: {
-    backgroundColor: "#ef4444",
-  },
-  previewActions: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    flexDirection: "row",
-    gap: 8,
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
-    borderRadius: 8,
-    padding: 4,
-  },
-  rotateImageButton: {
-    margin: 0,
-    backgroundColor: "#F8FAFC",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
-    backgroundColor: "#FFFFFF",
-  },
-  modalContent: {
-    padding: 24,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#F8F9FA",
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: "#1e293b",
-    fontFamily: "Poppins-Regular",
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#F8F9FA",
-    padding: 24,
-  },
-  errorText: {
-    fontSize: 16,
-    color: "#ef4444",
-    textAlign: "center",
-    marginBottom: 16,
-    fontFamily: "Poppins-Regular",
-  },
-  retryButton: {
-    marginTop: 16,
-  },
-  dropzone: {
-    borderWidth: 2,
-    borderColor: "#E0E0E0",
-    borderStyle: "dashed",
-    borderRadius: 16,
-    padding: 24,
-    backgroundColor: "#FAFAFA",
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 16,
-  },
-  dropzoneText: {
-    fontSize: 16,
-    color: "#64748B",
-    textAlign: "center",
-    fontFamily: "Poppins-Medium",
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  dropzoneSubText: {
-    fontSize: 14,
-    color: "#94A3B8",
-    textAlign: "center",
-    marginBottom: 16,
-    fontFamily: "Poppins-Regular",
-  },
-  uploadingContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 20,
-    position: "relative",
-    overflow: "hidden",
-  },
-  uploadingSubtext: {
-    fontSize: 14,
-    color: "#64748B",
-    fontFamily: "Poppins-Regular",
-    marginTop: 8,
-    textAlign: "center",
-  },
-  actionButton: {
-    margin: 4,
-    backgroundColor: "#F8FAFC",
-  },
-  uploadProgressContainer: {
-    marginTop: 16,
-    padding: 12,
-    backgroundColor: "#f0f9ff",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#bae6fd",
-  },
-  uploadProgressText: {
-    fontSize: 14,
-    marginBottom: 8,
-    color: "#0369a1",
-  },
-  progressBar: {
-    height: 6,
-    borderRadius: 3,
-  },
-  uploadErrorContainer: {
-    marginTop: 16,
-    padding: 12,
-    backgroundColor: "#fef2f2",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#fecaca",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  uploadErrorText: {
-    fontSize: 14,
-    color: "#b91c1c",
-    flex: 1,
-  },
-  dismissErrorButton: {
-    marginLeft: 8,
-  },
-  sharingLinkContainer: {
-    marginTop: 16,
-    padding: 12,
-    backgroundColor: "#f0fdf4",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#bbf7d0",
-  },
-  sharingLinkLabel: {
-    fontSize: 14,
-    fontWeight: "500",
-    marginBottom: 8,
-    color: "#166534",
-  },
-  sharingLinkButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#ffffff",
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: "#dcfce7",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  sharingLinkText: {
-    fontSize: 14,
-    color: "#0891b2",
-    textDecorationLine: "underline",
-    flex: 1,
-  },
-  dragOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(255, 255, 255, 0.8)",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 1000,
-  },
-  dragText: {
-    fontSize: 16,
-    color: "#64748b",
-    fontFamily: "Poppins-Regular",
-    textAlign: "center",
-    marginTop: 16,
-  },
-});
-
-// Add web-specific hover styles
-if (Platform.OS === "web") {
-  const styleSheet = document.createElement("style");
-  styleSheet.textContent = `
-      .previewTouchable:hover .previewOverlay {
-        opacity: 1 !important;
-        transition: opacity 0.2s ease;
-      }
-    `;
-  document.head.appendChild(styleSheet);
-}
 export default CreateCompanyReceiptScreen;

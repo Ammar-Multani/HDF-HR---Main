@@ -8,7 +8,6 @@ import React, {
 import {
   StyleSheet,
   View,
-  FlatList,
   TouchableOpacity,
   RefreshControl,
   ScrollView,
@@ -63,6 +62,8 @@ import {
   PillFilterGroup,
 } from "../../components/FilterSections";
 import HelpGuideModal from "../../components/HelpGuideModal";
+import { t } from "i18next";
+import { FlashList } from "@shopify/flash-list";
 
 // Update navigation type definitions
 type RootStackParamList = {
@@ -1372,7 +1373,8 @@ const FormSubmissionsScreen = () => {
         {isMediumScreen || isLargeScreen ? (
           <View style={styles.tableContainer}>
             <TableHeader />
-            <FlatList
+            <FlashList
+              estimatedItemSize={74}
               data={filteredForms}
               renderItem={({ item }) => (
                 <TableRow item={item} navigation={navigation} />
@@ -1385,7 +1387,8 @@ const FormSubmissionsScreen = () => {
             />
           </View>
         ) : (
-          <FlatList
+          <FlashList
+            estimatedItemSize={74}
             data={filteredForms}
             renderItem={renderFormItem}
             keyExtractor={(item) => `${item.type}-${item.id}`}
@@ -1395,15 +1398,54 @@ const FormSubmissionsScreen = () => {
             }
           />
         )}
-        {totalPages > 1 && (
-          <View style={styles.paginationWrapper}>
-            <Pagination
-              currentPage={page}
-              totalPages={totalPages}
-              onPageChange={handlePageChange}
-            />
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginTop: 16,
+            minHeight: 48,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              marginLeft: 12,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 14,
+                color: "#666",
+                fontFamily: "Poppins-Regular",
+              }}
+            >
+              Total Forms:
+            </Text>
+            <Text
+              style={{
+                fontSize: 14,
+                color: theme.colors.primary,
+                fontFamily: "Poppins-Medium",
+                marginLeft: 4,
+                minWidth: 20,
+                textAlign: "right",
+              }}
+            >
+              {totalItems}
+            </Text>
           </View>
-        )}
+          {totalPages > 1 && (
+            <View style={styles.paginationWrapper}>
+              <Pagination
+                currentPage={page}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+              />
+            </View>
+          )}
+        </View>
       </>
     );
   };
@@ -1463,7 +1505,8 @@ const FormSubmissionsScreen = () => {
           {useTableLayout ? (
             <TableSkeleton />
           ) : (
-            <FlatList
+            <FlashList
+              estimatedItemSize={74}
               data={Array(4).fill(0)}
               renderItem={() => <FormItemSkeleton />}
               keyExtractor={(_, index) => `skeleton-${index}`}
@@ -1871,7 +1914,8 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins-Regular",
   },
   tableContent: {
-    flexGrow: 1,
+    paddingTop: 8,
+    paddingBottom: 50,
   },
   actionCell: {
     flex: 1,

@@ -2,11 +2,11 @@ import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   View,
-  FlatList,
   TouchableOpacity,
   RefreshControl,
   ScrollView,
 } from "react-native";
+import { FlashList } from "@shopify/flash-list";
 import {
   Text,
   Card,
@@ -351,7 +351,7 @@ const EmployeeFormsScreen = () => {
           }
         />
       ) : (
-        <FlatList
+        <FlashList estimatedItemSize={74}
           data={filteredForms}
           renderItem={renderFormItem}
           keyExtractor={(item) => `${item.type}-${item.id}`}

@@ -24,6 +24,7 @@ import {
 import * as Crypto from "expo-crypto";
 import { generatePasswordResetEmail } from "../utils/emailTemplates";
 import { sendPasswordResetEmail } from "../utils/emailService";
+import { logDebug } from "../utils/logger";
 import NetInfo from "@react-native-community/netinfo";
 
 // Auth token constants
@@ -87,7 +88,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Function to handle user authentication with optimized caching
   const authenticate = useCallback(
     async (token: string, userData: any) => {
-      console.log("Authentication starting...", {
+      logDebug("Authentication starting...", {
         token: token.substring(0, 10) + "...",
         hasRole: !!userData?.role,
       });
@@ -155,7 +156,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Check for existing session in AsyncStorage
     const loadStoredSession = async () => {
       try {
-        console.log("Checking for stored session...");
+        logDebug("Checking for stored session...");
 
         // Load token, user data and role in parallel for better performance
         const [storedToken, storedUserData, storedRole] = await Promise.all([
@@ -164,7 +165,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           AsyncStorage.getItem(USER_ROLE_KEY),
         ]);
 
-        console.log("Stored session check result:", {
+        logDebug("Stored session check result:", {
           hasToken: !!storedToken,
           hasUserData: !!storedUserData,
           hasRole: !!storedRole,
@@ -172,7 +173,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         if (storedToken && storedUserData) {
           const userData = JSON.parse(storedUserData);
-          console.log("Found stored session, restoring...", {
+          logDebug("Found stored session, restoring...", {
             userId: userData.id,
           });
 
@@ -236,11 +237,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const fetchUserRole = useCallback(
     async (userId: string) => {
       try {
-        console.log("Fetching user role for ID:", userId);
+        logDebug("Fetching user role for ID:", userId);
 
         // If offline, don't attempt to fetch
         if (!isConnected) {
-          console.log("Offline - can't fetch user role");
+          logDebug("Offline - can't fetch user role");
           return;
         }
 
@@ -280,7 +281,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         const { adminData, companyUserData } = result.data;
 
-        console.log("Role check results:", {
+        logDebug("Role check results:", {
           fromCache: result.fromCache,
           adminData,
           companyUserData,
@@ -289,10 +290,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // Process admin role first if it exists
         if (adminData && adminData.role) {
           const role = adminData.role.toLowerCase();
-          console.log("User is an admin with role:", role);
+          logDebug("User is an admin with role:", role);
 
           if (role === "superadmin") {
-            console.log("Setting role to SUPER_ADMIN");
+            logDebug("Setting role to SUPER_ADMIN");
             setUserRole(UserRole.SUPER_ADMIN);
             AsyncStorage.setItem(USER_ROLE_KEY, UserRole.SUPER_ADMIN).catch(
               console.error
@@ -304,27 +305,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // Then check company user role
         if (companyUserData && companyUserData.role) {
           const role = companyUserData.role.toLowerCase();
-          console.log("User is a company user with role:", role);
+          logDebug("User is a company user with role:", role);
 
           if (role === "companyadmin" || role === "admin") {
-            console.log("Setting role to COMPANY_ADMIN");
+            logDebug("Setting role to COMPANY_ADMIN");
             setUserRole(UserRole.COMPANY_ADMIN);
             AsyncStorage.setItem(USER_ROLE_KEY, UserRole.COMPANY_ADMIN).catch(
               console.error
             );
           } else if (role === "employee") {
-            console.log("Setting role to EMPLOYEE");
+            logDebug("Setting role to EMPLOYEE");
             setUserRole(UserRole.EMPLOYEE);
             AsyncStorage.setItem(USER_ROLE_KEY, UserRole.EMPLOYEE).catch(
               console.error
             );
           } else {
-            console.log("Unknown company user role:", role);
+            logDebug("Unknown company user role:", role);
             setUserRole(null);
             AsyncStorage.removeItem(USER_ROLE_KEY).catch(console.error);
           }
         } else {
-          console.log("User has no assigned role");
+          logDebug("User has no assigned role");
           setUserRole(null);
           AsyncStorage.removeItem(USER_ROLE_KEY).catch(console.error);
         }
@@ -343,11 +344,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
    */
   const validateUserPassword = useCallback(
     async (password: string, hash: string): Promise<boolean> => {
-      console.log("Validating user password...");
+      logDebug("Validating user password...");
       try {
         // Directly use the validatePassword function from utils/auth
         const isValid = await validatePassword(password, hash);
-        console.log("Password validation result:", { isValid });
+        logDebug("Password validation result:", { isValid });
         return isValid;
       } catch (error) {
         console.error("Error validating password:", error);
@@ -360,11 +361,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signIn = useCallback(
     async (email: string, password: string) => {
       setLoading(true);
-      console.log("Sign-in attempt for:", email);
+      logDebug("Sign-in attempt for:", email);
 
       try {
         if (!isConnected) {
-          console.log("Can't sign in while offline");
+          logDebug("Can't sign in while offline");
           return {
             error: {
               message:
@@ -381,7 +382,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           .single();
 
         if (userError || !userData) {
-          console.log("Sign-in failed: User not found");
+          logDebug("Sign-in failed: User not found");
           setLoading(false);
           return { error: { message: "Invalid email or password" } };
         }
@@ -393,7 +394,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         );
 
         if (!isPasswordValid) {
-          console.log("Sign-in failed: Invalid password");
+          logDebug("Sign-in failed: Invalid password");
           setLoading(false);
           return { error: { message: "Invalid email or password" } };
         }
@@ -425,7 +426,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const userStatus = await checkUserStatus(adminData, companyUserData);
 
         if (!userStatus.isActive) {
-          console.log("Sign-in failed: Account not active");
+          logDebug("Sign-in failed: Account not active");
           return {
             error: { message: userStatus.message },
             status: userStatus,
@@ -460,10 +461,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           ...finalUserData,
         };
 
-        console.log("Calling authenticate with user data");
+        logDebug("Calling authenticate with user data");
         await authenticate(token, userDataWithRole);
 
-        console.log("Sign-in process completed successfully");
+        logDebug("Sign-in process completed successfully");
         return { error: null, status: userStatus };
       } catch (error: any) {
         console.error("Sign-in error:", error);
@@ -609,7 +610,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           return { error: { message: "Failed to send reset email" } };
         }
 
-        console.log(`Reset email sent to ${email} successfully`);
+        logDebug(`Reset email sent to ${email} successfully`);
         return { error: null };
       } catch (error: any) {
         console.error("Forgot password error:", error);

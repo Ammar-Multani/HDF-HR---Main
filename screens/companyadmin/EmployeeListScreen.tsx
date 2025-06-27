@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
-  FlatList,
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
@@ -47,6 +47,7 @@ import EmptyState from "../../components/EmptyState";
 import StatusBadge from "../../components/StatusBadge";
 import { CompanyUser, UserStatus } from "../../types";
 import { LinearGradient } from "expo-linear-gradient";
+import { FlashList } from "@shopify/flash-list";
 
 // Date sort options
 enum DateSortOrder {
@@ -267,7 +268,7 @@ const EmployeeListScreen = () => {
       // Modified network check logic - only prevent refresh if DEFINITELY offline
       const networkAvailable = await isNetworkAvailable();
       if (!networkAvailable && refresh) {
-        console.log(
+        logDebug(
           "Network appears to be offline, but still attempting fetch"
         );
         // We'll still try the fetch but prepare for potential errors
@@ -583,7 +584,7 @@ const EmployeeListScreen = () => {
     // Show skeleton loaders when initially loading
     if (loading && filteredEmployees.length === 0) {
       return (
-        <FlatList
+        <FlashList estimatedItemSize={74}
           data={Array(3).fill(0)}
           renderItem={() => <EmployeeItemSkeleton />}
           keyExtractor={(_, index) => `skeleton-${index}`}
@@ -594,7 +595,7 @@ const EmployeeListScreen = () => {
 
     // Show the actual data
     return (
-      <FlatList
+      <FlashList estimatedItemSize={74}
         data={filteredEmployees}
         renderItem={renderEmployeeItem}
         keyExtractor={(item) => item.id}
@@ -1054,7 +1055,7 @@ const EmployeeListScreen = () => {
           />
         ) : // Show skeleton loaders when initially loading
         loading && filteredEmployees.length === 0 ? (
-          <FlatList
+          <FlashList estimatedItemSize={74}
             data={Array(3).fill(0)}
             renderItem={() => <EmployeeItemSkeleton />}
             keyExtractor={(_, index) => `skeleton-${index}`}
@@ -1062,7 +1063,7 @@ const EmployeeListScreen = () => {
           />
         ) : (
           // Show the actual data
-          <FlatList
+          <FlashList estimatedItemSize={74}
             data={filteredEmployees}
             renderItem={renderEmployeeItem}
             keyExtractor={(item) => item.id}

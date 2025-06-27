@@ -12,6 +12,7 @@ import {
   Dimensions,
   ActivityIndicator,
 } from "react-native";
+import { logDebug } from "../../utils/logger";
 import {
   Text,
   TextInput,
@@ -107,7 +108,7 @@ const ForgotPasswordScreen = () => {
     }
 
     try {
-      console.log("Initiating password reset for email:", email);
+      logDebug("Initiating password reset for email:", email);
       const { error } = await forgotPassword(email);
 
       if (error) {
@@ -129,7 +130,7 @@ const ForgotPasswordScreen = () => {
         setSnackbarMessage(errorMessage);
         setSnackbarVisible(true);
       } else {
-        console.log("Password reset request successful");
+        logDebug("Password reset request successful");
         setSnackbarMessage(t("forgotPassword.resetInstructions"));
         setSnackbarVisible(true);
 

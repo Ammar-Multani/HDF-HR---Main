@@ -379,6 +379,7 @@ const ActivityLogsScreen = () => {
               showHeader={false}
               containerStyle={styles.timeline}
               nestedScrollEnabled={true}
+              maxHeight={600}
             />
           </Surface>
         ) : (
@@ -696,7 +697,7 @@ const styles = StyleSheet.create({
           fontSize: 16,
           borderRadius: 4,
           border: "1px solid #e2e8f0",
-          outlineStyle: "none",
+          outline: "none",
           fontFamily: "Poppins-Regular",
         } as any)
       : {},

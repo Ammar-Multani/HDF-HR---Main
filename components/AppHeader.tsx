@@ -19,6 +19,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Text from "./Text";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
+import { logDebug } from "../utils/logger";
 
 interface AppHeaderProps {
   showBackButton?: boolean;
@@ -66,7 +67,7 @@ const AppHeader = ({
     try {
       navigationObject = useNavigation();
     } catch (error) {
-      console.log("Navigation not available in this context");
+      logDebug("Navigation not available in this context");
     }
   }
 
@@ -76,7 +77,7 @@ const AppHeader = ({
     } else if (navigationObject) {
       navigationObject.goBack();
     } else {
-      console.log("Back navigation not available");
+      logDebug("Back navigation not available");
     }
   };
 
@@ -85,7 +86,7 @@ const AppHeader = ({
       onHelpPress();
     } else {
       // Default help action if no handler provided
-      console.log("Help pressed");
+      logDebug("Help pressed");
     }
   };
 
@@ -117,7 +118,7 @@ const AppHeader = ({
         navigationObject.navigate("Profile" as never);
       }
     } else {
-      console.log("Navigation not available");
+      logDebug("Navigation not available");
     }
   };
 

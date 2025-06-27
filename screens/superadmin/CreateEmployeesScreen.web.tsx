@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
@@ -372,7 +373,7 @@ const CreateEmployeeScreen = () => {
 
       if (employeeError) {
         // If employee creation fails, delete the user for atomicity
-        console.log(
+        logDebug(
           "Error creating employee, cleaning up user:",
           employeeError
         );
@@ -451,11 +452,11 @@ const CreateEmployeeScreen = () => {
       }
 
       // Send welcome email based on role
-      console.log("Sending employee welcome email...");
+      logDebug("Sending employee welcome email...");
       let emailResult;
 
       if (data.is_admin) {
-        console.log("Sending company admin invitation email...");
+        logDebug("Sending company admin invitation email...");
         emailResult = await sendCompanyAdminInviteEmail(
           data.email,
           data.password,
@@ -464,7 +465,7 @@ const CreateEmployeeScreen = () => {
       } else {
         // Send regular employee welcome email
         const functionUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/send-email`;
-        console.log("Sending email using function URL:", functionUrl);
+        logDebug("Sending email using function URL:", functionUrl);
 
         const { success: emailSent, error: emailError } = await fetch(
           functionUrl,
@@ -492,12 +493,12 @@ const CreateEmployeeScreen = () => {
         if (!emailSent) {
           console.error("Error sending welcome email:", emailError);
         } else {
-          console.log("Welcome email sent successfully");
+          logDebug("Welcome email sent successfully");
         }
         emailResult = { success: emailSent };
       }
 
-      console.log(`Employee created with email: ${data.email}`);
+      logDebug(`Employee created with email: ${data.email}`);
 
       setSnackbarMessage(
         emailResult.success

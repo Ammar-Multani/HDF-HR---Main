@@ -2,6 +2,7 @@ import { Platform } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
 import { supabase } from "../lib/supabase";
+import { logDebug } from "./logger";
 
 /**
  * Pick a document from the device
@@ -15,7 +16,7 @@ export const pickDocument = async (
     const result = await DocumentPicker.getDocumentAsync(options);
 
     if (result.canceled) {
-      console.log("Document picking was cancelled");
+      logDebug("Document picking was cancelled");
       return null;
     }
 

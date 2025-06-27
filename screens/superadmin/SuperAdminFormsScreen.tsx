@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
-  FlatList,
   TouchableOpacity,
   RefreshControl,
   ScrollView,
@@ -38,6 +38,7 @@ import { FormStatus } from "../../types";
 import Text from "../../components/Text";
 import { useTranslation } from "react-i18next";
 import { LinearGradient } from "expo-linear-gradient";
+import { FlashList } from "@shopify/flash-list";
 
 // Define form interface with the properties needed for our UI
 interface FormItem {
@@ -809,7 +810,7 @@ const SuperAdminFormsScreen = () => {
         <TouchableOpacity
           onPress={() => {
             // Navigate to form details screen based on form type
-            console.log("View form details for:", item.id, item.type);
+            logDebug("View form details for:", item.id, item.type);
             navigation.navigate("SuperAdminFormDetailsScreen", {
               formId: item.id,
               formType: item.type,
@@ -931,7 +932,7 @@ const SuperAdminFormsScreen = () => {
             />
           </View>
         </View>
-        <FlatList
+        <FlashList estimatedItemSize={74}
           data={Array(3).fill(0)}
           renderItem={() => <FormItemSkeleton />}
           keyExtractor={(_, index) => `skeleton-${index}`}
@@ -1011,7 +1012,7 @@ const SuperAdminFormsScreen = () => {
           }}
         />
       ) : (
-        <FlatList
+        <FlashList estimatedItemSize={74}
           data={filteredForms}
           renderItem={renderFormItem}
           keyExtractor={(item) => `${item.type}-${item.id}`}

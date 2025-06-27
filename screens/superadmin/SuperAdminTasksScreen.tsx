@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
-  FlatList,
   TouchableOpacity,
   RefreshControl,
   ScrollView,
@@ -39,6 +39,7 @@ import { Task, TaskPriority, TaskStatus } from "../../types";
 import Text from "../../components/Text";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTranslation } from "react-i18next";
+import { FlashList } from "@shopify/flash-list";
 
 // Define extended Task type with the properties needed for our UI
 interface ExtendedTask extends Task {
@@ -330,7 +331,7 @@ const SuperAdminTasksScreen = () => {
       }
 
       if (!data) {
-        console.log("No task data returned");
+        logDebug("No task data returned");
         if (refresh) {
           setTasks([]);
         }
@@ -1059,7 +1060,7 @@ const SuperAdminTasksScreen = () => {
             />
           </View>
         </View>
-        <FlatList
+        <FlashList estimatedItemSize={74}
           data={Array(3).fill(0)}
           renderItem={() => <TaskItemSkeleton />}
           keyExtractor={(_, index) => `skeleton-${index}`}
@@ -1139,7 +1140,7 @@ const SuperAdminTasksScreen = () => {
           }}
         />
       ) : (
-        <FlatList
+        <FlashList estimatedItemSize={74}
           data={filteredTasks}
           renderItem={renderTaskItem}
           keyExtractor={(item) => item.id}

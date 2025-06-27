@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
@@ -100,15 +101,15 @@ const EmployeeFormDetailsScreen = () => {
         }
 
         formData = data;
-        console.log("Fetched accident report:", formData);
-        console.log(
+        logDebug("Fetched accident report:", formData);
+        logDebug(
           "Medical certificate field value:",
           formData.medical_certificate
         );
 
         // Get document details if medical certificate exists
         if (formData.medical_certificate) {
-          console.log(
+          logDebug(
             "Medical certificate exists, fetching document details..."
           );
 
@@ -120,17 +121,17 @@ const EmployeeFormDetailsScreen = () => {
             .eq("reference_id", formId)
             .eq("document_type", "MEDICAL_CERTIFICATE");
 
-          console.log("Document query result:", { docData, documentError });
+          logDebug("Document query result:", { docData, documentError });
 
           if (documentError) {
             console.error("Error fetching document details:", documentError);
           } else if (docData && docData.length > 0) {
             const doc = docData[0];
-            console.log("Found document with URL:", doc.file_url);
+            logDebug("Found document with URL:", doc.file_url);
             formData.document_url = doc.file_url;
           } else {
             // If not found by reference, try to find by file_path
-            console.log(
+            logDebug(
               "Trying to find document by file path:",
               formData.medical_certificate
             );
@@ -143,7 +144,7 @@ const EmployeeFormDetailsScreen = () => {
               console.error("Error fetching document by path:", pathError);
             } else if (pathDocData && pathDocData.length > 0) {
               const doc = pathDocData[0];
-              console.log("Found document by path with URL:", doc.file_url);
+              logDebug("Found document by path with URL:", doc.file_url);
               formData.document_url = doc.file_url;
             }
           }
@@ -161,15 +162,15 @@ const EmployeeFormDetailsScreen = () => {
         }
 
         formData = data;
-        console.log("Fetched illness report:", formData);
-        console.log(
+        logDebug("Fetched illness report:", formData);
+        logDebug(
           "Medical certificate field value:",
           formData.medical_certificate
         );
 
         // Get document details if medical certificate exists
         if (formData.medical_certificate) {
-          console.log(
+          logDebug(
             "Medical certificate exists, fetching document details..."
           );
 
@@ -181,17 +182,17 @@ const EmployeeFormDetailsScreen = () => {
             .eq("reference_id", formId)
             .eq("document_type", "MEDICAL_CERTIFICATE");
 
-          console.log("Document query result:", { docData, documentError });
+          logDebug("Document query result:", { docData, documentError });
 
           if (documentError) {
             console.error("Error fetching document details:", documentError);
           } else if (docData && docData.length > 0) {
             const doc = docData[0];
-            console.log("Found document with URL:", doc.file_url);
+            logDebug("Found document with URL:", doc.file_url);
             formData.document_url = doc.file_url;
           } else {
             // If not found by reference, try to find by file_path
-            console.log(
+            logDebug(
               "Trying to find document by file path:",
               formData.medical_certificate
             );
@@ -204,7 +205,7 @@ const EmployeeFormDetailsScreen = () => {
               console.error("Error fetching document by path:", pathError);
             } else if (pathDocData && pathDocData.length > 0) {
               const doc = pathDocData[0];
-              console.log("Found document by path with URL:", doc.file_url);
+              logDebug("Found document by path with URL:", doc.file_url);
               formData.document_url = doc.file_url;
             }
           }
@@ -365,7 +366,7 @@ const EmployeeFormDetailsScreen = () => {
               <Button
                 mode="outlined"
                 onPress={() => {
-                  console.log("Opening document URL:", form.document_url);
+                  logDebug("Opening document URL:", form.document_url);
                   if (form.document_url) {
                     if (Platform.OS === "web") {
                       window.open(form.document_url, "_blank");
@@ -437,7 +438,7 @@ const EmployeeFormDetailsScreen = () => {
               <Button
                 mode="outlined"
                 onPress={() => {
-                  console.log("Opening document URL:", form.document_url);
+                  logDebug("Opening document URL:", form.document_url);
                   if (form.document_url) {
                     if (Platform.OS === "web") {
                       window.open(form.document_url, "_blank");

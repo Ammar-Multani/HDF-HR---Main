@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
@@ -114,8 +115,8 @@ const CompanyAdminTaskDetailsScreen = () => {
 
   const fetchTaskDetails = async () => {
     try {
-      console.log("=== Starting fetchTaskDetails ===");
-      console.log("Fetching details for task:", taskId);
+      logDebug("=== Starting fetchTaskDetails ===");
+      logDebug("Fetching details for task:", taskId);
       setLoading(true);
 
       // Fetch task details
@@ -125,7 +126,7 @@ const CompanyAdminTaskDetailsScreen = () => {
         .eq("id", taskId)
         .single();
 
-      console.log("Task data:", { taskData, taskError });
+      logDebug("Task data:", { taskData, taskError });
 
       if (taskError) {
         console.error("Error fetching task details:", taskError);
@@ -138,7 +139,7 @@ const CompanyAdminTaskDetailsScreen = () => {
       // Check if the task was created by a super admin
       if (taskData.created_by) {
         try {
-          console.log(
+          logDebug(
             "Checking if creator is super admin. Creator ID:",
             taskData.created_by
           );
@@ -149,7 +150,7 @@ const CompanyAdminTaskDetailsScreen = () => {
             .eq("id", taskData.created_by)
             .maybeSingle();
 
-          console.log("Creator admin check result:", {
+          logDebug("Creator admin check result:", {
             creatorAdmin,
             creatorError,
           });
@@ -159,11 +160,11 @@ const CompanyAdminTaskDetailsScreen = () => {
             (creatorAdmin.role === "SUPER_ADMIN" ||
               creatorAdmin.role === "superadmin")
           ) {
-            console.log("Task was created by super admin:", creatorAdmin.name);
+            logDebug("Task was created by super admin:", creatorAdmin.name);
             setIsCreatedBySuperAdmin(true);
             setCreatorInfo(`Created by Super Admin: ${creatorAdmin.name}`);
           } else {
-            console.log("Task was not created by a super admin");
+            logDebug("Task was not created by a super admin");
             setIsCreatedBySuperAdmin(false);
           }
         } catch (creatorError) {
@@ -447,15 +448,15 @@ const CompanyAdminTaskDetailsScreen = () => {
 
   // Function to check if the company admin can edit this task
   const canEditTask = async () => {
-    console.log("=== Starting canEditTask check ===");
-    console.log("Current task state:", {
+    logDebug("=== Starting canEditTask check ===");
+    logDebug("Current task state:", {
       taskId: task?.id,
       createdBy: task?.created_by,
       isCreatedBySuperAdmin,
     });
 
     if (!user || !task) {
-      console.log("No user or task found, returning false");
+      logDebug("No user or task found, returning false");
       return false;
     }
 
@@ -467,20 +468,20 @@ const CompanyAdminTaskDetailsScreen = () => {
         .eq("id", task.created_by)
         .maybeSingle();
 
-      console.log("Creator admin query result:", { creatorAdmin, adminError });
+      logDebug("Creator admin query result:", { creatorAdmin, adminError });
 
       // If creator is found in admin table and is a super admin, return false
       if (creatorAdmin) {
         const isSuperAdmin =
           creatorAdmin.role === "SUPER_ADMIN" ||
           creatorAdmin.role === "superadmin";
-        console.log("Creator admin role check:", {
+        logDebug("Creator admin role check:", {
           role: creatorAdmin.role,
           isSuperAdmin,
         });
 
         if (isSuperAdmin) {
-          console.log("Task was created by super admin, editing not allowed");
+          logDebug("Task was created by super admin, editing not allowed");
           return false;
         }
       }
@@ -494,16 +495,16 @@ const CompanyAdminTaskDetailsScreen = () => {
         .eq("active_status", "active")
         .single();
 
-      console.log("Company user data:", { companyUserData, companyUserError });
+      logDebug("Company user data:", { companyUserData, companyUserError });
 
       if (companyUserError || !companyUserData) {
-        console.log("Error or no data found for company user");
+        logDebug("Error or no data found for company user");
         return false;
       }
 
       // For editing, only allow if user is the creator
       const isCreator = task.created_by === companyUserData.id;
-      console.log("Permission check results:", {
+      logDebug("Permission check results:", {
         isCreator,
         currentUserId: companyUserData.id,
         taskCreator: task.created_by,
@@ -518,9 +519,9 @@ const CompanyAdminTaskDetailsScreen = () => {
 
   // Function to check if user can update task status
   const canUpdateStatus = async () => {
-    console.log("=== Starting canUpdateStatus check ===");
+    logDebug("=== Starting canUpdateStatus check ===");
     if (!user || !task) {
-      console.log("No user or task found, returning false");
+      logDebug("No user or task found, returning false");
       return false;
     }
 
@@ -534,7 +535,7 @@ const CompanyAdminTaskDetailsScreen = () => {
         .single();
 
       if (userError || !currentUser) {
-        console.log("Could not find active company user record");
+        logDebug("Could not find active company user record");
         return false;
       }
 
@@ -544,7 +545,7 @@ const CompanyAdminTaskDetailsScreen = () => {
         ? task.assigned_to.includes(currentUser.id)
         : task.assigned_to === currentUser.id;
 
-      console.log("Status update permission check:", {
+      logDebug("Status update permission check:", {
         userId: currentUser.id,
         isCreator,
         isAssignee,
@@ -569,7 +570,7 @@ const CompanyAdminTaskDetailsScreen = () => {
           creatorAdmin?.role === "SUPER_ADMIN" ||
           creatorAdmin?.role === "superadmin"
         ) {
-          console.log(
+          logDebug(
             "Task created by super admin, creator cannot update status"
           );
           return false;
@@ -586,9 +587,9 @@ const CompanyAdminTaskDetailsScreen = () => {
 
   // Update the handleStatusPress to use canUpdateStatus
   const handleStatusPress = async () => {
-    console.log("=== Status Press Handler ===");
+    logDebug("=== Status Press Handler ===");
     const canUpdate = await canUpdateStatus();
-    console.log("Can update status?", canUpdate);
+    logDebug("Can update status?", canUpdate);
 
     if (canUpdate) {
       setStatusMenuVisible(true);
@@ -608,15 +609,15 @@ const CompanyAdminTaskDetailsScreen = () => {
   };
 
   const handleUpdateStatus = async (newStatus: TaskStatus) => {
-    console.log("=== Starting handleUpdateStatus ===");
+    logDebug("=== Starting handleUpdateStatus ===");
     if (!task || !user) {
-      console.log("No task or user found");
+      logDebug("No task or user found");
       return;
     }
 
     try {
       const canUpdate = await canUpdateStatus();
-      console.log("Can update status check result:", canUpdate);
+      logDebug("Can update status check result:", canUpdate);
 
       if (!canUpdate) {
         if (isCreatedBySuperAdmin && !task.assigned_to) {
@@ -641,7 +642,7 @@ const CompanyAdminTaskDetailsScreen = () => {
         .eq("active_status", "active")
         .single();
 
-      console.log("Company user data for update:", {
+      logDebug("Company user data for update:", {
         companyUserData,
         companyUserError,
       });
@@ -660,7 +661,7 @@ const CompanyAdminTaskDetailsScreen = () => {
         updated_at: new Date().toISOString(),
       };
 
-      console.log("Attempting to update task with data:", {
+      logDebug("Attempting to update task with data:", {
         taskId: task.id,
         updateData,
       });
@@ -675,7 +676,7 @@ const CompanyAdminTaskDetailsScreen = () => {
         throw updateError;
       }
 
-      console.log("Task status updated successfully");
+      logDebug("Task status updated successfully");
 
       // Update local state
       setTask({

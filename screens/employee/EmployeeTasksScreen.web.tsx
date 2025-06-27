@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { StyleSheet, View, FlatList, RefreshControl } from "react-native";
+import { StyleSheet, View, RefreshControl } from "react-native";
+import { FlashList } from "@shopify/flash-list";
 import {
   Text,
   Card,
@@ -161,7 +162,7 @@ const EmployeeTasksScreen = () => {
           <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
       ) : (
-        <FlatList
+        <FlashList estimatedItemSize={74}
           data={filteredTasks}
           keyExtractor={(item) => item.id.toString()}
           renderItem={renderTaskItem}

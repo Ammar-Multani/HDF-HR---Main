@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
@@ -476,7 +477,7 @@ const CreateCompanyScreen = () => {
         // Don't throw here, as the company and user are already created successfully
       }
 
-      console.log(`Company admin created with email: ${data.admin_email}`);
+      logDebug(`Company admin created with email: ${data.admin_email}`);
 
       setSnackbarMessage(
         emailSent

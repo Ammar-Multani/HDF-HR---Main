@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
@@ -323,7 +324,7 @@ const SuperAdminDetailsScreen = () => {
 
       // Define the async function to fetch admin data
       const fetchAdminData = async () => {
-        console.log(`Fetching admin data for ID: ${adminId}`);
+        logDebug(`Fetching admin data for ID: ${adminId}`);
         const { data, error } = await supabase
           .from("admin")
           .select("*")
@@ -395,7 +396,7 @@ const SuperAdminDetailsScreen = () => {
       // Prepare the new status (opposite of current)
       const newStatus = !isCurrentlyActive;
 
-      console.log(
+      logDebug(
         `Current status: ${admin.status} (${typeof admin.status}), Interpreted as: ${isCurrentlyActive}, New status: ${newStatus}`
       );
 

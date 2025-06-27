@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
@@ -361,7 +362,7 @@ const CreateAccidentReportScreen = () => {
       let reportId = watch("id");
       if (!reportId) {
         setUploadProgress(20);
-        console.log("Creating new accident report...");
+        logDebug("Creating new accident report...");
         const { data: accidentReport, error: createError } = await supabase
           .from("accident_report")
           .insert([
@@ -396,7 +397,7 @@ const CreateAccidentReportScreen = () => {
           );
         }
 
-        console.log("Created accident report:", accidentReport);
+        logDebug("Created accident report:", accidentReport);
         reportId = accidentReport.id;
         setValue("id", reportId);
 
@@ -480,12 +481,12 @@ const CreateAccidentReportScreen = () => {
 
       while (retryCount < MAX_RETRIES && !uploadSuccess) {
         try {
-          console.log("Attempting to upload file...");
+          logDebug("Attempting to upload file...");
           const response = await supabase.functions.invoke("onedrive-upload", {
             body: formData,
           });
 
-          console.log("Raw upload response:", response);
+          logDebug("Raw upload response:", response);
 
           if (response.error) {
             throw new Error(response.error.message);
@@ -509,11 +510,11 @@ const CreateAccidentReportScreen = () => {
       setUploadProgress(70);
 
       if (uploadResponse?.data) {
-        console.log("Upload response data:", uploadResponse.data);
+        logDebug("Upload response data:", uploadResponse.data);
 
         // The actual data is nested inside data.data
         const responseData = uploadResponse.data.data;
-        console.log("Processed response data:", responseData);
+        logDebug("Processed response data:", responseData);
 
         // Update form with file path if available
         if (responseData?.filePath) {
@@ -536,7 +537,7 @@ const CreateAccidentReportScreen = () => {
 
         // Store both webUrl and sharingLink
         if (responseData?.webUrl) {
-          console.log("Original webUrl:", responseData.webUrl);
+          logDebug("Original webUrl:", responseData.webUrl);
 
           // Extract the direct file URL from SharePoint URL
           let directUrl = responseData.webUrl;
@@ -549,7 +550,7 @@ const CreateAccidentReportScreen = () => {
             directUrl += "?web=1";
           }
 
-          console.log("Setting preview URL to:", directUrl);
+          logDebug("Setting preview URL to:", directUrl);
           setSharingLink(responseData.sharingLink);
         } else {
           console.warn("No webUrl in response data:", responseData);
@@ -859,7 +860,7 @@ const CreateAccidentReportScreen = () => {
         },
       });
 
-      console.log("Delete response:", response);
+      logDebug("Delete response:", response);
 
       // Reset document-related state variables even if there was an error
       // This ensures the UI is cleaned up

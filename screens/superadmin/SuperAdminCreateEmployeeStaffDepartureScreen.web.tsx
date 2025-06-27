@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
@@ -176,7 +177,7 @@ const CreateStaffDepartureScreen = () => {
       // Create staff departure report first if it doesn't exist
       let reportId = watch("id");
       if (!reportId) {
-        console.log("Creating new staff departure report...");
+        logDebug("Creating new staff departure report...");
         const { data: departureReport, error: createError } = await supabase
           .from("staff_departure")
           .insert([
@@ -207,7 +208,7 @@ const CreateStaffDepartureScreen = () => {
           );
         }
 
-        console.log("Created staff departure report:", departureReport);
+        logDebug("Created staff departure report:", departureReport);
         reportId = departureReport.id;
         setValue("id", reportId);
       }

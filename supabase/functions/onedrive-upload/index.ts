@@ -156,10 +156,15 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS, DELETE",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-app-version"
 };
+const logDebug = (...args: unknown[]) => {
+  if (NODE_ENV === "development") {
+    console.log(...args);
+  }
+};
 // Logger function with environment-specific behavior
 function logger(level, message, data) {
   if (NODE_ENV === "development" || level === "error") {
-    console.log(`[${level.toUpperCase()}] ${message}`, data || "");
+    logDebug(`[${level.toUpperCase()}] ${message}`, data || "");
   }
 }
 // Initialize Microsoft Graph Client
@@ -212,7 +217,7 @@ async function withRetry(operation, retryCount = 0) {
       throw error;
     }
     const delay = Math.min(RETRY_CONFIG.INITIAL_DELAY * Math.pow(2, retryCount), RETRY_CONFIG.MAX_DELAY);
-    console.log(`Retry attempt ${retryCount + 1} after ${delay}ms`);
+    logDebug(`Retry attempt ${retryCount + 1} after ${delay}ms`);
     await sleep(delay);
     return withRetry(operation, retryCount + 1);
   }
@@ -289,9 +294,9 @@ async function uploadFileToOneDrive(graphClient, file, companyId, employeeId, fi
       }
     });
     // Create sharing link
-    console.log("Creating sharing link for item:", response.id);
+    logDebug("Creating sharing link for item:", response.id);
     const sharingLink = await createSharingLink(graphClient, response.id);
-    console.log("Sharing link created:", sharingLink);
+    logDebug("Sharing link created:", sharingLink);
     return {
       filePath,
       driveId: response.parentReference.driveId,
@@ -446,7 +451,7 @@ async function updateDocumentAfterDeletion(documentId, userId, companyId) {
 // Add new function to delete file from OneDrive
 async function deleteFileFromOneDrive(graphClient, itemId) {
   try {
-    console.log(`Attempting to delete file with item ID: ${itemId}`);
+    logDebug(`Attempting to delete file with item ID: ${itemId}`);
     // Delete the file using Microsoft Graph API
     try {
       await withRetry(async ()=>{
@@ -455,7 +460,7 @@ async function deleteFileFromOneDrive(graphClient, itemId) {
         } catch (deleteError) {
           // Check if the error is "item not found" (404) - if so, consider it a success
           if (deleteError.statusCode === 404) {
-            console.log(`Item ${itemId} not found, considering deletion successful`);
+            logDebug(`Item ${itemId} not found, considering deletion successful`);
             return {
               success: true
             };
@@ -473,7 +478,7 @@ async function deleteFileFromOneDrive(graphClient, itemId) {
     } catch (error) {
       // If the error is "item not found", consider it successful
       if (error.originalError && error.originalError.statusCode === 404) {
-        console.log(`Item ${itemId} not found after retries, considering deletion successful`);
+        logDebug(`Item ${itemId} not found after retries, considering deletion successful`);
         return {
           success: true
         };
@@ -494,14 +499,14 @@ async function deleteFileFromOneDrive(graphClient, itemId) {
 }
 serve(async (req)=>{
   // Log all incoming request details
-  console.log("Request details:", {
+  logDebug("Request details:", {
     method: req.method,
     url: req.url,
     headers: Object.fromEntries(req.headers.entries())
   });
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
-    console.log("Handling OPTIONS request");
+    logDebug("Handling OPTIONS request");
     return new Response(null, {
       status: 204,
       headers: {
@@ -512,7 +517,7 @@ serve(async (req)=>{
   }
   try {
     // Log request method
-    console.log(`Processing ${req.method} request`);
+    logDebug(`Processing ${req.method} request`);
     // Handle DELETE requests for file deletion
     if (req.method === "DELETE") {
       // Verify authorization
@@ -533,7 +538,7 @@ serve(async (req)=>{
       let requestData;
       try {
         requestData = await req.json();
-        console.log("Received delete request data:", requestData);
+        logDebug("Received delete request data:", requestData);
       } catch (e) {
         console.error("Failed to parse JSON data:", e);
         return new Response(JSON.stringify({
@@ -657,7 +662,7 @@ serve(async (req)=>{
     let formData;
     try {
       formData = await req.formData();
-      console.log("Received form data with fields:", Array.from(formData.keys()));
+      logDebug("Received form data with fields:", Array.from(formData.keys()));
     } catch (e) {
       console.error("Failed to parse form data:", e);
       return new Response(JSON.stringify({

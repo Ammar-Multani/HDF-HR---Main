@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   StyleSheet,
   View,
-  FlatList,
   TouchableOpacity,
   RefreshControl,
   Platform,
@@ -46,6 +45,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
 import Pagination from "../../components/Pagination";
+import { FlashList } from "@shopify/flash-list";
 
 // Define the navigation param list type
 type RootStackParamList = {
@@ -292,24 +292,25 @@ const createStyles = (theme: MD3Theme) =>
       padding: 16,
     },
     searchContainer: {
-      marginTop: 16,
       flexDirection: "row",
+      alignItems: "center",
       marginBottom: 16,
       gap: 8,
-    },
-    searchBar: {
-      flex: 1,
-      elevation: 0,
-      borderRadius: 18,
-      height: 60,
-      backgroundColor: "#fff",
-      borderWidth: 1,
-      borderColor: "#e0e0e0",
     },
     searchBarContainer: {
       flex: 1,
       flexDirection: "row",
       alignItems: "center",
+      gap: 8,
+    },
+    searchInput: {
+      flex: 1,
+      elevation: 0,
+      borderRadius: 18,
+      height: 56,
+      backgroundColor: "#fff",
+      borderWidth: 1,
+      borderColor: "#e0e0e0",
     },
     filterButtonContainer: {
       position: "relative",
@@ -318,7 +319,7 @@ const createStyles = (theme: MD3Theme) =>
     filterButton: {
       borderWidth: 1,
       borderColor: "#e0e0e0",
-      borderRadius: 12,
+      borderRadius: 8,
       backgroundColor: "#fff",
     },
     activeFilterButton: {
@@ -420,7 +421,8 @@ const createStyles = (theme: MD3Theme) =>
     },
     contentContainer: {
       flex: 1,
-      paddingBottom: 19,
+      paddingHorizontal: Platform.OS === "web" ? 24 : 16,
+      paddingVertical: 16,
     },
     tableContainer: {
       flex: 1,
@@ -429,6 +431,7 @@ const createStyles = (theme: MD3Theme) =>
       borderWidth: 1,
       borderColor: "#e0e0e0",
       overflow: "hidden",
+      minHeight: 400,
     },
     tableHeaderRow: {
       flexDirection: "row",
@@ -474,7 +477,8 @@ const createStyles = (theme: MD3Theme) =>
       fontFamily: "Poppins-Regular",
     },
     tableContent: {
-      flexGrow: 1,
+      paddingTop: 8,
+      paddingBottom: 50,
     },
     actionCell: {
       flex: 1,
@@ -518,6 +522,29 @@ const createStyles = (theme: MD3Theme) =>
     },
     tooltipText: {
       color: theme.colors.inverseOnSurface,
+    },
+    skeletonRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 16,
+      paddingHorizontal: 26,
+      borderBottomWidth: 1,
+      borderBottomColor: "#e0e0e0",
+      backgroundColor: "#fff",
+    },
+    skeletonCell: {
+      flex: 1,
+      paddingHorizontal: 26,
+    },
+    emptyStateContainer: {
+      backgroundColor: "#fff",
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: "#e0e0e0",
+      minHeight: 400,
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 24,
     },
   });
 
@@ -888,7 +915,7 @@ const CompanyReceiptsListScreen = () => {
         </Text>
       </View>
       <View style={[styles.tableCell, { flex: 0.8 }]}>
-        <TooltipText text={receipt.receipt_number} theme={theme} />
+        <TooltipText text={receipt.receipt_number.length > 15 ? receipt.receipt_number.slice(0, 15) + '...' : receipt.receipt_number} theme={theme} />
       </View>
       <View style={styles.tableCell}>
         <TooltipText text={receipt.merchant_name} theme={theme} />
@@ -930,86 +957,52 @@ const CompanyReceiptsListScreen = () => {
     </Pressable>
   );
 
-  const renderTableSkeleton = () => (
-    <View style={styles.tableContainer}>
-      <View style={styles.tableHeaderRow}>
-        {["ID", "Receipt No.", "Merchant", "Date", "Amount", "Actions"].map(
-          (header, index) => (
-            <View
-              key={header}
-              style={[
-                styles.tableHeaderCell,
-                index === 0 && { flex: 0.5 },
-                index === 1 && { flex: 0.8 },
-              ]}
-            >
-              <Shimmer width={100} height={20} />
-            </View>
-          )
-        )}
-      </View>
-      {Array(5)
-        .fill(0)
-        .map((_, index) => (
-          <View key={`skeleton-${index}`} style={styles.tableRow}>
-            {[100, 150, 200, 120, 100, 80].map((width, cellIndex) => (
-              <View
-                key={`cell-${index}-${cellIndex}`}
-                style={[
-                  styles.tableCell,
-                  cellIndex === 0 && { flex: 0.5 },
-                  cellIndex === 1 && { flex: 0.8 },
-                ]}
-              >
-                <Shimmer width={width} height={16} />
-              </View>
-            ))}
-          </View>
-        ))}
-    </View>
-  );
 
   const renderContent = () => {
     if (error) {
       return (
-        <EmptyState
-          icon="alert-circle"
-          title="Error Loading Receipts"
-          message={error}
-          buttonTitle="Try Again"
-          onButtonPress={() => {
-            setError(null);
-            fetchReceipts(true);
-          }}
-        />
+        <View style={styles.tableContainer}>
+          <EmptyState
+            icon="alert-circle"
+            title="Error Loading Receipts"
+            message={error}
+            buttonTitle="Try Again"
+            onButtonPress={() => {
+              setError(null);
+              fetchReceipts(true);
+            }}
+          />
+        </View>
       );
     }
 
     if (receipts.length === 0) {
       return (
-        <EmptyState
-          icon="receipt"
-          title={t("receipts.noReceiptsFound")}
-          message={
-            searchQuery || hasActiveFilters()
-              ? t("receipts.noReceiptsMatch")
-              : t("receipts.noReceiptsCreated")
-          }
-          buttonTitle={
-            searchQuery || hasActiveFilters()
-              ? t("common.clearFilters")
-              : t("receipts.createReceipt")
-          }
-          onButtonPress={() => {
-            if (searchQuery || hasActiveFilters()) {
-              setSearchQuery("");
-              setSortBy("date");
-              setSortOrder("desc");
-            } else {
-              handleCreateReceipt();
+        <View style={styles.tableContainer}>
+          <EmptyState
+            icon="receipt"
+            title={t("receipts.noReceiptsFound")}
+            message={
+              searchQuery || hasActiveFilters()
+                ? t("receipts.noReceiptsMatch")
+                : t("receipts.noReceiptsCreated")
             }
-          }}
-        />
+            buttonTitle={
+              searchQuery || hasActiveFilters()
+                ? t("common.clearFilters")
+                : t("receipts.createReceipt")
+            }
+            onButtonPress={() => {
+              if (searchQuery || hasActiveFilters()) {
+                setSearchQuery("");
+                setSortBy("date");
+                setSortOrder("desc");
+              } else {
+                handleCreateReceipt();
+              }
+            }}
+          />
+        </View>
       );
     }
 
@@ -1019,13 +1012,31 @@ const CompanyReceiptsListScreen = () => {
       <>
         <View style={styles.tableContainer}>
           {renderTableHeader()}
-          <FlatList
-            data={receipts}
+          <FlashList estimatedItemSize={74}
+            data={receipts.sort((a, b) => {
+              return sortOrder === 'desc'
+                ? new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                : new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+            })}
             renderItem={({ item }) => renderTableRow(item)}
             keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.tableContent}
+            contentContainerStyle={[
+              styles.tableContent,
+              receipts.length < 5 && { minHeight: 300 },
+            ]}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+            ListEmptyComponent={
+              <View
+                style={{ flex: 1, minHeight: 300, justifyContent: "center" }}
+              >
+                <EmptyState
+                  icon="receipt"
+                  title={t("receipts.noReceiptsFound")}
+                  message={t("receipts.noReceiptsMatch")}
+                />
+              </View>
             }
           />
         </View>
@@ -1034,6 +1045,8 @@ const CompanyReceiptsListScreen = () => {
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-between",
+            marginTop: 12,
+            minHeight: 48,
           }}
         >
           <View
@@ -1041,7 +1054,6 @@ const CompanyReceiptsListScreen = () => {
               flexDirection: "row",
               alignItems: "center",
               marginLeft: 12,
-              marginTop: 12,
             }}
           >
             <Text
@@ -1059,13 +1071,15 @@ const CompanyReceiptsListScreen = () => {
                 color: theme.colors.primary,
                 fontFamily: "Poppins-Medium",
                 marginLeft: 4,
+                minWidth: 20,
+                textAlign: "right",
               }}
             >
               {totalItems}
             </Text>
           </View>
           {totalPages > 1 && (
-            <View style={styles.paginationWrapper}>
+            <View style={[styles.paginationWrapper, { minHeight: 36 }]}>
               <Pagination
                 currentPage={page}
                 totalPages={totalPages}
@@ -1088,53 +1102,125 @@ const CompanyReceiptsListScreen = () => {
         />
         <View
           style={[
-            styles.searchContainer,
-            {
-              maxWidth: isLargeScreen ? 1400 : isMediumScreen ? 900 : "100%",
-              alignSelf: "center",
-              width: "100%",
-            },
-          ]}
-        >
-          <View style={styles.searchBarContainer}>
-            <Shimmer
-              width="100%"
-              height={60}
-              style={{
-                borderRadius: 18,
-                marginRight: 8,
-              }}
-            />
-            <Shimmer
-              width={48}
-              height={48}
-              style={{
-                borderRadius: 8,
-                marginRight: 15,
-              }}
-            />
-            <Shimmer
-              width={98}
-              height={48}
-              style={{
-                borderRadius: 8,
-              }}
-            />
-          </View>
-        </View>
-
-        <View
-          style={[
             styles.contentContainer,
             {
               maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
               alignSelf: "center",
               width: "100%",
-              flex: 1,
             },
           ]}
         >
-          {renderTableSkeleton()}
+          {/* Search Bar Shimmer with exact dimensions */}
+          <View style={[styles.searchContainer, { minHeight: 56 }]}>
+            <View style={styles.searchBarContainer}>
+              <Shimmer
+                width="70%"
+                height={56}
+                style={{
+                  borderRadius: 18,
+                }}
+              />
+              <Shimmer
+                width={48}
+                height={48}
+                style={{
+                  borderRadius: 8,
+                }}
+              />
+              <Shimmer
+                width={140}
+                height={56}
+                style={{
+                  borderRadius: 17,
+                }}
+              />
+            </View>
+          </View>
+
+          {/* Table Shimmer with consistent height */}
+          <View style={[styles.tableContainer, { minHeight: 400 }]}>
+            {/* Header Shimmer */}
+            <View style={[styles.tableHeaderRow, { height: 56 }]}>
+              <View style={[styles.tableHeaderCell, { flex: 0.5 }]}>
+                <Shimmer width={40} height={20} />
+              </View>
+              <View style={[styles.tableHeaderCell, { flex: 0.8 }]}>
+                <Shimmer width={80} height={20} />
+              </View>
+              <View style={styles.tableHeaderCell}>
+                <Shimmer width={100} height={20} />
+              </View>
+              <View style={styles.tableHeaderCell}>
+                <Shimmer width={80} height={20} />
+              </View>
+              <View style={styles.tableHeaderCell}>
+                <Shimmer width={90} height={20} />
+              </View>
+              <View style={styles.tableHeaderCell}>
+                <Shimmer width={70} height={20} />
+              </View>
+            </View>
+
+            {/* Table Rows Shimmer with consistent height */}
+            {Array(8)
+              .fill(0)
+              .map((_, index) => (
+                <View
+                  key={`skeleton-${index}`}
+                  style={[styles.skeletonRow, { height: 52 }]}
+                >
+                  <View style={[styles.skeletonCell, { flex: 0.5 }]}>
+                    <Shimmer width={40} height={16} />
+                  </View>
+                  <View style={[styles.skeletonCell, { flex: 0.8 }]}>
+                    <Shimmer width={100} height={16} />
+                  </View>
+                  <View style={styles.skeletonCell}>
+                    <Shimmer width={150} height={16} />
+                  </View>
+                  <View style={styles.skeletonCell}>
+                    <Shimmer width={100} height={16} />
+                  </View>
+                  <View style={styles.skeletonCell}>
+                    <Shimmer width={80} height={16} />
+                  </View>
+                  <View style={styles.skeletonCell}>
+                    <View style={{ flexDirection: "row", gap: 8 }}>
+                      <Shimmer
+                        width={32}
+                        height={32}
+                        style={{ borderRadius: 16 }}
+                      />
+                      <Shimmer
+                        width={32}
+                        height={32}
+                        style={{ borderRadius: 16 }}
+                      />
+                    </View>
+                  </View>
+                </View>
+              ))}
+          </View>
+
+          {/* Pagination Shimmer with consistent height */}
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              marginTop: 16,
+              minHeight: 48,
+            }}
+          >
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+            >
+              <Shimmer width={100} height={20} />
+              <Shimmer width={40} height={20} />
+            </View>
+            <View style={[styles.paginationWrapper, { minHeight: 36 }]}>
+              <Shimmer width={200} height={36} style={{ borderRadius: 8 }} />
+            </View>
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -1147,10 +1233,9 @@ const CompanyReceiptsListScreen = () => {
         subtitle={t("receipts.subtitle")}
         showLogo={false}
       />
-
       <View
         style={[
-          styles.searchContainer,
+          styles.contentContainer,
           {
             maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
             alignSelf: "center",
@@ -1158,7 +1243,7 @@ const CompanyReceiptsListScreen = () => {
           },
         ]}
       >
-        <View style={styles.searchBarContainer}>
+        <View style={[styles.searchContainer]}>
           <Searchbar
             placeholder={t("receipts.searchPlaceholder")}
             onChangeText={setSearchQuery}
@@ -1189,42 +1274,29 @@ const CompanyReceiptsListScreen = () => {
             />
             {hasActiveFilters() && <View style={styles.filterBadge} />}
           </View>
+
+          {canUploadReceipts && (
+            <FAB
+              icon="plus"
+              label="Add a Receipt"
+              style={[
+                styles.fab,
+                {
+                  backgroundColor: theme.colors.primary,
+                  position: "relative",
+                  margin: 0,
+                  marginLeft: 16,
+                },
+              ]}
+              onPress={handleCreateReceipt}
+              color={theme.colors.surface}
+              mode="flat"
+              theme={{ colors: { accent: theme.colors.surface } }}
+            />
+          )}
         </View>
+        {renderFilterModal()}
 
-        {canUploadReceipts && (
-          <FAB
-            icon="plus"
-            label="Add a Receipt"
-            style={[
-              styles.fab,
-              {
-                backgroundColor: theme.colors.primary,
-                position: "relative",
-                margin: 0,
-                marginLeft: 16,
-              },
-            ]}
-            onPress={handleCreateReceipt}
-            color={theme.colors.surface}
-            mode="flat"
-            theme={{ colors: { accent: theme.colors.surface } }}
-          />
-        )}
-      </View>
-
-      {renderFilterModal()}
-
-      <View
-        style={[
-          styles.contentContainer,
-          {
-            maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
-            alignSelf: "center",
-            width: "100%",
-            flex: 1,
-          },
-        ]}
-      >
         {renderContent()}
       </View>
     </SafeAreaView>

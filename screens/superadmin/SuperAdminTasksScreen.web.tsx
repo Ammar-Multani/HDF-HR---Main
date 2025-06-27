@@ -8,7 +8,6 @@ import React, {
 import {
   StyleSheet,
   View,
-  FlatList,
   TouchableOpacity,
   RefreshControl,
   ScrollView,
@@ -66,6 +65,7 @@ import {
   PillFilterGroup,
 } from "../../components/FilterSections";
 import Pagination from "../../components/Pagination";
+import { FlashList } from "@shopify/flash-list";
 
 // Define extended Task type with the properties needed for our UI
 interface ExtendedTask extends Task {
@@ -1268,7 +1268,8 @@ const SuperAdminTasksScreen = () => {
         <>
           <View style={styles.tableContainer}>
             <TableHeader />
-            <FlatList
+            <FlashList
+              estimatedItemSize={74}
               data={filteredTasks}
               renderItem={({ item }) => <TableRow item={item} />}
               keyExtractor={(item) => `task-${item.id}`}
@@ -1283,6 +1284,8 @@ const SuperAdminTasksScreen = () => {
               flexDirection: "row",
               alignItems: "center",
               justifyContent: "space-between",
+              marginTop: 12,
+              minHeight: 33,
             }}
           >
             <View
@@ -1329,7 +1332,8 @@ const SuperAdminTasksScreen = () => {
     return (
       <>
         <View style={{ flex: 1 }}>
-          <FlatList
+          <FlashList
+            estimatedItemSize={74}
             data={filteredTasks}
             renderItem={renderTaskItem}
             keyExtractor={(item) => `task-${item.id}`}
@@ -1419,7 +1423,8 @@ const SuperAdminTasksScreen = () => {
           {useTableLayout ? (
             <TableSkeleton />
           ) : (
-            <FlatList
+            <FlashList
+              estimatedItemSize={74}
               data={Array(4).fill(0)}
               renderItem={() => <TaskItemSkeleton />}
               keyExtractor={(_, index) => `skeleton-${index}`}
@@ -1840,7 +1845,8 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins-Regular",
   },
   tableContent: {
-    flexGrow: 1,
+    paddingTop: 8,
+    paddingBottom: 50,
   },
   tooltipContainer: {
     position: "relative",

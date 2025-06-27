@@ -18,6 +18,7 @@ import { EmployeeNavigator } from "./EmployeeNavigator";
 
 // Import linking configuration
 import { linking } from "./linkingConfiguration";
+import { logDebug } from "../utils/logger";
 
 // Keys for storage
 const NAVIGATION_STATE_KEY = "@navigation_state";
@@ -61,7 +62,7 @@ export const navigateToDashboard = (role: string) => {
 
   try {
     nav.dispatch(resetAction);
-    console.log(`Navigated user to ${role} dashboard`);
+    logDebug(`Navigated user to ${role} dashboard`);
 
     // Clean up the navigation flag
     AsyncStorage.removeItem(NAVIGATE_TO_DASHBOARD_KEY).catch(console.error);
@@ -131,7 +132,7 @@ export const AppNavigator = ({ initialAuthState = null }) => {
         );
 
         if (dashboardRole && navRef.current && navRef.isReady()) {
-          console.log(
+          logDebug(
             "Processing dashboard navigation request for role:",
             dashboardRole
           );

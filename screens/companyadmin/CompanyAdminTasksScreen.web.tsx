@@ -1,8 +1,13 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import {
   StyleSheet,
   View,
-  FlatList,
   TouchableOpacity,
   RefreshControl,
   ScrollView,
@@ -67,6 +72,8 @@ import {
   PillFilterGroup,
 } from "../../components/FilterSections";
 import HelpGuideModal from "../../components/HelpGuideModal";
+import { MD3Theme } from "react-native-paper";
+import { FlashList } from "@shopify/flash-list";
 
 // Add window dimensions hook
 const useWindowDimensions = () => {
@@ -96,28 +103,19 @@ const useWindowDimensions = () => {
 const TooltipText = ({
   text,
   numberOfLines = 1,
+  theme,
 }: {
   text: string;
   numberOfLines?: number;
+  theme: MD3Theme;
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
-  const containerRef = React.useRef<View>(null);
-  const [isLargeScreen, setIsLargeScreen] = useState(window.innerWidth >= 1440);
-
-  useEffect(() => {
-    const handleResize = () => {
-      setIsLargeScreen(window.innerWidth >= 1440);
-    };
-
-    if (Platform.OS === "web") {
-      window.addEventListener("resize", handleResize);
-      return () => window.removeEventListener("resize", handleResize);
-    }
-  }, []);
+  const containerRef = useRef<View>(null);
+  const styles = createStyles(theme);
 
   const updateTooltipPosition = () => {
-    if (Platform.OS === "web" && containerRef.current && !isLargeScreen) {
+    if (Platform.OS === "web" && containerRef.current) {
       // @ts-ignore - web specific
       const rect = containerRef.current.getBoundingClientRect();
       const windowHeight = window.innerHeight;
@@ -148,49 +146,63 @@ const TooltipText = ({
   };
 
   return (
-    <Text
+    <View
       ref={containerRef}
-      numberOfLines={numberOfLines}
-      onMouseEnter={updateTooltipPosition}
+      style={styles.tooltipContainer}
+      // @ts-ignore - web specific props
+      onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      style={[
-        {
-          color: isHovered ? "#1a73e8" : "#666",
-          fontSize: 13,
-          lineHeight: 20,
-        },
-      ]}
     >
-      {text}
-    </Text>
+      <Text style={styles.tableCellText} numberOfLines={numberOfLines}>
+        {text}
+      </Text>
+      {isHovered && (
+        <Portal>
+          <View
+            style={[
+              styles.tooltip,
+              {
+                position: "absolute",
+                left: tooltipPosition.x,
+                top: tooltipPosition.y,
+              },
+            ]}
+          >
+            <Text style={styles.tooltipText}>{text}</Text>
+          </View>
+        </Portal>
+      )}
+    </View>
   );
 };
 
 // Add Shimmer component
 interface ShimmerProps {
-  width: number;
+  width: number | string;
   height: number;
-  style?: ViewStyle;
+  style?: any;
 }
 
 const Shimmer: React.FC<ShimmerProps> = ({ width, height, style }) => {
-  const animatedValue = useSharedValue(0);
-
-  useEffect(() => {
-    animatedValue.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 1000 }),
-        withTiming(0, { duration: 1000 })
-      ),
-      -1
-    );
-  }, []);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: interpolate(animatedValue.value, [0, 1], [-width, width]) },
-    ],
-  }));
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        {
+          translateX: withRepeat(
+            withSequence(
+              withTiming(typeof width === "number" ? -width : -200, {
+                duration: 800,
+              }),
+              withTiming(typeof width === "number" ? width : 200, {
+                duration: 800,
+              })
+            ),
+            -1
+          ),
+        },
+      ],
+    };
+  });
 
   return (
     <View
@@ -198,14 +210,24 @@ const Shimmer: React.FC<ShimmerProps> = ({ width, height, style }) => {
         {
           width,
           height,
+          backgroundColor: "#E8E8E8",
           overflow: "hidden",
-          backgroundColor: "#E5E7EB",
           borderRadius: 4,
         },
         style,
       ]}
     >
-      <Animated.View style={[{ width: "100%", height: "100%" }, animatedStyle]}>
+      <Animated.View
+        style={[
+          {
+            width: "100%",
+            height: "100%",
+            position: "absolute",
+            backgroundColor: "transparent",
+          },
+          animatedStyle,
+        ]}
+      >
         <LinearGradient
           colors={["transparent", "rgba(255, 255, 255, 0.4)", "transparent"]}
           start={{ x: 0, y: 0 }}
@@ -218,10 +240,14 @@ const Shimmer: React.FC<ShimmerProps> = ({ width, height, style }) => {
 };
 
 // Add TableHeader component
-const TableHeader = () => {
+const TableHeader = ({
+  styles,
+}: {
+  styles: ReturnType<typeof createStyles>;
+}) => {
   return (
     <View style={styles.tableHeaderRow}>
-      <View style={styles.tableHeaderCell}>
+      <View style={[styles.tableHeaderCell, { flex: 2 }]}>
         <Text style={styles.tableHeaderText}>Title</Text>
       </View>
       <View style={styles.tableHeaderCell}>
@@ -241,16 +267,14 @@ const TableHeader = () => {
 };
 
 // Add TableHeaderSkeleton component
-const TableHeaderSkeleton = () => {
+const TableHeaderSkeleton = ({
+  styles,
+}: {
+  styles: ReturnType<typeof createStyles>;
+}) => {
   return (
-    <View style={styles.tableHeaderRow}>
-      <View style={styles.tableHeaderCell}>
-        <Shimmer width={160} height={20} />
-      </View>
-      <View style={styles.tableHeaderCell}>
-        <Shimmer width={140} height={20} />
-      </View>
-      <View style={styles.tableHeaderCell}>
+    <View style={[styles.tableHeaderRow, { height: 56 }]}>
+      <View style={[styles.tableHeaderCell, { flex: 2 }]}>
         <Shimmer width={120} height={20} />
       </View>
       <View style={styles.tableHeaderCell}>
@@ -259,33 +283,46 @@ const TableHeaderSkeleton = () => {
       <View style={styles.tableHeaderCell}>
         <Shimmer width={80} height={20} />
       </View>
+      <View style={styles.tableHeaderCell}>
+        <Shimmer width={70} height={20} />
+      </View>
+      <View style={styles.tableHeaderCell}>
+        <Shimmer width={60} height={20} />
+      </View>
     </View>
   );
 };
 
 // Add TableSkeleton component
-const TableSkeleton = () => {
+const TableSkeleton = ({
+  styles,
+}: {
+  styles: ReturnType<typeof createStyles>;
+}) => {
   return (
-    <View style={styles.tableContainer}>
-      <TableHeaderSkeleton />
-      {Array(5)
+    <View style={[styles.tableContainer, { minHeight: 400 }]}>
+      <TableHeaderSkeleton styles={styles} />
+      {Array(8)
         .fill(0)
         .map((_, index) => (
-          <View key={`skeleton-${index}`} style={styles.tableRow}>
-            <View style={styles.tableCell}>
-              <Shimmer width={160} height={16} />
+          <View
+            key={`skeleton-${index}`}
+            style={[styles.tableRow, { height: 52 }]}
+          >
+            <View style={[styles.tableCell, { flex: 2 }]}>
+              <Shimmer width={180} height={16} />
             </View>
             <View style={styles.tableCell}>
               <Shimmer width={140} height={16} />
             </View>
             <View style={styles.tableCell}>
-              <Shimmer width={120} height={16} />
+              <Shimmer width={100} height={16} />
             </View>
             <View style={styles.tableCell}>
               <Shimmer width={80} height={24} style={{ borderRadius: 12 }} />
             </View>
             <View style={styles.tableCell}>
-              <Shimmer width={80} height={24} style={{ borderRadius: 12 }} />
+              <Shimmer width={90} height={24} style={{ borderRadius: 12 }} />
             </View>
           </View>
         ))}
@@ -294,118 +331,39 @@ const TableSkeleton = () => {
 };
 
 // Component for skeleton loading UI
-const TaskItemSkeleton = () => {
+const TaskItemSkeleton = ({
+  styles,
+}: {
+  styles: ReturnType<typeof createStyles>;
+}) => {
   return (
-    <View
-      style={[
-        {
-          backgroundColor: "#FFFFFF",
-          borderRadius: 16,
-          marginBottom: 16,
-          borderWidth: 1,
-          borderColor: "rgba(0,0,0,0.03)",
-          elevation: 1,
-          shadowColor: "rgba(0,0,0,0.1)",
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.08,
-          shadowRadius: 8,
-          padding: 16,
-        },
-      ]}
-    >
+    <View style={[styles.taskCard, { minHeight: 200 }]}>
       <View
         style={{
           flexDirection: "row",
           justifyContent: "space-between",
           alignItems: "flex-start",
-          marginBottom: 12,
+          marginBottom: 16,
         }}
       >
-        <View style={{ flex: 1, marginRight: 8 }}>
-          <View
-            style={{
-              height: 20,
-              width: "70%",
-              backgroundColor: "#E0E0E0",
-              borderRadius: 4,
-              marginBottom: 8,
-            }}
-          />
-          <View
-            style={{
-              height: 14,
-              width: "50%",
-              backgroundColor: "#E0E0E0",
-              borderRadius: 4,
-            }}
-          />
+        <View style={{ flex: 1, marginRight: 16 }}>
+          <Shimmer width={200} height={24} style={{ marginBottom: 8 }} />
+          <Shimmer width={150} height={16} />
         </View>
-        <View
-          style={{
-            height: 24,
-            width: 80,
-            backgroundColor: "#E0E0E0",
-            borderRadius: 12,
-          }}
-        />
+        <Shimmer width={100} height={32} style={{ borderRadius: 16 }} />
       </View>
 
-      <View
-        style={{
-          height: 40,
-          backgroundColor: "#F5F5F5",
-          borderRadius: 6,
-          marginBottom: 16,
-        }}
-      />
+      <Shimmer width="100%" height={40} style={{ marginBottom: 16 }} />
 
-      <View
-        style={{
-          backgroundColor: "#f9f9f9",
-          borderRadius: 8,
-          padding: 12,
-          marginBottom: 16,
-          borderLeftWidth: 2,
-          borderLeftColor: "#E0E0E0",
-        }}
-      >
-        <View style={{ flexDirection: "row", marginBottom: 4 }}>
-          <View
-            style={{
-              height: 14,
-              width: 80,
-              backgroundColor: "#E0E0E0",
-              borderRadius: 4,
-            }}
-          />
-          <View
-            style={{
-              height: 14,
-              width: "60%",
-              backgroundColor: "#E0E0E0",
-              borderRadius: 4,
-              marginLeft: 8,
-            }}
-          />
+      <View style={[styles.detailsSection, { marginBottom: 16 }]}>
+        <View style={{ marginBottom: 8 }}>
+          <Shimmer width={180} height={16} style={{ marginBottom: 4 }} />
         </View>
-        <View style={{ flexDirection: "row", marginBottom: 4 }}>
-          <View
-            style={{
-              height: 14,
-              width: 80,
-              backgroundColor: "#E0E0E0",
-              borderRadius: 4,
-            }}
-          />
-          <View
-            style={{
-              height: 14,
-              width: "40%",
-              backgroundColor: "#E0E0E0",
-              borderRadius: 4,
-              marginLeft: 8,
-            }}
-          />
+        <View style={{ marginBottom: 8 }}>
+          <Shimmer width={160} height={16} style={{ marginBottom: 4 }} />
+        </View>
+        <View>
+          <Shimmer width={170} height={16} />
         </View>
       </View>
 
@@ -414,25 +372,10 @@ const TaskItemSkeleton = () => {
           flexDirection: "row",
           justifyContent: "space-between",
           alignItems: "center",
-          marginTop: 4,
         }}
       >
-        <View
-          style={{
-            height: 30,
-            width: 80,
-            backgroundColor: "#E0E0E0",
-            borderRadius: 15,
-          }}
-        />
-        <View
-          style={{
-            height: 24,
-            width: 120,
-            backgroundColor: "#E0E0E0",
-            borderRadius: 6,
-          }}
-        />
+        <Shimmer width={100} height={30} style={{ borderRadius: 15 }} />
+        <Shimmer width={120} height={32} style={{ borderRadius: 6 }} />
       </View>
     </View>
   );
@@ -471,8 +414,351 @@ interface AdminUser {
   role: string;
 }
 
+// Add createStyles before component
+const createStyles = (theme: MD3Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: "#F8F9FA",
+    },
+    contentContainer: {
+      flex: 1,
+      paddingHorizontal: Platform.OS === "web" ? 24 : 16,
+      paddingVertical: 16,
+    },
+    searchContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 16,
+      gap: 8,
+    },
+    searchBarContainer: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    searchbar: {
+      flex: 1,
+      elevation: 0,
+      borderRadius: 18,
+      height: 56,
+      backgroundColor: "#fff",
+      borderWidth: 1,
+      borderColor: "#e0e0e0",
+    },
+    filterButtonContainer: {
+      position: "relative",
+      marginLeft: 8,
+    },
+    filterButton: {
+      borderWidth: 1,
+      borderColor: "#e0e0e0",
+      borderRadius: 8,
+      backgroundColor: "#fff",
+    },
+    activeFilterButton: {
+      backgroundColor: "#E8F0FE",
+      borderWidth: 1,
+      borderColor: theme.colors.primary,
+    },
+    filterBadge: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: "#ff5252",
+      position: "absolute",
+      top: 8,
+      right: 8,
+      zIndex: 2,
+    },
+    activeFiltersContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      flexWrap: "wrap",
+      marginTop: 8,
+      marginBottom: 12,
+      paddingHorizontal: 20,
+    },
+    activeFiltersText: {
+      fontSize: 14,
+      fontFamily: "Poppins-Regular",
+      color: "#616161",
+      marginRight: 8,
+    },
+    filtersScrollView: {
+      flexGrow: 0,
+      marginVertical: 4,
+    },
+    activeFilterChip: {
+      margin: 4,
+    },
+    listContent: {
+      padding: 16,
+      paddingTop: 8,
+      paddingBottom: 100,
+    },
+    card: {
+      marginBottom: 16,
+      elevation: 1,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: "rgba(0,0,0,0.03)",
+      overflow: "hidden",
+    },
+    cardContent: {
+      padding: 16,
+    },
+    cardHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+      marginBottom: 12,
+    },
+    titleContainer: {
+      flex: 1,
+      marginRight: 8,
+    },
+    taskTitle: {
+      fontSize: 16,
+      color: "#333",
+      marginBottom: 4,
+    },
+    taskDescription: {
+      marginBottom: 16,
+      opacity: 0.7,
+      color: "#666",
+      lineHeight: 20,
+    },
+    taskCard: {
+      backgroundColor: "#fff",
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: "rgba(0,0,0,0.03)",
+      padding: 16,
+      marginBottom: 16,
+      minHeight: 200,
+    },
+    detailsSection: {
+      backgroundColor: "#f9f9f9",
+      borderRadius: 8,
+      padding: 12,
+      marginBottom: 16,
+      borderLeftWidth: 2,
+      borderLeftColor: "#1a73e8",
+    },
+    detailItem: {
+      flexDirection: "row",
+      marginBottom: 4,
+    },
+    detailLabel: {
+      opacity: 0.7,
+      color: "#333",
+      fontSize: 13,
+      fontWeight: "600",
+      marginRight: 2,
+    },
+    detailValue: {
+      flex: 1,
+      color: "#666",
+      fontSize: 13,
+    },
+    fab: {
+      borderRadius: 17,
+      height: 56,
+    },
+    modalContainer: {
+      backgroundColor: "white",
+      borderRadius: 16,
+      margin: 16,
+      overflow: "hidden",
+      maxHeight: "80%",
+      elevation: 5,
+    },
+    modalHeaderContainer: {
+      backgroundColor: "white",
+      borderTopLeftRadius: 16,
+      borderTopRightRadius: 16,
+      zIndex: 1,
+    },
+    modalHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    modalTitle: {
+      fontFamily: "Poppins-SemiBold",
+      color: "#212121",
+    },
+    modalContent: {
+      maxHeight: 400,
+    },
+    modalDivider: {
+      height: 1,
+      backgroundColor: "#E0E0E0",
+      marginTop: 16,
+    },
+    modalSection: {
+      marginBottom: 24,
+    },
+    sectionHeader: {
+      marginBottom: 16,
+    },
+    sectionTitle: {
+      fontSize: 16,
+      fontFamily: "Poppins-SemiBold",
+      color: "#212121",
+    },
+    radioItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginVertical: 8,
+    },
+    radioLabel: {
+      fontSize: 16,
+      marginLeft: 12,
+      fontFamily: "Poppins-Regular",
+      color: "#424242",
+    },
+    modalFooter: {
+      flexDirection: "row",
+      justifyContent: "flex-end",
+      borderTopWidth: 1,
+      borderTopColor: "#E0E0E0",
+    },
+    footerButton: {
+      borderRadius: 8,
+      marginLeft: 16,
+    },
+    applyButton: {
+      elevation: 2,
+    },
+    clearButtonText: {
+      fontFamily: "Poppins-Medium",
+      color: "#616161",
+    },
+    applyButtonText: {
+      fontFamily: "Poppins-Medium",
+      color: "#FFFFFF",
+    },
+    loadingFooter: {
+      padding: 16,
+      alignItems: "center",
+    },
+    endListText: {
+      fontSize: 14,
+      fontFamily: "Poppins-Regular",
+      color: "#616161",
+    },
+    tableContainer: {
+      flex: 1,
+      backgroundColor: "#fff",
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: "#e0e0e0",
+      overflow: "hidden",
+      minHeight: 400,
+    },
+    tableHeaderRow: {
+      flexDirection: "row",
+      backgroundColor: "#f8fafc",
+      borderBottomWidth: 1,
+      borderBottomColor: "#e0e0e0",
+      paddingVertical: 16,
+      paddingHorizontal: 26,
+      alignContent: "center",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    tableHeaderCell: {
+      flex: 1,
+      paddingHorizontal: 16,
+      justifyContent: "space-around",
+      paddingLeft: 25,
+      alignItems: "flex-start",
+    },
+    tableHeaderText: {
+      fontSize: 14,
+      color: "#64748b",
+      fontFamily: "Poppins-Medium",
+    },
+    tableRow: {
+      flexDirection: "row",
+      borderBottomWidth: 1,
+      borderBottomColor: "#e0e0e0",
+      paddingVertical: 13,
+      backgroundColor: "#fff",
+      paddingHorizontal: 26,
+      alignItems: "center",
+    },
+    tableCell: {
+      flex: 1,
+      paddingHorizontal: 26,
+      justifyContent: "space-evenly",
+      alignItems: "flex-start",
+    },
+    tableCellText: {
+      fontSize: 14,
+      color: "#334155",
+      fontFamily: "Poppins-Regular",
+    },
+    tableContent: {
+      paddingTop: 8,
+      paddingBottom: 50,
+    },
+    tooltipContainer: {
+      position: "relative",
+      flex: 1,
+      maxWidth: "100%",
+      zIndex: 10,
+    },
+    tooltip: {
+      backgroundColor: "rgba(255, 255, 255, 0.95)",
+      padding: 8,
+      marginLeft: 30,
+      borderRadius: 4,
+      borderWidth: 1,
+      borderColor: "#e0e0e0",
+      maxWidth: 300,
+      shadowColor: "#000",
+      shadowOffset: {
+        width: 0,
+        height: 2,
+      },
+      shadowOpacity: 0.25,
+      shadowRadius: 3.84,
+      elevation: 5,
+      zIndex: 9999,
+      ...(Platform.OS === "web"
+        ? {
+            // @ts-ignore - web specific style
+            willChange: "transform",
+            // @ts-ignore - web specific style
+            isolation: "isolate",
+          }
+        : {}),
+    },
+    tooltipText: {
+      color: "#000",
+      fontSize: 12,
+      fontFamily: "Poppins-Regular",
+      lineHeight: 16,
+    },
+    paginationWrapper: {
+      backgroundColor: "#fff",
+      borderWidth: 1,
+      borderColor: "#e0e0e0",
+      borderRadius: 16,
+      marginTop: 12,
+      overflow: "hidden",
+      width: "auto",
+      alignSelf: "center",
+    },
+  });
+
 const CompanyAdminTasksScreen = () => {
   const theme = useTheme();
+  const styles = createStyles(theme);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const { user } = useAuth();
   const dimensions = useWindowDimensions();
@@ -915,7 +1201,7 @@ const CompanyAdminTasksScreen = () => {
     }
 
     // Clear the timeout on unmount
-    let debounceTimeout;
+    let debounceTimeout: NodeJS.Timeout | undefined;
 
     // Only fetch when a search query is entered or cleared
     if (searchQuery.trim() === "" || searchQuery.length > 2) {
@@ -1176,129 +1462,17 @@ const CompanyAdminTasksScreen = () => {
     );
   };
 
-  // Update the renderTaskItem to use the new ExtendedTask type
-  const renderTaskItem = ({ item }: { item: ExtendedTask }) => (
-    <TouchableOpacity
-      onPress={() =>
-        navigation.navigate(
-          "TaskDetails" as never,
-          { taskId: item.id } as never
-        )
-      }
-    >
-      <View style={styles.taskCard}>
-        <View
-          style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-          }}
-        >
-          <View style={{ flex: 1, marginRight: 8 }}>
-            <Text
-              style={{
-                fontSize: 16,
-                color: "#333",
-                marginBottom: 4,
-                fontWeight: "bold",
-              }}
-            >
-              {item.title}
-            </Text>
-          </View>
-          <StatusBadge status={item.status} />
-        </View>
-
-        <Text
-          style={{
-            marginBottom: 16,
-            opacity: 0.7,
-            color: "#666",
-            lineHeight: 20,
-          }}
-          numberOfLines={2}
-        >
-          {item.description}
-        </Text>
-
-        <View style={styles.detailsSection}>
-          {item.assignee && (
-            <View style={styles.detailItem}>
-              <Text style={styles.detailLabel}>Assigned to</Text>
-              <Text style={styles.detailValue}>
-                : {item.assignee.first_name} {item.assignee.last_name}
-              </Text>
-            </View>
-          )}
-          <View style={styles.detailItem}>
-            <Text style={styles.detailLabel}>Created</Text>
-            <Text style={styles.detailValue}>
-              : {format(new Date(item.created_at), "MMM d, yyyy")}
-            </Text>
-          </View>
-          {item.creator && (
-            <View style={styles.detailItem}>
-              <Text style={styles.detailLabel}>Created by</Text>
-              <Text style={styles.detailValue}>
-                : {item.creator.first_name} {item.creator.last_name}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        <View
-          style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <Chip
-            icon="flag"
-            style={{
-              height: 30,
-              borderRadius: 25,
-              borderWidth: 1,
-              backgroundColor: getPriorityColor(item.priority),
-              borderColor: getPriorityColor(item.priority),
-            }}
-            textStyle={{
-              color: getPriorityColor(item.priority),
-              fontSize: 12,
-            }}
-          >
-            {item.priority.charAt(0).toUpperCase() + item.priority.slice(1)}
-          </Chip>
-
-          <Text
-            style={{
-              opacity: 0.8,
-              fontSize: 13,
-              color: "#555",
-              backgroundColor: "#f5f5f5",
-              paddingVertical: 6,
-              paddingHorizontal: 12,
-              borderRadius: 6,
-            }}
-          >
-            Due: {format(new Date(item.deadline), "MMM d, yyyy")}
-          </Text>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-
   // Update the TableRow component to use ExtendedTask and show formatted names
-  const TableRow = ({ item }: { item: ExtendedTask }) => (
+  const renderTableRow = ({ item }: { item: ExtendedTask }) => (
     <Pressable
       onPress={() => navigation.navigate("TaskDetails", { taskId: item.id })}
-      style={({ pressed }: PressableStateCallbackType) => [
+      style={({ pressed }) => [
         styles.tableRow,
         pressed && { backgroundColor: "#f8fafc" },
       ]}
     >
-      <View style={styles.tableCell}>
-        <TooltipText text={item.title} />
+      <View style={[styles.tableCell, { flex: 2 }]}>
+        <TooltipText text={item.title} theme={theme} />
       </View>
       <View style={styles.tableCell}>
         <TooltipText
@@ -1307,13 +1481,17 @@ const CompanyAdminTasksScreen = () => {
               ? `${item.assignee.first_name} ${item.assignee.last_name}`
               : "-"
           }
+          theme={theme}
         />
       </View>
       <View style={styles.tableCell}>
-        <TooltipText text={format(new Date(item.deadline), "MMM d, yyyy")} />
+        <TooltipText
+          text={format(new Date(item.deadline), "MMM d, yyyy")}
+          theme={theme}
+        />
       </View>
       <View style={styles.tableCell}>
-      <Chip
+        <Chip
           style={{
             borderRadius: 25,
             backgroundColor: getPriorityColor(item.priority) + "20",
@@ -1380,37 +1558,82 @@ const CompanyAdminTasksScreen = () => {
       <>
         {isMediumScreen || isLargeScreen ? (
           <View style={styles.tableContainer}>
-            <TableHeader />
-            <FlatList
+            <TableHeader styles={styles} />
+            <FlashList estimatedItemSize={74}
               data={filteredTasks}
-              renderItem={({ item }) => <TableRow item={item} />}
+              renderItem={renderTableRow}
               keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.tableContent}
+              contentContainerStyle={[
+                styles.tableContent,
+                filteredTasks.length < 5 && { minHeight: 300 },
+              ]}
               refreshControl={
                 <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
               }
             />
           </View>
         ) : (
-          <FlatList
+          <FlashList estimatedItemSize={74}
             data={filteredTasks}
-            renderItem={renderTaskItem}
+            renderItem={renderTableRow}
             keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.listContent}
+            contentContainerStyle={[
+              styles.listContent,
+              filteredTasks.length < 5 && { minHeight: 300 },
+            ]}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
             }
           />
         )}
-        {totalPages > 1 && (
-          <View style={styles.paginationWrapper}>
-            <Pagination
-              currentPage={page}
-              totalPages={totalPages}
-              onPageChange={handlePageChange}
-            />
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginTop: 16,
+            minHeight: 48,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              marginLeft: 12,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 14,
+                color: "#666",
+                fontFamily: "Poppins-Regular",
+              }}
+            >
+              Total Tasks:
+            </Text>
+            <Text
+              style={{
+                fontSize: 14,
+                color: theme.colors.primary,
+                fontFamily: "Poppins-Medium",
+                marginLeft: 4,
+                minWidth: 20,
+                textAlign: "right",
+              }}
+            >
+              {totalCount}
+            </Text>
           </View>
-        )}
+          {totalPages > 1 && (
+            <View style={styles.paginationWrapper}>
+              <Pagination
+                currentPage={page}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+              />
+            </View>
+          )}
+        </View>
       </>
     );
   };
@@ -1459,6 +1682,97 @@ const CompanyAdminTasksScreen = () => {
       "Network status is monitored to ensure data accuracy",
     ],
   };
+
+  if (loading && !refreshing) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: "#F5F5F5" }]}>
+        <AppHeader
+          title="Tasks"
+          showBackButton={false}
+          showHelpButton={true}
+          onHelpPress={() => setHelpModalVisible(true)}
+          showLogo={false}
+        />
+
+        <View
+          style={[
+            styles.contentContainer,
+            {
+              maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
+              alignSelf: "center",
+              width: "100%",
+            },
+          ]}
+        >
+          {/* Search Bar Shimmer */}
+          <View style={[styles.searchContainer, { minHeight: 56 }]}>
+            <View style={styles.searchBarContainer}>
+              <Shimmer
+                width="70%"
+                height={56}
+                style={{
+                  borderRadius: 18,
+                }}
+              />
+              <Shimmer
+                width={48}
+                height={48}
+                style={{
+                  borderRadius: 8,
+                  marginLeft: 8,
+                }}
+              />
+              <Shimmer
+                width={140}
+                height={56}
+                style={{
+                  borderRadius: 17,
+                  marginLeft: 16,
+                }}
+              />
+            </View>
+          </View>
+
+          {/* Content Shimmer */}
+          {isMediumScreen || isLargeScreen ? (
+            <TableSkeleton styles={styles} />
+          ) : (
+            <View style={{ padding: 16 }}>
+              {Array(5)
+                .fill(0)
+                .map((_, index) => (
+                  <TaskItemSkeleton
+                    key={`card-skeleton-${index}`}
+                    styles={styles}
+                  />
+                ))}
+            </View>
+          )}
+
+          {/* Pagination Shimmer */}
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              marginTop: 16,
+              minHeight: 48,
+              paddingHorizontal: 16,
+            }}
+          >
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+            >
+              <Shimmer width={100} height={20} />
+              <Shimmer width={40} height={20} />
+            </View>
+            <View style={[styles.paginationWrapper, { minHeight: 36 }]}>
+              <Shimmer width={200} height={36} style={{ borderRadius: 8 }} />
+            </View>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: "#F5F5F5" }]}>
@@ -1516,10 +1830,9 @@ const CompanyAdminTasksScreen = () => {
           {error}
         </Banner>
       )}
-
       <View
         style={[
-          styles.searchContainer,
+          styles.contentContainer,
           {
             maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
             alignSelf: "center",
@@ -1527,7 +1840,16 @@ const CompanyAdminTasksScreen = () => {
           },
         ]}
       >
-        <View style={styles.searchBarContainer}>
+        <View
+          style={[
+            styles.searchContainer,
+            {
+              maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
+              alignSelf: "center",
+              width: "100%",
+            },
+          ]}
+        >
           <Searchbar
             placeholder="Search tasks..."
             onChangeText={networkStatus === false ? undefined : setSearchQuery}
@@ -1567,383 +1889,33 @@ const CompanyAdminTasksScreen = () => {
             />
             {hasActiveFilters() && <View style={styles.filterBadge} />}
           </View>
+
+          <FAB
+            icon="plus"
+            label={isLargeScreen ? "Create Task" : undefined}
+            style={[
+              styles.fab,
+              {
+                backgroundColor: theme.colors.primary,
+                position: "relative",
+                margin: 0,
+                marginLeft: 16,
+              },
+            ]}
+            onPress={() => navigation.navigate("CreateTask")}
+            color={theme.colors.surface}
+            mode="flat"
+            theme={{ colors: { accent: theme.colors.surface } }}
+          />
         </View>
 
-        <FAB
-          icon="plus"
-          label={isLargeScreen ? "Create Task" : undefined}
-          style={[
-            styles.fab,
-            {
-              backgroundColor: theme.colors.primary,
-              position: "relative",
-              margin: 0,
-              marginLeft: 16,
-            },
-          ]}
-          onPress={() => navigation.navigate("CreateTask")}
-          color={theme.colors.surface}
-          mode="flat"
-          theme={{ colors: { accent: theme.colors.surface } }}
-        />
-      </View>
+        {renderFilterModal()}
 
-      {renderFilterModal()}
-
-      <View
-        style={[
-          styles.contentContainer,
-          {
-            maxWidth: isLargeScreen ? 1500 : isMediumScreen ? 900 : "100%",
-            alignSelf: "center",
-            width: "100%",
-            flex: 1,
-          },
-        ]}
-      >
         {renderActiveFilterIndicator()}
         {renderContent()}
       </View>
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F8F9FA",
-  },
-  contentContainer: {
-    flex: 1,
-    paddingHorizontal: Platform.OS === "web" ? 24 : 16,
-    paddingVertical: 16,
-  },
-  searchContainer: {
-    padding: Platform.OS === "web" ? 24 : 16,
-    paddingTop: 10,
-    paddingBottom: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  searchBarContainer: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  searchbar: {
-    elevation: 0,
-    borderRadius: 18,
-    height: 56,
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    flex: 1,
-  },
-  filterButtonContainer: {
-    position: "relative",
-    marginLeft: 8,
-  },
-  filterButton: {
-    borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.05)",
-    borderRadius: 12,
-    backgroundColor: "#fff",
-  },
-  activeFilterButton: {
-    backgroundColor: "#E8F0FE",
-    borderWidth: 1,
-    borderColor: "#1a73e8",
-  },
-  filterBadge: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#ff5252",
-    position: "absolute",
-    top: 8,
-    right: 8,
-    zIndex: 2,
-  },
-  activeFiltersContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
-    marginTop: 8,
-    marginBottom: 12,
-    paddingHorizontal: 20,
-  },
-  activeFiltersText: {
-    fontSize: 14,
-    fontFamily: "Poppins-Regular",
-    color: "#616161",
-    marginRight: 8,
-  },
-  filtersScrollView: {
-    flexGrow: 0,
-    marginVertical: 4,
-  },
-  activeFilterChip: {
-    margin: 4,
-  },
-  listContent: {
-    padding: 16,
-    paddingTop: 8,
-    paddingBottom: 100,
-  },
-  card: {
-    marginBottom: 16,
-    elevation: 1,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.03)",
-    overflow: "hidden",
-  },
-  cardContent: {
-    padding: 16,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 12,
-  },
-  titleContainer: {
-    flex: 1,
-    marginRight: 8,
-  },
-  taskTitle: {
-    fontSize: 16,
-    color: "#333",
-    marginBottom: 4,
-  },
-  taskDescription: {
-    marginBottom: 16,
-    opacity: 0.7,
-    color: "#666",
-    lineHeight: 20,
-  },
-  taskCard: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.03)",
-    padding: 16,
-    marginBottom: 16,
-  },
-  detailsSection: {
-    backgroundColor: "#f9f9f9",
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-    borderLeftWidth: 2,
-    borderLeftColor: "#1a73e8",
-  },
-  detailItem: {
-    flexDirection: "row",
-    marginBottom: 4,
-  },
-  detailLabel: {
-    opacity: 0.7,
-    color: "#333",
-    fontSize: 13,
-    fontWeight: "600",
-    marginRight: 2,
-  },
-  detailValue: {
-    flex: 1,
-    color: "#666",
-    fontSize: 13,
-  },
-  fab: {
-    borderRadius: 17,
-    height: 56,
-  },
-  modalContainer: {
-    backgroundColor: "white",
-    borderRadius: 16,
-    margin: 16,
-    overflow: "hidden",
-    maxHeight: "80%",
-    elevation: 5,
-  },
-  modalHeaderContainer: {
-    backgroundColor: "white",
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    zIndex: 1,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  modalTitle: {
-    fontFamily: "Poppins-SemiBold",
-    color: "#212121",
-  },
-  modalContent: {
-    maxHeight: 400,
-  },
-  modalDivider: {
-    height: 1,
-    backgroundColor: "#E0E0E0",
-    marginTop: 16,
-  },
-  modalSection: {
-    marginBottom: 24,
-  },
-  sectionHeader: {
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontFamily: "Poppins-SemiBold",
-    color: "#212121",
-  },
-  radioItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: 8,
-  },
-  radioLabel: {
-    fontSize: 16,
-    marginLeft: 12,
-    fontFamily: "Poppins-Regular",
-    color: "#424242",
-  },
-  modalFooter: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    borderTopWidth: 1,
-    borderTopColor: "#E0E0E0",
-  },
-  footerButton: {
-    borderRadius: 8,
-    marginLeft: 16,
-  },
-  applyButton: {
-    elevation: 2,
-  },
-  clearButtonText: {
-    fontFamily: "Poppins-Medium",
-    color: "#616161",
-  },
-  applyButtonText: {
-    fontFamily: "Poppins-Medium",
-    color: "#FFFFFF",
-  },
-  loadingFooter: {
-    padding: 16,
-    alignItems: "center",
-  },
-  endListText: {
-    fontSize: 14,
-    fontFamily: "Poppins-Regular",
-    color: "#616161",
-  },
-  tableContainer: {
-    backgroundColor: "white",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    overflow: "hidden",
-    flex: 1,
-  },
-  tableHeaderRow: {
-    flexDirection: "row",
-    backgroundColor: "#f8fafc",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
-    paddingVertical: 16,
-    paddingHorizontal: 26,
-    alignContent: "center",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  tableHeaderCell: {
-    flex: 1,
-    paddingHorizontal: 16,
-    justifyContent: "space-around",
-    paddingLeft: 25,
-    alignItems: "flex-start",
-  },
-  tableHeaderText: {
-    fontSize: 14,
-    color: "#64748b",
-    fontFamily: "Poppins-Medium",
-  },
-  tableRow: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
-    paddingVertical: 16,
-    backgroundColor: "#fff",
-    paddingHorizontal: 26,
-    alignItems: "center",
-  },
-  tableCell: {
-    flex: 1,
-    paddingHorizontal: 26,
-    justifyContent: "space-evenly",
-    alignItems: "flex-start",
-  },
-  tableCellText: {
-    fontSize: 14,
-    color: "#334155",
-    fontFamily: "Poppins-Regular",
-  },
-  tableContent: {
-    flexGrow: 1,
-  },
-  tooltipContainer: {
-    position: "relative",
-    flex: 1,
-    maxWidth: "100%",
-    zIndex: 10,
-  },
-  tooltip: {
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
-    padding: 8,
-    marginLeft: 30,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    maxWidth: 300,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-    zIndex: 9999,
-    ...(Platform.OS === "web"
-      ? {
-          // @ts-ignore - web specific style
-          willChange: "transform",
-          // @ts-ignore - web specific style
-          isolation: "isolate",
-        }
-      : {}),
-  },
-  tooltipText: {
-    color: "#000",
-    fontSize: 12,
-    fontFamily: "Poppins-Regular",
-    lineHeight: 16,
-  },
-  paginationWrapper: {
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    borderRadius: 16,
-    marginTop: 12,
-    overflow: "hidden",
-    width: "auto",
-    alignSelf: "center",
-  },
-});
 
 export default CompanyAdminTasksScreen;

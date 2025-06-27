@@ -7,14 +7,15 @@ import {
   CachePerformanceMetrics
 } from "../store/cacheStore";
 import { isNetworkAvailable } from "../utils/networkUtils";
-import { 
-  enforceCacheLimit, 
-  saveToAsyncStorage, 
+import {
+  enforceCacheLimit,
+  saveToAsyncStorage,
   getFromAsyncStorage,
   clearAsyncStorageCache,
   clearAllAsyncStorageCache,
   resetAsyncStorageCacheMetrics
 } from "../utils/storageUtils";
+import { logDebug } from "../../utils/logger";
 
 /**
  * Tracks cache performance metrics
@@ -117,7 +118,7 @@ export const cachedQuery = async <T>(
     const cachedEntry = useCacheStore.getState().getCache<T>(finalCacheKey);
     if (cachedEntry) {
       const { data } = cachedEntry;
-      console.log(`Network unavailable, using stale Zustand cache for: ${cacheKey}`);
+      logDebug(`Network unavailable, using stale Zustand cache for: ${cacheKey}`);
       return { 
         data, 
         error: { message: "Using stale data due to network being unavailable" },
@@ -131,7 +132,7 @@ export const cachedQuery = async <T>(
         const cachedData = await getFromAsyncStorage<T>(finalCacheKey);
         if (cachedData) {
           const { data } = cachedData;
-          console.log(`Network unavailable, using stale AsyncStorage cache for: ${cacheKey}`);
+          logDebug(`Network unavailable, using stale AsyncStorage cache for: ${cacheKey}`);
           return { 
             data, 
             error: { message: "Using stale data due to network being unavailable" },

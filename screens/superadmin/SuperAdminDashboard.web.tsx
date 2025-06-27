@@ -32,6 +32,7 @@ import Animated, {
 } from "react-native-reanimated";
 import DynamicChart from "../../components/DynamicChart";
 import ActivityLogTimeline from "../../components/ActivityLogTimeline";
+import { ActivityLog } from "../../types/activity-log";
 
 const { width } = Dimensions.get("window");
 

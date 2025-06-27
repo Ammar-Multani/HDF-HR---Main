@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
@@ -145,7 +146,7 @@ const EditCompanyAdminScreen = () => {
 
       // Define the async function to fetch admin data
       const fetchAdminData = async () => {
-        console.log(`Fetching company admin data for ID: ${adminId}`);
+        logDebug(`Fetching company admin data for ID: ${adminId}`);
         const { data, error } = await supabase
           .from("company_user")
           .select("*, company:company_id(company_name)")
@@ -176,7 +177,7 @@ const EditCompanyAdminScreen = () => {
 
       // Set admin data
       setAdmin(result.data);
-      console.log(
+      logDebug(
         "Company admin data received:",
         JSON.stringify(result.data, null, 2)
       );

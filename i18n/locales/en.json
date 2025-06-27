@@ -180,12 +180,14 @@
     "companyRequired": "Please select a company for this task"
   },
   "superAdmin": {
+    "totalForms": "Total Forms",
     "dashboard": {
       "title": "Welcome to HDF Dashboard",
       "overview": "Monitor and manage your platform",
       "metrics": "Key Metrics",
       "recentActivity": "Recent Activity",
       "totalCompanies": "Total Companies",
+      "totalForms": "Total Forms",
       "activeCompanies": "Active Companies",
       "totalEmployees": "Total Employees",
       "activeEmployees": "Active Employees",
@@ -193,7 +195,6 @@
       "pendingTasks": "Pending Tasks",
       "completedTasks": "Completed Tasks",
       "overdueTasks": "Overdue Tasks",
-      "totalForms": "Total Forms",
       "monthlyOnboarded": "Companies Onboarded",
       "monthlyForms": "Forms Filled Over Time",
       "topCompanies": "Top Companies",
@@ -1012,6 +1013,10 @@
     "deactivateTitle": "Deactivate Company Admin",
     "activateMessage": "Are you sure you want to activate this company admin?",
     "deactivateMessage": "Are you sure you want to deactivate this company admin?",
+    "totalTasks": "Total Tasks",
+    "totalEmployees": "Total Employees",
+    "totalForms": "Total Forms",
+    "totalReceipts": "Total Receipts",
     "profile": {
       "title": "Profile",
       "subtitle": "Manage your account information",

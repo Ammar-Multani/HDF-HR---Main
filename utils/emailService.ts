@@ -4,6 +4,7 @@ import {
   generateSuperAdminWelcomeEmail,
 } from "./emailTemplates";
 import { supabase } from "../lib/supabase";
+import { logDebug } from "./logger";
 
 // Rate limiting configuration
 const RATE_LIMIT_WINDOW = 3600000; // 1 hour in milliseconds
@@ -16,7 +17,7 @@ const resetAttempts = new Map<string, { count: number; timestamp: number }>();
  * Initialize email service
  */
 export const initEmailService = () => {
-  console.log("Email service initialized");
+  logDebug("Email service initialized");
   // Clear rate limiting data periodically
   setInterval(() => {
     const now = Date.now();
@@ -72,11 +73,11 @@ export const sendPasswordResetEmail = async (
   resetToken: string
 ) => {
   try {
-    console.log("Starting password reset email process for:", email);
+    logDebug("Starting password reset email process for:", email);
 
     // Check rate limiting
     if (checkRateLimit(email)) {
-      console.log("Rate limit exceeded for:", email);
+      logDebug("Rate limit exceeded for:", email);
       return {
         success: false,
         error: new Error("Too many reset attempts. Please try again later."),
@@ -85,7 +86,7 @@ export const sendPasswordResetEmail = async (
 
     // Create reset link with token using the Netlify domain
     const resetLink = `${process.env.EXPO_PUBLIC_APP_URL || "https://hdfhr.netlify.app"}/reset-password?token=${resetToken}`;
-    console.log("Reset link generated:", resetLink);
+    logDebug("Reset link generated:", resetLink);
 
     // Generate HTML content
     const htmlContent = generatePasswordResetEmail(resetToken);
@@ -104,8 +105,9 @@ export const sendPasswordResetEmail = async (
     // Get the function URL from environment variable
     const functionUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/send-email`;
 
-    console.log("Preparing request to:", functionUrl);
-    console.log("Request body:", JSON.stringify(body, null, 2));
+    logDebug("Preparing request to:", functionUrl);
+    // Avoid logging sensitive email body contents
+    logDebug("Request body keys:", Object.keys(body));
 
     // Make the request directly using fetch with environment variables
     const response = await fetch(functionUrl, {
@@ -118,8 +120,8 @@ export const sendPasswordResetEmail = async (
       body: JSON.stringify(body),
     });
 
-    console.log("Response status:", response.status);
-    console.log(
+    logDebug("Response status:", response.status);
+    logDebug(
       "Response headers:",
       Object.fromEntries(response.headers.entries())
     );
@@ -139,7 +141,7 @@ export const sendPasswordResetEmail = async (
     }
 
     const result = await response.json();
-    console.log("Success response:", result);
+    logDebug("Success response:", result);
 
     if (!result.success) {
       return {
@@ -148,7 +150,7 @@ export const sendPasswordResetEmail = async (
       };
     }
 
-    console.log("Password reset email sent successfully to:", email);
+    logDebug("Password reset email sent successfully to:", email);
     return { success: true };
   } catch (err) {
     const error = err as Error;
@@ -177,7 +179,7 @@ export const sendCompanyAdminInviteEmail = async (
   companyName: string
 ) => {
   try {
-    console.log("Starting company admin invitation email process for:", email);
+    logDebug("Starting company admin invitation email process for:", email);
 
     // Generate HTML content
     const htmlContent = generateAdminInviteEmail(email, password, companyName);
@@ -204,8 +206,8 @@ export const sendCompanyAdminInviteEmail = async (
     // Get the function URL from environment variable
     const functionUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/send-email`;
 
-    console.log("Preparing request to:", functionUrl);
-    console.log("Request body length:", {
+    logDebug("Preparing request to:", functionUrl);
+    logDebug("Request body length:", {
       html: htmlContent.length,
       text: textContent.length,
     });
@@ -221,8 +223,8 @@ export const sendCompanyAdminInviteEmail = async (
       body: JSON.stringify(body),
     });
 
-    console.log("Response status:", response.status);
-    console.log(
+    logDebug("Response status:", response.status);
+    logDebug(
       "Response headers:",
       Object.fromEntries(response.headers.entries())
     );
@@ -244,7 +246,7 @@ export const sendCompanyAdminInviteEmail = async (
     }
 
     const result = await response.json();
-    console.log("Success response:", result);
+    logDebug("Success response:", result);
 
     if (!result.success) {
       return {
@@ -253,7 +255,7 @@ export const sendCompanyAdminInviteEmail = async (
       };
     }
 
-    console.log("Company admin invitation email sent successfully to:", email);
+    logDebug("Company admin invitation email sent successfully to:", email);
     return { success: true };
   } catch (err) {
     const error = err as Error;
@@ -284,7 +286,7 @@ export const sendSuperAdminWelcomeEmail = async (
   password: string
 ) => {
   try {
-    console.log("Starting super admin welcome email process for:", email);
+    logDebug("Starting super admin welcome email process for:", email);
 
     // Generate HTML content
     const htmlContent = generateSuperAdminWelcomeEmail(name, email, password);
@@ -312,8 +314,8 @@ export const sendSuperAdminWelcomeEmail = async (
     // Get the function URL from environment variable
     const functionUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/send-email`;
 
-    console.log("Preparing request to:", functionUrl);
-    console.log("Request body length:", {
+    logDebug("Preparing request to:", functionUrl);
+    logDebug("Request body length:", {
       html: htmlContent.length,
       text: textContent.length,
     });
@@ -329,8 +331,8 @@ export const sendSuperAdminWelcomeEmail = async (
       body: JSON.stringify(body),
     });
 
-    console.log("Response status:", response.status);
-    console.log(
+    logDebug("Response status:", response.status);
+    logDebug(
       "Response headers:",
       Object.fromEntries(response.headers.entries())
     );
@@ -352,7 +354,7 @@ export const sendSuperAdminWelcomeEmail = async (
     }
 
     const result = await response.json();
-    console.log("Success response:", result);
+    logDebug("Success response:", result);
 
     if (!result.success) {
       return {
@@ -361,7 +363,7 @@ export const sendSuperAdminWelcomeEmail = async (
       };
     }
 
-    console.log("Super admin welcome email sent successfully to:", email);
+    logDebug("Super admin welcome email sent successfully to:", email);
     return { success: true };
   } catch (err) {
     const error = err as Error;

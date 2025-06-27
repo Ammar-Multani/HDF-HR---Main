@@ -9,8 +9,9 @@ import {
   TouchableOpacity,
   Dimensions,
   Platform,
+  LogBox,
 } from "react-native";
-import { useTheme, Avatar, Divider, Button } from "react-native-paper";
+import { useTheme, Avatar, Divider, Button, Surface } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { supabase, isNetworkAvailable } from "../../lib/supabase";
@@ -25,6 +26,14 @@ import { globalStyles, createTextStyle } from "../../utils/globalStyles";
 import { useTranslation } from "react-i18next";
 import Animated, { FadeIn } from "react-native-reanimated";
 import DynamicChart from "../../components/DynamicChart";
+import ActivityLogTimeline from "../../components/ActivityLogTimeline.android";
+import { ActivityLog } from "../../types/activity-log";
+import { time } from "console";
+
+// Suppress specific warning about nested VirtualizedLists
+LogBox.ignoreLogs([
+  "VirtualizedLists should never be nested inside plain ScrollViews with the same orientation - use another VirtualizedList-backed container instead",
+]);
 
 const { width } = Dimensions.get("window");
 
@@ -76,6 +85,7 @@ const SuperAdminDashboard = () => {
     monthlyForms: [] as number[],
     topCompanies: [] as CompanyData[],
     topEmployees: [] as EmployeeData[],
+    latestActivities: [] as ActivityLog[],
   });
 
   const checkNetworkStatus = async () => {
@@ -623,6 +633,17 @@ const SuperAdminDashboard = () => {
         }
       }
 
+      // Add this new fetch call for latest activities
+      const { data: latestActivities, error: activitiesError } = await supabase
+        .from("activity_logs")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(10);
+
+      if (activitiesError) {
+        console.error("Error fetching latest activities:", activitiesError);
+      }
+
       // Update state with all the data
       setStats({
         totalCompanies: totalCompanies || 0,
@@ -642,6 +663,7 @@ const SuperAdminDashboard = () => {
         monthlyForms: recentMonthsFormData,
         topCompanies: topCompanies,
         topEmployees: topEmployees,
+        latestActivities: latestActivities || [],
       });
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
@@ -1015,6 +1037,8 @@ const SuperAdminDashboard = () => {
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
             }
+            nestedScrollEnabled={true}
+            scrollEventThrottle={16}
           >
             {Platform.OS !== "web" && (
               <View style={styles.welcomeHeader}>
@@ -1226,7 +1250,6 @@ const SuperAdminDashboard = () => {
               )}
             </View>
 
-            {/* Top Employees Section */}
             <View style={styles.topEmployeesContainer}>
               <Text variant={"bold"} style={styles.sectionTitle}>
                 {t("superAdmin.dashboard.topEmployees") ||
@@ -1310,6 +1333,35 @@ const SuperAdminDashboard = () => {
                   </TouchableOpacity>
                 )
               )}
+            </View>
+            {/* Activity Logs section */}
+            <View style={styles.activityLogsSection}>
+              <Surface style={styles.activityLogsCard} elevation={0}>
+                {stats.latestActivities && stats.latestActivities.length > 0 ? (
+                  <View style={styles.activityTimelineContainer}>
+                    <ActivityLogTimeline
+                      logs={stats.latestActivities}
+                      containerStyle={styles.timeline}
+                      nestedScrollEnabled={true}
+                      onRefresh={onRefresh}
+                      isLoading={loading}
+                      showHeader={true}
+                      maxHeight={500}
+                    />
+                  </View>
+                ) : (
+                  <View style={styles.emptyState}>
+                    <MaterialCommunityIcons
+                      name="clock-outline"
+                      size={48}
+                      color={theme.colors.outlineVariant}
+                    />
+                    <Text style={styles.emptyStateText}>
+                      {t("superAdmin.activityLogs.noLogs")}
+                    </Text>
+                  </View>
+                )}
+              </Surface>
             </View>
           </ScrollView>
         </Animated.View>
@@ -1430,6 +1482,26 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     color: "#333",
   },
+  activityLogsSection: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    marginBottom: 16,
+  },
+  activityLogsCard: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    borderColor: "#e0e0e0",
+  },
+  activityTimelineContainer: {
+    overflow: "hidden",
+  },
+  timeline: {
+    borderRadius: 0,
+    borderWidth: 0,
+    flex: 1,
+    backgroundColor: "transparent",
+  },
   topCompaniesContainer: {
     backgroundColor: "#fff",
     borderRadius: 16,
@@ -1438,7 +1510,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e0e0e0",
   },
-  // Add new styles for top employees
   topEmployeesContainer: {
     backgroundColor: "#fff",
     borderRadius: 16,
@@ -1459,7 +1530,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#666",
   },
-  // Skeleton styles
   skeleton: {
     backgroundColor: "#E1E9EE",
     borderRadius: 4,
@@ -1489,7 +1559,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 12,
-    // backgroundColor: "#f0f7ff",
     borderRadius: 8,
     marginTop: 8,
   },

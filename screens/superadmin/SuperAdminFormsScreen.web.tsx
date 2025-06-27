@@ -5,10 +5,10 @@ import React, {
   useMemo,
   useRef,
 } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
-  FlatList,
   TouchableOpacity,
   RefreshControl,
   ScrollView,
@@ -63,6 +63,7 @@ import {
 } from "../../components/FilterSections";
 import FilterModal from "../../components/FilterModal";
 import Pagination from "../../components/Pagination";
+import { FlashList } from "@shopify/flash-list";
 
 // Define form interface with the properties needed for our UI
 interface FormItem {
@@ -914,7 +915,7 @@ const SuperAdminFormsScreen = () => {
       <Surface style={[styles.cardSurface, { backgroundColor: "#FFFFFF" }]}>
         <TouchableOpacity
           onPress={() => {
-            console.log("View form details for:", item.id, item.type);
+            logDebug("View form details for:", item.id, item.type);
             navigation.navigate("SuperAdminFormDetailsScreen", {
               formId: item.id,
               formType: item.type,
@@ -1225,7 +1226,7 @@ const SuperAdminFormsScreen = () => {
                   onPress={() => {
                     setFabMenuVisible(false);
                     navigation.navigate(
-                      "SuperAdminCreateEmployeeStaffDeparture"  
+                      "SuperAdminCreateEmployeeStaffDeparture"
                     );
                   }}
                 >
@@ -1247,7 +1248,6 @@ const SuperAdminFormsScreen = () => {
                     </View>
                   </View>
                 </TouchableOpacity>
-
               </View>
             </View>
           </Pressable>
@@ -1316,7 +1316,8 @@ const SuperAdminFormsScreen = () => {
           {useTableLayout ? (
             <TableSkeleton />
           ) : (
-            <FlatList
+            <FlashList
+              estimatedItemSize={74}
               data={Array(4).fill(0)}
               renderItem={() => <FormItemSkeleton />}
               keyExtractor={(_, index) => `skeleton-${index}`}
@@ -1424,7 +1425,8 @@ const SuperAdminFormsScreen = () => {
           <>
             <View style={styles.tableContainer}>
               <TableHeader />
-              <FlatList
+              <FlashList
+                estimatedItemSize={74}
                 data={filteredForms}
                 renderItem={({ item }) => <TableRow item={item} />}
                 keyExtractor={(item) => `${item.type}-${item.id}`}
@@ -1437,19 +1439,57 @@ const SuperAdminFormsScreen = () => {
                 }
               />
             </View>
-            {totalPages > 1 && (
-              <View style={styles.paginationWrapper}>
-                <Pagination
-                  currentPage={page}
-                  totalPages={totalPages}
-                  onPageChange={handlePageChange}
-                />
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginTop: 16,
+                minHeight: 48,
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginLeft: 12,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 14,
+                    color: "#666",
+                    fontFamily: "Poppins-Regular",
+                  }}
+                >
+                  {t("superAdmin.totalForms")}:
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    color: theme.colors.primary,
+                    fontFamily: "Poppins-Medium",
+                    marginLeft: 4,
+                  }}
+                >
+                  {totalItems}
+                </Text>
               </View>
-            )}
+              {totalPages > 1 && (
+                <View style={styles.paginationWrapper}>
+                  <Pagination
+                    currentPage={page}
+                    totalPages={totalPages}
+                    onPageChange={handlePageChange}
+                  />
+                </View>
+              )}
+            </View>
           </>
         ) : (
           <>
-            <FlatList
+            <FlashList
+              estimatedItemSize={74}
               data={filteredForms}
               renderItem={renderFormItem}
               keyExtractor={(item) => `${item.type}-${item.id}`}
@@ -1458,15 +1498,52 @@ const SuperAdminFormsScreen = () => {
                 <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
               }
             />
-            {totalPages > 1 && (
-              <View style={styles.paginationWrapper}>
-                <Pagination
-                  currentPage={page}
-                  totalPages={totalPages}
-                  onPageChange={handlePageChange}
-                />
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginTop: 16,
+                minHeight: 48,
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginLeft: 12,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 14,
+                    color: "#666",
+                    fontFamily: "Poppins-Regular",
+                  }}
+                >
+                  {t("superAdmin.totalForms")}:
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    color: theme.colors.primary,
+                    fontFamily: "Poppins-Medium",
+                    marginLeft: 4,
+                  }}
+                >
+                  {totalForms}
+                </Text>
               </View>
-            )}
+              {totalPages > 1 && (
+                <View style={styles.paginationWrapper}>
+                  <Pagination
+                    currentPage={page}
+                    totalPages={totalPages}
+                    onPageChange={handlePageChange}
+                  />
+                </View>
+              )}
+            </View>
           </>
         )}
       </View>
@@ -1807,7 +1884,8 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins-Regular",
   },
   tableContent: {
-    flexGrow: 1,
+    paddingTop: 8,
+    paddingBottom: 50,
   },
   actionCell: {
     flex: 1,

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
@@ -1238,7 +1239,7 @@ const EmployeeProfileScreen = () => {
       }
 
       setResettingPassword(true);
-      console.log("Initiating password reset for email:", user.email);
+      logDebug("Initiating password reset for email:", user.email);
       const { error } = await forgotPassword(user.email);
 
       if (error) {
@@ -1260,7 +1261,7 @@ const EmployeeProfileScreen = () => {
         setSnackbarMessage(errorMessage);
         setSnackbarVisible(true);
       } else {
-        console.log("Password reset request successful");
+        logDebug("Password reset request successful");
         setSnackbarMessage(
           t("forgotPassword.resetInstructions") ||
             "Password reset instructions have been sent to your email."
@@ -1464,7 +1465,7 @@ Export completed on: ${new Date().toLocaleString()}
       };
 
       // 3. Store compliance record
-      console.log("Compliance record created:", complianceRecord);
+      logDebug("Compliance record created:", complianceRecord);
 
       // 4. Anonymize personal data in company_user table
       const { error: userUpdateError } = await supabase

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
@@ -509,7 +510,7 @@ const CreateEmployeeScreen = () => {
 
       if (employeeError) {
         // If employee creation fails, delete the user for atomicity
-        console.log(
+        logDebug(
           "Error creating employee, cleaning up user:",
           employeeError
         );
@@ -519,7 +520,7 @@ const CreateEmployeeScreen = () => {
         );
       }
 
-      console.log(`Employee created with email: ${data.email}`);
+      logDebug(`Employee created with email: ${data.email}`);
 
       setSnackbarMessage(
         `${data.is_admin ? "Company admin" : "Employee"} created successfully!`

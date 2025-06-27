@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CACHE_PREFIX, CACHE_PERFORMANCE_KEY } from "../store/cacheStore";
+import { logDebug } from "../../utils/logger";
 
 export const AUTH_TOKEN_KEY = "auth_token";
 
@@ -50,7 +51,7 @@ export const enforceCacheLimit = async (maxItems: number): Promise<void> => {
         
         if (sortedKeys.length > 0) {
           await AsyncStorage.multiRemove(sortedKeys);
-          console.log(`Removed ${sortedKeys.length} old cache items`);
+          logDebug(`Removed ${sortedKeys.length} old cache items`);
         }
       }
     }
@@ -106,7 +107,7 @@ export const clearAsyncStorageCache = async (cacheKey: string): Promise<void> =>
       
       if (matchingKeys.length > 0) {
         await AsyncStorage.multiRemove(matchingKeys);
-        console.log(`Cleared ${matchingKeys.length} cache entries matching: ${pattern}`);
+        logDebug(`Cleared ${matchingKeys.length} cache entries matching: ${pattern}`);
       }
     } else {
       await AsyncStorage.removeItem(cacheKey);
@@ -125,7 +126,7 @@ export const clearAllAsyncStorageCache = async (): Promise<void> => {
     const cacheKeys = keys.filter(key => key.startsWith(CACHE_PREFIX));
     if (cacheKeys.length > 0) {
       await AsyncStorage.multiRemove(cacheKeys);
-      console.log(`Cleared ${cacheKeys.length} cache entries from AsyncStorage`);
+      logDebug(`Cleared ${cacheKeys.length} cache entries from AsyncStorage`);
     }
   } catch (error) {
     console.error("Error clearing all cache from AsyncStorage:", error);

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
-  FlatList,
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
@@ -46,6 +46,7 @@ import Text from "../../components/Text";
 import { globalStyles } from "../../utils/globalStyles";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTranslation } from "react-i18next";
+import { FlashList } from "@shopify/flash-list";
 
 // Component for skeleton loading UI
 const CompanyItemSkeleton = () => {
@@ -123,13 +124,10 @@ const CompanyListScreen = () => {
   // Filter state
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
-  const [sortOrder, setSortOrder] = useState<string>("desc");
   const [appliedFilters, setAppliedFilters] = useState<{
     status: string | null;
-    sortOrder: string;
   }>({
     status: null,
-    sortOrder: "desc",
   });
 
   // Check network status when screen focuses
@@ -170,37 +168,28 @@ const CompanyListScreen = () => {
       // Clear any previous errors
       setError(null);
 
+      // Handle refresh case
       if (refresh) {
         setPage(0);
         setHasMoreData(true);
-
-        // Only show refreshing indicator when explicitly requested via pull-to-refresh
-        // or when searching, but not during initial load
-        if (page > 0 || searchQuery.trim() !== "") {
-          setRefreshing(true);
-        } else {
-          // For initial load, we want the skeleton loader instead of the refresh indicator
-          setRefreshing(false);
-        }
-      } else if (!refresh && page > 0) {
-        setLoadingMore(true);
+        setRefreshing(true);
+        setCompanies([]); // Clear existing data on refresh
+        setFilteredCompanies([]);
       }
-
-      // Generate a cache key based on search query and pagination
-      const cacheKey = `companies_${searchQuery.trim()}_page${page}_size${PAGE_SIZE}_status${appliedFilters.status}_sort${appliedFilters.sortOrder}`;
-
-      // Only force refresh when explicitly requested
-      const forceRefresh = refresh;
 
       const currentPage = refresh ? 0 : page;
       const from = currentPage * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
+
+      // Generate a cache key based on search query and pagination
+      const cacheKey = `companies_${searchQuery.trim()}_page${currentPage}_size${PAGE_SIZE}_status${appliedFilters.status}`;
+
       // Modified network check logic - only prevent refresh if DEFINITELY offline
       // This fixes false "offline" errors
       const networkAvailable = await isNetworkAvailable();
       if (!networkAvailable && refresh) {
-        console.log(
+        logDebug(
           "Network appears to be offline, but still attempting fetch"
         );
         // We'll still try the fetch but prepare for potential errors
@@ -214,42 +203,35 @@ const CompanyListScreen = () => {
           { count: "exact" } // Get exact count for better pagination
         );
 
-        // Apply status filter if set
-        if (appliedFilters.status === "active") {
+        // Apply status filter using the current activeFilter value
+        if (activeFilter === "active") {
           query = query.eq("active", true);
-        } else if (appliedFilters.status === "inactive") {
+        } else if (activeFilter === "inactive") {
           query = query.eq("active", false);
         }
 
-        // Apply optimization: use text_search for better performance when searching
+        // Apply search if needed
         if (searchQuery.trim() !== "") {
-          // Better performance using the pg_trgm index we've added
           if (searchQuery.length > 2) {
             query = query.or(
               `company_name.ilike.%${searchQuery.toLowerCase()}%,registration_number.ilike.%${searchQuery.toLowerCase()}%,industry_type.ilike.%${searchQuery.toLowerCase()}%,contact_email.ilike.%${searchQuery.toLowerCase()}%,contact_number.ilike.%${searchQuery.toLowerCase()}%`
             );
           } else {
-            // For very short queries, use exact matching for better performance
             query = query.or(
               `company_name.ilike.${searchQuery.toLowerCase()}%,registration_number.ilike.${searchQuery.toLowerCase()}%,industry_type.ilike.${searchQuery.toLowerCase()}%,contact_email.ilike.${searchQuery.toLowerCase()}%,contact_number.ilike.${searchQuery.toLowerCase()}%`
             );
           }
         }
 
-        // Apply sorting based on the selected sort order
-        query = query
-          .order("created_at", {
-            ascending: appliedFilters.sortOrder === "asc",
-          })
-          .range(from, to);
+        // Always sort by newest first
+        query = query.order("created_at", { ascending: false }).range(from, to);
 
         const result = await query;
         return result;
       };
 
       const result = await cachedQuery<any>(fetchData, cacheKey, {
-        forceRefresh,
-        criticalData: true, // Mark as critical data that should be available offline
+        forceRefresh: true, // Mark as critical data that should be available offline
       });
 
       // Check if we're using stale data
@@ -297,15 +279,31 @@ const CompanyListScreen = () => {
 
       const typedData = (data as Company[]) || [];
 
-      if (refresh || currentPage === 0) {
+      // Update the companies list
+      if (refresh) {
         setCompanies(typedData);
         setFilteredCompanies(typedData);
       } else {
-        setCompanies((prevCompanies) => [...prevCompanies, ...typedData]);
-        setFilteredCompanies((prevCompanies) => [
-          ...prevCompanies,
-          ...typedData,
-        ]);
+        setCompanies((prevCompanies) => {
+          // Prevent duplicate entries
+          const newCompanies = [...prevCompanies];
+          typedData.forEach((company) => {
+            if (!newCompanies.find((c) => c.id === company.id)) {
+              newCompanies.push(company);
+            }
+          });
+          return newCompanies;
+        });
+        setFilteredCompanies((prevCompanies) => {
+          // Prevent duplicate entries
+          const newCompanies = [...prevCompanies];
+          typedData.forEach((company) => {
+            if (!newCompanies.find((c) => c.id === company.id)) {
+              newCompanies.push(company);
+            }
+          });
+          return newCompanies;
+        });
       }
     } catch (error) {
       console.error("Error fetching companies:", error);
@@ -378,12 +376,28 @@ const CompanyListScreen = () => {
     };
   }, [searchQuery, networkStatus]);
 
-  const loadMoreCompanies = () => {
+  const loadMoreCompanies = useCallback(() => {
     if (!loading && !loadingMore && hasMoreData && networkStatus !== false) {
-      setPage((prevPage) => prevPage + 1);
-      fetchCompanies();
+      
+
+      // Set loading more before changing page
+      setLoadingMore(true);
+      setPage((prevPage) => {
+        const nextPage = prevPage + 1;
+        // Fetch more data with the new page number
+        fetchCompanies(false);
+        return nextPage;
+      });
     }
-  };
+  }, [
+    loading,
+    loadingMore,
+    hasMoreData,
+    networkStatus,
+    page,
+    companies.length,
+    totalCount,
+  ]);
 
   const onRefresh = () => {
     if (networkStatus === false) {
@@ -517,7 +531,7 @@ const CompanyListScreen = () => {
     // Show skeleton loaders when initially loading
     if (loading && filteredCompanies.length === 0) {
       return (
-        <FlatList
+        <FlashList estimatedItemSize={74}
           data={Array(3).fill(0)}
           renderItem={() => <CompanyItemSkeleton />}
           keyExtractor={(_, index) => `skeleton-${index}`}
@@ -528,7 +542,7 @@ const CompanyListScreen = () => {
 
     // Show the actual data
     return (
-      <FlatList
+      <FlashList estimatedItemSize={74}
         data={filteredCompanies}
         renderItem={renderCompanyItem}
         keyExtractor={(item) => item.id}
@@ -575,7 +589,6 @@ const CompanyListScreen = () => {
     // Apply new filters directly and immediately
     const newFilters = {
       status: activeFilter,
-      sortOrder: sortOrder,
     };
 
     // Set applied filters and then immediately force a fetch
@@ -589,7 +602,7 @@ const CompanyListScreen = () => {
         setError(null);
 
         // Generate a cache key based on search query and pagination
-        const cacheKey = `companies_${searchQuery.trim()}_page0_size${PAGE_SIZE}_status${activeFilter}_sort${sortOrder}`;
+        const cacheKey = `companies_${searchQuery.trim()}_page0_size${PAGE_SIZE}_status${activeFilter}`;
 
         const from = 0;
         const to = PAGE_SIZE - 1;
@@ -622,9 +635,9 @@ const CompanyListScreen = () => {
             }
           }
 
-          // Apply sorting based on the current sortOrder value
+          // Always sort by newest first
           query = query
-            .order("created_at", { ascending: sortOrder === "asc" })
+            .order("created_at", { ascending: false })
             .range(from, to);
 
           return await query;
@@ -670,7 +683,6 @@ const CompanyListScreen = () => {
   // Clear all filters
   const clearFilters = () => {
     setActiveFilter(null);
-    setSortOrder("desc");
 
     // Force a complete reset and refresh
     setCompanies([]);
@@ -683,7 +695,6 @@ const CompanyListScreen = () => {
     // Clear applied filters
     setAppliedFilters({
       status: null,
-      sortOrder: "desc",
     });
 
     // Call the regular fetch after resetting everything
@@ -692,9 +703,7 @@ const CompanyListScreen = () => {
 
   // Check if we have any active filters
   const hasActiveFilters = () => {
-    return (
-      appliedFilters.status !== null || appliedFilters.sortOrder !== "desc"
-    );
+    return appliedFilters.status !== null;
   };
 
   // Render active filter indicator
@@ -724,7 +733,7 @@ const CompanyListScreen = () => {
               style={[
                 styles.activeFilterChip,
                 {
-                  backgroundColor: theme.colors.primary + "15",
+                  backgroundColor: "rgba(26, 115, 232, 0.1)", // Light blue with 10% opacity
                   borderColor: theme.colors.primary,
                 },
               ]}
@@ -733,30 +742,6 @@ const CompanyListScreen = () => {
               Status:{" "}
               {appliedFilters.status.charAt(0).toUpperCase() +
                 appliedFilters.status.slice(1)}
-            </Chip>
-          )}
-          {appliedFilters.sortOrder !== "desc" && (
-            <Chip
-              mode="outlined"
-              onClose={() => {
-                setAppliedFilters({
-                  ...appliedFilters,
-                  sortOrder: "desc",
-                });
-                setSortOrder("desc");
-                setPage(0);
-                fetchCompanies(true);
-              }}
-              style={[
-                styles.activeFilterChip,
-                {
-                  backgroundColor: theme.colors.primary + "15",
-                  borderColor: theme.colors.primary,
-                },
-              ]}
-              textStyle={{ color: theme.colors.primary }}
-            >
-              Date: Oldest first
             </Chip>
           )}
         </ScrollView>
@@ -814,33 +799,6 @@ const CompanyListScreen = () => {
                 </View>
               </RadioButton.Group>
             </View>
-
-            <Divider style={styles.modalDivider} />
-
-            <View style={styles.modalSection}>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Sort by creation date</Text>
-              </View>
-              <RadioButton.Group
-                onValueChange={(value) => setSortOrder(value)}
-                value={sortOrder}
-              >
-                <View style={styles.radioItem}>
-                  <RadioButton.Android
-                    value="desc"
-                    color={theme.colors.primary}
-                  />
-                  <Text style={styles.radioLabel}>Newest first</Text>
-                </View>
-                <View style={styles.radioItem}>
-                  <RadioButton.Android
-                    value="asc"
-                    color={theme.colors.primary}
-                  />
-                  <Text style={styles.radioLabel}>Oldest first</Text>
-                </View>
-              </RadioButton.Group>
-            </View>
           </ScrollView>
 
           <View style={styles.modalFooter}>
@@ -878,110 +836,109 @@ const CompanyListScreen = () => {
         showHelpButton={true}
         absolute={false}
       />
-      <View style={{ flex: 1, backgroundColor: theme.colors.backgroundSecondary,  }}>
-
-      {networkStatus === false && (
-        <Banner
-          visible={true}
-          icon="wifi-off"
-          actions={[
-            {
-              label: t("common.retry"),
-              onPress: async () => {
-                const isAvailable = await isNetworkAvailable();
-                setNetworkStatus(isAvailable);
-                if (isAvailable) {
-                  setRefreshing(true);
-                  fetchCompanies(true);
-                }
+      <View style={{ flex: 1, backgroundColor: theme.colors.surfaceVariant }}>
+        {networkStatus === false && (
+          <Banner
+            visible={true}
+            icon="wifi-off"
+            actions={[
+              {
+                label: t("common.retry"),
+                onPress: async () => {
+                  const isAvailable = await isNetworkAvailable();
+                  setNetworkStatus(isAvailable);
+                  if (isAvailable) {
+                    setRefreshing(true);
+                    fetchCompanies(true);
+                  }
+                },
               },
-            },
-          ]}
-        >
-          {t("common.offline")}
-        </Banner>
-      )}
-
-      {error && error !== t("common.offline") && (
-        <Banner
-          visible={true}
-          icon="alert-circle"
-          actions={[
-            {
-              label: t("common.dismiss"),
-              onPress: () => setError(null),
-            },
-          ]}
-        >
-          {error}
-        </Banner>
-      )}
-
-      <View style={styles.searchContainer}>
-        <Searchbar
-          placeholder={t("superAdmin.companies.search")}
-          onChangeText={networkStatus === false ? undefined : setSearchQuery}
-          value={searchQuery}
-          style={[
-            styles.searchbar,
-            networkStatus === false && { opacity: 0.6 },
-          ]}
-          loading={refreshing && searchQuery.length > 0}
-          onClearIconPress={() => {
-            if (networkStatus !== false) {
-              setSearchQuery("");
-            }
-          }}
-          theme={{ colors: { primary: theme.colors.primary } }}
-          clearIcon={() =>
-            searchQuery ? (
-              <IconButton
-                icon="close-circle"
-                size={18}
-                onPress={() => setSearchQuery("")}
-              />
-            ) : null
-          }
-          icon="magnify"
-        />
-        <View style={styles.filterButtonContainer}>
-          <IconButton
-            icon="filter-variant"
-            size={24}
-            style={[
-              styles.filterButton,
-              hasActiveFilters() && styles.activeFilterButton,
             ]}
-            iconColor={hasActiveFilters() ? theme.colors.primary : undefined}
-            onPress={() => setFilterModalVisible(true)}
+          >
+            {t("common.offline")}
+          </Banner>
+        )}
+
+        {error && error !== t("common.offline") && (
+          <Banner
+            visible={true}
+            icon="alert-circle"
+            actions={[
+              {
+                label: t("common.dismiss"),
+                onPress: () => setError(null),
+              },
+            ]}
+          >
+            {error}
+          </Banner>
+        )}
+
+        <View style={styles.searchContainer}>
+          <Searchbar
+            placeholder={t("superAdmin.companies.search")}
+            onChangeText={networkStatus === false ? undefined : setSearchQuery}
+            value={searchQuery}
+            style={[
+              styles.searchbar,
+              networkStatus === false && { opacity: 0.6 },
+            ]}
+            loading={refreshing && searchQuery.length > 0}
+            onClearIconPress={() => {
+              if (networkStatus !== false) {
+                setSearchQuery("");
+              }
+            }}
+            theme={{ colors: { primary: theme.colors.primary } }}
+            clearIcon={() =>
+              searchQuery ? (
+                <IconButton
+                  icon="close-circle"
+                  size={18}
+                  onPress={() => setSearchQuery("")}
+                />
+              ) : null
+            }
+            icon="magnify"
           />
-          {hasActiveFilters() && <View style={styles.filterBadge} />}
+          <View style={styles.filterButtonContainer}>
+            <IconButton
+              icon="filter-variant"
+              size={24}
+              style={[
+                styles.filterButton,
+                hasActiveFilters() && styles.activeFilterButton,
+              ]}
+              iconColor={hasActiveFilters() ? theme.colors.primary : undefined}
+              onPress={() => setFilterModalVisible(true)}
+            />
+            {hasActiveFilters() && <View style={styles.filterBadge} />}
+          </View>
         </View>
-      </View>
 
-      {searchQuery && searchQuery.length > 0 && searchQuery.length < 3 && (
-        <View style={styles.searchTips}>
-          <Text style={styles.searchTipsText}>
-            {t("superAdmin.companies.typeMoreChars")}
-          </Text>
-        </View>
-      )}
+        {searchQuery && searchQuery.length > 0 && searchQuery.length < 3 && (
+          <View style={styles.searchTips}>
+            <Text style={styles.searchTipsText}>
+              {t("superAdmin.companies.typeMoreChars")}
+            </Text>
+          </View>
+        )}
 
-      {renderActiveFilterIndicator()}
-      {renderFilterModal()}
+        {renderActiveFilterIndicator()}
+        {renderFilterModal()}
 
-      {renderContent()}
+        {renderContent()}
 
-      <FAB
-        icon="plus"
-        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
-        onPress={() => {
-          // @ts-ignore - Navigation typing is complex but this works
-          navigation.navigate("CreateCompany");
-        }}
-        color={theme.colors.surface}
-        disabled={networkStatus === false}
-      />
+        <FAB
+          icon="plus"
+          style={[styles.fab, { backgroundColor: theme.colors.primary }]}
+          onPress={() => {
+            // @ts-ignore - Navigation typing is complex but this works
+            navigation.navigate("CreateCompany");
+          }}
+          color={theme.colors.surface}
+          disabled={networkStatus === false}
+        />
       </View>
     </SafeAreaView>
   );

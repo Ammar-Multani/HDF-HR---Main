@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   View,
-  FlatList,
   TouchableOpacity,
   RefreshControl,
   Platform,
@@ -33,6 +32,7 @@ import { supabase } from "../../lib/supabase";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import EmptyState from "../../components/EmptyState";
+import { FlashList } from "@shopify/flash-list";
 
 // Define the navigation param list type
 type RootStackParamList = {
@@ -473,7 +473,7 @@ const ReceiptsListScreen = () => {
             <Divider style={styles.modalDivider} />
           </View>
 
-          <FlatList
+          <FlashList estimatedItemSize={74}
             style={styles.modalContent}
             data={[]}
             ListHeaderComponent={
@@ -819,7 +819,7 @@ const ReceiptsListScreen = () => {
           }}
         />
       ) : (
-        <FlatList
+        <FlashList estimatedItemSize={74}
           data={filteredReceipts}
           renderItem={renderReceiptItem}
           keyExtractor={(item) => item.id}

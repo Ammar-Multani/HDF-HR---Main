@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
@@ -529,7 +530,7 @@ const EditEmployeeScreen = () => {
             setHasEndDate(true);
           }
         } catch (e) {
-          console.log("Invalid employment end date", e);
+          logDebug("Invalid employment end date", e);
         }
       }
 

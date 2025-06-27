@@ -13,12 +13,13 @@ import { useNavigation } from "@react-navigation/native";
 import { supabase, isNetworkAvailable } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
-import LoadingIndicator from "../../components/LoadingIndicator";
 import { TaskStatus, FormStatus } from "../../types";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Text from "../../components/Text";
 import { globalStyles } from "../../utils/globalStyles";
 import DynamicChart from "../../components/DynamicChart";
+import Shimmer from "../../components/Shimmer";
+import { LinearGradient } from "expo-linear-gradient";
 
 const { width } = Dimensions.get("window");
 
@@ -475,7 +476,88 @@ const CompanyAdminDashboard = () => {
   };
 
   if (loading && !refreshing) {
-    return <LoadingIndicator />;
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: theme.colors.background }]}
+      >
+        <StatusBar barStyle={theme.dark ? "light-content" : "dark-content"} />
+        <AppHeader
+          showProfileMenu={true}
+          userEmail={user?.email || ""}
+          isAdmin={true}
+          onSignOut={signOut}
+          showHelpButton={false}
+        />
+
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+        >
+          <View style={styles.welcomeHeader}>
+            <Shimmer width={250} height={28} style={{ marginBottom: 8 }} />
+            <Shimmer width={200} height={16} />
+          </View>
+
+          {/* Total Employees Stats Card Shimmer */}
+          <View style={styles.statsCard}>
+            <View style={styles.statRow}>
+              <Shimmer width={120} height={20} />
+              <Shimmer width={60} height={16} />
+            </View>
+            <Shimmer width={90} height={32} style={{ marginTop: 12 }} />
+          </View>
+
+          {/* Monthly Employee Chart Shimmer */}
+          <View style={styles.chartCard}>
+            <Shimmer width={200} height={24} style={{ marginBottom: 24 }} />
+            <Shimmer
+              width={width - 42}
+              height={220}
+              style={{ marginBottom: 16 }}
+            />
+          </View>
+
+          {/* Total Tasks Stats Card Shimmer */}
+          <View style={styles.statsCard}>
+            <View style={styles.statRow}>
+              <Shimmer width={100} height={20} />
+              <Shimmer width={60} height={16} />
+            </View>
+            <Shimmer width={90} height={32} style={{ marginTop: 12 }} />
+          </View>
+
+          {/* Task Status Cards Shimmer */}
+          <View style={styles.statCardsContainer}>
+            {[1, 2, 3].map((_, index) => (
+              <View key={index} style={styles.statCardSmall}>
+                <Shimmer width={80} height={16} style={{ marginBottom: 8 }} />
+                <Shimmer width={60} height={24} style={{ marginBottom: 8 }} />
+                <Shimmer width={24} height={24} style={{ borderRadius: 12 }} />
+              </View>
+            ))}
+          </View>
+
+          {/* Total Forms Stats Card Shimmer */}
+          <View style={styles.statsCard}>
+            <View style={styles.statRow}>
+              <Shimmer width={100} height={20} />
+              <Shimmer width={60} height={16} />
+            </View>
+            <Shimmer width={90} height={32} style={{ marginTop: 12 }} />
+          </View>
+
+          {/* Monthly Forms Chart Shimmer */}
+          <View style={styles.chartCard}>
+            <Shimmer width={200} height={24} style={{ marginBottom: 24 }} />
+            <Shimmer
+              width={width - 42}
+              height={220}
+              style={{ marginBottom: 16 }}
+            />
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
   }
 
   return (

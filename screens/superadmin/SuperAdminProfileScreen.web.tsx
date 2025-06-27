@@ -1521,7 +1521,7 @@ ${exportData.activityHistory.activities.join("\n")}
   if (loading) {
     return (
       <SafeAreaView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
+        style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
       >
         <AppHeader
           title={t("superAdmin.profile.title") || "Profile"}
@@ -1534,7 +1534,6 @@ ${exportData.activityHistory.activities.join("\n")}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={[
             styles.keyboardAvoidingView,
-            { backgroundColor: theme.colors.background },
           ]}
         >
           <ScrollView
@@ -1705,7 +1704,7 @@ ${exportData.activityHistory.activities.join("\n")}
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
       edges={["top"]}
     >
       <StatusBar barStyle={theme.dark ? "light-content" : "dark-content"} />
@@ -1721,7 +1720,6 @@ ${exportData.activityHistory.activities.join("\n")}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={[
           styles.keyboardAvoidingView,
-          { backgroundColor: theme.colors.background },
         ]}
       >
         <ScrollView

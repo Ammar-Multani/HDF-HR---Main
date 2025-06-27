@@ -20,6 +20,12 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+const logDebug = (...args: unknown[]) => {
+  if (NODE_ENV === "development") {
+    console.log(...args);
+  }
+};
+
 async function sendWithMailtrap(
   to: string,
   subject: string,
@@ -106,7 +112,7 @@ async function sendWithSendGrid(
     ],
   };
 
-  console.log("Sending with SendGrid:", {
+  logDebug("Sending with SendGrid:", {
     to,
     from: FROM_EMAIL,
     fromName: FROM_NAME,
@@ -124,7 +130,7 @@ async function sendWithSendGrid(
       body: JSON.stringify(data),
     });
 
-    console.log("SendGrid API response status:", response.status);
+    logDebug("SendGrid API response status:", response.status);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -166,7 +172,7 @@ serve(async (req) => {
     let body;
     try {
       body = await req.json();
-      console.log("Received request body:", body);
+      logDebug("Received request body:", body);
     } catch (e) {
       console.error("Failed to parse request body:", e);
       throw new Error("Invalid request body");
@@ -180,7 +186,7 @@ serve(async (req) => {
     if (!html && !text)
       throw new Error("Email content (html or text) is required");
 
-    console.log("Sending email with data:", {
+    logDebug("Sending email with data:", {
       to,
       from: FROM_EMAIL,
       subject,

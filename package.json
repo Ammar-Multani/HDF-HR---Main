@@ -22,6 +22,7 @@
     "@babel/runtime": "^7.20.6",
     "@emailjs/browser": "^4.4.1",
     "@expo/vector-icons": "^14.1.0",
+    "@hookform/resolvers": "^5.1.1",
     "@microsoft/microsoft-graph-client": "^3.0.7",
     "@microsoft/microsoft-graph-types": "^2.40.0",
     "@react-native-async-storage/async-storage": "1.23.1",
@@ -86,6 +87,7 @@
     "react-native-web": "~0.19.6",
     "react-native-web-hooks": "^3.0.2",
     "react-native-webview": "13.12.5",
+    "yup": "^1.6.1",
     "zustand": "^5.0.4"
   },
   "devDependencies": {

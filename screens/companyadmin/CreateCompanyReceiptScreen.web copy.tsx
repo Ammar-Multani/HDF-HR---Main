@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
@@ -791,7 +792,7 @@ const CreateCompanyReceiptScreen = () => {
         body: formData,
       });
 
-      console.log("OneDrive upload response:", response);
+      logDebug("OneDrive upload response:", response);
 
       if (response.error) {
         throw new Error(response.error.message || "Upload failed");
@@ -856,7 +857,7 @@ const CreateCompanyReceiptScreen = () => {
         },
       });
 
-      console.log("Delete response:", response);
+      logDebug("Delete response:", response);
 
       // Reset OneDrive-related state
       setOneDriveItemId(null);
@@ -1023,7 +1024,7 @@ const CreateCompanyReceiptScreen = () => {
   };
 
   const handlePreviewClick = () => {
-    console.log("Opening preview modal...");
+    logDebug("Opening preview modal...");
     setShowPreviewModal(true);
   };
 

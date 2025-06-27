@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
@@ -598,7 +599,7 @@ const CreateReceiptScreen = () => {
     if (!receiptNumber || !selectedCompany?.id) return false;
 
     try {
-      console.log(
+      logDebug(
         `Checking if receipt number "${receiptNumber}" exists for company ID "${selectedCompany.id}"`
       );
 
@@ -611,7 +612,7 @@ const CreateReceiptScreen = () => {
 
       // If we found any receipts with this number in this company, it's a duplicate
       const exists = Array.isArray(data) && data.length > 0;
-      console.log(`Receipt exists for this company: ${exists}`, data);
+      logDebug(`Receipt exists for this company: ${exists}`, data);
 
       return exists;
     } catch (error: any) {
@@ -796,7 +797,7 @@ const CreateReceiptScreen = () => {
 
       // 1. Try from direct receipt number field
       if (ocrData.entities?.receiptNumber?.data) {
-        console.log(
+        logDebug(
           "Found receipt number in receiptNumber field:",
           ocrData.entities.receiptNumber.data
         );
@@ -808,7 +809,7 @@ const CreateReceiptScreen = () => {
 
       // 2. Try from invoice number if receipt number not found
       if (!receiptNumber && ocrData.entities?.invoiceNumber?.data) {
-        console.log(
+        logDebug(
           "Found receipt number in invoiceNumber field:",
           ocrData.entities.invoiceNumber.data
         );
@@ -822,7 +823,7 @@ const CreateReceiptScreen = () => {
       if (!receiptNumber && ocrData.text?.text) {
         const extractedNumber = extractReceiptNumber(ocrData.text.text);
         if (extractedNumber) {
-          console.log("Found receipt number in raw text:", extractedNumber);
+          logDebug("Found receipt number in raw text:", extractedNumber);
           // Clean the extracted number
           receiptNumber = extractedNumber
             .replace(/[^a-zA-Z0-9-\/]/g, "")
@@ -838,7 +839,7 @@ const CreateReceiptScreen = () => {
           .toString()
           .padStart(4, "0");
         receiptNumber = `R-${today.getFullYear()}${(today.getMonth() + 1).toString().padStart(2, "0")}${today.getDate().toString().padStart(2, "0")}-${randomNum}`;
-        console.log("Generated fallback receipt number:", receiptNumber);
+        logDebug("Generated fallback receipt number:", receiptNumber);
       }
 
       // Set the receipt number
@@ -1014,7 +1015,7 @@ const CreateReceiptScreen = () => {
 
       // Format VAT details for display with improved formatting and NaN handling
       if (ocrData.entities?.multiTaxLineItems?.length > 0) {
-        console.log("Raw VAT data:", ocrData.entities.multiTaxLineItems);
+        logDebug("Raw VAT data:", ocrData.entities.multiTaxLineItems);
 
         const vatDetailsText = ocrData.entities.multiTaxLineItems
           .map((vat) => {
@@ -1042,17 +1043,17 @@ const CreateReceiptScreen = () => {
               ) * (vat.data?.taxRate?.data ? 100 : 1)
             );
 
-            console.log("Parsed VAT values:", { base, rate });
+            logDebug("Parsed VAT values:", { base, rate });
 
             if (isNaN(base) || isNaN(rate) || base === 0 || rate === 0) {
-              console.log("Skipping invalid VAT entry:", { base, rate });
+              logDebug("Skipping invalid VAT entry:", { base, rate });
               return null;
             }
 
             const vatAmount = roundToTwoDecimals((base * rate) / 100);
             const total = roundToTwoDecimals(base + vatAmount);
 
-            console.log("Calculated VAT values:", {
+            logDebug("Calculated VAT values:", {
               base: formatAmount(base),
               rate: rate.toFixed(1),
               vatAmount: formatAmount(vatAmount),
@@ -1067,7 +1068,7 @@ const CreateReceiptScreen = () => {
         if (vatDetailsText) {
           setValue("vat_details", vatDetailsText);
         } else {
-          console.log(
+          logDebug(
             "No valid VAT details to display, trying fallback calculation"
           );
 
@@ -1083,7 +1084,7 @@ const CreateReceiptScreen = () => {
             const base = roundToTwoDecimals(total - tax);
             const rate = roundToTwoDecimals((tax / base) * 100);
 
-            console.log("Fallback VAT calculation:", {
+            logDebug("Fallback VAT calculation:", {
               total: formatAmount(total),
               tax: formatAmount(tax),
               base: formatAmount(base),
@@ -1592,7 +1593,7 @@ const CreateReceiptScreen = () => {
       }
 
       // Find a super admin to use as created_by
-      console.log("Current user:", user);
+      logDebug("Current user:", user);
 
       const { data: adminUser, error: adminError } = await supabase
         .from("admin")
@@ -1600,7 +1601,7 @@ const CreateReceiptScreen = () => {
         .eq("email", user.email)
         .single();
 
-      console.log("Admin query result:", { adminUser, adminError });
+      logDebug("Admin query result:", { adminUser, adminError });
 
       if (!adminUser || adminUser.role !== "superadmin" || !adminUser.status) {
         console.error("User validation failed:", {
@@ -1641,7 +1642,7 @@ const CreateReceiptScreen = () => {
         created_by: adminUser.id,
       };
 
-      console.log("Creating receipt with data:", receiptData);
+      logDebug("Creating receipt with data:", receiptData);
 
       const { data: createdReceipt, error } = await supabase
         .from("receipts")
@@ -1738,7 +1739,7 @@ const CreateReceiptScreen = () => {
   };
 
   const handlePreviewClick = () => {
-    console.log("Opening preview modal...");
+    logDebug("Opening preview modal...");
     setShowPreviewModal(true);
   };
 
@@ -1972,7 +1973,7 @@ const CreateReceiptScreen = () => {
         body: formData,
       });
 
-      console.log("OneDrive upload response:", response);
+      logDebug("OneDrive upload response:", response);
 
       if (response.error) {
         throw new Error(response.error.message || "Upload failed");
@@ -2037,7 +2038,7 @@ const CreateReceiptScreen = () => {
         },
       });
 
-      console.log("Delete response:", response);
+      logDebug("Delete response:", response);
 
       // Reset OneDrive-related state
       setOneDriveItemId(null);

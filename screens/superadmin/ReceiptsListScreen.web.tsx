@@ -8,7 +8,6 @@ import React, {
 import {
   StyleSheet,
   View,
-  FlatList,
   TouchableOpacity,
   RefreshControl,
   Platform,
@@ -51,6 +50,7 @@ import Animated, {
 import { useTranslation } from "react-i18next";
 import Pagination from "../../components/Pagination";
 import CompanySelector from "../../components/CompanySelector";
+import { FlashList } from "@shopify/flash-list";
 
 // Define the navigation param list type
 type RootStackParamList = {
@@ -540,7 +540,8 @@ const createStyles = (theme: MD3Theme) =>
       fontFamily: "Poppins-Regular",
     },
     tableContent: {
-      flexGrow: 1,
+      paddingTop: 8,
+      paddingBottom: 50,
     },
     actionCell: {
       flex: 1,
@@ -905,7 +906,8 @@ const ReceiptsListScreen = () => {
         <>
           <View style={styles.tableContainer}>
             <TableHeader />
-            <FlatList
+            <FlashList
+              estimatedItemSize={74}
               data={filteredReceipts}
               renderItem={({ item }) => <TableRow item={item} />}
               keyExtractor={(item) => item.id}
@@ -920,6 +922,8 @@ const ReceiptsListScreen = () => {
               flexDirection: "row",
               alignItems: "center",
               justifyContent: "space-between",
+              marginTop: 12,
+              minHeight: 33,
             }}
           >
             <View
@@ -967,7 +971,8 @@ const ReceiptsListScreen = () => {
     return (
       <>
         <View style={{ flex: 1 }}>
-          <FlatList
+          <FlashList
+            estimatedItemSize={74}
             data={filteredReceipts}
             renderItem={renderReceiptItem}
             keyExtractor={(item) => item.id}
@@ -1653,7 +1658,8 @@ const ReceiptsListScreen = () => {
           {useTableLayout ? (
             <TableSkeleton />
           ) : (
-            <FlatList
+            <FlashList
+              estimatedItemSize={74}
               data={Array(4).fill(0)}
               renderItem={() => <CardSkeleton />}
               keyExtractor={(_, index) => `skeleton-${index}`}

@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   StyleSheet,
   View,
-  FlatList,
   TouchableOpacity,
   RefreshControl,
   ScrollView,
@@ -12,6 +11,7 @@ import {
   Pressable,
   PressableStateCallbackType,
 } from "react-native";
+import { FlashList } from "@shopify/flash-list";
 import {
   Text,
   Card,
@@ -865,7 +865,8 @@ const EmployeeFormsScreen = () => {
           {useTableLayout ? (
             <TableSkeleton />
           ) : (
-            <FlatList
+            <FlashList
+              estimatedItemSize={74}
               data={Array(4).fill(0)}
               renderItem={() => <FormItemSkeleton />}
               keyExtractor={(_, index) => `skeleton-${index}`}
@@ -976,7 +977,8 @@ const EmployeeFormsScreen = () => {
         ) : isMediumScreen || isLargeScreen ? (
           <View style={styles.tableContainer}>
             <TableHeader />
-            <FlatList
+            <FlashList
+              estimatedItemSize={74}
               data={filteredForms}
               renderItem={({ item }) => (
                 <TableRow item={item} navigation={navigation} />
@@ -989,7 +991,8 @@ const EmployeeFormsScreen = () => {
             />
           </View>
         ) : (
-          <FlatList
+          <FlashList
+            estimatedItemSize={74}
             data={filteredForms}
             renderItem={renderFormItem}
             keyExtractor={(item) => `${item.type}-${item.id}`}
@@ -1272,7 +1275,8 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins-Regular",
   },
   tableContent: {
-    flexGrow: 1,
+    paddingTop: 8,
+    paddingBottom: 50,
   },
   actionCell: {
     flex: 1,

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
-  FlatList,
   TouchableOpacity,
   RefreshControl,
   ScrollView,
@@ -44,6 +44,7 @@ import LoadingIndicator from "../../components/LoadingIndicator";
 import EmptyState from "../../components/EmptyState";
 import StatusBadge from "../../components/StatusBadge";
 import { Task, TaskPriority, TaskStatus } from "../../types";
+import { FlashList } from "@shopify/flash-list";
 
 // Component for skeleton loading UI
 const TaskItemSkeleton = () => {
@@ -344,7 +345,7 @@ const CompanyAdminTasksScreen = () => {
 
   const fetchTasks = async (refresh = false) => {
     try {
-      console.log("=== Starting fetchTasks ===");
+      logDebug("=== Starting fetchTasks ===");
       // Clear any previous errors
       setError(null);
 
@@ -365,7 +366,7 @@ const CompanyAdminTasksScreen = () => {
         .eq("active_status", "active")
         .single();
 
-      console.log("Company user data:", { companyUserData, companyUserError });
+      logDebug("Company user data:", { companyUserData, companyUserError });
 
       if (companyUserError || !companyUserData) {
         console.error("Error fetching company user data:", companyUserError);
@@ -393,14 +394,14 @@ const CompanyAdminTasksScreen = () => {
       // Check network availability
       const networkAvailable = await isNetworkAvailable();
       if (!networkAvailable && refresh) {
-        console.log(
+        logDebug(
           "Network appears to be offline, but still attempting fetch"
         );
       }
 
       // Use cached query implementation with proper typing
       const fetchData = async () => {
-        console.log("Fetching tasks with filters:", {
+        logDebug("Fetching tasks with filters:", {
           companyId: companyUserData.company_id,
           userId: companyUserData.id,
           status: appliedFilters.status,
@@ -451,7 +452,7 @@ const CompanyAdminTasksScreen = () => {
           })
           .range(from, to);
 
-        console.log("Executing queries...");
+        logDebug("Executing queries...");
 
         // Execute both queries
         const [countResult, tasksResult] = await Promise.all([
@@ -459,7 +460,7 @@ const CompanyAdminTasksScreen = () => {
           query,
         ]);
 
-        console.log("Query results:", {
+        logDebug("Query results:", {
           countError: countResult.error,
           tasksError: tasksResult.error,
           taskCount: countResult.count,
@@ -480,7 +481,7 @@ const CompanyAdminTasksScreen = () => {
           ];
           const allUserIds = [...new Set([...creatorIds, ...assigneeIds])];
 
-          console.log("Fetching user details for IDs:", allUserIds);
+          logDebug("Fetching user details for IDs:", allUserIds);
 
           // First check which creators are super admins
           const { data: adminUsers } = await supabase
@@ -488,7 +489,7 @@ const CompanyAdminTasksScreen = () => {
             .select("id, role, name")
             .in("id", creatorIds);
 
-          console.log("Admin users found:", adminUsers);
+          logDebug("Admin users found:", adminUsers);
 
           // Identify super admin creators but don't filter them out
           const superAdminIds =
@@ -499,7 +500,7 @@ const CompanyAdminTasksScreen = () => {
               )
               .map((admin) => admin.id) || [];
 
-          console.log("Super admin IDs:", superAdminIds);
+          logDebug("Super admin IDs:", superAdminIds);
 
           // Fetch user details from company_user table
           const { data: userDetails } = await supabase
@@ -1058,7 +1059,7 @@ const CompanyAdminTasksScreen = () => {
             />
           </View>
         </View>
-        <FlatList
+        <FlashList estimatedItemSize={74}
           data={Array(3).fill(0)}
           renderItem={() => <TaskItemSkeleton />}
           keyExtractor={(_, index) => `skeleton-${index}`}
@@ -1210,7 +1211,7 @@ const CompanyAdminTasksScreen = () => {
           />
         </ScrollView>
       ) : (
-        <FlatList
+        <FlashList estimatedItemSize={74}
           data={filteredTasks}
           renderItem={renderTaskItem}
           keyExtractor={(item) => item.id}

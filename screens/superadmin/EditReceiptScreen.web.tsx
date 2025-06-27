@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
@@ -315,7 +316,7 @@ const EditReceiptScreen = () => {
         .eq("email", user?.email)
         .single();
 
-      console.log("Admin query result:", { adminUser, adminError });
+      logDebug("Admin query result:", { adminUser, adminError });
 
       if (!adminUser || adminUser.role !== "superadmin" || !adminUser.status) {
         console.error("User validation failed:", {

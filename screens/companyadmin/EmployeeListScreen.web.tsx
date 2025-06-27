@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
-  FlatList,
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
@@ -67,6 +67,7 @@ import {
   PillFilterGroup,
 } from "../../components/FilterSections";
 import HelpGuideModal from "../../components/HelpGuideModal";
+import { FlashList } from "@shopify/flash-list";
 
 // Update the CompanyUser interface to include optional created_at
 interface ExtendedCompanyUser extends CompanyUser {
@@ -150,21 +151,67 @@ const EmployeeItemSkeleton = () => {
       <Card.Content>
         <View style={styles.cardHeader}>
           <View style={styles.userInfo}>
-            <Shimmer width={40} height={40} style={{ borderRadius: 20 }} />
+            <Shimmer
+              width={50}
+              height={50}
+              style={{ borderRadius: 25, marginRight: 16 }}
+            />
             <View style={styles.userTextContainer}>
-              <Shimmer width={160} height={18} style={{ marginBottom: 4 }} />
-              <Shimmer width={140} height={14} style={{ marginBottom: 4 }} />
-              <Shimmer width={100} height={14} />
+              <Shimmer width={180} height={20} style={{ marginBottom: 8 }} />
+              <Shimmer width={150} height={16} style={{ marginBottom: 8 }} />
+              <View style={styles.badgeContainer}>
+                <View style={styles.jobTitleBadge}>
+                  <Shimmer
+                    width={120}
+                    height={24}
+                    style={{ borderRadius: 8 }}
+                  />
+                </View>
+              </View>
+              <View style={styles.dateContainer}>
+                <Shimmer width={140} height={16} style={{ marginTop: 8 }} />
+              </View>
             </View>
           </View>
           <View style={styles.statusContainer}>
-            <Shimmer width={80} height={24} style={{ borderRadius: 12 }} />
+            <Shimmer width={90} height={32} style={{ borderRadius: 16 }} />
           </View>
         </View>
       </Card.Content>
     </Card>
   );
 };
+
+// Update the table skeleton loading state
+const TableRowSkeleton = () => (
+  <View style={styles.tableRow}>
+    <View style={styles.tableCell}>
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <Shimmer
+          width={40}
+          height={40}
+          style={{ borderRadius: 20, marginRight: 12 }}
+        />
+        <Shimmer width={120} height={16} />
+      </View>
+    </View>
+    <View style={styles.tableCell}>
+      <Shimmer width={180} height={16} />
+    </View>
+    <View style={styles.tableCell}>
+      <Shimmer width={140} height={16} />
+    </View>
+    <View style={styles.tableCell}>
+      <Shimmer width={120} height={16} />
+    </View>
+    <View style={styles.tableCell}>
+      <Shimmer width={80} height={24} style={{ borderRadius: 12 }} />
+    </View>
+    <View style={styles.actionCell}>
+      <Shimmer width={32} height={32} style={{ borderRadius: 16 }} />
+    </View>
+  </View>
+);
 
 // Add TooltipText component for table cells
 const TooltipText = ({
@@ -536,7 +583,7 @@ const EmployeeListScreen = () => {
 
         // Apply status filter if not "all"
         if (statusFilter && statusFilter !== "all") {
-          console.log("Applying status filter:", statusFilter); // Debug log
+          logDebug("Applying status filter:", statusFilter); // Debug log
           query = query.eq("active_status", statusFilter);
         }
 
@@ -756,54 +803,41 @@ const EmployeeListScreen = () => {
   const renderContent = () => {
     if (loading && !refreshing) {
       if (useTableLayout) {
-        // Table view skeleton
         return (
           <View style={styles.tableContainer}>
             <EmployeeTableHeader />
-            {Array(6)
+            {Array(8)
               .fill(0)
               .map((_, index) => (
-                <View key={`skeleton-${index}`} style={styles.tableRow}>
-                  <View style={styles.tableCell}>
-                    <Shimmer width={160} height={16} />
-                  </View>
-                  <View style={styles.tableCell}>
-                    <Shimmer width={180} height={16} />
-                  </View>
-                  <View style={styles.tableCell}>
-                    <Shimmer width={140} height={16} />
-                  </View>
-                  <View style={styles.tableCell}>
-                    <Shimmer width={100} height={16} />
-                  </View>
-                  <View style={styles.tableCell}>
-                    <Shimmer
-                      width={80}
-                      height={24}
-                      style={{ borderRadius: 12 }}
-                    />
-                  </View>
-                  <View style={styles.actionCell}>
-                    <Shimmer
-                      width={40}
-                      height={40}
-                      style={{ borderRadius: 20 }}
-                    />
-                  </View>
-                </View>
+                <TableRowSkeleton key={`skeleton-${index}`} />
               ))}
           </View>
         );
       }
 
-      // Card view skeleton
       return (
-        <FlatList
-          data={Array(4).fill(0)}
-          renderItem={() => <EmployeeItemSkeleton />}
-          keyExtractor={(_, index) => `skeleton-${index}`}
-          contentContainerStyle={styles.listContent}
-        />
+        <>
+          <View style={styles.searchContainer}>
+            <Shimmer
+              width="70%"
+              height={56}
+              style={{ borderRadius: 18, marginRight: 8 }}
+            />
+            <Shimmer
+              width={48}
+              height={48}
+              style={{ borderRadius: 8, marginRight: 8 }}
+            />
+            <Shimmer width={140} height={56} style={{ borderRadius: 17 }} />
+          </View>
+          <FlashList estimatedItemSize={74}
+            data={Array(6).fill(0)}
+            renderItem={() => <EmployeeItemSkeleton />}
+            keyExtractor={(_, index) => `skeleton-${index}`}
+            contentContainerStyle={styles.listContent}
+            ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+          />
+        </>
       );
     }
 
@@ -840,7 +874,7 @@ const EmployeeListScreen = () => {
       <>
         <View style={styles.tableContainer}>
           <EmployeeTableHeader />
-          <FlatList
+          <FlashList estimatedItemSize={74}
             data={filteredEmployees}
             renderItem={({ item }) => <EmployeeTableRow item={item} />}
             keyExtractor={(item) => item.id}
@@ -850,6 +884,44 @@ const EmployeeListScreen = () => {
             }
           />
         </View>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginTop: 16,
+            minHeight: 48,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              marginLeft: 12,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 14,
+                color: "#666",
+                fontFamily: "Poppins-Regular",
+              }}
+            >
+              Total Employees:
+            </Text>
+            <Text
+              style={{
+                fontSize: 14,
+                color: theme.colors.primary,
+                fontFamily: "Poppins-Medium",
+                marginLeft: 4,
+                minWidth: 20,
+                textAlign: "right",
+              }}
+            >
+              {totalCount}
+            </Text>
+          </View>
         {totalPages > 1 && (
           <View style={styles.paginationWrapper}>
             <Pagination
@@ -861,11 +933,12 @@ const EmployeeListScreen = () => {
               }}
             />
           </View>
-        )}
+          )}
+        </View>
       </>
     ) : (
       <>
-        <FlatList
+        <FlashList estimatedItemSize={74}
           data={filteredEmployees}
           renderItem={renderEmployeeItem}
           keyExtractor={(item) => item.id}
@@ -874,18 +947,57 @@ const EmployeeListScreen = () => {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
         />
-        {totalPages > 1 && (
-          <View style={styles.paginationWrapper}>
-            <Pagination
-              currentPage={page}
-              totalPages={totalPages}
-              onPageChange={(newPage) => {
-                setPage(newPage);
-                fetchEmployees(false);
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginTop: 16,
+            minHeight: 48,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              marginLeft: 12,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 14,
+                color: "#666",
+                fontFamily: "Poppins-Regular",
               }}
-            />
+            >
+              Total Employees:
+            </Text>
+            <Text
+              style={{
+                fontSize: 14,
+                color: theme.colors.primary,
+                fontFamily: "Poppins-Medium",
+                marginLeft: 4,
+                minWidth: 20,
+                textAlign: "right",
+              }}
+            >
+              {totalCount}
+            </Text>
           </View>
-        )}
+          {totalPages > 1 && (
+            <View style={styles.paginationWrapper}>
+              <Pagination
+                currentPage={page}
+                totalPages={totalPages}
+                onPageChange={(newPage) => {
+                  setPage(newPage);
+                  fetchEmployees(false);
+                }}
+              />
+            </View>
+          )}
+        </View>
       </>
     );
   };
@@ -1102,7 +1214,7 @@ const EmployeeListScreen = () => {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
     >
       <AppHeader
         title="Employees"
@@ -1376,7 +1488,8 @@ const styles = StyleSheet.create({
     fontFamily: getFontFamily("normal"),
   },
   tableContent: {
-    flexGrow: 1,
+    paddingTop: 8,
+    paddingBottom: 50,
   },
   actionCell: {
     flex: 1,

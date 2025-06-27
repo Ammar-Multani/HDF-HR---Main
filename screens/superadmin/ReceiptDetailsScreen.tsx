@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
@@ -492,7 +493,7 @@ const ReceiptDetailsScreen = () => {
           {/* <Button
             mode="outlined"
             icon="printer"
-            onPress={() => console.log("Print receipt")}
+            onPress={() => logDebug("Print receipt")}
             style={styles.button}
           >
             Print

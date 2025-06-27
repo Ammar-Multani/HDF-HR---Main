@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { logDebug } from "../../utils/logger";
 import {
   StyleSheet,
   View,
@@ -264,7 +265,7 @@ const CreateCompanyScreen = () => {
         throw companyUserError;
       }
 
-      console.log(`Company admin created with email: ${data.admin_email}`);
+      logDebug(`Company admin created with email: ${data.admin_email}`);
 
       setSnackbarMessage(t("superAdmin.companies.companyCreatedSuccess"));
       setSnackbarVisible(true);

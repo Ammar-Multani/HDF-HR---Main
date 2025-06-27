@@ -511,65 +511,6 @@ const SuperAdminTabNavigator = () => {
         </SuperAdminTab.Screen>
 
         <SuperAdminTab.Screen
-          name="Users"
-          options={{
-            tabBarIcon: ({ color }) => (
-              <MaterialCommunityIcons
-                name="account-group"
-                color={color}
-                size={24}
-              />
-            ),
-          }}
-        >
-          {() => (
-            <ContentStack.Navigator
-              screenOptions={{
-                headerShown: false,
-                animation: "none",
-              }}
-            >
-              <ContentStack.Screen
-                name="UsersList"
-                component={SuperAdminUsersScreen}
-              />
-              <ContentStack.Screen
-                name="CreateSuperAdmin"
-                component={CreateSuperAdminScreen}
-              />
-              <ContentStack.Screen
-                name="SuperAdminDetailsScreen"
-                component={SuperAdminDetailsScreen}
-              />
-              <ContentStack.Screen
-                name="EditSuperAdmin"
-                component={EditSuperAdminScreen}
-              />
-              <ContentStack.Screen
-                name="CompanyAdminDetailsScreen"
-                component={CompanyAdminDetailsScreen}
-              />
-              <ContentStack.Screen
-                name="EditCompanyAdmin"
-                component={EditCompanyAdminScreen}
-              />
-              <ContentStack.Screen
-                name="CreateCompanyAdmin"
-                component={CreateCompanyAdminScreen}
-              />
-              <ContentStack.Screen
-                name="CreateEmployee"
-                component={CreateEmployeesScreen}
-              />
-              <ContentStack.Screen
-                name="EmployeeDetails"
-                component={EmployeeDetailedScreen}
-              />
-            </ContentStack.Navigator>
-          )}
-        </SuperAdminTab.Screen>
-
-        <SuperAdminTab.Screen
           name="Utilities"
           options={{
             tabBarIcon: ({ color }) => (
@@ -625,6 +566,7 @@ const SuperAdminTabNavigator = () => {
                 name="EditReceipt"
                 component={EditReceiptScreen}
               />
+              {/* Remove user-related screens from here since they are now in the main stack */}
             </ContentStack.Navigator>
           )}
         </SuperAdminTab.Screen>
@@ -728,6 +670,47 @@ export const SuperAdminNavigator = () => {
       <SuperAdminStack.Screen
         name="SuperAdminCreateEmployeeStaffDeparture"
         component={SuperAdminCreateEmployeeStaffDepartureScreen}
+      />
+      <SuperAdminStack.Screen
+        name="ActivityLogs"
+        component={ActivityLogsScreen}
+      />
+      {/* Add User related screens to main stack */}
+      <SuperAdminStack.Screen
+        name="UsersList"
+        component={SuperAdminUsersScreen}
+      />
+      <SuperAdminStack.Screen
+        name="CreateSuperAdmin"
+        component={CreateSuperAdminScreen}
+      />
+      <SuperAdminStack.Screen
+        name="SuperAdminDetailsScreen"
+        component={SuperAdminDetailsScreen}
+      />
+      <SuperAdminStack.Screen
+        name="EditSuperAdmin"
+        component={EditSuperAdminScreen}
+      />
+      <SuperAdminStack.Screen
+        name="CompanyAdminDetailsScreen"
+        component={CompanyAdminDetailsScreen}
+      />
+      <SuperAdminStack.Screen
+        name="EditCompanyAdmin"
+        component={EditCompanyAdminScreen}
+      />
+      <SuperAdminStack.Screen
+        name="CreateCompanyAdmin"
+        component={CreateCompanyAdminScreen}
+      />
+      <SuperAdminStack.Screen
+        name="CreateEmployee"
+        component={CreateEmployeesScreen}
+      />
+      <SuperAdminStack.Screen
+        name="EmployeeDetails"
+        component={EmployeeDetailedScreen}
       />
     </SuperAdminStack.Navigator>
   );

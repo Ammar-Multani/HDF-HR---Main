@@ -23,6 +23,7 @@ import {
   TouchableRipple,
   List,
 } from "react-native-paper";
+import { logDebug } from "../../utils/logger";
 import { useTranslation } from "react-i18next";
 import { supabase } from "../../lib/supabase";
 import AppHeader from "../../components/AppHeader";
@@ -213,7 +214,7 @@ const CompanyActivityLogsScreen = () => {
   ) => {
     try {
       if (!companyId) {
-        console.log("No company ID available");
+        logDebug("No company ID available");
         setLoading(false);
         return;
       }

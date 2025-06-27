@@ -9,6 +9,7 @@ import * as SplashScreen from "expo-splash-screen";
 import * as Linking from "expo-linking";
 import { Alert, AppState, AppStateStatus, Platform } from "react-native";
 import { initEmailService } from "./utils/emailService";
+import { logDebug } from "./utils/logger";
 import {
   prefetchCommonData,
   clearAllCache,
@@ -139,7 +140,7 @@ export default function App() {
           const { state, timestamp } = JSON.parse(lastCheck);
           // If check is recent (within 5 minutes), use it
           if (now - timestamp < 5 * 60 * 1000) {
-            console.log("Using recent auth pre-check result:", state);
+            logDebug("Using recent auth pre-check result:", state);
             setPreAuthCheck(state);
             setHasCheckedAuth(true);
             return;
@@ -159,7 +160,7 @@ export default function App() {
           })
         );
 
-        console.log("Fresh auth pre-check result:", isAuthenticated);
+        logDebug("Fresh auth pre-check result:", isAuthenticated);
         setPreAuthCheck(isAuthenticated);
         setHasCheckedAuth(true);
       } catch (error) {
@@ -181,7 +182,7 @@ export default function App() {
       // Only perform maintenance if it hasn't been done in the last day
       // (reduced from 3 days to 1 day but made less aggressive)
       if (!lastResetStr || now - parseInt(lastResetStr) > ONE_DAY_MS) {
-        console.log("Performing periodic cache maintenance...");
+        logDebug("Performing periodic cache maintenance...");
 
         // Instead of resetting metrics, just clean up old entries
         const cacheKeys = await AsyncStorage.getAllKeys();
@@ -284,7 +285,7 @@ export default function App() {
   // Function to handle deep links
   const handleDeepLink = useCallback(async (event: DeepLinkEvent) => {
     const url = event.url;
-    console.log("Deep link received:", url);
+    logDebug("Deep link received:", url);
 
     // For password reset links
     if (url.includes("reset-password")) {
