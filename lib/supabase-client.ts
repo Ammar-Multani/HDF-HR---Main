@@ -1,3 +1,4 @@
+import "react-native-url-polyfill/auto";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY } from "@env";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -19,10 +20,13 @@ const supabaseAnonKey = EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
 // Initialize client with pooling and query configurations
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  ...queryConfig,
+  db: queryConfig.db,
+  global: queryConfig.global,
   auth: {
-    ...queryConfig.auth,
     storage: AsyncStorage,
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false,
   },
 });
 

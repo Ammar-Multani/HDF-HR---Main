@@ -478,7 +478,7 @@ const CompanyAdminDashboard = () => {
   if (loading && !refreshing) {
     return (
       <SafeAreaView
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
+        style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
       >
         <StatusBar barStyle={theme.dark ? "light-content" : "dark-content"} />
         <AppHeader
@@ -562,7 +562,7 @@ const CompanyAdminDashboard = () => {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
     >
       <StatusBar barStyle={theme.dark ? "light-content" : "dark-content"} />
       <AppHeader
@@ -726,7 +726,6 @@ const CompanyAdminDashboard = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f7fa",
   },
   scrollView: {
     flex: 1,

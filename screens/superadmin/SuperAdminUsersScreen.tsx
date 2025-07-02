@@ -32,7 +32,6 @@ import {
   Modal,
   Portal,
   RadioButton,
-  Theme,
   MD3Theme,
   Banner,
 } from "react-native-paper";
@@ -295,7 +294,7 @@ const getStyles = (theme: MD3Theme) =>
     },
     contentContainer: {
       flex: 1,
-      paddingHorizontal: Platform.OS === "web" ? 24 : 16,
+      paddingHorizontal: Platform.OS === "web" ? 24 : 0,
     },
     filterCard: {
       marginBottom: 12,
@@ -386,8 +385,8 @@ const getStyles = (theme: MD3Theme) =>
       paddingVertical: 12,
     },
     cardContainer: {
-      marginBottom: 12,
-      marginHorizontal: 2,
+      marginBottom: 5,
+      marginHorizontal: 0,
     },
     userInfo: {
       flexDirection: "row",
@@ -435,12 +434,13 @@ const getStyles = (theme: MD3Theme) =>
       padding: 16,
       paddingTop: 8,
       paddingBottom: 100,
-      backgroundColor: "#fff",
+      flexGrow: 1,
     },
     listContainer: {
       flex: 1,
-      marginTop: 4,
-      marginBottom: 18,
+      marginTop: 0,
+      marginBottom: 0,
+      minHeight: 400,
     },
     listHeaderContainer: {
       backgroundColor: "#FFFFFF",
@@ -965,10 +965,10 @@ const getStyles = (theme: MD3Theme) =>
     tabsWrapper: {
       flexDirection: "row",
       alignItems: "center",
-      maxWidth: 400,
+      justifyContent: "center",
     },
     tab: {
-      paddingVertical: 12,
+      paddingVertical: 5,
       paddingHorizontal: 10,
       borderWidth: 0.5,
       borderRadius: 25,
@@ -985,7 +985,7 @@ const getStyles = (theme: MD3Theme) =>
     },
     tableContainer: {
       flex: 1,
-      minHeight: 100, // Ensure minimum height
+      minHeight: 400,
       backgroundColor: "#fff",
       borderRadius: 16,
       borderWidth: 1,
@@ -1043,6 +1043,7 @@ const getStyles = (theme: MD3Theme) =>
       padding: 8,
       paddingBottom: 50,
       backgroundColor: "#fff",
+      flexGrow: 1,
     },
     actionCell: {
       flex: 1,
@@ -1171,8 +1172,10 @@ const SuperAdminUsersScreen = () => {
   const [menuVisible, setMenuVisible] = useState(false);
 
   // Add pagination state
-  const PAGE_SIZE = 10;
+  const PAGE_SIZE = 20;
   const [page, setPage] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMoreData, setHasMoreData] = useState(true);
 
   // Add separate count states for each user type
   const [superAdminCount, setSuperAdminCount] = useState(0);
@@ -1252,8 +1255,19 @@ const SuperAdminUsersScreen = () => {
   };
 
   // Fetch super admins with pagination
-  const fetchSuperAdmins = async () => {
+  const fetchSuperAdmins = async (refresh = false) => {
     try {
+      if (refresh) {
+        setPage(0);
+        setHasMoreData(true);
+      } else {
+        setLoadingMore(true);
+      }
+
+      const currentPage = refresh ? 0 : page;
+      const from = currentPage * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
       let query = supabase
         .from("admin")
         .select("*", { count: "exact" })
@@ -1280,8 +1294,6 @@ const SuperAdminUsersScreen = () => {
       }
 
       // Apply pagination
-      const from = page * PAGE_SIZE;
-      const to = from + PAGE_SIZE - 1;
       query = query.range(from, to);
 
       const { data, error, count } = await query;
@@ -1291,23 +1303,45 @@ const SuperAdminUsersScreen = () => {
         return;
       }
 
-      setSuperAdmins(data || []);
-      setFilteredSuperAdmins(data || []);
+      // Check if we have more data
       if (count !== null) {
+        setHasMoreData(from + (data?.length || 0) < count);
         setSuperAdminCount(count);
         setTotalItems(count);
+      } else {
+        setHasMoreData(data?.length === PAGE_SIZE);
+      }
+
+      if (refresh) {
+        setSuperAdmins(data || []);
+        setFilteredSuperAdmins(data || []);
+      } else {
+        setSuperAdmins((prev) => [...prev, ...(data || [])]);
+        setFilteredSuperAdmins((prev) => [...prev, ...(data || [])]);
       }
     } catch (error) {
       console.error("Error in fetchSuperAdmins:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setLoadingMore(false);
     }
   };
 
   // Fetch company admins with pagination
-  const fetchCompanyAdmins = async () => {
+  const fetchCompanyAdmins = async (refresh = false) => {
     try {
+      if (refresh) {
+        setPage(0);
+        setHasMoreData(true);
+      } else {
+        setLoadingMore(true);
+      }
+
+      const currentPage = refresh ? 0 : page;
+      const from = currentPage * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
       let query = supabase
         .from("company_user")
         .select("*, company:company_id(company_name)", { count: "exact" })
@@ -1334,9 +1368,14 @@ const SuperAdminUsersScreen = () => {
         );
       }
 
+      // Apply company filter
+      if (selectedCompanyIds.length > 0) {
+        query = query.in("company_id", selectedCompanyIds);
+      } else if (selectedCompanyId !== "all") {
+        query = query.eq("company_id", selectedCompanyId);
+      }
+
       // Apply pagination
-      const from = page * PAGE_SIZE;
-      const to = from + PAGE_SIZE - 1;
       query = query.range(from, to);
 
       const { data, error, count } = await query;
@@ -1346,23 +1385,45 @@ const SuperAdminUsersScreen = () => {
         return;
       }
 
-      setCompanyAdmins(data || []);
-      setFilteredCompanyAdmins(data || []);
+      // Check if we have more data
       if (count !== null) {
+        setHasMoreData(from + (data?.length || 0) < count);
         setCompanyAdminCount(count);
         setTotalItems(count);
+      } else {
+        setHasMoreData(data?.length === PAGE_SIZE);
+      }
+
+      if (refresh) {
+        setCompanyAdmins(data || []);
+        setFilteredCompanyAdmins(data || []);
+      } else {
+        setCompanyAdmins((prev) => [...prev, ...(data || [])]);
+        setFilteredCompanyAdmins((prev) => [...prev, ...(data || [])]);
       }
     } catch (error) {
       console.error("Error in fetchCompanyAdmins:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setLoadingMore(false);
     }
   };
 
   // Fetch employees with pagination
-  const fetchEmployees = async () => {
+  const fetchEmployees = async (refresh = false) => {
     try {
+      if (refresh) {
+        setPage(0);
+        setHasMoreData(true);
+      } else {
+        setLoadingMore(true);
+      }
+
+      const currentPage = refresh ? 0 : page;
+      const from = currentPage * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
       let query = supabase
         .from("company_user")
         .select("*, company:company_id(company_name)", { count: "exact" })
@@ -1389,9 +1450,14 @@ const SuperAdminUsersScreen = () => {
         );
       }
 
+      // Apply company filter
+      if (selectedCompanyIds.length > 0) {
+        query = query.in("company_id", selectedCompanyIds);
+      } else if (selectedCompanyId !== "all") {
+        query = query.eq("company_id", selectedCompanyId);
+      }
+
       // Apply pagination
-      const from = page * PAGE_SIZE;
-      const to = from + PAGE_SIZE - 1;
       query = query.range(from, to);
 
       const { data, error, count } = await query;
@@ -1401,69 +1467,75 @@ const SuperAdminUsersScreen = () => {
         return;
       }
 
-      setEmployees(data || []);
-      setFilteredEmployees(data || []);
+      // Check if we have more data
       if (count !== null) {
+        setHasMoreData(from + (data?.length || 0) < count);
         setEmployeeCount(count);
         setTotalItems(count);
+      } else {
+        setHasMoreData(data?.length === PAGE_SIZE);
+      }
+
+      if (refresh) {
+        setEmployees(data || []);
+        setFilteredEmployees(data || []);
+      } else {
+        setEmployees((prev) => [...prev, ...(data || [])]);
+        setFilteredEmployees((prev) => [...prev, ...(data || [])]);
       }
     } catch (error) {
       console.error("Error in fetchEmployees:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setLoadingMore(false);
     }
   };
 
   // Fetch all user data
-  const fetchAllUsers = async () => {
+  const fetchAllUsers = async (refresh = false) => {
     try {
-      setLoading(true);
-      await Promise.all([
-        fetchSuperAdmins(),
-        fetchCompanyAdmins(),
-        fetchEmployees(),
-      ]);
+      if (refresh) {
+        setLoading(true);
+        setPage(0);
+        setHasMoreData(true);
+      }
+
+      if (selectedTab === UserListType.SUPER_ADMIN) {
+        await fetchSuperAdmins(refresh);
+      } else if (selectedTab === UserListType.COMPANY_ADMIN) {
+        await fetchCompanyAdmins(refresh);
+      } else if (selectedTab === UserListType.EMPLOYEE) {
+        await fetchEmployees(refresh);
+      }
     } catch (error) {
       console.error("Error fetching users:", error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
     }
   };
 
   // Initial data load
   useEffect(() => {
     fetchCompanies();
-    fetchAllUsers();
+    fetchAllUsers(true);
   }, []);
 
-  // Refetch when company filter changes
-  useEffect(() => {
-    if (selectedTab === UserListType.COMPANY_ADMIN) {
-      fetchCompanyAdmins();
-    } else if (selectedTab === UserListType.EMPLOYEE) {
-      fetchEmployees();
+  // Add load more function
+  const loadMoreUsers = () => {
+    if (!loading && !loadingMore && hasMoreData) {
+      setPage((prevPage) => prevPage + 1);
+      fetchAllUsers(false);
     }
-  }, [selectedCompanyIds, selectedCompanyId, selectedTab]);
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchAllUsers(true);
+  };
 
   // Filter users based on search query
   useEffect(() => {
-    // Clear the timeout on unmount or new search
-    let debounceTimeout: NodeJS.Timeout;
-
-    const performSearch = () => {
-      if (searchQuery.trim() === "") {
-        setFilteredSuperAdmins(superAdmins);
-        setFilteredCompanyAdmins(companyAdmins);
-        setFilteredEmployees(employees);
-        setRefreshing(false);
-        return;
-      }
-
-      // Set refreshing while searching
-      setRefreshing(true);
-
+    // Only perform client-side filtering if we're not doing a server search
+    if (searchQuery.length > 0 && searchQuery.length < 3) {
       const query = searchQuery.toLowerCase();
 
       // Filter super admins
@@ -1504,166 +1576,34 @@ const SuperAdminUsersScreen = () => {
           `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(query)
       );
       setFilteredEmployees(filteredEmps);
-
-      // Turn off refreshing
-      setRefreshing(false);
-    };
-
-    // Use different debounce times based on query length
-    const debounceTime = searchQuery.length < 3 ? 300 : 500;
-
-    // Show refreshing indicator when actively searching
-    if (searchQuery.length > 0) {
-      setRefreshing(true);
     }
-
-    // Debounce the search
-    debounceTimeout = setTimeout(performSearch, debounceTime);
-
-    return () => {
-      if (debounceTimeout) clearTimeout(debounceTimeout);
-    };
   }, [searchQuery, superAdmins, companyAdmins, employees]);
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    setPage(0);
-    fetchAllUsers();
-  };
 
   // Update useEffect for fetching data when filters change
   useEffect(() => {
-    if (selectedTab === UserListType.SUPER_ADMIN) {
-      fetchSuperAdmins();
-    } else if (selectedTab === UserListType.COMPANY_ADMIN) {
-      fetchCompanyAdmins();
-    } else if (selectedTab === UserListType.EMPLOYEE) {
-      fetchEmployees();
+    // Reset pagination and fetch new data when filters change
+    setPage(0);
+    setHasMoreData(true);
+
+    // Only fetch from server if search query is significant (3+ chars) or empty
+    if (searchQuery.length === 0 || searchQuery.length >= 3) {
+      fetchAllUsers(true);
     }
   }, [
     selectedTab,
     statusFilter,
-    page,
     selectedCompanyIds,
     selectedCompanyId,
-    searchQuery,
+    // Only trigger fetch when search is significant or cleared
+    searchQuery.length === 0 || searchQuery.length >= 3 ? searchQuery : null,
   ]);
 
   // Update the applyFiltersDirect function
   const applyFiltersDirect = async () => {
     setFilterModalVisible(false);
-    setLoading(true);
     setPage(0); // Reset page when applying filters
-
-    try {
-      if (selectedTab === UserListType.SUPER_ADMIN) {
-        let query = supabase
-          .from("admin")
-          .select("*", { count: "exact" })
-          .eq("role", "superadmin")
-          .order("created_at", { ascending: false });
-
-        // Apply status filter
-        if (statusFilter === "deleted") {
-          query = query.not("deleted_at", "is", null);
-        } else {
-          query = query.is("deleted_at", null);
-          if (statusFilter === "active") {
-            query = query.eq("status", true);
-          } else if (statusFilter === "inactive") {
-            query = query.eq("status", false);
-          }
-        }
-
-        const { data, error, count } = await query.range(0, PAGE_SIZE - 1);
-
-        if (error) throw error;
-        if (data) {
-          setSuperAdmins(data);
-          setFilteredSuperAdmins(data);
-          if (count !== null) {
-            setTotalItems(count);
-          }
-        }
-      } else if (selectedTab === UserListType.COMPANY_ADMIN) {
-        let query = supabase
-          .from("company_user")
-          .select("*, company:company_id(company_name)", { count: "exact" })
-          .eq("role", "admin")
-          .order("created_at", { ascending: false });
-
-        // Apply status filter
-        if (statusFilter === "deleted") {
-          query = query.not("deleted_at", "is", null);
-        } else {
-          query = query.is("deleted_at", null);
-          if (statusFilter === "active") {
-            query = query.eq("active_status", "active");
-          } else if (statusFilter === "inactive") {
-            query = query.eq("active_status", "inactive");
-          }
-        }
-
-        // Apply company filter
-        if (selectedCompanyIds.length > 0) {
-          query = query.in("company_id", selectedCompanyIds);
-        } else if (selectedCompanyId !== "all") {
-          query = query.eq("company_id", selectedCompanyId);
-        }
-
-        const { data, error, count } = await query.range(0, PAGE_SIZE - 1);
-
-        if (error) throw error;
-        if (data) {
-          setCompanyAdmins(data);
-          setFilteredCompanyAdmins(data);
-          if (count !== null) {
-            setTotalItems(count);
-          }
-        }
-      } else if (selectedTab === UserListType.EMPLOYEE) {
-        let query = supabase
-          .from("company_user")
-          .select("*, company:company_id(company_name)", { count: "exact" })
-          .eq("role", "employee")
-          .order("created_at", { ascending: false });
-
-        // Apply status filter
-        if (statusFilter === "deleted") {
-          query = query.not("deleted_at", "is", null);
-        } else {
-          query = query.is("deleted_at", null);
-          if (statusFilter === "active") {
-            query = query.eq("active_status", "active");
-          } else if (statusFilter === "inactive") {
-            query = query.eq("active_status", "inactive");
-          }
-        }
-
-        // Apply company filter
-        if (selectedCompanyIds.length > 0) {
-          query = query.in("company_id", selectedCompanyIds);
-        } else if (selectedCompanyId !== "all") {
-          query = query.eq("company_id", selectedCompanyId);
-        }
-
-        const { data, error, count } = await query.range(0, PAGE_SIZE - 1);
-
-        if (error) throw error;
-        if (data) {
-          setEmployees(data);
-          setFilteredEmployees(data);
-          if (count !== null) {
-            setTotalItems(count);
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Error applying filters:", error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+    setHasMoreData(true);
+    fetchAllUsers(true);
   };
 
   // Update handleClearFilters to ensure proper state reset
@@ -1673,32 +1613,23 @@ const SuperAdminUsersScreen = () => {
     setSelectedCompanyId("all");
     setStatusFilter("");
     setPage(0);
-    setLoading(true);
-
-    // Immediately fetch fresh data after clearing filters
-    applyFiltersDirect();
+    setHasMoreData(true);
+    fetchAllUsers(true);
   };
 
   // Update handleClearIndividualFilter to ensure proper refresh
   const handleClearIndividualFilter = async (
     filterType: "status" | "company" | "deleted"
   ) => {
-    setLoading(true);
-    try {
-      if (filterType === "deleted" || filterType === "status") {
-        setStatusFilter("");
-      } else {
-        setSelectedCompanyIds([]);
-        setSelectedCompanyId("all");
-      }
-      setPage(0);
-      // Immediately fetch fresh data after clearing individual filter
-      await applyFiltersDirect();
-    } catch (error) {
-      console.error("Error clearing filter:", error);
-    } finally {
-      setLoading(false);
+    if (filterType === "deleted" || filterType === "status") {
+      setStatusFilter("");
+    } else {
+      setSelectedCompanyIds([]);
+      setSelectedCompanyId("all");
     }
+    setPage(0);
+    setHasMoreData(true);
+    fetchAllUsers(true);
   };
 
   const getInitials = (name: string, email: string) => {
@@ -2476,12 +2407,81 @@ const SuperAdminUsersScreen = () => {
   const isMediumScreen = windowWidth >= 768 && windowWidth < 1440;
   const useTableLayout = isLargeScreen || isMediumScreen;
 
+  // Add loading footer component
+  const LoadingFooter = () => {
+    const currentListLength =
+      selectedTab === UserListType.SUPER_ADMIN
+        ? filteredSuperAdmins.length
+        : selectedTab === UserListType.COMPANY_ADMIN
+          ? filteredCompanyAdmins.length
+          : filteredEmployees.length;
+
+    return (
+      <View style={{ padding: 16, alignItems: "center" }}>
+        {loadingMore && hasMoreData && (
+          <ActivityIndicator size="small" color={theme.colors.primary} />
+        )}
+        {!hasMoreData && currentListLength > 0 && (
+          <Text
+            style={{
+              fontSize: 14,
+              color: "#616161",
+              fontFamily: "Poppins-Regular",
+            }}
+          >
+            No more users to load
+          </Text>
+        )}
+      </View>
+    );
+  };
+
+  // Render total count component
+  const renderTotalCount = () => (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        marginLeft: 5,
+        paddingTop: 16,
+        marginBottom: 8,
+      }}
+    >
+      <Text
+        style={{
+          fontSize: 14,
+          color: "#666",
+          fontFamily: "Poppins-Regular",
+        }}
+      >
+        Total:
+      </Text>
+      <Text
+        style={{
+          fontSize: 14,
+          color: theme.colors.primary,
+          fontFamily: "Poppins-Medium",
+          marginLeft: 4,
+        }}
+      >
+        {selectedTab === UserListType.SUPER_ADMIN
+          ? superAdminCount
+          : selectedTab === UserListType.COMPANY_ADMIN
+            ? companyAdminCount
+            : employeeCount}
+      </Text>
+    </View>
+  );
+
+  // Update the renderCurrentList function
   const renderCurrentList = () => {
     if (loading && !refreshing) {
       return (
         <FlashList
-          estimatedItemSize={74}
-          data={Array(6)}
+          estimatedItemSize={80}
+          data={Array(6)
+            .fill(null)
+            .map((_, index) => ({ id: `skeleton-${index}` }))}
           renderItem={() => (
             <View style={styles.cardContainer}>
               <Card style={[styles.card]} elevation={0}>
@@ -2514,71 +2514,11 @@ const SuperAdminUsersScreen = () => {
               </Card>
             </View>
           )}
-          keyExtractor={(_, index) => `skeleton-${index}`}
+          keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
         />
       );
     }
-
-    const totalPages = Math.ceil(totalItems / PAGE_SIZE);
-
-    const renderTotalCount = () => (
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            marginLeft: 12,
-            paddingTop: 16,
-          }}
-        >
-          <Text
-            style={{
-              fontSize: 14,
-              color: "#666",
-              fontFamily: "Poppins-Regular",
-            }}
-          >
-            Total{" "}
-            {selectedTab === UserListType.SUPER_ADMIN
-              ? "HDF Users"
-              : selectedTab === UserListType.COMPANY_ADMIN
-                ? "Company Admins"
-                : "Employees"}
-            :
-          </Text>
-          <Text
-            style={{
-              fontSize: 14,
-              color: theme.colors.primary,
-              fontFamily: "Poppins-Medium",
-              marginLeft: 4,
-            }}
-          >
-            {selectedTab === UserListType.SUPER_ADMIN
-              ? superAdminCount
-              : selectedTab === UserListType.COMPANY_ADMIN
-                ? companyAdminCount
-                : employeeCount}
-          </Text>
-        </View>
-        {totalPages > 1 && (
-          <View style={styles.paginationWrapper}>
-            <Pagination
-              currentPage={page}
-              totalPages={totalPages}
-              onPageChange={handlePageChange}
-            />
-          </View>
-        )}
-      </View>
-    );
 
     switch (selectedTab) {
       case UserListType.SUPER_ADMIN:
@@ -2588,44 +2528,46 @@ const SuperAdminUsersScreen = () => {
         return (
           <>
             {useTableLayout ? (
-              <>
-                <View style={styles.tableContainer}>
-                  <SuperAdminTableHeader />
-                  <FlashList
-                    estimatedItemSize={74}
-                    data={filteredSuperAdmins}
-                    renderItem={({ item }) => (
-                      <SuperAdminTableRow item={item} />
-                    )}
-                    keyExtractor={(item) => `super-${item.id}`}
-                    contentContainerStyle={styles.tableContent}
-                    refreshControl={
-                      <RefreshControl
-                        refreshing={refreshing}
-                        onRefresh={onRefresh}
-                      />
-                    }
-                  />
-                </View>
-                {renderTotalCount()}
-              </>
-            ) : (
-              <>
+              <View style={styles.tableContainer}>
+                <SuperAdminTableHeader />
                 <FlashList
-                  estimatedItemSize={74}
+                  estimatedItemSize={60}
                   data={filteredSuperAdmins}
-                  renderItem={renderSuperAdminItem}
+                  renderItem={({ item }) => <SuperAdminTableRow item={item} />}
                   keyExtractor={(item) => `super-${item.id}`}
-                  contentContainerStyle={styles.listContent}
+                  contentContainerStyle={styles.tableContent}
                   refreshControl={
                     <RefreshControl
                       refreshing={refreshing}
                       onRefresh={onRefresh}
                     />
                   }
+                  onEndReached={loadMoreUsers}
+                  onEndReachedThreshold={0.5}
+                  ListFooterComponent={LoadingFooter}
+                  extraData={[refreshing, loadingMore]}
+                  drawDistance={200}
                 />
-                {renderTotalCount()}
-              </>
+              </View>
+            ) : (
+              <FlashList
+                estimatedItemSize={80}
+                data={filteredSuperAdmins}
+                renderItem={renderSuperAdminItem}
+                keyExtractor={(item) => `super-${item.id}`}
+                contentContainerStyle={styles.listContent}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                  />
+                }
+                onEndReached={loadMoreUsers}
+                onEndReachedThreshold={0.5}
+                ListFooterComponent={LoadingFooter}
+                extraData={[refreshing, loadingMore]}
+                drawDistance={200}
+              />
             )}
           </>
         );
@@ -2637,44 +2579,48 @@ const SuperAdminUsersScreen = () => {
         return (
           <>
             {useTableLayout ? (
-              <>
-                <View style={styles.tableContainer}>
-                  <CompanyAdminTableHeader />
-                  <FlashList
-                    estimatedItemSize={74}
-                    data={filteredCompanyAdmins}
-                    renderItem={({ item }) => (
-                      <CompanyAdminTableRow item={item} />
-                    )}
-                    keyExtractor={(item) => `admin-${item.id}`}
-                    contentContainerStyle={styles.tableContent}
-                    refreshControl={
-                      <RefreshControl
-                        refreshing={refreshing}
-                        onRefresh={onRefresh}
-                      />
-                    }
-                  />
-                </View>
-                {renderTotalCount()}
-              </>
-            ) : (
-              <>
+              <View style={styles.tableContainer}>
+                <CompanyAdminTableHeader />
                 <FlashList
-                  estimatedItemSize={74}
+                  estimatedItemSize={60}
                   data={filteredCompanyAdmins}
-                  renderItem={renderCompanyAdminItem}
+                  renderItem={({ item }) => (
+                    <CompanyAdminTableRow item={item} />
+                  )}
                   keyExtractor={(item) => `admin-${item.id}`}
-                  contentContainerStyle={styles.listContent}
+                  contentContainerStyle={styles.tableContent}
                   refreshControl={
                     <RefreshControl
                       refreshing={refreshing}
                       onRefresh={onRefresh}
                     />
                   }
+                  onEndReached={loadMoreUsers}
+                  onEndReachedThreshold={0.5}
+                  ListFooterComponent={LoadingFooter}
+                  extraData={[refreshing, loadingMore]}
+                  drawDistance={200}
                 />
-                {renderTotalCount()}
-              </>
+              </View>
+            ) : (
+              <FlashList
+                estimatedItemSize={80}
+                data={filteredCompanyAdmins}
+                renderItem={renderCompanyAdminItem}
+                keyExtractor={(item) => `admin-${item.id}`}
+                contentContainerStyle={styles.listContent}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                  />
+                }
+                onEndReached={loadMoreUsers}
+                onEndReachedThreshold={0.5}
+                ListFooterComponent={LoadingFooter}
+                extraData={[refreshing, loadingMore]}
+                drawDistance={200}
+              />
             )}
           </>
         );
@@ -2686,42 +2632,46 @@ const SuperAdminUsersScreen = () => {
         return (
           <>
             {useTableLayout ? (
-              <>
-                <View style={styles.tableContainer}>
-                  <EmployeeTableHeader />
-                  <FlashList
-                    estimatedItemSize={74}
-                    data={filteredEmployees}
-                    renderItem={({ item }) => <EmployeeTableRow item={item} />}
-                    keyExtractor={(item) => `emp-${item.id}`}
-                    contentContainerStyle={styles.tableContent}
-                    refreshControl={
-                      <RefreshControl
-                        refreshing={refreshing}
-                        onRefresh={onRefresh}
-                      />
-                    }
-                  />
-                </View>
-                {renderTotalCount()}
-              </>
-            ) : (
-              <>
+              <View style={styles.tableContainer}>
+                <EmployeeTableHeader />
                 <FlashList
-                  estimatedItemSize={74}
+                  estimatedItemSize={60}
                   data={filteredEmployees}
-                  renderItem={renderEmployeeItem}
+                  renderItem={({ item }) => <EmployeeTableRow item={item} />}
                   keyExtractor={(item) => `emp-${item.id}`}
-                  contentContainerStyle={styles.listContent}
+                  contentContainerStyle={styles.tableContent}
                   refreshControl={
                     <RefreshControl
                       refreshing={refreshing}
                       onRefresh={onRefresh}
                     />
                   }
+                  onEndReached={loadMoreUsers}
+                  onEndReachedThreshold={0.5}
+                  ListFooterComponent={LoadingFooter}
+                  extraData={[refreshing, loadingMore]}
+                  drawDistance={200}
                 />
-                {renderTotalCount()}
-              </>
+              </View>
+            ) : (
+              <FlashList
+                estimatedItemSize={80}
+                data={filteredEmployees}
+                renderItem={renderEmployeeItem}
+                keyExtractor={(item) => `emp-${item.id}`}
+                contentContainerStyle={styles.listContent}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                  />
+                }
+                onEndReached={loadMoreUsers}
+                onEndReachedThreshold={0.5}
+                ListFooterComponent={LoadingFooter}
+                extraData={[refreshing, loadingMore]}
+                drawDistance={200}
+              />
             )}
           </>
         );
@@ -3224,13 +3174,6 @@ const SuperAdminUsersScreen = () => {
     return "All Companies";
   };
 
-  // Add page change handler
-  const handlePageChange = (newPage: number) => {
-    setPage(newPage);
-    setLoading(true);
-    // The fetch functions will be called via useEffect when page changes
-  };
-
   return (
     <SafeAreaView style={[styles.container]}>
       <AppHeader
@@ -3337,7 +3280,7 @@ const SuperAdminUsersScreen = () => {
                 styles.tab,
                 selectedTab === UserListType.SUPER_ADMIN && {
                   borderColor: theme.colors.primary,
-                  borderWidth: 0.5,
+                  borderWidth: 1,
                 },
               ]}
               onPress={() => {
@@ -3379,7 +3322,7 @@ const SuperAdminUsersScreen = () => {
                   },
                 ]}
               >
-                Company Users
+                Admins
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -3403,9 +3346,10 @@ const SuperAdminUsersScreen = () => {
                   },
                 ]}
               >
-                Company Employees
+                Employees
               </Text>
             </TouchableOpacity>
+            {renderTotalCount()}
           </View>
         </View>
         <View style={styles.listContainer}>{renderCurrentList()}</View>

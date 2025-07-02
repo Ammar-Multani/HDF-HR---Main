@@ -9,6 +9,8 @@ import {
   Platform,
   AppState,
   AppStateStatus,
+  Dimensions,
+  TouchableOpacity,
 } from "react-native";
 import {
   Text,
@@ -17,6 +19,9 @@ import {
   Divider,
   useTheme,
   Chip,
+  Avatar,
+  Surface,
+  IconButton,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -44,6 +49,8 @@ import {
   IDType,
   EmploymentType,
 } from "../../types";
+import { getFontFamily } from "../../utils/globalStyles";
+import Animated, { FadeIn } from "react-native-reanimated";
 
 type EmployeeDetailsRouteParams = {
   employeeId: string;
@@ -127,6 +134,37 @@ const EmployeeDetailsSkeleton = () => {
         ))}
       </Card.Content>
     </Card>
+  );
+};
+
+const useWindowDimensions = () => {
+  const [dimensions, setDimensions] = useState({
+    width: Dimensions.get("window").width,
+    height: Dimensions.get("window").height,
+  });
+
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      const handleResize = () => {
+        setDimensions({
+          width: Dimensions.get("window").width,
+          height: Dimensions.get("window").height,
+        });
+      };
+
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }
+  }, []);
+
+  return dimensions;
+};
+
+// Add getInitials function before the EmployeeDetailsScreen component
+const getInitials = (firstName?: string, lastName?: string) => {
+  return (
+    (firstName ? firstName.charAt(0).toUpperCase() : "") +
+      (lastName ? lastName.charAt(0).toUpperCase() : "") || "?"
   );
 };
 
@@ -368,6 +406,10 @@ const EmployeeDetailsScreen = () => {
 
   // Render content based on the current state
   const renderContent = () => {
+    const dimensions = useWindowDimensions();
+    const isLargeScreen = dimensions.width >= 1440;
+    const isMediumScreen = dimensions.width >= 768 && dimensions.width < 1440;
+
     // Show no network warning if applicable
     if (networkStatus === false && !loading) {
       return (
@@ -484,308 +526,399 @@ const EmployeeDetailsScreen = () => {
     return (
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            maxWidth: isLargeScreen ? 1400 : isMediumScreen ? 1100 : "100%",
+            paddingHorizontal: isLargeScreen ? 48 : isMediumScreen ? 32 : 16,
+          },
+        ]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
         {error && (
-          <Card style={[styles.warningCard, { marginBottom: 16 }]}>
+          <Card style={[styles.warningCard]}>
             <Card.Content>
               <Text style={{ color: "orange" }}>{error}</Text>
             </Card.Content>
           </Card>
         )}
 
-        <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-          <Card.Content>
-            <View style={styles.headerRow}>
-              <View>
-                <Text style={styles.employeeName}>
-                  {employee.first_name} {employee.last_name}
-                </Text>
-                <Text style={styles.jobTitle}>{employee.job_title}</Text>
+        <View style={styles.gridContainer}>
+          <View style={styles.gridColumn}>
+            <Animated.View entering={FadeIn.delay(100)}>
+              <Surface style={styles.detailsCard}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.headerLeft}>
+                    <View style={styles.iconContainer}>
+                      <IconButton
+                        icon="account"
+                        size={20}
+                        iconColor="#64748b"
+                        style={styles.headerIcon}
+                      />
+                    </View>
+                    <Text style={styles.cardTitle}>Employee Profile</Text>
+                  </View>
+                </View>
+
+                <View style={styles.cardContent}>
+                  <View style={styles.profileHeader}>
+                    <Avatar.Text
+                      size={70}
+                      label={getInitials(
+                        employee?.first_name,
+                        employee?.last_name
+                      )}
+                      style={styles.employeeAvatar}
+                      labelStyle={{ color: "white", fontSize: 24 }}
+                    />
+                    <View>
+                      <Text style={styles.employeeName}>
+                        {employee?.first_name || ""} {employee?.last_name || ""}
+                      </Text>
+                      <Text style={styles.jobTitle}>
+                        {employee?.job_title || ""}
+                      </Text>
+                      <StatusBadge
+                        status={employee?.active_status || "inactive"}
+                      />
+                    </View>
+                  </View>
+
+                  <View style={styles.contactButtons}>
+                    <Button
+                      mode="contained"
+                      icon="phone"
+                      onPress={() => handleCall(employee?.phone_number || "")}
+                      style={styles.contactButton}
+                      buttonColor={theme.colors.primary}
+                    >
+                      Call
+                    </Button>
+
+                    <Button
+                      mode="contained"
+                      icon="email"
+                      onPress={() => handleEmail(employee?.email || "")}
+                      style={styles.contactButton}
+                      buttonColor={theme.colors.primary}
+                    >
+                      Email
+                    </Button>
+                  </View>
+                </View>
+              </Surface>
+
+              <Surface style={[styles.detailsCard, { marginTop: 24 }]}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.headerLeft}>
+                    <View style={styles.iconContainer}>
+                      <IconButton
+                        icon="account-details"
+                        size={20}
+                        iconColor="#64748b"
+                        style={styles.headerIcon}
+                      />
+                    </View>
+                    <Text style={styles.cardTitle}>Personal Information</Text>
+                  </View>
+                </View>
+
+                <View style={styles.cardContent}>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Email:</Text>
+                    <Text style={styles.infoValue}>
+                      {employee?.email || ""}
+                    </Text>
+                  </View>
+
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Phone:</Text>
+                    <Text style={styles.infoValue}>
+                      {employee?.phone_number || ""}
+                    </Text>
+                  </View>
+
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Date of Birth:</Text>
+                    <Text style={styles.infoValue}>
+                      {formatDate(employee?.date_of_birth)}
+                    </Text>
+                  </View>
+
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Gender:</Text>
+                    <Text style={styles.infoValue}>
+                      {employee?.gender && typeof employee.gender === "string"
+                        ? employee.gender.charAt(0).toUpperCase() +
+                          employee.gender.slice(1)
+                        : "N/A"}
+                    </Text>
+                  </View>
+
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Nationality:</Text>
+                    <Text style={styles.infoValue}>
+                      {employee?.nationality || "N/A"}
+                    </Text>
+                  </View>
+
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Marital Status:</Text>
+                    <Text style={styles.infoValue}>
+                      {employee?.marital_status &&
+                      typeof employee.marital_status === "string"
+                        ? employee.marital_status.charAt(0).toUpperCase() +
+                          employee.marital_status.slice(1).replace("_", " ")
+                        : "N/A"}
+                    </Text>
+                  </View>
+                </View>
+              </Surface>
+            </Animated.View>
+          </View>
+
+          <View style={styles.gridColumn}>
+            <Animated.View entering={FadeIn.delay(200)}>
+              <Surface style={styles.detailsCard}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.headerLeft}>
+                    <View style={styles.iconContainer}>
+                      <IconButton
+                        icon="briefcase"
+                        size={20}
+                        iconColor="#64748b"
+                        style={styles.headerIcon}
+                      />
+                    </View>
+                    <Text style={styles.cardTitle}>Employment Details</Text>
+                  </View>
+                </View>
+
+                <View style={styles.cardContent}>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Start Date:</Text>
+                    <Text style={styles.infoValue}>
+                      {formatDate(employee?.employment_start_date)}
+                    </Text>
+                  </View>
+
+                  {employee?.employment_end_date && (
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>End Date:</Text>
+                      <Text style={styles.infoValue}>
+                        {formatDate(employee?.employment_end_date)}
+                      </Text>
+                    </View>
+                  )}
+
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Employment Type:</Text>
+                    <Text style={styles.infoValue}>
+                      {typeof employee?.employment_type === "boolean"
+                        ? employee?.employment_type
+                          ? "Full Time"
+                          : "Contract"
+                        : employee?.employment_type
+                          ? employee?.employment_type
+                              .split("_")
+                              .map(
+                                (word) =>
+                                  word.charAt(0).toUpperCase() + word.slice(1)
+                              )
+                              .join(" ")
+                          : "N/A"}
+                    </Text>
+                  </View>
+
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Workload:</Text>
+                    <Text style={styles.infoValue}>
+                      {employee?.workload_percentage}%
+                    </Text>
+                  </View>
+
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Education:</Text>
+                    <Text style={styles.infoValue}>
+                      {employee?.education || "N/A"}
+                    </Text>
+                  </View>
+                </View>
+              </Surface>
+
+              <Surface style={[styles.detailsCard, { marginTop: 24 }]}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.headerLeft}>
+                    <View style={styles.iconContainer}>
+                      <IconButton
+                        icon="card-account-details"
+                        size={20}
+                        iconColor="#64748b"
+                        style={styles.headerIcon}
+                      />
+                    </View>
+                    <Text style={styles.cardTitle}>Identification</Text>
+                  </View>
+                </View>
+
+                <View style={styles.cardContent}>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>ID Type:</Text>
+                    <Text style={styles.infoValue}>
+                      {employee?.id_type && typeof employee.id_type === "string"
+                        ? employee.id_type
+                            .split("_")
+                            .map(
+                              (word) =>
+                                word.charAt(0).toUpperCase() + word.slice(1)
+                            )
+                            .join(" ")
+                        : "N/A"}
+                    </Text>
+                  </View>
+
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>AHV Number:</Text>
+                    <Text style={styles.infoValue}>
+                      {employee?.ahv_number || ""}
+                    </Text>
+                  </View>
+                </View>
+              </Surface>
+
+              <Surface style={[styles.detailsCard, { marginTop: 24 }]}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.headerLeft}>
+                    <View style={styles.iconContainer}>
+                      <IconButton
+                        icon="map-marker"
+                        size={20}
+                        iconColor="#64748b"
+                        style={styles.headerIcon}
+                      />
+                    </View>
+                    <Text style={styles.cardTitle}>Address</Text>
+                  </View>
+                </View>
+
+                <View style={styles.cardContent}>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Street:</Text>
+                    <Text style={styles.infoValue}>
+                      {employee?.address ? (
+                        <>
+                          {employee.address.line1}
+                          {employee.address.line2
+                            ? `, ${employee.address.line2}`
+                            : ""}
+                        </>
+                      ) : (
+                        "N/A"
+                      )}
+                    </Text>
+                  </View>
+
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>City:</Text>
+                    <Text style={styles.infoValue}>
+                      {employee?.address ? employee.address.city : "N/A"}
+                    </Text>
+                  </View>
+
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>State/Province:</Text>
+                    <Text style={styles.infoValue}>
+                      {employee?.address ? employee.address.state : "N/A"}
+                    </Text>
+                  </View>
+
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Postal Code:</Text>
+                    <Text style={styles.infoValue}>
+                      {employee?.address ? employee.address.postal_code : "N/A"}
+                    </Text>
+                  </View>
+
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Country:</Text>
+                    <Text style={styles.infoValue}>
+                      {employee?.address ? employee.address.country : "N/A"}
+                    </Text>
+                  </View>
+                </View>
+              </Surface>
+
+              {employee?.comments && (
+                <Surface style={[styles.detailsCard, { marginTop: 24 }]}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="comment"
+                          size={20}
+                          iconColor="#64748b"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>Comments</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardContent}>
+                    <Text style={styles.comments}>
+                      {employee?.comments || ""}
+                    </Text>
+                  </View>
+                </Surface>
+              )}
+
+              <View style={styles.bottomBarContent}>
+                <View style={styles.actionButtons}>
+                  <Button
+                    mode="contained"
+                    onPress={() =>
+                      navigation.navigate("EditEmployee", {
+                        employeeId: employee.id,
+                      })
+                    }
+                    style={styles.button}
+                    buttonColor={theme.colors.primary}
+                    disabled={loadingAction || networkStatus === false}
+                  >
+                    Edit Employee
+                  </Button>
+
+                  <Button
+                    mode="outlined"
+                    onPress={handleToggleStatus}
+                    style={[
+                      styles.button,
+                      {
+                        borderColor:
+                          employee.active_status === UserStatus.ACTIVE
+                            ? theme.colors.error
+                            : theme.colors.primary,
+                      },
+                    ]}
+                    textColor={
+                      employee.active_status === UserStatus.ACTIVE
+                        ? theme.colors.error
+                        : theme.colors.primary
+                    }
+                    loading={loadingAction}
+                    disabled={loadingAction || networkStatus === false}
+                  >
+                    {employee.active_status === UserStatus.ACTIVE
+                      ? "Deactivate Employee"
+                      : "Activate Employee"}
+                  </Button>
+                </View>
               </View>
-              <StatusBadge status={employee.active_status} />
-            </View>
-
-            <View style={styles.contactButtons}>
-              <Button
-                mode="contained-tonal"
-                icon="phone"
-                onPress={() => handleCall(employee.phone_number)}
-                style={[
-                  styles.contactButton,
-                  { backgroundColor: theme.colors.primary },
-                ]}
-                labelStyle={{ color: theme.colors.onPrimary }}
-              >
-                Call
-              </Button>
-
-              <Button
-                mode="contained-tonal"
-                icon="email"
-                onPress={() => handleEmail(employee.email)}
-                style={[
-                  styles.contactButton,
-                  { backgroundColor: theme.colors.primary },
-                ]}
-                labelStyle={{ color: theme.colors.onPrimary }}
-              >
-                Email
-              </Button>
-            </View>
-
-            <Divider style={styles.divider} />
-
-            <Text style={styles.sectionTitle}>Personal Information</Text>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Email:</Text>
-              <Text style={styles.infoValue}>{employee.email}</Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Phone:</Text>
-              <Text style={styles.infoValue}>{employee.phone_number}</Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Date of Birth:</Text>
-              <Text style={styles.infoValue}>
-                {formatDate(employee.date_of_birth)}
-              </Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Gender:</Text>
-              <Text style={styles.infoValue}>
-                {employee.gender && typeof employee.gender === "string"
-                  ? employee.gender.charAt(0).toUpperCase() +
-                    employee.gender.slice(1)
-                  : "N/A"}
-              </Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Nationality:</Text>
-              <Text style={styles.infoValue}>
-                {employee.nationality || "N/A"}
-              </Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Marital Status:</Text>
-              <Text style={styles.infoValue}>
-                {employee.marital_status &&
-                typeof employee.marital_status === "string"
-                  ? employee.marital_status.charAt(0).toUpperCase() +
-                    employee.marital_status.slice(1).replace("_", " ")
-                  : "N/A"}
-              </Text>
-            </View>
-
-            <Divider style={styles.divider} />
-
-            <Text style={styles.sectionTitle}>Employment Details</Text>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Start Date:</Text>
-              <Text style={styles.infoValue}>
-                {formatDate(employee.employment_start_date)}
-              </Text>
-            </View>
-
-            {employee.employment_end_date && (
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>End Date:</Text>
-                <Text style={styles.infoValue}>
-                  {formatDate(employee.employment_end_date)}
-                </Text>
-              </View>
-            )}
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Employment Type:</Text>
-              <Text style={styles.infoValue}>
-                {typeof employee.employment_type === "boolean"
-                  ? employee.employment_type
-                    ? "Full Time"
-                    : "Contract"
-                  : employee.employment_type
-                    ? employee.employment_type
-                        .split("_")
-                        .map(
-                          (word) => word.charAt(0).toUpperCase() + word.slice(1)
-                        )
-                        .join(" ")
-                    : "N/A"}
-              </Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Workload:</Text>
-              <Text style={styles.infoValue}>
-                {employee.workload_percentage}%
-              </Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Education:</Text>
-              <Text style={styles.infoValue}>
-                {employee.education || "N/A"}
-              </Text>
-            </View>
-
-            <Divider style={styles.divider} />
-
-            <Text style={styles.sectionTitle}>Identification</Text>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>ID Type:</Text>
-              <Text style={styles.infoValue}>
-                {employee.id_type && typeof employee.id_type === "string"
-                  ? employee.id_type
-                      .split("_")
-                      .map(
-                        (word) => word.charAt(0).toUpperCase() + word.slice(1)
-                      )
-                      .join(" ")
-                  : "N/A"}
-              </Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>AHV Number:</Text>
-              <Text style={styles.infoValue}>{employee.ahv_number}</Text>
-            </View>
-
-            <Divider style={styles.divider} />
-
-            <Text style={styles.sectionTitle}>Address</Text>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Street:</Text>
-              <Text style={styles.infoValue}>
-                {employee.address ? (
-                  <>
-                    {employee.address.line1}
-                    {employee.address.line2
-                      ? `, ${employee.address.line2}`
-                      : ""}
-                  </>
-                ) : (
-                  "N/A"
-                )}
-              </Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>City:</Text>
-              <Text style={styles.infoValue}>
-                {employee.address ? employee.address.city : "N/A"}
-              </Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>State/Province:</Text>
-              <Text style={styles.infoValue}>
-                {employee.address ? employee.address.state : "N/A"}
-              </Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Postal Code:</Text>
-              <Text style={styles.infoValue}>
-                {employee.address ? employee.address.postal_code : "N/A"}
-              </Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Country:</Text>
-              <Text style={styles.infoValue}>
-                {employee.address ? employee.address.country : "N/A"}
-              </Text>
-            </View>
-
-            <Divider style={styles.divider} />
-
-            <Text style={styles.sectionTitle}>Bank Details</Text>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Bank Name:</Text>
-              <Text style={styles.infoValue}>
-                {employee.bank_details
-                  ? employee.bank_details.bank_name
-                  : "N/A"}
-              </Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Account Number:</Text>
-              <Text style={styles.infoValue}>
-                {employee.bank_details
-                  ? employee.bank_details.account_number
-                  : "N/A"}
-              </Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>IBAN:</Text>
-              <Text style={styles.infoValue}>
-                {employee.bank_details ? employee.bank_details.iban : "N/A"}
-              </Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>SWIFT Code:</Text>
-              <Text style={styles.infoValue}>
-                {employee.bank_details
-                  ? employee.bank_details.swift_code
-                  : "N/A"}
-              </Text>
-            </View>
-
-            {employee.comments && (
-              <>
-                <Divider style={styles.divider} />
-
-                <Text style={styles.sectionTitle}>Comments</Text>
-                <Text style={styles.comments}>{employee.comments}</Text>
-              </>
-            )}
-          </Card.Content>
-        </Card>
-
-        <View style={styles.buttonContainer}>
-          <Button
-            mode="contained"
-            onPress={() =>
-              navigation.navigate("EditEmployee", { employeeId: employee.id })
-            }
-            style={[styles.button, { backgroundColor: theme.colors.primary }]}
-            disabled={loadingAction || networkStatus === false}
-          >
-            Edit Employee
-          </Button>
-
-          <Button
-            mode="outlined"
-            onPress={handleToggleStatus}
-            style={styles.button}
-            textColor={
-              employee.active_status === UserStatus.ACTIVE
-                ? theme.colors.error
-                : theme.colors.primary
-            }
-            loading={loadingAction}
-            disabled={loadingAction || networkStatus === false}
-          >
-            {employee.active_status === UserStatus.ACTIVE
-              ? "Deactivate Employee"
-              : "Activate Employee"}
-          </Button>
+            </Animated.View>
+          </View>
         </View>
       </ScrollView>
     );
@@ -817,13 +950,171 @@ const EmployeeDetailsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#F8F9FA",
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
+    paddingVertical: 32,
+    alignSelf: "center",
+    width: "100%",
+  },
+  gridContainer: {
+    flexDirection: "row",
+    gap: 24,
+    flexWrap: "wrap",
+  },
+  gridColumn: {
+    flex: 1,
+    minWidth: 320,
+    gap: 24,
+  },
+  detailsCard: {
+    borderRadius: 16,
+    overflow: "hidden",
+    elevation: 1,
+    shadowColor: "rgba(0,0,0,0.1)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     padding: 16,
-    paddingBottom: 40,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  iconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "#f1f5f9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerIcon: {
+    margin: 0,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontFamily: getFontFamily("600"),
+    color: "#1e293b",
+  },
+  cardContent: {
+    padding: 24,
+  },
+  profileHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 24,
+  },
+  employeeAvatar: {
+    marginRight: 24,
+    backgroundColor: "rgba(76,175,80,0.9)",
+  },
+  employeeName: {
+    fontSize: 24,
+    fontFamily: getFontFamily("600"),
+    color: "#1e293b",
+    marginBottom: 4,
+  },
+  jobTitle: {
+    fontSize: 16,
+    color: "#64748b",
+    fontFamily: getFontFamily("500"),
+    marginBottom: 8,
+  },
+  contactButtons: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 24,
+  },
+  contactButton: {
+    flex: 1,
+  },
+  infoRow: {
+    flexDirection: "row",
+    marginBottom: 16,
+  },
+  infoLabel: {
+    width: 120,
+    fontSize: 14,
+    color: "#64748b",
+    fontFamily: getFontFamily("500"),
+  },
+  infoValue: {
+    flex: 1,
+    fontSize: 14,
+    color: "#334155",
+    fontFamily: getFontFamily("normal"),
+  },
+  comments: {
+    fontSize: 14,
+    color: "#334155",
+    fontFamily: getFontFamily("normal"),
+    lineHeight: 24,
+  },
+  bottomBarContent: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    marginTop: 24,
+  },
+  actionButtons: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  button: {
+    minWidth: 120,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  offlineBanner: {
+    backgroundColor: "rgba(239, 68, 68, 0.9)",
+    padding: 8,
+    alignItems: "center",
+  },
+  offlineText: {
+    color: "white",
+    fontFamily: getFontFamily("500"),
+  },
+  offlineContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  warningCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: "orange",
+    marginBottom: 24,
+  },
+  buttonContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontFamily: getFontFamily("600"),
+    marginBottom: 12,
+    color: "#1e293b",
   },
   card: {
     marginBottom: 16,
@@ -835,76 +1126,9 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     marginBottom: 16,
   },
-  employeeName: {
-    fontSize: 22,
-    fontWeight: "bold",
-  },
-  jobTitle: {
-    fontSize: 16,
-    opacity: 0.7,
-    marginTop: 4,
-  },
-  contactButtons: {
-    flexDirection: "row",
-    marginBottom: 16,
-  },
-  contactButton: {
-    marginRight: 12,
-  },
   divider: {
     marginVertical: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 12,
-  },
-  infoRow: {
-    flexDirection: "row",
-    marginBottom: 8,
-  },
-  infoLabel: {
-    fontWeight: "500",
-    width: 120,
-    opacity: 0.7,
-  },
-  infoValue: {
-    flex: 1,
-  },
-  comments: {
-    fontSize: 16,
-    lineHeight: 24,
-  },
-  buttonContainer: {
-    marginTop: 8,
-  },
-  button: {
-    marginBottom: 12,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  offlineBanner: {
-    backgroundColor: "rgba(255, 59, 48, 0.8)",
-    padding: 8,
-    alignItems: "center",
-  },
-  offlineText: {
-    color: "white",
-    fontWeight: "bold",
-  },
-  offlineContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  warningCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: "orange",
+    backgroundColor: "#e2e8f0",
   },
 });
 

@@ -7,10 +7,8 @@ const FROM_EMAIL = Deno.env.get("SENDGRID_FROM_EMAIL") || "";
 const FROM_NAME = Deno.env.get("SENDGRID_FROM_NAME") || "";
 
 // Mailtrap credentials
-const MAILTRAP_HOST = Deno.env.get("MAILTRAP_HOST") || "";
-const MAILTRAP_PORT = parseInt(Deno.env.get("MAILTRAP_PORT") || "2525");
-const MAILTRAP_USER = Deno.env.get("MAILTRAP_USER") || "";
-const MAILTRAP_PASS = Deno.env.get("MAILTRAP_PASS") || "";
+const MAILTRAP_API_TOKEN = Deno.env.get("MAILTRAP_API_TOKEN") || "";
+const MAILTRAP_INBOX_ID = Deno.env.get("MAILTRAP_INBOX_ID") || "";
 
 // CORS headers
 const corsHeaders = {
@@ -32,7 +30,11 @@ async function sendWithMailtrap(
   html: string,
   text: string
 ) {
-  // Use Mailtrap's API instead of SMTP for Edge Function compatibility
+  if (!MAILTRAP_API_TOKEN || !MAILTRAP_INBOX_ID) {
+    console.error("Mailtrap configuration missing");
+    throw new Error("Mailtrap API token or inbox ID is not configured");
+  }
+
   const message = {
     from: {
       email: FROM_EMAIL,
@@ -49,14 +51,13 @@ async function sendWithMailtrap(
     category: "Welcome Email",
   };
 
-  // Note: Replace 3772478 with your inbox ID from the Mailtrap API URL
   const response = await fetch(
-    "https://sandbox.api.mailtrap.io/api/send/3772478",
+    `https://sandbox.api.mailtrap.io/api/send/${MAILTRAP_INBOX_ID}`,
     {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${MAILTRAP_PASS}`,
+        Authorization: `Bearer ${MAILTRAP_API_TOKEN}`,
       },
       body: JSON.stringify(message),
     }
@@ -201,9 +202,9 @@ serve(async (req) => {
     let response;
     if (NODE_ENV === "development") {
       // Verify Mailtrap configuration
-      if (!MAILTRAP_HOST || !MAILTRAP_USER || !MAILTRAP_PASS) {
+      if (!MAILTRAP_API_TOKEN || !MAILTRAP_INBOX_ID) {
         console.error("Mailtrap configuration missing");
-        throw new Error("Mailtrap is not properly configured");
+        throw new Error("Mailtrap API token or inbox ID is not configured");
       }
       response = await sendWithMailtrap(to, subject, html, text);
     } else {

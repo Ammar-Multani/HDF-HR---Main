@@ -1198,8 +1198,15 @@ const styles = StyleSheet.create({
   },
   saveButton: {},
   webDatePickerModal: {
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
     padding: 24,
+    elevation: 0,
+    shadowColor: "transparent",
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0,
+    shadowRadius: 0,
   },
   webDatePickerContainer: {
     backgroundColor: "#FFFFFF",
@@ -1208,6 +1215,7 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 480,
     alignSelf: "center",
+
   },
   webDatePickerTitle: {
     fontSize: 18,

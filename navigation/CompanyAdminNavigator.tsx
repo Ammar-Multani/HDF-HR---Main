@@ -44,6 +44,7 @@ import CreateCompanyReceiptScreen from "../screens/companyadmin/CreateCompanyRec
 import CompanyReceiptDetailsScreen from "../screens/companyadmin/CompanyReceiptDetailsScreen.web";
 import CompanyActivityLogsScreen from "../screens/companyadmin/CompanyActivityLogsScreen";
 import EditCompanyReceiptScreen from "../screens/companyadmin/EditCompanyReceiptScreen.web";
+import CompanyAdminUtilitiesScreen from "../screens/companyadmin/CompanyAdminUtilitiesScreen";
 
 // Stack navigators
 const CompanyAdminStack = createNativeStackNavigator();
@@ -74,6 +75,7 @@ type RootStackParamList = {
   CompanyReceiptDetails: { id: string };
   EditCompanyReceipt: { receiptId: string };
   ActivityLogs: undefined;
+  UtilitiesScreen: undefined;
 };
 
 // Add type for company response
@@ -225,6 +227,10 @@ const MainContentNavigator = () => {
         name="ProfileScreen"
         component={CompanyAdminProfileScreen}
       />
+      <ContentStack.Screen
+        name="UtilitiesScreen"
+        component={CompanyAdminUtilitiesScreen}
+      />
     </ContentStack.Navigator>
   );
 };
@@ -276,14 +282,9 @@ const WebStackNavigator = () => {
       screen: "EmployeesScreen",
     },
     {
-      icon: "clipboard-text" as const,
-      label: t("navigation.tasks"),
-      screen: "TasksScreen",
-    },
-    {
-      icon: "file-document" as const,
-      label: t("navigation.forms"),
-      screen: "FormSubmissionsScreen",
+      icon: "tools" as const,
+      label: t("navigation.utilities"),
+      screen: "UtilitiesScreen",
     },
     {
       icon: "account-circle" as const,
@@ -292,17 +293,7 @@ const WebStackNavigator = () => {
     },
   ];
 
-  const navigationItems = canUploadReceipts
-    ? [
-        ...baseNavigationItems.slice(0, -1),
-        {
-          icon: "receipt" as const,
-          label: t("navigation.receipts"),
-          screen: "ReceiptsScreen",
-        },
-        baseNavigationItems[baseNavigationItems.length - 1],
-      ]
-    : baseNavigationItems;
+  const navigationItems = baseNavigationItems;
 
   // Handle navigation
   const handleNavigation = (screen: string) => {
@@ -445,33 +436,118 @@ const CompanyAdminTabNavigator = () => {
             ),
           }}
         />
+
         <CompanyAdminTab.Screen
-          name="Tasks"
-          component={CompanyAdminTasksScreen}
+          name="Utilities"
           options={{
             tabBarIcon: ({ color }) => (
-              <MaterialCommunityIcons
-                name="clipboard-text"
-                color={color}
-                size={24}
-              />
+              <MaterialCommunityIcons name="tools" color={color} size={24} />
             ),
           }}
-        />
-        <CompanyAdminTab.Screen
-          name="FormSubmissions"
-          component={FormSubmissionsScreen}
-          options={{
-            tabBarLabel: "Forms",
-            tabBarIcon: ({ color }) => (
-              <MaterialCommunityIcons
-                name="file-document"
-                color={color}
-                size={24}
+        >
+          {() => (
+            <ContentStack.Navigator
+              screenOptions={{
+                headerShown: false,
+                animation: "none",
+              }}
+            >
+              <ContentStack.Screen
+                name="UtilitiesMain"
+                component={CompanyAdminUtilitiesScreen}
               />
-            ),
-          }}
-        />
+              <ContentStack.Screen
+                name="FormsList"
+                component={FormSubmissionsScreen}
+              />
+              <ContentStack.Screen
+                name="FormDetails"
+                component={FormDetailsScreen}
+              />
+              <ContentStack.Screen
+                name="TasksScreen"
+                component={CompanyAdminTasksScreen}
+              />
+              <ContentStack.Screen
+                name="TasksList"
+                component={CompanyAdminTasksScreen}
+              />
+              <ContentStack.Screen
+                name="TaskDetails"
+                component={CompanyAdminTaskDetailsScreen}
+              />
+              <ContentStack.Screen
+                name="CreateTask"
+                component={CompanyAdminCreateTaskScreen}
+              />
+              <ContentStack.Screen
+                name="EditTask"
+                component={CompanyAdminEditTaskScreen}
+              />
+              <ContentStack.Screen
+                name="EmployeesScreen"
+                component={EmployeeListScreen}
+              />
+              <ContentStack.Screen
+                name="EmployeeDetails"
+                component={EmployeeDetailsScreen}
+              />
+              {canUploadReceipts && (
+                <>
+                  <ContentStack.Screen
+                    name="ReceiptsScreen"
+                    component={CompanyReceiptsListScreen}
+                  />
+                  <ContentStack.Screen
+                    name="ReceiptsList"
+                    component={CompanyReceiptsListScreen}
+                  />
+                  <ContentStack.Screen
+                    name="CreateReceipt"
+                    component={CreateCompanyReceiptScreen}
+                  />
+                  <ContentStack.Screen
+                    name="CreateCompanyReceipt"
+                    component={CreateCompanyReceiptScreen}
+                  />
+                  <ContentStack.Screen
+                    name="ReceiptDetails"
+                    component={CompanyReceiptDetailsScreen}
+                  />
+                  <ContentStack.Screen
+                    name="CompanyReceiptDetails"
+                    component={CompanyReceiptDetailsScreen}
+                  />
+                  <ContentStack.Screen
+                    name="EditReceipt"
+                    component={EditCompanyReceiptScreen}
+                  />
+                  <ContentStack.Screen
+                    name="EditCompanyReceipt"
+                    component={EditCompanyReceiptScreen}
+                  />
+                </>
+              )}
+              <ContentStack.Screen
+                name="ActivityLogs"
+                component={CompanyActivityLogsScreen}
+              />
+              <ContentStack.Screen
+                name="CreateEmployeeAccidentReport"
+                component={CreateEmployeeAccidentReportScreen}
+              />
+              <ContentStack.Screen
+                name="CreateEmployeeIllnessReport"
+                component={CreateEmployeeIllnessReportScreen}
+              />
+              <ContentStack.Screen
+                name="CreateEmployeeStaffDepartureReport"
+                component={CreateEmployeeStaffDepartureReportScreen}
+              />
+            </ContentStack.Navigator>
+          )}
+        </CompanyAdminTab.Screen>
+
         {canUploadReceipts && (
           <CompanyAdminTab.Screen
             name="Receipts"
@@ -535,6 +611,7 @@ export const CompanyAdminNavigator = () => {
           animation: "slide_from_right",
         }}
       >
+        {/* Employee related screens */}
         <CompanyAdminStack.Screen
           name="EmployeeDetails"
           component={EmployeeDetailsScreen}
@@ -547,6 +624,8 @@ export const CompanyAdminNavigator = () => {
           name="EditEmployee"
           component={EditEmployeeScreen}
         />
+
+        {/* Task related screens */}
         <CompanyAdminStack.Screen
           name="TaskDetails"
           component={CompanyAdminTaskDetailsScreen}
@@ -559,9 +638,15 @@ export const CompanyAdminNavigator = () => {
           name="EditTask"
           component={CompanyAdminEditTaskScreen}
         />
+
+        {/* Form related screens */}
         <CompanyAdminStack.Screen
           name="FormDetails"
           component={FormDetailsScreen}
+        />
+        <CompanyAdminStack.Screen
+          name="FormSubmissionsScreen"
+          component={FormSubmissionsScreen}
         />
         <CompanyAdminStack.Screen
           name="CreateEmployeeAccidentReport"
@@ -575,6 +660,12 @@ export const CompanyAdminNavigator = () => {
           name="CreateEmployeeStaffDepartureReport"
           component={CreateEmployeeStaffDepartureReportScreen}
         />
+
+        {/* Receipt related screens */}
+        <CompanyAdminStack.Screen
+          name="ReceiptsScreen"
+          component={CompanyReceiptsListScreen}
+        />
         <CompanyAdminStack.Screen
           name="CreateCompanyReceipt"
           component={CreateCompanyReceiptScreen}
@@ -586,6 +677,12 @@ export const CompanyAdminNavigator = () => {
         <CompanyAdminStack.Screen
           name="EditCompanyReceipt"
           component={EditCompanyReceiptScreen}
+        />
+
+        {/* Utilities related screens */}
+        <CompanyAdminStack.Screen
+          name="UtilitiesScreen"
+          component={CompanyAdminUtilitiesScreen}
         />
         <CompanyAdminStack.Screen
           name="ActivityLogs"

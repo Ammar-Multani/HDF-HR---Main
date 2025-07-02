@@ -442,7 +442,7 @@ const EmployeeFormsScreen = () => {
         type: "illness" as const,
         title: "Illness Report",
         status: report.status,
-        submission_date: report.submission_date,
+        submission_date: report.created_at,
       }));
 
       // Format departure reports
@@ -455,7 +455,7 @@ const EmployeeFormsScreen = () => {
         submission_date: report.created_at,
       }));
 
-      // Combine all reports
+      // Combine all reports and sort by submission_date descending (newest first)
       const allForms = [
         ...formattedAccidents,
         ...formattedIllness,

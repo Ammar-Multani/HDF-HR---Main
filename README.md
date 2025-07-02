@@ -56,7 +56,7 @@ A comprehensive HR and business management platform designed for organizations w
 
 2. Install dependencies:
    ```bash
-   yarn install
+   yarn 
    # or
    npm install
    ```

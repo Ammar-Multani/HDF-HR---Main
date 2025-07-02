@@ -313,7 +313,7 @@ const CreateAccidentReportScreen = () => {
               objects_involved: watch("objects_involved") || "",
               injuries: watch("injuries") || "",
               accident_type: watch("accident_type") || "",
-              status: FormStatus.DRAFT,
+              status: FormStatus.PENDING,
               submitted_by: user?.id,
             },
           ])
@@ -1488,6 +1488,11 @@ const styles = StyleSheet.create<StylesType>({
     borderRadius: 16,
     overflow: "hidden",
     backgroundColor: "transparent",
+    elevation: 0,
+    shadowColor: "transparent",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
   },
   modalSurface: {
     backgroundColor: "white",

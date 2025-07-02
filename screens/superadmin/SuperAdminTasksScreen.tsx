@@ -1008,7 +1008,7 @@ const SuperAdminTasksScreen = () => {
                 height: 30,
                 borderRadius: 25,
                 borderWidth: 1,
-                backgroundColor: getPriorityColor(item.priority),
+                backgroundColor: `${getPriorityColor(item.priority)}50`, // Added 80 for 50% transparency
                 borderColor: getPriorityColor(item.priority),
               }}
               textStyle={{

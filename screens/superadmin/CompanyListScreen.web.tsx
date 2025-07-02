@@ -1629,7 +1629,10 @@ const CompanyListScreen = () => {
     <SafeAreaView
       style={[
         styles.container,
-        { backgroundColor: theme.colors.backgroundSecondary },
+        {
+          backgroundColor:
+            (theme.colors as any).backgroundSecondary || "#F8F9FA",
+        },
       ]}
     >
       <AppHeader
