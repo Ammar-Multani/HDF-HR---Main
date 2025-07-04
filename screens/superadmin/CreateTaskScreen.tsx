@@ -6,6 +6,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  TouchableOpacity,
 } from "react-native";
 import {
   Text,
@@ -18,6 +19,9 @@ import {
   Menu,
   Portal,
   Modal,
+  Surface,
+  IconButton,
+  Divider,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -29,8 +33,15 @@ import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import { TaskPriority, UserRole, TaskStatus } from "../../types";
+import Animated, { FadeIn } from "react-native-reanimated";
+import DateTimePicker from "react-native-modal-datetime-picker";
 import CustomSnackbar from "../../components/CustomSnackbar";
 import { t } from "i18next";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+
+type RootStackParamList = {
+  TaskDetails: { taskId: string };
+};
 
 interface TaskFormData {
   title: string;
@@ -42,7 +53,8 @@ interface TaskFormData {
 
 const CreateTaskScreen = () => {
   const theme = useTheme();
-  const navigation = useNavigation();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { user } = useAuth();
 
   const [loading, setLoading] = useState(false);
@@ -238,51 +250,86 @@ const CreateTaskScreen = () => {
       // Get admin's name from admin table
       const { data: adminDetails, error: adminDetailsError } = await supabase
         .from("admin")
-        .select("id, name")
+        .select("id, name, role")
         .eq("email", user.email)
         .single();
 
+      if (adminDetailsError) {
+        console.error("Error fetching admin details:", adminDetailsError);
+      }
+
       const userDisplayName = adminDetails?.name || user.email;
 
-      // Create activity log with task ID
+      // Get assigned user's details
+      const assignedUser = availableUsers.find(
+        (u) => u.id === selectedAssignees[0]
+      );
+
+      // Log the activity with complete user information
       const activityLogData = {
-        user_id: adminDetails?.id,
+        user_id: adminData.id,
         activity_type: "CREATE_TASK",
-        description: `New task '${data.title}' created by ${userDisplayName} (${user.email}). Assigned to ${availableUsers.find((u) => u.id === selectedAssignees[0])?.name || "Unknown User"}`,
+        description: `New task "${data.title}" created by ${userDisplayName} (${user.email}). Assigned to ${assignedUser?.name || "Unknown User"}`,
         company_id: selectedCompany.id,
-        task_id: createdTask.id, // Add task_id at root level
         metadata: {
-          task_id: createdTask.id, // Also include in metadata
+          task_id: createdTask.id,
           task_title: data.title,
+          status: TaskStatus.OPEN,
           priority: data.priority,
+          assigned_to: assignedUser
+            ? {
+                id: assignedUser.id,
+                name: assignedUser.name,
+                email: assignedUser.email,
+                role: assignedUser.role,
+              }
+            : null,
           created_by: {
+            id: adminData.id,
             name: userDisplayName,
             email: user.email,
+            role: adminDetails?.role || "superadmin",
           },
-          assigned_to: {
-            id: selectedAssignees[0],
-            name:
-              availableUsers.find((u) => u.id === selectedAssignees[0])?.name ||
-              "Unknown User",
+          company: {
+            id: selectedCompany.id,
+            name: selectedCompany.company_name,
+          },
+        },
+        old_value: null,
+        new_value: {
+          id: createdTask.id,
+          title: data.title,
+          description: data.description,
+          deadline: data.deadline.toISOString(),
+          priority: data.priority,
+          status: TaskStatus.OPEN,
+          assigned_to: selectedAssignees[0],
+          company_id: selectedCompany.id,
+          created_at: new Date().toISOString(),
+          created_by: {
+            id: adminData.id,
+            name: userDisplayName,
+            email: user.email,
+            role: adminDetails?.role || "superadmin",
           },
         },
       };
 
-      // Log the activity
       const { error: logError } = await supabase
         .from("activity_logs")
         .insert([activityLogData]);
 
       if (logError) {
-        console.error("Error creating activity log:", logError);
+        console.error("Error logging activity:", logError);
+        // Don't throw error here, as the task was created successfully
       }
 
-      setSnackbarMessage("Task created successfully");
+      setSnackbarMessage(t("superAdmin.tasks.taskCreatedSuccessfully"));
       setSnackbarVisible(true);
 
-      // Navigate back after a short delay
+      // Navigate to task details after a short delay
       setTimeout(() => {
-        navigation.goBack();
+        navigation.navigate("TaskDetails", { taskId: createdTask.id });
       }, 1500);
     } catch (error: any) {
       console.error("Error creating task:", error);
@@ -293,94 +340,16 @@ const CreateTaskScreen = () => {
     }
   };
 
-  // Date picker handlers for the web-compatible date picker
-  const handleDateConfirm = (selectedDate: Date) => {
-    setShowDatePicker(false);
-    setValue("deadline", selectedDate);
-  };
-
-  const handleDateCancel = () => {
-    setShowDatePicker(false);
-  };
-
-  // Web-specific date picker component
-  const WebDatePicker = () => {
-    const [year, setYear] = useState(deadline.getFullYear());
-    const [month, setMonth] = useState(deadline.getMonth() + 1); // JavaScript months are 0-indexed
-    const [day, setDay] = useState(deadline.getDate());
-
-    const handleConfirm = () => {
-      const newDate = new Date(year, month - 1, day);
-      handleDateConfirm(newDate);
-    };
-
-    return (
-      <Portal>
-        <Modal
-          visible={showDatePicker}
-          onDismiss={handleDateCancel}
-          contentContainerStyle={styles.webDatePickerModal}
-        >
-          <View style={styles.webDatePickerContainer}>
-            <Text style={styles.webDatePickerTitle}>Select Date</Text>
-
-            <View style={styles.webDateInputRow}>
-              <View style={styles.webDateInputContainer}>
-                <Text style={styles.webDateInputLabel}>Day</Text>
-                <TextInput
-                  mode="outlined"
-                  keyboardType="numeric"
-                  value={day.toString()}
-                  onChangeText={(text) => setDay(parseInt(text) || 1)}
-                  style={styles.webDateInput}
-                />
-              </View>
-
-              <View style={styles.webDateInputContainer}>
-                <Text style={styles.webDateInputLabel}>Month</Text>
-                <TextInput
-                  mode="outlined"
-                  keyboardType="numeric"
-                  value={month.toString()}
-                  onChangeText={(text) => {
-                    const newMonth = parseInt(text) || 1;
-                    setMonth(Math.min(Math.max(newMonth, 1), 12));
-                  }}
-                  style={styles.webDateInput}
-                />
-              </View>
-
-              <View style={styles.webDateInputContainer}>
-                <Text style={styles.webDateInputLabel}>Year</Text>
-                <TextInput
-                  mode="outlined"
-                  keyboardType="numeric"
-                  value={year.toString()}
-                  onChangeText={(text) => setYear(parseInt(text) || 2023)}
-                  style={styles.webDateInput}
-                />
-              </View>
-            </View>
-
-            <View style={styles.webDatePickerActions}>
-              <Button
-                onPress={handleDateCancel}
-                style={styles.webDatePickerButton}
-              >
-                Cancel
-              </Button>
-              <Button
-                mode="contained"
-                onPress={handleConfirm}
-                style={styles.webDatePickerButton}
-              >
-                Confirm
-              </Button>
-            </View>
-          </View>
-        </Modal>
-      </Portal>
-    );
+  const handleDateChange = (event: any) => {
+    if (Platform.OS === "web") {
+      const selectedDate = new Date(event.target.value);
+      setValue("deadline", selectedDate);
+    } else {
+      if (event.type === "set" && event.nativeEvent.timestamp) {
+        setValue("deadline", new Date(event.nativeEvent.timestamp));
+      }
+      setShowDatePicker(false);
+    }
   };
 
   if (loadingUsers || loadingCompanies) {
@@ -388,14 +357,12 @@ const CreateTaskScreen = () => {
   }
 
   return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
+    <SafeAreaView style={styles.container}>
       <AppHeader
-        title="Create Task"
+        title={t("superAdmin.tasks.createTask")}
+        subtitle={t("superAdmin.tasks.updateTaskDetails")}
         showBackButton
         showLogo={false}
-        showHelpButton={false}
       />
 
       <KeyboardAvoidingView
@@ -406,201 +373,379 @@ const CreateTaskScreen = () => {
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
         >
-          <Text
-            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
-          >
-            Task Details
-          </Text>
+          <View style={styles.gridContainer}>
+            <View style={styles.gridColumn}>
+              <Animated.View entering={FadeIn.delay(100)}>
+                {/* Basic Information */}
+                <Surface style={styles.formCard}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="clipboard-text"
+                          size={20}
+                          iconColor="#64748b"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>
+                        {t("superAdmin.tasks.details")}
+                      </Text>
+                    </View>
+                  </View>
 
-          <Text style={styles.inputLabel}>Select Company *</Text>
-          <View style={styles.companySelector}>
+                  <View style={styles.cardContent}>
+                    <Text style={styles.inputLabel}>
+                      {t("superAdmin.tasks.selectCompany")} *
+                    </Text>
+                    <Button
+                      mode="outlined"
+                      onPress={() => setMenuVisible(true)}
+                      style={styles.companyButton}
+                      icon="office-building"
+                    >
+                      {selectedCompany
+                        ? selectedCompany.company_name
+                        : t("superAdmin.tasks.selectCompany")}
+                    </Button>
+
+                    <Controller
+                      control={control}
+                      rules={{ required: t("superAdmin.tasks.titleRequired") }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <>
+                          <TextInput
+                            label={`${t("superAdmin.tasks.taskTitle")} *`}
+                            mode="outlined"
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
+                            error={!!errors.title}
+                            style={styles.input}
+                            disabled={loading}
+                          />
+                          {errors.title && (
+                            <Text style={styles.errorText}>
+                              {errors.title.message}
+                            </Text>
+                          )}
+                        </>
+                      )}
+                      name="title"
+                    />
+
+                    <Controller
+                      control={control}
+                      rules={{
+                        required: t("superAdmin.tasks.descriptionRequired"),
+                      }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <>
+                          <TextInput
+                            label={`${t("superAdmin.tasks.description")} *`}
+                            mode="outlined"
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
+                            error={!!errors.description}
+                            style={styles.input}
+                            multiline
+                            numberOfLines={4}
+                            disabled={loading}
+                          />
+                          {errors.description && (
+                            <Text style={styles.errorText}>
+                              {errors.description.message}
+                            </Text>
+                          )}
+                        </>
+                      )}
+                      name="description"
+                    />
+                  </View>
+                </Surface>
+
+                {/* Task Settings */}
+                <Surface style={[styles.formCard, { marginTop: 24 }]}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="cog"
+                          size={20}
+                          iconColor="#64748b"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>
+                        {t("superAdmin.tasks.taskDetails")}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardContent}>
+                    <Text style={styles.inputLabel}>
+                      {t("superAdmin.tasks.deadline")} *
+                    </Text>
+                    {Platform.OS === "web" ? (
+                      <View style={styles.webDateInputContainer}>
+                        <input
+                          type="date"
+                          value={format(deadline, "yyyy-MM-dd")}
+                          onChange={handleDateChange}
+                          style={{
+                            width: "100%",
+                            padding: "10px",
+                            fontSize: "16px",
+                            borderRadius: "4px",
+                            border: "1px solid #e2e8f0",
+                            outline: "none",
+                          }}
+                          min={format(new Date(), "yyyy-MM-dd")}
+                        />
+                      </View>
+                    ) : (
+                      <>
+                        <Button
+                          mode="outlined"
+                          onPress={() => setShowDatePicker(true)}
+                          style={styles.dateButton}
+                          icon="calendar"
+                        >
+                          {format(deadline, "MMMM d, yyyy")}
+                        </Button>
+
+                        {showDatePicker && (
+                          <DateTimePickerModal
+                            isVisible={showDatePicker}
+                            mode="date"
+                            onConfirm={(date) => {
+                              setValue("deadline", date);
+                              setShowDatePicker(false);
+                            }}
+                            onCancel={() => setShowDatePicker(false)}
+                            minimumDate={new Date()}
+                          />
+                        )}
+                      </>
+                    )}
+
+                    <Text style={styles.inputLabel}>
+                      {t("superAdmin.tasks.priority")} *
+                    </Text>
+                    <Controller
+                      control={control}
+                      render={({ field: { onChange, value } }) => (
+                        <SegmentedButtons
+                          value={value}
+                          onValueChange={onChange}
+                          buttons={[
+                            {
+                              value: TaskPriority.LOW,
+                              label: t("superAdmin.tasks.low"),
+                            },
+                            {
+                              value: TaskPriority.MEDIUM,
+                              label: t("superAdmin.tasks.medium"),
+                            },
+                            {
+                              value: TaskPriority.HIGH,
+                              label: t("superAdmin.tasks.high"),
+                            },
+                          ]}
+                          style={styles.segmentedButtons}
+                          theme={{
+                            colors: {
+                              secondaryContainer: theme.colors.primaryContainer,
+                              onSecondaryContainer: theme.colors.primary,
+                            },
+                          }}
+                        />
+                      )}
+                      name="priority"
+                    />
+
+                    <Controller
+                      control={control}
+                      rules={{
+                        required: t("superAdmin.tasks.reminderDaysRequired"),
+                        validate: (value) =>
+                          !isNaN(parseInt(value)) &&
+                          parseInt(value) >= 0 &&
+                          parseInt(value) <= 365
+                            ? true
+                            : t("superAdmin.tasks.reminderDaysRange"),
+                      }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <>
+                          <TextInput
+                            label={`${t("superAdmin.tasks.reminderDays")} *`}
+                            mode="outlined"
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
+                            error={!!errors.reminder_days_before}
+                            style={styles.input}
+                            keyboardType="numeric"
+                            disabled={loading}
+                          />
+                          {errors.reminder_days_before && (
+                            <Text style={styles.errorText}>
+                              {errors.reminder_days_before.message}
+                            </Text>
+                          )}
+                        </>
+                      )}
+                      name="reminder_days_before"
+                    />
+                  </View>
+                </Surface>
+              </Animated.View>
+            </View>
+
+            <View style={styles.gridColumn}>
+              <Animated.View entering={FadeIn.delay(200)}>
+                {/* Assign Users */}
+                <Surface style={styles.formCard}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="account-multiple"
+                          size={20}
+                          iconColor="#64748b"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>
+                        {t("superAdmin.tasks.assignUsers")}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardContent}>
+                    <Text style={styles.helperText}>
+                      {t("superAdmin.tasks.selectAdminsToAssign")}
+                    </Text>
+
+                    <View style={styles.usersContainer}>
+                      {availableUsers.map((user) => (
+                        <Chip
+                          key={`assignee-${user.id}`}
+                          selected={selectedAssignees.includes(user.id)}
+                          onPress={() => toggleAssignee(user.id)}
+                          style={styles.userChip}
+                          showSelectedCheck
+                          mode="outlined"
+                        >
+                          {user.name} (
+                          {user.role === UserRole.SUPER_ADMIN
+                            ? t("superAdmin.tasks.superAdmin")
+                            : t("superAdmin.tasks.companyAdmin")}
+                          )
+                        </Chip>
+                      ))}
+                    </View>
+                  </View>
+                </Surface>
+              </Animated.View>
+            </View>
+          </View>
+        </ScrollView>
+
+        <Surface style={styles.bottomBar}>
+          <View style={styles.bottomBarContent}>
             <Button
               mode="outlined"
-              onPress={() => setMenuVisible(true)}
-              style={styles.companyButton}
+              onPress={() => navigation.goBack()}
+              style={[styles.button, styles.cancelButton]}
+              disabled={loading}
             >
-              {selectedCompany
-                ? selectedCompany.company_name
-                : "Select Company"}
+              {t("common.cancel")}
             </Button>
-            <Menu
-              visible={menuVisible}
-              onDismiss={() => setMenuVisible(false)}
-              anchor={{ x: 0, y: 0 }}
+            <Button
+              mode="contained"
+              onPress={handleSubmit(onSubmit)}
+              style={[styles.button, styles.saveButton]}
+              loading={loading}
+              disabled={loading}
             >
+              {t("superAdmin.tasks.createTask")}
+            </Button>
+          </View>
+        </Surface>
+      </KeyboardAvoidingView>
+
+      {/* Company Selection Modal */}
+      <Portal>
+        <Modal
+          visible={menuVisible}
+          onDismiss={() => setMenuVisible(false)}
+          contentContainerStyle={styles.modalContainer}
+        >
+          <Surface style={styles.modalSurface}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {t("superAdmin.tasks.selectCompany")}
+              </Text>
+              <IconButton icon="close" onPress={() => setMenuVisible(false)} />
+            </View>
+            <Divider />
+
+            <ScrollView style={styles.companyOptionsContainer}>
               {companies.map((company) => (
-                <Menu.Item
+                <TouchableOpacity
                   key={company.id}
-                  title={company.company_name}
+                  style={[
+                    styles.companyOption,
+                    selectedCompany?.id === company.id &&
+                      styles.selectedCompanyOption,
+                  ]}
                   onPress={() => {
                     setSelectedCompany(company);
                     setMenuVisible(false);
                   }}
-                />
+                >
+                  <View style={styles.companyOptionContent}>
+                    <View style={styles.companyIconContainer}>
+                      <IconButton
+                        icon="office-building"
+                        size={20}
+                        iconColor={
+                          selectedCompany?.id === company.id
+                            ? theme.colors.primary
+                            : "#64748b"
+                        }
+                        style={{ margin: 0 }}
+                      />
+                    </View>
+                    <View style={styles.companyTextContainer}>
+                      <Text
+                        style={[
+                          styles.companyName,
+                          selectedCompany?.id === company.id && {
+                            color: theme.colors.primary,
+                          },
+                        ]}
+                      >
+                        {company.company_name}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {selectedCompany?.id === company.id && (
+                    <IconButton
+                      icon="check"
+                      size={20}
+                      iconColor={theme.colors.primary}
+                    />
+                  )}
+                </TouchableOpacity>
               ))}
-            </Menu>
-          </View>
-
-          <Controller
-            control={control}
-            rules={{ required: "Title is required" }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Title *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.title}
-                style={styles.input}
-                disabled={loading}
-              />
-            )}
-            name="title"
-          />
-          {errors.title && (
-            <Text style={styles.errorText}>{errors.title.message}</Text>
-          )}
-
-          <Controller
-            control={control}
-            rules={{ required: "Description is required" }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Description *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.description}
-                style={styles.input}
-                multiline
-                numberOfLines={4}
-                disabled={loading}
-              />
-            )}
-            name="description"
-          />
-          {errors.description && (
-            <Text style={styles.errorText}>{errors.description.message}</Text>
-          )}
-
-          <Text style={styles.inputLabel}>Deadline *</Text>
-          <Button
-            mode="outlined"
-            onPress={() => setShowDatePicker(true)}
-            style={styles.dateButton}
-            icon="calendar"
-          >
-            {format(deadline, "MMMM d, yyyy")}
-          </Button>
-
-          {Platform.OS === "web" ? (
-            <WebDatePicker />
-          ) : (
-            <DateTimePickerModal
-              isVisible={showDatePicker}
-              mode="date"
-              onConfirm={handleDateConfirm}
-              onCancel={handleDateCancel}
-              date={deadline}
-              minimumDate={new Date()}
-            />
-          )}
-
-          <Text style={styles.inputLabel}>Priority *</Text>
-          <Controller
-            control={control}
-            render={({ field: { onChange, value } }) => (
-              <SegmentedButtons
-                value={value}
-                onValueChange={onChange}
-                buttons={[
-                  { value: TaskPriority.LOW, label: "Low" },
-                  { value: TaskPriority.MEDIUM, label: "Medium" },
-                  { value: TaskPriority.HIGH, label: "High" },
-                ]}
-                style={styles.segmentedButtons}
-                theme={{
-                  colors: {
-                    secondaryContainer: theme.colors.primaryContainer,
-                    onSecondaryContainer: theme.colors.primary,
-                  },
-                }}
-              />
-            )}
-            name="priority"
-          />
-
-          <Controller
-            control={control}
-            rules={{
-              required: "Reminder days is required",
-              validate: (value) =>
-                !isNaN(parseInt(value)) &&
-                parseInt(value) >= 0 &&
-                parseInt(value) <= 365
-                  ? true
-                  : "Please enter a value between 0 and 365 days",
-            }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Reminder (days before deadline) *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.reminder_days_before}
-                style={styles.input}
-                keyboardType="numeric"
-                disabled={loading}
-              />
-            )}
-            name="reminder_days_before"
-          />
-          {errors.reminder_days_before && (
-            <Text style={styles.errorText}>
-              {errors.reminder_days_before.message}
-            </Text>
-          )}
-
-          <Text
-            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
-          >
-            Assign Users
-          </Text>
-
-          <Text style={styles.helperText}>
-            Select one admin to assign this task to (required)
-          </Text>
-
-          <View style={styles.usersContainer}>
-            {availableUsers.map((user) => (
-              <Chip
-                key={`assignee-${user.id}`}
-                selected={selectedAssignees.includes(user.id)}
-                onPress={() => toggleAssignee(user.id)}
-                style={styles.userChip}
-                showSelectedCheck
-                mode="outlined"
-              >
-                {user.name} (Company Admin)
-              </Chip>
-            ))}
-          </View>
-
-          <Button
-            mode="contained"
-            onPress={handleSubmit(onSubmit)}
-            style={styles.submitButton}
-            loading={loading}
-            disabled={loading}
-          >
-            Create Task
-          </Button>
-        </ScrollView>
-      </KeyboardAvoidingView>
-
+            </ScrollView>
+          </Surface>
+        </Modal>
+      </Portal>
       <CustomSnackbar
         visible={snackbarVisible}
         message={snackbarMessage}
@@ -636,6 +781,7 @@ const CreateTaskScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#F8F9FA",
   },
   keyboardAvoidingView: {
     flex: 1,
@@ -644,17 +790,76 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
+    padding: 24,
     paddingBottom: 40,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginTop: 24,
-    marginBottom: 16,
+  headerSection: {
+    marginBottom: 32,
+  },
+  pageTitle: {
+    fontSize: Platform.OS === "web" ? 32 : 24,
+    fontWeight: "600",
+    color: "#1e293b",
+    fontFamily: "Poppins-SemiBold",
+  },
+  gridContainer: {
+    flexDirection: "row",
+    gap: 24,
+    flexWrap: "wrap",
+  },
+  gridColumn: {
+    flex: 1,
+    minWidth: 320,
+    gap: 24,
+  },
+  formCard: {
+    borderRadius: 16,
+    overflow: "hidden",
+    elevation: 1,
+    shadowColor: "rgba(0,0,0,0.1)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  iconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "#f1f5f9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerIcon: {
+    margin: 0,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1e293b",
+    fontFamily: "Poppins-SemiBold",
+  },
+  cardContent: {
+    padding: 24,
   },
   input: {
     marginBottom: 12,
+    backgroundColor: "#FFFFFF",
   },
   inputLabel: {
     fontSize: 14,
@@ -671,7 +876,7 @@ const styles = StyleSheet.create({
     color: "#EF4444",
     fontSize: 12,
     marginTop: -8,
-    marginBottom: 8,
+    marginBottom: 12,
     marginLeft: 4,
   },
   helperText: {
@@ -682,14 +887,10 @@ const styles = StyleSheet.create({
   usersContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginBottom: 16,
+    gap: 8,
   },
   userChip: {
-    margin: 4,
-  },
-  submitButton: {
-    marginTop: 24,
-    paddingVertical: 6,
+    marginBottom: 8,
   },
   companySelector: {
     marginBottom: 16,
@@ -698,44 +899,95 @@ const styles = StyleSheet.create({
   companyButton: {
     width: "100%",
   },
-  webDatePickerModal: {
-    backgroundColor: "white",
-    padding: 20,
+  bottomBar: {
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+    padding: 13,
+  },
+  bottomBarContent: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 12,
+    maxWidth: 1400,
+    marginHorizontal: "auto",
+    width: "100%",
+  },
+  button: {
+    minWidth: 120,
+  },
+  cancelButton: {},
+  saveButton: {},
+  modalContainer: {
     margin: 20,
-    borderRadius: 8,
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: "transparent",
+  },
+  modalSurface: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    overflow: "hidden",
+    elevation: 1,
+    shadowColor: "rgba(0,0,0,0.1)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
     maxWidth: 500,
+    width: "100%",
     alignSelf: "center",
   },
-  webDatePickerContainer: {
-    alignItems: "center",
-  },
-  webDatePickerTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 20,
-  },
-  webDateInputRow: {
+  modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    width: "100%",
-    marginBottom: 20,
+    alignItems: "center",
+    padding: 18,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontFamily: "Poppins-SemiBold",
+    color: "#424242",
+  },
+  companyOptionsContainer: {
+    maxHeight: 400,
+    padding: 12,
+  },
+  companyOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 12,
+    borderRadius: 12,
+    marginVertical: 6,
+    backgroundColor: "#f8fafc",
+  },
+  selectedCompanyOption: {
+    backgroundColor: "#f0f9ff",
+  },
+  companyOptionContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  companyIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#f1f5f9",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 14,
+  },
+  companyTextContainer: {
+    flex: 1,
+  },
+  companyName: {
+    fontSize: 15,
+    fontFamily: "Poppins-Medium",
+    color: "#334155",
   },
   webDateInputContainer: {
-    width: "30%",
-  },
-  webDateInputLabel: {
-    marginBottom: 5,
-  },
-  webDateInput: {
-    height: 40,
-  },
-  webDatePickerActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    width: "100%",
-  },
-  webDatePickerButton: {
-    marginLeft: 10,
+    marginBottom: 16,
   },
   snackbar: {
     marginBottom: 16,

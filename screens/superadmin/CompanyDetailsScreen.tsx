@@ -69,7 +69,7 @@ const CompanyDetailsSkeleton = () => {
   );
 
   return (
-    <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+    <Card style={[styles.card, { backgroundColor: theme.colors.surface }]} elevation={0}>
       <Card.Content>
         <View style={styles.headerRow}>
           <SkeletonBlock width="70%" height={24} style={{ marginBottom: 8 }} />
@@ -587,7 +587,7 @@ const CompanyDetailsScreen = () => {
                   height: 40,
                   backgroundColor: theme.colors.surfaceVariant,
                   opacity: 0.3,
-                  borderRadius: 4,
+                  borderRadius: 14,
                 },
               ]}
             />
@@ -598,7 +598,7 @@ const CompanyDetailsScreen = () => {
                   height: 40,
                   backgroundColor: theme.colors.surfaceVariant,
                   opacity: 0.3,
-                  borderRadius: 4,
+                  borderRadius: 14,
                   marginTop: 12,
                 },
               ]}
@@ -812,7 +812,7 @@ const CompanyDetailsScreen = () => {
 
             {companyAdmins.length > 0 ? (
               companyAdmins.map((admin) => (
-                <Card key={admin.id} style={styles.adminCard}>
+                <Card key={admin.id} style={styles.adminCard} elevation={0}>
                   <Card.Content>
                     <View style={styles.adminHeader}>
                       <Text style={styles.adminName}>
@@ -846,7 +846,7 @@ const CompanyDetailsScreen = () => {
               // @ts-ignore - Navigation typing is complex but this works
               navigation.navigate("EditCompany", { companyId: company.id });
             }}
-            style={[styles.button, { backgroundColor: theme.colors.primary }]}
+            style={[styles.button, { backgroundColor: theme.colors.primary,  }]}
             disabled={loadingAction || networkStatus === false}
           >
             {t("superAdmin.companies.editCompany")}
@@ -873,7 +873,7 @@ const CompanyDetailsScreen = () => {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
     >
       <AppHeader
         showLogo={false}
@@ -903,7 +903,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 140,
   },
   card: {
     marginBottom: 16,

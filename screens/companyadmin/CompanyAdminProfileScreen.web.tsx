@@ -40,9 +40,16 @@ import Animated, {
 } from "react-native-reanimated";
 import CustomSnackbar from "../../components/CustomSnackbar";
 import { t } from "i18next";
-import { initEmailService } from "../../utils/emailService";
+import {
+  initEmailService,
+  sendPasswordResetEmail,
+} from "../../utils/emailService";
 import CustomLanguageSelector from "../../components/CustomLanguageSelector";
 import HelpGuideModal from "../../components/HelpGuideModal";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { ActivityType } from "../../types/activity-log";
+import { clearAllCache } from "../../lib/services/cacheService";
+import { generateSecureToken, APP_URL } from "../../utils/auth";
 
 // Add Shimmer component for loading states
 interface ShimmerProps {
@@ -491,6 +498,7 @@ const CompanyAdminProfileScreen = () => {
   const [deleteVerificationText, setDeleteVerificationText] = useState("");
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [helpModalVisible, setHelpModalVisible] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   // Initialize email service
   useEffect(() => {
@@ -574,32 +582,82 @@ const CompanyAdminProfileScreen = () => {
   };
 
   const handleSignOut = async () => {
-    if (Platform.OS === "web") {
-      // For web, show modal dialog
-      setSignOutModalVisible(true);
-    } else {
-      // For mobile, show alert dialog
-      Alert.alert("Sign Out", "Are you sure you want to sign out?", [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Sign Out",
-          onPress: performSignOut,
-        },
-      ]);
-    }
+    setSignOutModalVisible(true);
   };
 
   const performSignOut = async () => {
     try {
+      setSigningOut(true);
+
+      // Log the sign out activity
+      const activityLogData = {
+        user_id: user.id,
+        activity_type: ActivityType.SIGN_OUT,
+        description: `User signed out: ${adminData?.first_name || ""} ${adminData?.last_name || ""} (${user.email})`,
+        metadata: {
+          user_email: user.email,
+          user_role: "company_admin",
+          platform: Platform.OS,
+          company_id: adminData?.company_id,
+          timestamp: new Date().toISOString(),
+        },
+      };
+
+      // Log the activity before signing out
+      await supabase.from("activity_logs").insert([activityLogData]);
+
+      // Set flag to force reload after sign-out
+      await AsyncStorage.setItem("FORCE_RELOAD_AFTER_SIGNOUT", "true");
+
+      // Clear all cached data
+      await clearAllCache();
+
+      // Clear all auth-related storage
+      const keys = await AsyncStorage.getAllKeys();
+      const authKeys = keys.filter(
+        (key) =>
+          key.startsWith("supabase.auth.") ||
+          key.startsWith("cache:") ||
+          key.startsWith("auth_") ||
+          key === "auth_token" ||
+          key === "auth_check" ||
+          key === "NAVIGATE_TO_DASHBOARD" ||
+          key === "last_cache_reset" ||
+          key === "SKIP_LOADING_KEY" ||
+          key === "initial_load_complete"
+      );
+      await AsyncStorage.multiRemove(authKeys);
+
+      // Sign out using the auth context
       await signOut();
+
+      // For web, ensure we redirect to login
+      if (Platform.OS === "web") {
+        // Small delay to ensure all operations complete
+        setTimeout(() => {
+          window.location.href = "/";
+        }, 300);
+      }
     } catch (error) {
-      console.error("Error signing out:", error);
-      setSnackbarMessage("Failed to sign out");
+      console.error("Error during sign out:", error);
+      setSnackbarMessage(t("companyAdmin.profile.signOutFailed"));
       setSnackbarVisible(true);
+
+      // Even if there's an error, try to sign out
+      try {
+        await signOut();
+
+        // Force reload as last resort
+        if (Platform.OS === "web") {
+          setTimeout(() => {
+            window.location.href = "/";
+          }, 300);
+        }
+      } catch (e) {
+        console.error("Final sign out attempt failed:", e);
+      }
     } finally {
+      setSigningOut(false);
       setSignOutModalVisible(false);
     }
   };
@@ -623,7 +681,7 @@ const CompanyAdminProfileScreen = () => {
       <Portal>
         <Modal
           visible={signOutModalVisible}
-          onDismiss={() => setSignOutModalVisible(false)}
+          onDismiss={() => !signingOut && setSignOutModalVisible(false)}
           contentContainerStyle={[
             styles.signOutModal,
             {
@@ -656,6 +714,7 @@ const CompanyAdminProfileScreen = () => {
                   styles.signOutModalButtonText,
                   { fontSize: isLargeScreen ? 16 : 14 },
                 ]}
+                disabled={signingOut}
               >
                 Cancel
               </Button>
@@ -668,6 +727,8 @@ const CompanyAdminProfileScreen = () => {
                   styles.signOutModalButtonText,
                   { fontSize: isLargeScreen ? 16 : 14 },
                 ]}
+                loading={signingOut}
+                disabled={signingOut}
               >
                 Sign Out
               </Button>
@@ -684,53 +745,96 @@ const CompanyAdminProfileScreen = () => {
 
   const handleResetPassword = async () => {
     try {
-      if (!user?.email) {
-        setSnackbarMessage(
-          t("superAdmin.profile.emailRequired") || "Email is required"
-        );
-        setSnackbarVisible(true);
-        return;
-      }
-
       setResettingPassword(true);
-      logDebug("Initiating password reset for email:", user.email);
-      const { error } = await forgotPassword(user.email);
 
-      if (error) {
-        let errorMessage = error.message || t("forgotPassword.failedReset");
-        let messageType = "error";
-
-        // Handle specific error cases
-        if (error.message?.includes("sender identity")) {
-          errorMessage = t("forgotPassword.emailServiceError");
-        } else if (error.message?.includes("rate limit")) {
-          errorMessage = t("forgotPassword.tooManyAttempts");
-          messageType = "warning";
-        } else if (error.message?.includes("network")) {
-          errorMessage = t("forgotPassword.networkError");
-          messageType = "warning";
-        }
-
-        console.error("Password reset error:", error);
-        setSnackbarMessage(errorMessage);
-        setSnackbarVisible(true);
-      } else {
-        logDebug("Password reset request successful");
-        setSnackbarMessage(
-          t("forgotPassword.resetInstructions") ||
-            "Password reset instructions have been sent to your email."
-        );
-        setSnackbarVisible(true);
+      if (!adminData || !user?.email) {
+        throw new Error("Admin data not found");
       }
-    } catch (err) {
-      console.error("Unexpected error during password reset:", err);
-      setSnackbarMessage(
-        t("common.unexpectedError") || "An unexpected error occurred"
+
+      const userEmail = user.email.toLowerCase().trim();
+
+      // Ensure proper URL construction without double slashes
+      const redirectTo = new URL("/auth/reset-password", APP_URL).toString();
+
+      // First, initiate the password reset through Supabase Auth
+      const { data: resetData, error: resetError } =
+        await supabase.auth.resetPasswordForEmail(userEmail, {
+          redirectTo,
+        });
+
+      if (resetError) {
+        throw resetError;
+      }
+
+      // Generate a secure token with 60 minute expiration
+      const { token, expiresAt } = await generateSecureToken(60);
+
+      // Store the reset token in a secure table
+      const { error: storeError } = await supabase
+        .from("password_reset_tokens")
+        .insert({
+          email: userEmail,
+          token: token,
+          expires_at: expiresAt,
+          used: false,
+        })
+        .select();
+
+      if (storeError) {
+        console.error("Error storing reset token:", storeError);
+        throw new Error("Failed to initiate password reset");
+      }
+
+      // Create the reset link using URL constructor to ensure proper formatting
+      const resetUrl = new URL("/auth/reset-password", APP_URL);
+      resetUrl.searchParams.set("token", token);
+      resetUrl.searchParams.set("type", "recovery");
+
+      console.log("Generated reset URL:", resetUrl.toString());
+
+      // Send the password reset email using our custom email service
+      const { success, error } = await sendPasswordResetEmail(
+        userEmail,
+        token,
+        resetUrl.toString()
       );
+
+      if (!success) {
+        throw error || new Error("Failed to send password reset email");
+      }
+
+      // Log the activity
+      const activityLogData = {
+        user_id: user.id,
+        activity_type: ActivityType.PASSWORD_RESET,
+        description: `Password reset requested by ${adminData.first_name} ${adminData.last_name} (${userEmail})`,
+        metadata: {
+          action: "reset_requested",
+          created_by: {
+            id: user.id,
+            name: `${adminData.first_name} ${adminData.last_name}`,
+            email: userEmail,
+            role: "company_admin",
+            company_id: adminData.company_id,
+          },
+        },
+      };
+
+      const { error: logError } = await supabase
+        .from("activity_logs")
+        .insert([activityLogData]);
+
+      if (logError) throw logError;
+
+      setSnackbarMessage(t("forgotPassword.resetLinkSent"));
+      setSnackbarVisible(true);
+      setResetPasswordModalVisible(false);
+    } catch (error: any) {
+      console.error("Reset password error:", error);
+      setSnackbarMessage(error.message || t("forgotPassword.resetError"));
       setSnackbarVisible(true);
     } finally {
       setResettingPassword(false);
-      setResetPasswordModalVisible(false);
     }
   };
 
@@ -1289,7 +1393,7 @@ ${exportData.activityHistory.activities.join("\n")}
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
       <AppHeader
         title="Profile"
@@ -1559,7 +1663,7 @@ ${exportData.activityHistory.activities.join("\n")}
 
                         <TouchableOpacity
                           style={styles.settingItem}
-                          onPress={handleSignOut}
+                          onPress={() => setSignOutModalVisible(true)}
                         >
                           <View style={styles.settingItemContent}>
                             <MaterialCommunityIcons
@@ -1769,6 +1873,7 @@ const getStyles = (theme: any) =>
   StyleSheet.create({
     container: {
       flex: 1,
+      backgroundColor: theme.colors.background,
     },
     keyboardAvoidingView: {
       flex: 1,

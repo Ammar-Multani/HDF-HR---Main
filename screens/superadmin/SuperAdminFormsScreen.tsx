@@ -8,6 +8,7 @@ import {
   ScrollView,
   Platform,
   ActivityIndicator,
+  Pressable,
 } from "react-native";
 import {
   Card,
@@ -20,6 +21,7 @@ import {
   Divider,
   RadioButton,
   Surface,
+  FAB,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -27,6 +29,7 @@ import {
   ParamListBase,
   NavigationProp,
   useFocusEffect,
+  useIsFocused,
 } from "@react-navigation/native";
 import { format } from "date-fns";
 import { supabase } from "../../lib/supabase";
@@ -164,10 +167,11 @@ const FormItemSkeleton = () => {
   );
 };
 
-const SuperAdminFormsScreen = () => {
+const SuperAdminFormsScreen: React.FC = () => {
   const theme = useTheme();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const { t } = useTranslation();
+  const isFocused = useIsFocused();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -192,6 +196,20 @@ const SuperAdminFormsScreen = () => {
     formType: "all",
     sortOrder: "desc",
   });
+
+  // Add state for FAB menu
+  const [fabMenuVisible, setFabMenuVisible] = useState(false);
+
+  // Add state for FAB visibility
+  const [isFABVisible, setIsFABVisible] = useState(true);
+
+  // Use focus effect to manage FAB visibility
+  useFocusEffect(
+    React.useCallback(() => {
+      setIsFABVisible(true);
+      return () => setIsFABVisible(false);
+    }, [])
+  );
 
   // Memoize filteredForms to avoid unnecessary re-filtering
   const memoizedFilteredForms = useMemo(() => {
@@ -881,11 +899,11 @@ const SuperAdminFormsScreen = () => {
 
           <View style={styles.cardFooter}>
             <View style={styles.detailItem}>
-            <Text variant="medium" style={styles.detailLabel}>
-              {t("superAdmin.forms.company")}:
-            </Text>
-            <Text variant="medium" style={styles.companyName}>
-              {item.company_name}
+              <Text variant="medium" style={styles.detailLabel}>
+                {t("superAdmin.forms.company")}:
+              </Text>
+              <Text variant="medium" style={styles.companyName}>
+                {item.company_name}
               </Text>
             </View>
 
@@ -932,7 +950,8 @@ const SuperAdminFormsScreen = () => {
             />
           </View>
         </View>
-        <FlashList estimatedItemSize={74}
+        <FlashList
+          estimatedItemSize={74}
           data={Array(3).fill(0)}
           renderItem={() => <FormItemSkeleton />}
           keyExtractor={(_, index) => `skeleton-${index}`}
@@ -990,6 +1009,124 @@ const SuperAdminFormsScreen = () => {
       {renderActiveFilterIndicator()}
       {renderFilterModal()}
 
+      <Portal>
+        {isFocused && fabMenuVisible && (
+          <Pressable
+            style={[styles.fabMenuOverlay, { zIndex: 1000 }]}
+            onPress={() => setFabMenuVisible(false)}
+          >
+            <View style={[styles.fabMenuContainer]}>
+              <View style={styles.fabMenuHeader}>
+                <Text style={styles.fabMenuHeaderTitle}>Create New Form</Text>
+                <IconButton
+                  icon="close"
+                  size={24}
+                  onPress={() => setFabMenuVisible(false)}
+                />
+              </View>
+              <Divider style={styles.fabMenuDivider} />
+              <View style={styles.fabMenuContent}>
+                <TouchableOpacity
+                  style={[styles.fabMenuItem, { backgroundColor: "#ffebee" }]}
+                  onPress={() => {
+                    setFabMenuVisible(false);
+                    navigation.navigate(
+                      "SuperAdminCreateEmployeeAccidentReport"
+                    );
+                  }}
+                >
+                  <View style={styles.fabMenuItemContent}>
+                    <View style={styles.fabMenuItemIcon}>
+                      <IconButton
+                        icon="alert-circle"
+                        size={24}
+                        iconColor="#f44336"
+                      />
+                    </View>
+                    <View style={styles.fabMenuItemText}>
+                      <Text style={styles.fabMenuItemTitle}>
+                        Create Accident Report
+                      </Text>
+                      <Text style={styles.fabMenuItemDescription}>
+                        Create a workplace accident report for any employee
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.fabMenuItem, { backgroundColor: "#fff3e0" }]}
+                  onPress={() => {
+                    setFabMenuVisible(false);
+                    navigation.navigate(
+                      "SuperAdminCreateEmployeeIllnessReport"
+                    );
+                  }}
+                >
+                  <View style={styles.fabMenuItemContent}>
+                    <View style={styles.fabMenuItemIcon}>
+                      <IconButton
+                        icon="medical-bag"
+                        size={24}
+                        iconColor="#ff9800"
+                      />
+                    </View>
+                    <View style={styles.fabMenuItemText}>
+                      <Text style={styles.fabMenuItemTitle}>
+                        Create Illness Report
+                      </Text>
+                      <Text style={styles.fabMenuItemDescription}>
+                        Create a health-related report for any employee
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.fabMenuItem, { backgroundColor: "#e3f2fd" }]}
+                  onPress={() => {
+                    setFabMenuVisible(false);
+                    navigation.navigate(
+                      "SuperAdminCreateEmployeeStaffDeparture"
+                    );
+                  }}
+                >
+                  <View style={styles.fabMenuItemContent}>
+                    <View style={styles.fabMenuItemIcon}>
+                      <IconButton
+                        icon="exit-to-app"
+                        size={24}
+                        iconColor="#2196f3"
+                      />
+                    </View>
+                    <View style={styles.fabMenuItemText}>
+                      <Text style={styles.fabMenuItemTitle}>
+                        Create Staff Departure
+                      </Text>
+                      <Text style={styles.fabMenuItemDescription}>
+                        Create a staff departure report for any employee
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Pressable>
+        )}
+        {isFocused && isFABVisible && (
+          <FAB
+            icon={fabMenuVisible ? "close" : "plus"}
+            style={[
+              styles.fab,
+              { backgroundColor: theme.colors.primary, zIndex: 1000 },
+            ]}
+            onPress={() => setFabMenuVisible(!fabMenuVisible)}
+            color={theme.colors.surface}
+            theme={{ colors: { accent: theme.colors.surface } }}
+          />
+        )}
+      </Portal>
+
       {filteredForms.length === 0 ? (
         <EmptyState
           icon="file-document"
@@ -1012,7 +1149,8 @@ const SuperAdminFormsScreen = () => {
           }}
         />
       ) : (
-        <FlashList estimatedItemSize={74}
+        <FlashList
+          estimatedItemSize={74}
           data={filteredForms}
           renderItem={renderFormItem}
           keyExtractor={(item) => `${item.type}-${item.id}`}
@@ -1331,6 +1469,88 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     borderTopWidth: 1,
     borderTopColor: "rgba(0,0,0,0.05)",
+  },
+  // Add FAB menu styles
+  fabMenuOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    zIndex: 1000,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  fabMenuContainer: {
+    width: "90%",
+    maxWidth: 380,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    zIndex: 1001,
+  },
+  fabMenuHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    paddingBottom: 12,
+  },
+  fabMenuHeaderTitle: {
+    fontSize: 20,
+    fontFamily: "Poppins-SemiBold",
+    color: "#333",
+  },
+  fabMenuDivider: {
+    backgroundColor: "#e0e0e0",
+  },
+  fabMenuContent: {
+    padding: 16,
+  },
+  fabMenuItem: {
+    borderRadius: 12,
+    marginVertical: 6,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.05)",
+  },
+  fabMenuItemContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+  },
+  fabMenuItemIcon: {
+    marginRight: 16,
+  },
+  fabMenuItemText: {
+    flex: 1,
+  },
+  fabMenuItemTitle: {
+    fontSize: 16,
+    fontFamily: "Poppins-Medium",
+    color: "#333",
+    marginBottom: 4,
+  },
+  fabMenuItemDescription: {
+    fontSize: 13,
+    fontFamily: "Poppins-Regular",
+    color: "#666",
+    lineHeight: 18,
+  },
+  fab: {
+    position: "absolute",
+    margin: 16,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
   },
 } as const);
 

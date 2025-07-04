@@ -4,19 +4,22 @@ import { LinearGradient } from "expo-linear-gradient";
 import { NavItem } from "./NavItem";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { RootStackParamList } from "../types";
 
 const ACTIVE_SCREEN_KEY = "@active_screen";
 
+interface NavigationItem {
+  icon: string;
+  label: string;
+  screen: keyof RootStackParamList;
+}
+
 interface SidebarLayoutProps {
-  activeScreen: string;
-  setActiveScreen: (screen: string) => void;
-  navigationItems: Array<{
-    icon: string;
-    label: string;
-    screen: string;
-  }>;
+  activeScreen: keyof RootStackParamList;
+  setActiveScreen: (screen: keyof RootStackParamList) => void;
+  navigationItems: readonly NavigationItem[];
   content: ReactNode;
-  onNavigate: (screen: string) => void;
+  onNavigate: (screen: keyof RootStackParamList) => void;
 }
 
 export const SidebarLayout: React.FC<SidebarLayoutProps> = ({
@@ -62,7 +65,7 @@ export const SidebarLayout: React.FC<SidebarLayoutProps> = ({
   }, [activeScreen]);
 
   // Handle navigation and active screen update
-  const handleScreenChange = async (screen: string) => {
+  const handleScreenChange = async (screen: keyof RootStackParamList) => {
     setActiveScreen(screen);
     onNavigate(screen);
     try {

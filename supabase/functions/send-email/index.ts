@@ -1,15 +1,12 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-
 // Environment variables
 const NODE_ENV = Deno.env.get("NODE_ENV") || "production";
 const SENDGRID_API_KEY = Deno.env.get("SENDGRID_API_KEY") || "";
 const FROM_EMAIL = Deno.env.get("SENDGRID_FROM_EMAIL") || "";
 const FROM_NAME = Deno.env.get("SENDGRID_FROM_NAME") || "";
-
 // Mailtrap credentials
 const MAILTRAP_API_TOKEN = Deno.env.get("MAILTRAP_API_TOKEN") || "";
 const MAILTRAP_INBOX_ID = Deno.env.get("MAILTRAP_INBOX_ID") || "";
-
 // CORS headers
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,24 +14,16 @@ const corsHeaders = {
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
-
-const logDebug = (...args: unknown[]) => {
+const logDebug = (...args) => {
   if (NODE_ENV === "development") {
     console.log(...args);
   }
 };
-
-async function sendWithMailtrap(
-  to: string,
-  subject: string,
-  html: string,
-  text: string
-) {
+async function sendWithMailtrap(to, subject, html, text) {
   if (!MAILTRAP_API_TOKEN || !MAILTRAP_INBOX_ID) {
     console.error("Mailtrap configuration missing");
     throw new Error("Mailtrap API token or inbox ID is not configured");
   }
-
   const message = {
     from: {
       email: FROM_EMAIL,
@@ -50,7 +39,6 @@ async function sendWithMailtrap(
     text: text,
     category: "Welcome Email",
   };
-
   const response = await fetch(
     `https://sandbox.api.mailtrap.io/api/send/${MAILTRAP_INBOX_ID}`,
     {
@@ -62,26 +50,17 @@ async function sendWithMailtrap(
       body: JSON.stringify(message),
     }
   );
-
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(`Mailtrap API error: ${errorText}`);
   }
-
   return response;
 }
-
-async function sendWithSendGrid(
-  to: string,
-  subject: string,
-  html: string,
-  text: string
-) {
+async function sendWithSendGrid(to, subject, html, text) {
   if (!SENDGRID_API_KEY) {
     console.error("SendGrid API key is missing");
     throw new Error("SendGrid API key is not configured");
   }
-
   if (!FROM_EMAIL || !FROM_NAME) {
     console.error("SendGrid sender details missing:", {
       FROM_EMAIL,
@@ -89,11 +68,14 @@ async function sendWithSendGrid(
     });
     throw new Error("SendGrid sender details are not configured");
   }
-
   const data = {
     personalizations: [
       {
-        to: [{ email: to }],
+        to: [
+          {
+            email: to,
+          },
+        ],
       },
     ],
     from: {
@@ -112,7 +94,6 @@ async function sendWithSendGrid(
       },
     ],
   };
-
   logDebug("Sending with SendGrid:", {
     to,
     from: FROM_EMAIL,
@@ -120,7 +101,6 @@ async function sendWithSendGrid(
     subject,
     apiKeyLength: SENDGRID_API_KEY.length,
   });
-
   try {
     const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
       method: "POST",
@@ -130,9 +110,7 @@ async function sendWithSendGrid(
       },
       body: JSON.stringify(data),
     });
-
     logDebug("SendGrid API response status:", response.status);
-
     if (!response.ok) {
       const errorText = await response.text();
       console.error("SendGrid API error response:", {
@@ -143,14 +121,12 @@ async function sendWithSendGrid(
       });
       throw new Error(`SendGrid API error: ${errorText}`);
     }
-
     return response;
   } catch (error) {
     console.error("SendGrid request failed:", error);
     throw error;
   }
 }
-
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -162,13 +138,11 @@ serve(async (req) => {
       },
     });
   }
-
   try {
     // Verify request method
     if (req.method !== "POST") {
       throw new Error("Method not allowed");
     }
-
     // Get and validate request body
     let body;
     try {
@@ -178,15 +152,12 @@ serve(async (req) => {
       console.error("Failed to parse request body:", e);
       throw new Error("Invalid request body");
     }
-
     const { to, subject, html, text } = body;
-
     // Validate required fields
     if (!to) throw new Error("Recipient email is required");
     if (!subject) throw new Error("Email subject is required");
     if (!html && !text)
       throw new Error("Email content (html or text) is required");
-
     logDebug("Sending email with data:", {
       to,
       from: FROM_EMAIL,
@@ -197,7 +168,6 @@ serve(async (req) => {
       },
       environment: NODE_ENV,
     });
-
     // Send email based on environment
     let response;
     if (NODE_ENV === "development") {
@@ -215,7 +185,6 @@ serve(async (req) => {
       }
       response = await sendWithSendGrid(to, subject, html, text);
     }
-
     return new Response(
       JSON.stringify({
         success: true,

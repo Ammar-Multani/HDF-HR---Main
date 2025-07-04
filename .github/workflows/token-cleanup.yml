@@ -1,0 +1,32 @@
+name: HDFHR Token Cleanup
+
+# This workflow maintains database security by:
+# 1. Removing expired password reset tokens
+# 2. Removing used tokens that are older than 7 days
+# 3. Ensuring no sensitive data is kept longer than necessary
+
+on:
+  schedule:
+    - cron: "0 1 * * *" # Run daily at 1:00 AM UTC (to avoid conflict with log maintenance)
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  cleanup-tokens:
+    runs-on: ubuntu-latest
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Execute token cleanup SQL
+        run: |
+          curl -X POST "${{ secrets.SUPABASE_URL }}/rest/v1/rpc/cleanup_expired_reset_tokens" \
+          -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+          -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+          -H "Content-Type: application/json"
+
+      - name: Report cleanup status
+        run: |
+          echo "Token cleanup completed at $(date)"
+          echo "Next scheduled run will be in 24 hours"

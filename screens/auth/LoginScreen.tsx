@@ -42,6 +42,7 @@ import CustomLanguageSelector from "../../components/CustomLanguageSelector";
 import { globalStyles, createTextStyle } from "../../utils/globalStyles";
 import { UserStatus } from "../../utils/auth";
 import CustomSnackbar from "../../components/CustomSnackbar";
+import { supabase } from "../../lib/supabase-client";
 
 // Key to prevent showing loading screen right after login
 const SKIP_LOADING_KEY = "skip_loading_after_login";
@@ -68,6 +69,120 @@ const LoginScreen = () => {
   // Animation values
   const fadeAnim = useState(new Animated.Value(0))[0];
   const slideAnim = useState(new Animated.Value(30))[0];
+
+  // Clear any stale auth tokens when the login screen is mounted
+  useEffect(() => {
+    const cleanupAuthState = async () => {
+      try {
+        // Check if we need to force reload after sign-out
+        const forceReload = await AsyncStorage.getItem(
+          "FORCE_RELOAD_AFTER_SIGNOUT"
+        );
+
+        if (forceReload === "true") {
+          console.log("Detected sign-out, cleaning up auth state");
+
+          // Clear the flag
+          await AsyncStorage.removeItem("FORCE_RELOAD_AFTER_SIGNOUT");
+
+          // For web, force a page reload if we haven't already
+          if (Platform.OS === "web") {
+            const hasReloaded = sessionStorage.getItem(
+              "has_reloaded_after_signout"
+            );
+            if (!hasReloaded) {
+              sessionStorage.setItem("has_reloaded_after_signout", "true");
+              window.location.reload();
+              return;
+            }
+            // Clear the reload flag after we've used it
+            sessionStorage.removeItem("has_reloaded_after_signout");
+          }
+
+          // Clean up all auth-related tokens
+          const keys = await AsyncStorage.getAllKeys();
+          const authKeys = keys.filter(
+            (key) =>
+              key.startsWith("supabase.auth.") ||
+              key === "auth_token" ||
+              key === "auth_check" ||
+              key === "auth_token_v2" ||
+              key === "user_data_v2" ||
+              key === "user_role_v2" ||
+              key === "session_v2" ||
+              key === "last_active_v2" ||
+              key === "auth_state_v3" ||
+              key === "NAVIGATE_TO_DASHBOARD" ||
+              key === "last_cache_reset" ||
+              key === "SKIP_LOADING_KEY" ||
+              key === "initial_load_complete"
+          );
+
+          if (authKeys.length > 0) {
+            await AsyncStorage.multiRemove(authKeys);
+
+            // Re-initialize supabase auth
+            await supabase.auth.initialize();
+          }
+
+          // Reset form fields
+          setEmail("");
+          setPassword("");
+          setEmailError("");
+          setPasswordError("");
+          return;
+        }
+
+        // If not coming from sign-out, still check for stale session
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        // If no session but we have auth tokens, clean them up
+        if (!session) {
+          const keys = await AsyncStorage.getAllKeys();
+          const authKeys = keys.filter(
+            (key) =>
+              key.startsWith("supabase.auth.") ||
+              key === "auth_token" ||
+              key === "auth_check"
+          );
+
+          if (authKeys.length > 0) {
+            console.log("Cleaning up stale auth tokens");
+            await AsyncStorage.multiRemove(authKeys);
+
+            // Re-initialize supabase auth
+            await supabase.auth.initialize();
+          }
+        }
+
+        // Always reset form fields when mounting
+        setEmail("");
+        setPassword("");
+        setEmailError("");
+        setPasswordError("");
+      } catch (error) {
+        console.error("Error cleaning up auth state:", error);
+
+        // Even if there's an error, reset the fields
+        setEmail("");
+        setPassword("");
+        setEmailError("");
+        setPasswordError("");
+      }
+    };
+
+    cleanupAuthState();
+
+    // Reset fields when component is unmounted
+    return () => {
+      setEmail("");
+      setPassword("");
+      setEmailError("");
+      setPasswordError("");
+    };
+  }, []);
 
   useEffect(() => {
     Animated.parallel([
@@ -109,7 +224,7 @@ const LoginScreen = () => {
     return true;
   };
 
-  const showInactiveDialog = (status: UserStatus) => {
+  const showInactiveDialog = (status: { message: string }) => {
     setDialogTitle(t("login.accountInactiveTitle") || "Account Inactive");
     setDialogMessage(status.message);
     setDialogActionText(t("common.contactSupport") || "Contact Support");
@@ -138,12 +253,14 @@ const LoginScreen = () => {
       if (error) {
         if (status) {
           // Show inactive account dialog with specific message
-          showInactiveDialog(status);
+          showInactiveDialog({
+            message:
+              status === "inactive" ? error.message : "Account is not active",
+          });
         } else if (
-          error.code === "auth/invalid-password" ||
-          error.code === "auth/wrong-password" ||
+          error.message?.toLowerCase().includes("invalid") ||
           error.message?.toLowerCase().includes("password") ||
-          error.message?.toLowerCase().includes("invalid credentials")
+          error.message?.toLowerCase().includes("credentials")
         ) {
           setPasswordError(
             t("login.invalidPassword") || "Invalid password. Please try again."
@@ -154,9 +271,9 @@ const LoginScreen = () => {
           );
           setSnackbarVisible(true);
         } else if (
-          error.code === "auth/user-not-found" ||
           error.message?.toLowerCase().includes("user") ||
-          error.message?.toLowerCase().includes("email")
+          error.message?.toLowerCase().includes("email") ||
+          error.message?.toLowerCase().includes("not found")
         ) {
           setEmailError(
             t("login.userNotFound") ||
@@ -204,12 +321,12 @@ const LoginScreen = () => {
 
   return (
     <SafeAreaView
-      style={[
-        styles.container,
-        { backgroundColor: theme.colors.backgroundTertiary },
-      ]}
+      style={[styles.container, { backgroundColor: theme.colors.backgroundTertiary }]}
     >
-      <StatusBar barStyle={theme.dark ? "light-content" : "dark-content"} />
+      <StatusBar
+        barStyle={theme.dark ? "light-content" : "dark-content"}
+        backgroundColor={theme.colors.background}
+      />
 
       <AppHeader showBackButton={false} showHelpButton={true} absolute={true} />
 
@@ -402,7 +519,8 @@ const LoginScreen = () => {
 
             <View style={styles.contactContainer}>
               <TouchableOpacity
-                onPress={handleContactUs}
+                // onPress={handleContactUs}
+                onPress={() => navigation.navigate("Register" as never)}
                 disabled={isLoggingIn}
                 style={styles.contactButton}
               >

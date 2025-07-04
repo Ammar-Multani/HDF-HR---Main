@@ -34,19 +34,22 @@ import { createTextStyle } from "../../utils/globalStyles";
 import { useTranslation } from "react-i18next";
 import CustomLanguageSelector from "../../components/CustomLanguageSelector";
 import CustomSnackbar from "../../components/CustomSnackbar";
+import { supabase } from "../../lib/supabase";
+import { logDebug } from "../../utils/logger";
 
 const { width, height } = Dimensions.get("window");
 
 // Add type definition for route params
 type ResetPasswordParams = {
-  token: string;
+  token?: string;
+  email?: string;
 };
 
 const ResetPasswordScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
   const route =
-    useRoute<RouteProp<{ params: ResetPasswordParams }, "params">>();
+    useRoute<RouteProp<Record<string, ResetPasswordParams>, string>>();
   const { resetPassword, loading } = useAuth();
   const { t } = useTranslation();
   const [password, setPassword] = useState("");
@@ -58,6 +61,7 @@ const ResetPasswordScreen = () => {
   const [passwordError, setPasswordError] = useState("");
   const [confirmPasswordError, setConfirmPasswordError] = useState("");
   const [token, setToken] = useState("");
+  const [email, setEmail] = useState("");
   const [isResetting, setIsResetting] = useState(false);
 
   // Animation values
@@ -65,10 +69,76 @@ const ResetPasswordScreen = () => {
   const slideAnim = useState(new Animated.Value(30))[0];
 
   useEffect(() => {
-    // Extract token from route params if available
-    if (route.params && route.params.token) {
-      setToken(route.params.token);
-    }
+    // Get the reset token from the URL on web or route params on mobile
+    const getResetToken = async () => {
+      try {
+        let resetToken;
+        let resetType;
+
+        if (Platform.OS === "web") {
+          // On web, parse the URL properly
+          const url = window.location.href;
+          console.log("Reset password URL:", url);
+
+          // First try to get the token from the URL hash (Supabase's format)
+          const hashParams = new URLSearchParams(
+            window.location.hash.substring(1)
+          );
+          resetToken = hashParams.get("access_token");
+          resetType = hashParams.get("type");
+
+          // If not in hash, try query parameters
+          if (!resetToken) {
+            const queryParams = new URLSearchParams(window.location.search);
+            resetToken = queryParams.get("token");
+            resetType = queryParams.get("type");
+          }
+
+          if (!resetToken || resetType !== "recovery") {
+            throw new Error("Invalid or missing reset token");
+          }
+
+          // Get the email from our tokens table
+          const { data: tokenData, error: tokenError } = await supabase
+            .from("password_reset_tokens")
+            .select("email")
+            .eq("token", resetToken)
+            .single();
+
+          if (tokenError || !tokenData?.email) {
+            throw new Error("Invalid reset token");
+          }
+
+          setEmail(tokenData.email);
+          setToken(resetToken);
+
+          // Set up the hash for Supabase Auth
+          if (!window.location.hash.includes("access_token")) {
+            window.location.hash = `access_token=${resetToken}&type=recovery`;
+          }
+        } else {
+          // On mobile, get from route params
+          resetToken = route.params?.token;
+          const email = route.params?.email;
+
+          if (!resetToken || !email) {
+            throw new Error("Invalid reset parameters");
+          }
+
+          setEmail(email);
+          setToken(resetToken);
+        }
+      } catch (error) {
+        console.error("Error in getResetToken:", error);
+        setSnackbarMessage(t("resetPassword.invalidOrExpiredLink"));
+        setSnackbarVisible(true);
+        setTimeout(() => {
+          navigation.navigate("Login" as never);
+        }, 3000);
+      }
+    };
+
+    getResetToken();
 
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -82,14 +152,26 @@ const ResetPasswordScreen = () => {
         useNativeDriver: true,
       }),
     ]).start();
-  }, [route.params]);
+  }, []);
 
   const validatePassword = (password: string) => {
     if (!password) {
       setPasswordError(t("resetPassword.passwordRequired"));
       return false;
-    } else if (password.length < 6) {
+    } else if (password.length < 8) {
       setPasswordError(t("resetPassword.passwordLength"));
+      return false;
+    } else if (!/(?=.*[a-z])/.test(password)) {
+      setPasswordError(t("resetPassword.passwordLowercase"));
+      return false;
+    } else if (!/(?=.*[A-Z])/.test(password)) {
+      setPasswordError(t("resetPassword.passwordUppercase"));
+      return false;
+    } else if (!/(?=.*\d)/.test(password)) {
+      setPasswordError(t("resetPassword.passwordNumber"));
+      return false;
+    } else if (!/(?=.*[@$!%*?&#])/.test(password)) {
+      setPasswordError(t("resetPassword.passwordSpecial"));
       return false;
     }
     setPasswordError("");
@@ -109,7 +191,9 @@ const ResetPasswordScreen = () => {
   };
 
   const handleContactUs = () => {
-    Linking.openURL("mailto:support@yourdomain.com?subject=Support%20Request");
+    Linking.openURL(
+      "mailto:support@hdf-hr.com?subject=Password%20Reset%20Support"
+    );
   };
 
   const handleResetPassword = async () => {
@@ -120,31 +204,108 @@ const ResetPasswordScreen = () => {
       return;
     }
 
-    if (!token) {
-      setSnackbarMessage(t("resetPassword.invalidToken"));
-      setSnackbarVisible(true);
-      return;
-    }
-
     try {
       setIsResetting(true);
-      const { error } = await resetPassword(password, token);
+      logDebug("Attempting to update password");
 
-      if (error) {
-        setSnackbarMessage(error.message || t("resetPassword.failedReset"));
-        setSnackbarVisible(true);
+      if (Platform.OS === "web") {
+        // Get token from URL query parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get("token");
+        const type = urlParams.get("type");
+
+        if (!token || type !== "recovery") {
+          throw new Error("Invalid or missing reset token");
+        }
+
+        // Call our edge function to handle the password reset
+        const response = await fetch(
+          `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/password-reset`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
+            },
+            body: JSON.stringify({
+              token,
+              password,
+            }),
+          }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          console.error("Edge function error:", data);
+          throw new Error(data.error || "Failed to reset password");
+        }
+
+        if (!data.success) {
+          throw new Error(data.error || "Failed to reset password");
+        }
       } else {
-        setSnackbarMessage(t("resetPassword.successMessage"));
-        setSnackbarVisible(true);
+        // Mobile implementation
+        const resetToken = route.params?.token;
+        const resetEmail = route.params?.email;
 
-        // Navigate to login after a delay
-        setTimeout(() => {
-          navigation.navigate("Login" as never);
-        }, 3000);
+        if (!resetToken || !resetEmail) {
+          throw new Error("Invalid reset parameters");
+        }
+
+        // Call our edge function to handle the password reset
+        const response = await fetch(
+          `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/password-reset`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
+            },
+            body: JSON.stringify({
+              token: resetToken,
+              password,
+            }),
+          }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          console.error("Edge function error:", data);
+          throw new Error(data.error || "Failed to reset password");
+        }
+
+        if (!data.success) {
+          throw new Error(data.error || "Failed to reset password");
+        }
       }
-    } catch (err) {
-      console.error("Reset password error:", err);
-      setSnackbarMessage(t("common.unexpectedError"));
+
+      setSnackbarMessage(t("resetPassword.successMessage"));
+      setSnackbarVisible(true);
+
+      // Navigate back to login after delay
+      setTimeout(() => {
+        navigation.navigate("Login" as never);
+      }, 3000);
+    } catch (error: any) {
+      console.error("Password reset error:", error);
+      let errorMessage = error.message;
+
+      // Handle specific error cases
+      if (error.message?.includes("Token has expired")) {
+        errorMessage = t("resetPassword.tokenExpired");
+      } else if (error.message?.includes("Invalid token")) {
+        errorMessage = t("resetPassword.invalidToken");
+      } else if (error.message?.includes("already been used")) {
+        errorMessage = t("resetPassword.tokenUsed");
+      } else if (error.message?.includes("Auth session missing")) {
+        errorMessage = t("resetPassword.sessionError");
+      } else if (error.message?.includes("User not found")) {
+        errorMessage = t("resetPassword.userNotFound");
+      }
+
+      setSnackbarMessage(errorMessage || t("resetPassword.resetError"));
       setSnackbarVisible(true);
     } finally {
       setIsResetting(false);
@@ -294,15 +455,15 @@ const ResetPasswordScreen = () => {
                   },
                 ]}
                 onPress={handleResetPassword}
-                disabled={isResetting || !token}
+                disabled={isResetting}
               >
                 <LinearGradient
                   colors={[
                     theme.colors.secondary,
                     theme.colors.tertiary,
-                    (theme.colors as any).quaternary,
-                    (theme.colors as any).quinary,
-                    (theme.colors as any).senary,
+                    (theme.colors as any).quaternary || theme.colors.tertiary,
+                    (theme.colors as any).quinary || theme.colors.tertiary,
+                    (theme.colors as any).senary || theme.colors.secondary,
                   ]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
@@ -317,12 +478,6 @@ const ResetPasswordScreen = () => {
                   )}
                 </LinearGradient>
               </TouchableOpacity>
-
-              {!token && (
-                <HelperText type="error" style={styles.tokenError}>
-                  {t("resetPassword.invalidLinkMessage")}
-                </HelperText>
-              )}
             </View>
           </Animated.View>
 
@@ -386,33 +541,36 @@ const ResetPasswordScreen = () => {
       </KeyboardAvoidingView>
 
       <CustomSnackbar
-          visible={snackbarVisible}
-          message={snackbarMessage}
-          onDismiss={() => setSnackbarVisible(false)}
-          type={
-            snackbarMessage?.includes("successful") ||
-            snackbarMessage?.includes("instructions will be sent")
-              ? "success"
-              : snackbarMessage?.includes("rate limit") ||
-                  snackbarMessage?.includes("network")
-                ? "warning"
-                : "error"
-          }
-          duration={20000}
-          action={{
-            label: t("common.ok"),
-            onPress: () => setSnackbarVisible(false),
-          }}
-          style={[
-            styles.snackbar,
-            {
-              width: Platform.OS === "web" ? 700 : undefined,
-              alignSelf: "center",
-              position: Platform.OS === "web" ? "absolute" : undefined,
-              bottom: Platform.OS === "web" ? 24 : undefined,
-            },
-          ]}
-        />
+        visible={snackbarVisible}
+        message={snackbarMessage}
+        onDismiss={() => setSnackbarVisible(false)}
+        type={
+          snackbarMessage?.includes("successful") ||
+          snackbarMessage?.includes("instructions will be sent") ||
+          snackbarMessage?.includes("Passwort erfolgreich zurückgesetzt!") ||
+          snackbarMessage?.includes("Passwort erfolgreich zurückgesetzt! Sie können sich jetzt mit Ihrem neuen Passwort anmelden.") ||
+          snackbarMessage?.includes("Passwort erfolgreich zurückgesetzt! Sie können sich jetzt mit Ihrem neuen Passwort anmelden.") 
+            ? "success"
+            : snackbarMessage?.includes("rate limit") ||
+                snackbarMessage?.includes("network")
+              ? "warning"
+              : "error"
+        }
+        duration={20000}
+        action={{
+          label: t("common.ok"),
+          onPress: () => setSnackbarVisible(false),
+        }}
+        style={[
+          styles.snackbar,
+          {
+            width: Platform.OS === "web" ? 700 : undefined,
+            alignSelf: "center",
+            position: Platform.OS === "web" ? "absolute" : undefined,
+            bottom: Platform.OS === "web" ? 24 : undefined,
+          },
+        ]}
+      />
     </SafeAreaView>
   );
 };
@@ -494,12 +652,6 @@ const styles = StyleSheet.create({
       letterSpacing: 1,
       color: "#ffffff",
     }),
-  },
-  tokenError: {
-    textAlign: "center",
-    marginTop: 16,
-    fontSize: 14,
-    letterSpacing: 0.25,
   },
   dividerContainer: {
     flexDirection: "row",

@@ -32,21 +32,28 @@ import { BlurView } from "expo-blur";
 import AppHeader from "../../components/AppHeader";
 import CustomLanguageSelector from "../../components/CustomLanguageSelector";
 import { globalStyles, createTextStyle } from "../../utils/globalStyles";
-import { initEmailService } from "../../utils/emailService";
+import {
+  initEmailService,
+  sendPasswordResetEmail,
+} from "../../utils/emailService";
 import CustomSnackbar from "../../components/CustomSnackbar";
 import { t } from "i18next";
 import { useTranslation } from "react-i18next";
+import { supabase } from "../../lib/supabase";
+import * as Linking from "expo-linking";
+import { generateSecureToken, APP_URL } from "../../utils/auth";
 
 const { width, height } = Dimensions.get("window");
 
 const ForgotPasswordScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
-  const { forgotPassword, loading } = useAuth();
+  const { loading } = useAuth();
   const [email, setEmail] = useState("");
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [emailError, setEmailError] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
   const { i18n } = useTranslation();
 
   // Initialize email service
@@ -101,48 +108,77 @@ const ForgotPasswordScreen = () => {
   };
 
   const handleResetPassword = async () => {
-    const isEmailValid = validateEmail(email);
-
-    if (!isEmailValid) {
+    if (!validateEmail(email)) {
       return;
     }
 
     try {
-      logDebug("Initiating password reset for email:", email);
-      const { error } = await forgotPassword(email);
+      setIsProcessing(true);
 
-      if (error) {
-        let errorMessage = error.message || t("forgotPassword.failedReset");
-        let messageType = "error";
+      // First, initiate the password reset through Supabase Auth
+      const { data: resetData, error: resetError } =
+        await supabase.auth.resetPasswordForEmail(email.toLowerCase().trim(), {
+          redirectTo: `${APP_URL}/auth/reset-password`,
+        });
 
-        // Handle specific error cases
-        if (error.message?.includes("sender identity")) {
-          errorMessage = t("forgotPassword.emailServiceError");
-        } else if (error.message?.includes("rate limit")) {
-          errorMessage = t("forgotPassword.tooManyAttempts");
-          messageType = "warning";
-        } else if (error.message?.includes("network")) {
-          errorMessage = t("forgotPassword.networkError");
-          messageType = "warning";
-        }
-
-        console.error("Password reset error:", error);
-        setSnackbarMessage(errorMessage);
-        setSnackbarVisible(true);
-      } else {
-        logDebug("Password reset request successful");
-        setSnackbarMessage(t("forgotPassword.resetInstructions"));
-        setSnackbarVisible(true);
-
-        // Navigate back to login after a delay
-        setTimeout(() => {
-          navigation.navigate("Login" as never);
-        }, 3000);
+      if (resetError) {
+        throw resetError;
       }
-    } catch (err) {
-      console.error("Unexpected error during password reset:", err);
-      setSnackbarMessage(t("common.unexpectedError"));
+
+      // Generate a secure token with 60 minute expiration
+      const { token, expiresAt } = await generateSecureToken(60);
+
+      // Store the reset token in a secure table
+      const { error: storeError } = await supabase
+        .from("password_reset_tokens")
+        .insert({
+          email: email.toLowerCase().trim(),
+          token: token,
+          expires_at: expiresAt,
+          used: false,
+        })
+        .select();
+
+      if (storeError) {
+        console.error("Error storing reset token:", storeError);
+        throw new Error("Failed to initiate password reset");
+      }
+
+      // Determine the base URL for the reset link
+      let baseUrl = "https://hdf-hr.vercel.app";
+      if (process.env.NODE_ENV === "development") {
+        baseUrl = "http://localhost:8081";
+      }
+
+      // Create the reset link in the format expected by Supabase Auth
+      const resetUrl = `${baseUrl}/auth/reset-password?token=${token}&type=recovery`;
+
+      console.log("Generated reset URL:", resetUrl);
+
+      // Send the password reset email using our custom email service
+      const { success, error } = await sendPasswordResetEmail(
+        email.toLowerCase().trim(),
+        token,
+        resetUrl
+      );
+
+      if (!success) {
+        throw error || new Error("Failed to send password reset email");
+      }
+
+      setSnackbarMessage(t("forgotPassword.resetLinkSent"));
       setSnackbarVisible(true);
+
+      // Navigate back to login after delay
+      setTimeout(() => {
+        navigation.navigate("Login" as never);
+      }, 3000);
+    } catch (error: any) {
+      console.error("Reset password error:", error);
+      setSnackbarMessage(error.message || t("forgotPassword.resetError"));
+      setSnackbarVisible(true);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -270,9 +306,9 @@ const ForgotPasswordScreen = () => {
                     colors={[
                       theme.colors.secondary,
                       theme.colors.tertiary,
-                      theme.colors.quaternary,
-                      theme.colors.quinary,
-                      theme.colors.senary,
+                      (theme.colors as any).quaternary || theme.colors.tertiary,
+                      (theme.colors as any).quinary || theme.colors.tertiary,
+                      (theme.colors as any).senary || theme.colors.secondary,
                     ]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}

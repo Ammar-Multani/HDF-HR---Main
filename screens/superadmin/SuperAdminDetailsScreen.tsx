@@ -10,6 +10,8 @@ import {
   Platform,
   AppState,
   AppStateStatus,
+  Dimensions,
+  TouchableOpacity,
 } from "react-native";
 import {
   Text,
@@ -19,6 +21,8 @@ import {
   useTheme,
   Chip,
   Avatar,
+  Surface,
+  IconButton,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -40,6 +44,32 @@ import LoadingIndicator from "../../components/LoadingIndicator";
 import StatusBadge from "../../components/StatusBadge";
 import { UserStatus } from "../../types";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import Animated, { FadeIn } from "react-native-reanimated";
+import { useAuth } from "../../contexts/AuthContext";
+
+// Add window dimensions hook
+const useWindowDimensions = () => {
+  const [dimensions, setDimensions] = useState({
+    width: Dimensions.get("window").width,
+    height: Dimensions.get("window").height,
+  });
+
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      const handleResize = () => {
+        setDimensions({
+          width: Dimensions.get("window").width,
+          height: Dimensions.get("window").height,
+        });
+      };
+
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }
+  }, []);
+
+  return dimensions;
+};
 
 type SuperAdminDetailsRouteParams = {
   adminId: string;
@@ -89,7 +119,7 @@ const SuperAdminDetailsSkeleton = () => {
   );
 
   return (
-    <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+    <Card style={[{ backgroundColor: theme.colors.surface }]}>
       <Card.Content>
         <View style={styles.profileHeader}>
           <SkeletonBlock
@@ -116,7 +146,7 @@ const SuperAdminDetailsSkeleton = () => {
           <SkeletonBlock width={100} height={36} style={{ borderRadius: 8 }} />
         </View>
 
-        <Divider style={styles.divider} />
+        <Divider style={{ marginVertical: 16 }} />
 
         <SkeletonBlock width="40%" height={20} style={{ marginBottom: 16 }} />
 
@@ -127,7 +157,7 @@ const SuperAdminDetailsSkeleton = () => {
           </View>
         ))}
 
-        <Divider style={styles.divider} />
+        <Divider style={{ marginVertical: 16 }} />
 
         <SkeletonBlock width="40%" height={20} style={{ marginBottom: 16 }} />
 
@@ -142,12 +172,90 @@ const SuperAdminDetailsSkeleton = () => {
   );
 };
 
+// Add interface for CustomAlert props
+interface CustomAlertProps {
+  visible: boolean;
+  title: string;
+  message: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  confirmText?: string;
+  cancelText?: string;
+  isDestructive?: boolean;
+}
+
+// Add CustomAlert component
+const CustomAlert: React.FC<CustomAlertProps> = ({
+  visible,
+  title,
+  message,
+  onConfirm,
+  onCancel,
+  confirmText = "Confirm",
+  cancelText = "Cancel",
+  isDestructive = false,
+}) => {
+  if (!visible) return null;
+
+  return (
+    <View style={styles.modalOverlay}>
+      <View style={styles.modalContent}>
+        <Text style={styles.modalTitle}>{title}</Text>
+        <Text style={styles.modalMessage}>{message}</Text>
+        <View style={styles.modalButtons}>
+          <TouchableOpacity
+            style={[styles.modalButton, styles.modalCancelButton]}
+            onPress={onCancel}
+          >
+            <Text style={styles.modalButtonText}>{cancelText}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.modalButton,
+              styles.modalConfirmButton,
+              isDestructive && styles.modalDestructiveButton,
+            ]}
+            onPress={onConfirm}
+          >
+            <Text
+              style={[
+                styles.modalButtonText,
+                styles.modalConfirmText,
+                isDestructive && styles.modalDestructiveText,
+              ]}
+            >
+              {confirmText}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
+};
+
+// Add interface for alert config
+interface AlertConfig {
+  title: string;
+  message: string;
+  confirmText: string;
+  cancelText: string;
+  isDestructive: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
 const SuperAdminDetailsScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation<AdminNavigationProp>();
   const route =
     useRoute<RouteProp<Record<string, SuperAdminDetailsRouteParams>, string>>();
   const { adminId, adminType } = route.params;
+  const dimensions = useWindowDimensions();
+  const { user, signOut } = useAuth();
+
+  // Calculate responsive breakpoints
+  const isLargeScreen = dimensions.width >= 1440;
+  const isMediumScreen = dimensions.width >= 768 && dimensions.width < 1440;
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -155,6 +263,16 @@ const SuperAdminDetailsScreen = () => {
   const [error, setError] = useState<string | null>(null);
   const [admin, setAdmin] = useState<Admin | null>(null);
   const [networkStatus, setNetworkStatus] = useState<boolean | null>(null);
+  const [showAlert, setShowAlert] = useState<boolean>(false);
+  const [alertConfig, setAlertConfig] = useState<AlertConfig>({
+    title: "",
+    message: "",
+    confirmText: "Confirm",
+    cancelText: "Cancel",
+    isDestructive: false,
+    onConfirm: () => {},
+    onCancel: () => {},
+  });
 
   // Check network status when screen focuses
   useFocusEffect(
@@ -263,47 +381,66 @@ const SuperAdminDetailsScreen = () => {
     fetchAdminDetails(true);
   };
 
-  const handleToggleStatus = async () => {
-    if (!admin) {
-      console.error("Cannot toggle status - admin object is null");
-      return;
-    }
+  const performToggleStatus = async () => {
+    if (!admin) return;
 
-    logDebug(
-      "Toggle status requested for admin:",
-      admin.id,
-      "Current status:",
-      admin.status
-    );
-
-    // First check network availability
     try {
-      const isAvailable = await isNetworkAvailable();
-      if (!isAvailable) {
-        Alert.alert(
-          "Network Check",
-          "Your network connection might be limited. Do you want to try anyway?",
-          [
-            { text: "Cancel", style: "cancel" },
-            {
-              text: "Try Anyway",
-              onPress: () => performToggleStatus(admin),
-            },
-          ]
-        );
-        return;
-      }
-    } catch (e) {
-      console.warn("Error checking network status:", e);
-      // Continue even if network check fails
-    }
+      setLoadingAction(true);
 
-    // If network seems available, proceed normally
-    performToggleStatus(admin);
+      // Determine if admin is currently active
+      const isCurrentlyActive =
+        typeof admin.status === "boolean"
+          ? admin.status
+          : admin.status === "active";
+
+      // Prepare the new status (opposite of current)
+      const newStatus = !isCurrentlyActive;
+
+      logDebug(
+        `Current status: ${admin.status} (${typeof admin.status}), Interpreted as: ${isCurrentlyActive}, New status: ${newStatus}`
+      );
+
+      const { error } = await supabase
+        .from("admin")
+        .update({ status: newStatus })
+        .eq("id", admin.id);
+
+      if (error) {
+        throw error;
+      }
+
+      // Update local state
+      setAdmin({
+        ...admin,
+        status: newStatus,
+      });
+
+      // Clear the cache for this admin after update
+      await clearCache(`admin_details_${adminId}`);
+
+      // Also clear any admin list caches - using wildcard pattern
+      await clearCache(`admins_*`);
+
+      // Close the alert modal after successful update
+      setShowAlert(false);
+
+      // If the user deactivated themselves, sign them out
+      if (user?.id === admin.id && !newStatus) {
+        await signOut();
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "Login" }],
+        });
+      }
+    } catch (error: any) {
+      console.error("Error toggling admin status:", error);
+      handleError(error);
+    } finally {
+      setLoadingAction(false);
+    }
   };
 
-  // Rewritten performToggleStatus function
-  const performToggleStatus = (admin: Admin) => {
+  const handleToggleStatus = async () => {
     if (!admin) return;
 
     // Determine if admin is currently active
@@ -312,67 +449,61 @@ const SuperAdminDetailsScreen = () => {
         ? admin.status
         : admin.status === "active";
 
-    // Prepare the new status (opposite of current)
-    const newStatus = !isCurrentlyActive;
+    // Check if user is trying to deactivate themselves
+    const isSelfDeactivation = user?.id === admin.id && isCurrentlyActive;
 
-    logDebug(
-      `Current status: ${admin.status} (${typeof admin.status}), Interpreted as: ${isCurrentlyActive}, New status: ${newStatus}`
-    );
-
-    Alert.alert(
-      isCurrentlyActive ? "Deactivate Admin" : "Activate Admin",
-      `Are you sure you want to ${isCurrentlyActive ? "deactivate" : "activate"} ${admin.name || admin.email}?`,
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
+    if (Platform.OS === "web") {
+      setAlertConfig({
+        title: isCurrentlyActive ? "Deactivate Admin" : "Activate Admin",
+        message: isSelfDeactivation
+          ? "Warning: You are about to deactivate your own account. This will log you out immediately. Are you sure you want to continue?"
+          : `Are you sure you want to ${isCurrentlyActive ? "deactivate" : "activate"} ${admin.name || admin.email}?`,
+        onConfirm: async () => {
+          await performToggleStatus();
         },
-        {
-          text: "Confirm",
-          onPress: async () => {
-            try {
-              setLoadingAction(true);
-
-              logDebug("Updating admin status to:", newStatus);
-
-              const { error } = await supabase
-                .from("admin")
-                .update({ status: newStatus })
-                .eq("id", admin.id);
-
-              if (error) {
-                throw error;
-              }
-
-              // Update local state
-              setAdmin({
-                ...admin,
-                status: newStatus,
-              });
-
-              // Clear the cache for this admin after update
-              await clearCache(`admin_details_${adminId}`);
-
-              // Also clear any admin list caches - using wildcard pattern
-              await clearCache(`admins_*`);
-
-              Alert.alert(
-                "Success",
-                `Admin ${newStatus ? "activated" : "deactivated"} successfully.`
-              );
-            } catch (error: any) {
-              console.error("Error toggling admin status:", error);
-              Alert.alert(
-                "Error",
-                error.message || "Failed to update admin status"
-              );
-            } finally {
-              setLoadingAction(false);
-            }
+        onCancel: () => setShowAlert(false),
+        confirmText: isCurrentlyActive ? "Deactivate" : "Activate",
+        cancelText: "Cancel",
+        isDestructive: isCurrentlyActive,
+      });
+      setShowAlert(true);
+    } else {
+      Alert.alert(
+        isCurrentlyActive ? "Deactivate Admin" : "Activate Admin",
+        isSelfDeactivation
+          ? "Warning: You are about to deactivate your own account. This will log you out immediately. Are you sure you want to continue?"
+          : `Are you sure you want to ${isCurrentlyActive ? "deactivate" : "activate"} ${admin.name || admin.email}?`,
+        [
+          {
+            text: "Cancel",
+            style: "cancel",
           },
-        },
-      ]
-    );
+          {
+            text: isCurrentlyActive ? "Deactivate" : "Activate",
+            style: isCurrentlyActive ? "destructive" : "default",
+            onPress: performToggleStatus,
+          },
+        ]
+      );
+    }
+  };
+
+  // Add handleError function
+  const handleError = (error: any) => {
+    if (Platform.OS === "web") {
+      setAlertConfig({
+        title: "Error",
+        message: error?.message || "An error occurred",
+        onConfirm: () => setShowAlert(false),
+        onCancel: () => setShowAlert(false),
+        confirmText: "OK",
+        cancelText: "Cancel",
+        isDestructive: false,
+      });
+      setShowAlert(true);
+    } else {
+      Alert.alert("Error", error?.message || "An error occurred");
+    }
   };
 
   const formatDate = (dateString: string | undefined) => {
@@ -401,6 +532,14 @@ const SuperAdminDetailsScreen = () => {
       nameParts[0].charAt(0).toUpperCase() +
       nameParts[nameParts.length - 1].charAt(0).toUpperCase()
     );
+  };
+
+  // Move avatar style here
+  const dynamicStyles = {
+    avatar: {
+      marginRight: 24,
+      backgroundColor: theme.colors.primary,
+    },
   };
 
   // Render content based on the current state
@@ -469,34 +608,15 @@ const SuperAdminDetailsScreen = () => {
       return (
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              maxWidth: isLargeScreen ? 1400 : isMediumScreen ? 1100 : "100%",
+              paddingHorizontal: isLargeScreen ? 48 : isMediumScreen ? 32 : 13,
+            },
+          ]}
         >
           <SuperAdminDetailsSkeleton />
-          <View style={styles.buttonContainer}>
-            <View
-              style={[
-                styles.button,
-                {
-                  height: 40,
-                  backgroundColor: theme.colors.surfaceVariant,
-                  opacity: 0.3,
-                  borderRadius: 4,
-                },
-              ]}
-            />
-            <View
-              style={[
-                styles.button,
-                {
-                  height: 40,
-                  backgroundColor: theme.colors.surfaceVariant,
-                  opacity: 0.3,
-                  borderRadius: 4,
-                  marginTop: 12,
-                },
-              ]}
-            />
-          </View>
         </ScrollView>
       );
     }
@@ -521,7 +641,13 @@ const SuperAdminDetailsScreen = () => {
     return (
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            maxWidth: isLargeScreen ? 1400 : isMediumScreen ? 1100 : "100%",
+            paddingHorizontal: isLargeScreen ? 48 : isMediumScreen ? 32 : 16,
+          },
+        ]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
@@ -534,209 +660,249 @@ const SuperAdminDetailsScreen = () => {
           </Card>
         )}
 
-        <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-          <Card.Content>
-            <View style={styles.profileHeader}>
-              {admin?.profile_picture ? (
-                <Avatar.Image
-                  size={80}
-                  source={{ uri: admin.profile_picture }}
-                  style={styles.avatar}
-                />
-              ) : (
-                <Avatar.Text
-                  size={80}
-                  label={getInitials(admin?.name || "", admin?.email || "")}
-                  style={styles.avatar}
-                />
-              )}
-              <View>
-                <Text style={styles.adminName}>
-                  {admin?.name || "Unnamed Admin"}
-                </Text>
-                <Text style={styles.adminRole}>Super Admin</Text>
-                {admin ? (
-                  <StatusBadge
-                    status={
-                      typeof admin.status === "boolean"
-                        ? admin.status
-                          ? UserStatus.ACTIVE
-                          : UserStatus.INACTIVE
-                        : admin.status === "active"
-                          ? UserStatus.ACTIVE
-                          : UserStatus.INACTIVE
+        <View style={styles.gridContainer}>
+          <View style={styles.gridColumn}>
+            <Animated.View entering={FadeIn.delay(100)}>
+              <Surface style={styles.detailsCard}>
+
+                <View style={styles.cardContent}>
+                  <View style={styles.profileHeader}>
+                    {admin?.profile_picture ? (
+                      <Avatar.Image
+                        size={60}
+                        source={{ uri: admin.profile_picture }}
+                        style={dynamicStyles.avatar}
+                      />
+                    ) : (
+                      <Avatar.Text
+                        size={60}
+                        label={getInitials(
+                          admin?.name || "",
+                          admin?.email || ""
+                        )}
+                        style={dynamicStyles.avatar}
+                      />
+                    )}
+                    <View>
+                      <Text style={styles.adminName}>
+                        {admin?.name || "Unnamed Admin"}
+                      </Text>
+                      <Text style={styles.adminRole}>Super Admin</Text>
+                      {admin ? (
+                        <StatusBadge
+                          status={
+                            typeof admin.status === "boolean"
+                              ? admin.status
+                                ? UserStatus.ACTIVE
+                                : UserStatus.INACTIVE
+                              : admin.status === "active"
+                                ? UserStatus.ACTIVE
+                                : UserStatus.INACTIVE
+                          }
+                        />
+                      ) : (
+                        <StatusBadge status={UserStatus.ACTIVE} />
+                      )}
+                    </View>
+                  </View>
+
+                  {admin?.phone_number && (
+                    <View style={styles.contactButtons}>
+                      <Button
+                        mode="contained"
+                        icon="phone"
+                        onPress={() => handleCall(admin.phone_number || "")}
+                        style={styles.contactButton}
+                        buttonColor={theme.colors.primary}
+                      >
+                        Call
+                      </Button>
+
+                      <Button
+                        mode="contained"
+                        icon="email"
+                        onPress={() => handleEmail(admin?.email || "")}
+                        style={styles.contactButton}
+                        buttonColor={theme.colors.primary}
+                      >
+                        Email
+                      </Button>
+                    </View>
+                  )}
+                </View>
+              </Surface>
+
+              <Surface style={[styles.detailsCard, { marginTop: 12 }]}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.headerLeft}>
+                    <View style={styles.iconContainer}>
+                      <IconButton
+                        icon="account-details"
+                        size={20}
+                        iconColor="#64748b"
+                        style={styles.headerIcon}
+                      />
+                    </View>
+                    <Text style={styles.cardTitle}>Admin Information</Text>
+                  </View>
+                </View>
+
+                <View style={styles.cardContent}>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Email:</Text>
+                    <Text style={styles.infoValue}>
+                      {admin?.email || "N/A"}
+                    </Text>
+                  </View>
+
+                  {admin?.phone_number && (
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Phone:</Text>
+                      <Text style={styles.infoValue}>{admin.phone_number}</Text>
+                    </View>
+                  )}
+
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Status:</Text>
+                    <Text style={styles.infoValue}>
+                      {admin
+                        ? typeof admin.status === "boolean"
+                          ? admin.status
+                            ? "Active"
+                            : "Inactive"
+                          : admin.status === "active"
+                            ? "Active"
+                            : "Inactive"
+                        : "Active"}
+                    </Text>
+                  </View>
+
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Role:</Text>
+                    <Text style={styles.infoValue}>
+                      {admin?.role && typeof admin.role === "string"
+                        ? admin.role.charAt(0).toUpperCase() +
+                          admin.role.slice(1)
+                        : "Super Admin"}
+                    </Text>
+                  </View>
+                </View>
+              </Surface>
+            </Animated.View>
+          </View>
+
+          <View style={styles.gridColumn}>
+            <Animated.View entering={FadeIn.delay(200)}>
+              <Surface style={styles.detailsCard}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.headerLeft}>
+                    <View style={styles.iconContainer}>
+                      <IconButton
+                        icon="account-cog"
+                        size={20}
+                        iconColor="#64748b"
+                        style={styles.headerIcon}
+                      />
+                    </View>
+                    <Text style={styles.cardTitle}>Account Details</Text>
+                  </View>
+                </View>
+
+                <View style={styles.cardContent}>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Created On:</Text>
+                    <Text style={styles.infoValue}>
+                      {admin?.created_at ? formatDate(admin.created_at) : "N/A"}
+                    </Text>
+                  </View>
+
+                  {admin?.last_login && (
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Last Login:</Text>
+                      <Text style={styles.infoValue}>
+                        {formatDate(admin.last_login)}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </Surface>
+
+              <View style={styles.bottomBarContent}>
+                <View style={styles.actionButtons}>
+                  <Button
+                    mode="contained"
+                    onPress={() =>
+                      navigation.navigate("EditSuperAdmin", {
+                        adminId: admin?.id || "",
+                      })
                     }
-                  />
-                ) : (
-                  <StatusBadge status={UserStatus.ACTIVE} />
-                )}
+                    style={styles.button}
+                    disabled={
+                      loadingAction || networkStatus === false || !admin
+                    }
+                    buttonColor={theme.colors.primary}
+                  >
+                    Edit Admin
+                  </Button>
+
+                  <Button
+                    mode="outlined"
+                    onPress={handleToggleStatus}
+                    style={[
+                      styles.button,
+                      {
+                        borderColor: (
+                          typeof admin?.status === "boolean"
+                            ? admin?.status
+                            : admin?.status === "active"
+                        )
+                          ? theme.colors.error
+                          : theme.colors.primary,
+                      },
+                    ]}
+                    textColor={
+                      (
+                        typeof admin?.status === "boolean"
+                          ? admin?.status
+                          : admin?.status === "active"
+                      )
+                        ? theme.colors.error
+                        : theme.colors.primary
+                    }
+                    loading={loadingAction}
+                    disabled={
+                      loadingAction || networkStatus === false || !admin
+                    }
+                  >
+                    {(
+                      typeof admin?.status === "boolean"
+                        ? admin?.status
+                        : admin?.status === "active"
+                    )
+                      ? "Deactivate Admin"
+                      : "Activate Admin"}
+                  </Button>
+                </View>
               </View>
-            </View>
-
-            {admin?.phone_number && (
-              <View style={styles.contactButtons}>
-                <Button
-                  mode="contained-tonal"
-                  icon="phone"
-                  onPress={() => handleCall(admin.phone_number || "")}
-                  style={[
-                    styles.contactButton,
-                    { backgroundColor: theme.colors.primary, color: "white" },
-                  ]}
-                  labelStyle={{ color: "white" }}
-                >
-                  Call
-                </Button>
-
-                <Button
-                  mode="contained-tonal"
-                  icon="email"
-                  onPress={() => handleEmail(admin?.email || "")}
-                  style={[
-                    styles.contactButton,
-                    { backgroundColor: theme.colors.primary },
-                  ]}
-                  labelStyle={{ color: "white" }}
-                >
-                  Email
-                </Button>
-              </View>
-            )}
-
-            <Divider style={styles.divider} />
-
-            <View style={styles.sectionTitleContainer}>
-              <MaterialCommunityIcons
-                name="account-details"
-                size={24}
-                color="rgba(54,105,157,1)"
-              />
-              <Text style={styles.sectionTitle}>Admin Information</Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Email:</Text>
-              <Text style={styles.infoValue}>{admin?.email || "N/A"}</Text>
-            </View>
-
-            {admin?.phone_number && (
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Phone:</Text>
-                <Text style={styles.infoValue}>{admin.phone_number}</Text>
-              </View>
-            )}
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Status:</Text>
-              <Text style={styles.infoValue}>
-                {admin
-                  ? typeof admin.status === "boolean"
-                    ? admin.status
-                      ? "Active"
-                      : "Inactive"
-                    : admin.status === "active"
-                      ? "Active"
-                      : "Inactive"
-                  : "Active"}
-              </Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Role:</Text>
-              <Text style={styles.infoValue}>
-                {admin?.role && typeof admin.role === "string"
-                  ? admin.role.charAt(0).toUpperCase() + admin.role.slice(1)
-                  : "Super Admin"}
-              </Text>
-            </View>
-
-            <Divider style={styles.divider} />
-
-            <View style={styles.sectionTitleContainer}>
-              <MaterialCommunityIcons
-                name="account-cog"
-                size={24}
-                color="rgba(54,105,157,1)"
-              />
-              <Text style={styles.sectionTitle}>Account Details</Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Created On:</Text>
-              <Text style={styles.infoValue}>
-                {admin?.created_at ? formatDate(admin.created_at) : "N/A"}
-              </Text>
-            </View>
-
-            {admin?.last_login && (
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Last Login:</Text>
-                <Text style={styles.infoValue}>
-                  {formatDate(admin.last_login)}
-                </Text>
-              </View>
-            )}
-          </Card.Content>
-        </Card>
-
-        <View style={styles.buttonContainer}>
-          <Button
-            mode="contained"
-            onPress={() =>
-              navigation.navigate("EditSuperAdmin", {
-                adminId: admin?.id || "",
-              })
-            }
-            style={[styles.button, { backgroundColor: "rgba(54,105,157,1)" }]}
-            disabled={loadingAction || networkStatus === false || !admin}
-            labelStyle={{ fontFamily: "Poppins-Medium" }}
-          >
-            Edit Admin
-          </Button>
-
-          <Button
-            mode="outlined"
-            onPress={handleToggleStatus}
-            style={[
-              styles.button,
-              {
-                borderColor:
-                  admin &&
-                  (typeof admin.status === "boolean"
-                    ? admin.status
-                    : admin.status === "active")
-                    ? theme.colors.error
-                    : "rgba(54,105,157,1)",
-              },
-            ]}
-            textColor={
-              admin &&
-              (typeof admin.status === "boolean"
-                ? admin.status
-                : admin.status === "active")
-                ? theme.colors.error
-                : "rgba(54,105,157,1)"
-            }
-            loading={loadingAction}
-            disabled={loadingAction || networkStatus === false || !admin}
-            labelStyle={{ fontFamily: "Poppins-Medium" }}
-          >
-            {admin &&
-            (typeof admin.status === "boolean"
-              ? admin.status
-              : admin.status === "active")
-              ? "Deactivate Admin"
-              : "Activate Admin"}
-          </Button>
+            </Animated.View>
+          </View>
         </View>
       </ScrollView>
     );
   };
 
   return (
-    <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
+    <SafeAreaView style={[styles.container, { backgroundColor: "#F8F9FA" }]}>
+      <CustomAlert
+        visible={showAlert}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        onConfirm={alertConfig.onConfirm}
+        onCancel={() => setShowAlert(false)}
+        confirmText={alertConfig.confirmText}
+        cancelText={alertConfig.cancelText}
+        isDestructive={alertConfig.isDestructive}
+      />
       <AppHeader
         title="Admin Details"
         showBackButton={true}
@@ -745,6 +911,7 @@ const SuperAdminDetailsScreen = () => {
           navigation.navigate("Help" as never);
         }}
         showLogo={false}
+        absolute={false}
       />
       {networkStatus === false && (
         <View style={styles.offlineBanner}>
@@ -759,83 +926,136 @@ const SuperAdminDetailsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#F8F9FA",
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
+    paddingVertical: 32,
+    alignSelf: "center",
+    width: "100%",
   },
-  card: {
-    marginBottom: 16,
-    elevation: 0,
-    borderRadius: 12,
+  gridContainer: {
+    flexDirection: "row",
+    gap: 12,
+    flexWrap: "wrap",
+  },
+  gridColumn: {
+    flex: 1,
+    minWidth: 320,
+    gap: 12,
+  },
+  detailsCard: {
+    borderRadius: 16,
+    overflow: "hidden",
+    elevation: 1,
+    shadowColor: "rgba(0,0,0,0.1)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#f0f0f0",
+    borderColor: "#e2e8f0",
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  iconContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: "#f1f5f9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerIcon: {
+    margin: 0,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1e293b",
+    fontFamily: "Poppins-SemiBold",
+  },
+  cardContent: {
+    padding: 16,
   },
   profileHeader: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 16,
-  },
-  avatar: {
-    marginRight: 16,
-    backgroundColor: "rgba(54,105,157,0.9)",
   },
   adminName: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: "#333",
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#1e293b",
+    fontFamily: "Poppins-SemiBold",
   },
   adminRole: {
-    fontSize: 16,
-    opacity: 0.7,
-    marginVertical: 4,
-    color: "rgba(54,105,157,1)",
+    fontSize: 14,
+    color: "#64748b",
     fontFamily: "Poppins-Medium",
+    marginBottom: 8,
   },
   contactButtons: {
     flexDirection: "row",
-    marginTop: 8,
-    marginBottom: 16,
+    gap: 12,
+    marginTop: 24,
   },
   contactButton: {
-    marginRight: 12,
-  },
-  divider: {
-    marginVertical: 16,
-  },
-  sectionTitleContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 0,
-    marginLeft: 8,
-    color: "#333",
-    fontFamily: "Poppins-SemiBold",
+    flex: 1,
   },
   infoRow: {
     flexDirection: "row",
-    marginBottom: 8,
+    marginBottom: 16,
   },
   infoLabel: {
-    fontWeight: "500",
     width: 120,
-    opacity: 0.7,
+    fontSize: 14,
+    color: "#64748b",
+    fontFamily: "Poppins-Medium",
   },
   infoValue: {
     flex: 1,
+    fontSize: 14,
+    color: "#334155",
+    fontFamily: "Poppins-Regular",
   },
-  buttonContainer: {
-    marginTop: 8,
+  bottomBar: {
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+    padding: 16,
+    marginTop: 32,
+    borderRadius: 16,
+    shadowColor: "rgba(0,0,0,0.1)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+  bottomBarContent: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
+  },
+  actionButtons: {
+    paddingTop: 16,
+    flexDirection: "row",
+    gap: 12,
   },
   button: {
-    marginBottom: 12,
+    minWidth: 120,
   },
   errorContainer: {
     flex: 1,
@@ -844,13 +1064,13 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   offlineBanner: {
-    backgroundColor: "rgba(255, 59, 48, 0.8)",
+    backgroundColor: "rgba(239, 68, 68, 0.9)",
     padding: 8,
     alignItems: "center",
   },
   offlineText: {
     color: "white",
-    fontWeight: "bold",
+    fontFamily: "Poppins-Medium",
   },
   offlineContainer: {
     flex: 1,
@@ -861,6 +1081,74 @@ const styles = StyleSheet.create({
   warningCard: {
     borderLeftWidth: 4,
     borderLeftColor: "orange",
+    marginBottom: 24,
+  },
+  modalOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 1000,
+  },
+  modalContent: {
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    padding: 24,
+    width: "90%",
+    maxWidth: 400,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#1e293b",
+    marginBottom: 12,
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: "#64748b",
+    marginBottom: 24,
+    lineHeight: 24,
+  },
+  modalButtons: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 12,
+  },
+  modalButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    minWidth: 80,
+    alignItems: "center",
+  },
+  modalCancelButton: {
+    backgroundColor: "#f1f5f9",
+  },
+  modalConfirmButton: {
+    backgroundColor: "#3b82f6",
+  },
+  modalDestructiveButton: {
+    backgroundColor: "#ef4444",
+  },
+  modalButtonText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#64748b",
+  },
+  modalConfirmText: {
+    color: "#ffffff",
+  },
+  modalDestructiveText: {
+    color: "#ffffff",
   },
 });
 

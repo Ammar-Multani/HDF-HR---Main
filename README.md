@@ -5,21 +5,25 @@ A comprehensive HR and business management platform designed for organizations w
 ## Key Features
 
 ### Role-Based Access Control
+
 - **Super Admin**: Complete system oversight, company management, and user administration
 - **Company Admin**: Employee management, task assignment, and company-specific operations
 - **Employee**: Task management, form submissions, and profile maintenance
 
 ### Company Management
+
 - Create, edit, and manage company profiles
 - Track company performance metrics and growth
 - Manage company-specific settings and configurations
 
 ### Task Management
+
 - Create and assign tasks with priorities (Low, Medium, High)
 - Track task status (Open, In Progress, Awaiting Response, Completed, Overdue)
 - Receive notifications for task updates and deadlines
 
 ### Form Management
+
 - Submit and process various HR forms:
   - Accident reports
   - Illness reports
@@ -27,11 +31,13 @@ A comprehensive HR and business management platform designed for organizations w
 - Track form status and approvals
 
 ### User Management
+
 - Comprehensive profile management
 - Secure authentication with Supabase Auth
 - Password reset and account recovery options
 
 ### Additional Features
+
 - Multi-language support (German, English, French, Italian, Albanian)
 - Responsive design for web, iOS, and Android platforms
 - Activity logging for audit and compliance
@@ -49,23 +55,26 @@ A comprehensive HR and business management platform designed for organizations w
 ### Installation
 
 1. Clone the repository:
+
    ```bash
-   git clone <repository-url>
-   cd HDF-HR---Main
+   git clone https://github.com/HDF-enacton/hdf-hr.git
+   cd hdf-hr
    ```
 
 2. Install dependencies:
+
    ```bash
-   yarn 
+   yarn
    # or
    npm install
    ```
 
 3. Set up environment variables:
+
    ```bash
    # Copy the example env file
    cp .env.example .env
-   
+
    # Edit the .env file with your credentials
    ```
 
@@ -74,27 +83,8 @@ A comprehensive HR and business management platform designed for organizations w
    # Required Supabase configuration
    EXPO_PUBLIC_SUPABASE_URL=your_supabase_url
    EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-   
-   # Authentication
-   EXPO_PUBLIC_JWT_SECRET=your_jwt_secret
-   
-   # Optional integrations
-   EXPO_PUBLIC_KIKI_API_KEY=your_kiki_api_key
-   EXPO_PUBLIC_KIKI_BASE_URL=your_kiki_base_url
+   EXPO_PUBLIC_APP_URL=your_app_url
    ```
-
-### Database Setup
-
-The application requires a Supabase database with the proper schema. Run the following migrations to set up your database:
-
-```bash
-# Create necessary tables and functions
-yarn db:setup
-
-# Or run individual migration scripts
-yarn db:create-task-tables
-yarn db:create-storage
-```
 
 ### Development
 
@@ -119,32 +109,6 @@ yarn lint
 # Run TypeScript type checking
 yarn tsc
 ```
-
-## Building and Deployment
-
-### EAS Build System
-
-This project uses Expo Application Services (EAS) for building and deploying the application to various platforms.
-
-#### Setup EAS
-
-1. Install EAS CLI globally:
-
-   ```bash
-   npm install -g eas-cli
-   ```
-
-2. Login to your Expo account:
-
-   ```bash
-   eas login
-   ```
-
-3. Configure your project for EAS builds:
-
-   ```bash
-   eas build:configure
-   ```
 
 #### Build Options
 
@@ -206,18 +170,6 @@ yarn web
 ```
 
 ### Deployment
-
-#### App Stores
-
-After building with EAS, you can submit your app to the app stores:
-
-```bash
-# Submit to Google Play Store
-eas submit -p android
-
-# Submit to Apple App Store
-eas submit -p ios
-```
 
 #### Web Deployment
 
@@ -284,6 +236,7 @@ The application follows a layered architecture pattern:
 The application uses a hybrid state management approach:
 
 - **Global State**: React Context for auth, theme, and language settings
+
   - `AuthContext`: User authentication and role management
   - `ThemeContext`: Theme preferences and customization
   - `LanguageContext`: Language selection and translations
@@ -303,6 +256,7 @@ The application uses a hybrid state management approach:
 ### Navigation Architecture
 
 - **Role-Based Navigation**: Different navigation stacks based on user role
+
   - `AuthNavigator`: Login, registration, and password reset flows
   - `SuperAdminNavigator`: Super Admin specific screens
   - `CompanyAdminNavigator`: Company Admin specific screens

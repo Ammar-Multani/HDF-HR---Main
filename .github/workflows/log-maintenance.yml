@@ -1,4 +1,4 @@
-name: Log Maintenance
+name: HDFHR Log Maintenance
 
 # This workflow maintains database health by:
 # 1. Archiving logs older than 3 months

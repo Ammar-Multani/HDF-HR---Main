@@ -101,18 +101,6 @@ const CompanyAdminUtilitiesScreen = () => {
         screen: "FormSubmissionsScreen",
         badge: "Data",
       },
-      {
-        id: "employees",
-        title: t("companyAdmin.utilities.employees") || "Employee Management",
-        description:
-          t("companyAdmin.utilities.employeesDescription") ||
-          "Manage and oversee all employees within your company",
-        icon: "account-group",
-        color: "#9C27B0",
-        gradientColors: ["#9C27B0", "#BA68C8"] as [string, string],
-        screen: "EmployeesScreen",
-        badge: "People",
-      },
     ];
 
     // Conditionally add receipt management based on permissions
@@ -276,6 +264,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-start",
     alignItems: "center",
     width: "100%",
+    paddingBottom: 100,
   },
   card: {
     borderRadius: 16,

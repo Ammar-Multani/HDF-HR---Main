@@ -116,21 +116,39 @@ const RegisterScreen = () => {
       return;
     }
 
-    const { data, error } = await signUp(email, password);
+    try {
+      const { data, error } = await signUp(email, password);
 
-    if (error) {
-      setSnackbarMessage(error.message || "Failed to register");
-      setSnackbarVisible(true);
-    } else {
-      setSnackbarMessage(
-        "Registration successful! Please check your email to confirm your account."
-      );
-      setSnackbarVisible(true);
+      if (error) {
+        if (
+          error.message?.includes("email") &&
+          error.message?.includes("exists")
+        ) {
+          setEmailError(
+            "Email already in use. Please use a different email or try logging in."
+          );
+          setSnackbarMessage(
+            "Email already in use. Please use a different email or try logging in."
+          );
+        } else {
+          setSnackbarMessage(error.message || "Failed to register");
+        }
+        setSnackbarVisible(true);
+      } else {
+        setSnackbarMessage(
+          "Registration successful! Please check your email to confirm your account."
+        );
+        setSnackbarVisible(true);
 
-      // Navigate back to login after a delay
-      setTimeout(() => {
-        navigation.navigate("Login" as never);
-      }, 3000);
+        // Navigate back to login after a delay
+        setTimeout(() => {
+          navigation.navigate("Login" as never);
+        }, 3000);
+      }
+    } catch (err) {
+      console.error("Registration error:", err);
+      setSnackbarMessage("An unexpected error occurred. Please try again.");
+      setSnackbarVisible(true);
     }
   };
 

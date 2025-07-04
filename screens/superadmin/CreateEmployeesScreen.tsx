@@ -8,6 +8,7 @@ import {
   Platform,
   Alert,
   TouchableOpacity,
+  useWindowDimensions,
 } from "react-native";
 import {
   Text,
@@ -19,9 +20,9 @@ import {
   HelperText,
   Banner,
   Switch,
-  Menu,
   IconButton,
   Divider,
+  Surface,
 } from "react-native-paper";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
@@ -32,6 +33,8 @@ import { supabase, cachedQuery, isNetworkAvailable } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
 import LoadingIndicator from "../../components/LoadingIndicator";
+import Animated, { FadeIn } from "react-native-reanimated";
+import CompanySelector from "../../components/CompanySelector";
 import {
   Gender,
   MaritalStatus,
@@ -40,7 +43,11 @@ import {
   UserRole,
   UserStatus,
 } from "../../types";
+import { ActivityType } from "../../types/activity-log";
 import { hashPassword, generateResetToken } from "../../utils/auth";
+import { sendCompanyAdminInviteEmail } from "../../utils/emailService";
+import { generateWelcomeEmail } from "../../utils/emailTemplates";
+import Constants from "expo-constants";
 import CustomSnackbar from "../../components/CustomSnackbar";
 import { t } from "i18next";
 
@@ -86,15 +93,14 @@ const CreateEmployeeScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
   const { user } = useAuth();
+  const dimensions = useWindowDimensions();
+
+  // Calculate responsive breakpoints
+  const isLargeScreen = dimensions.width >= 1440;
+  const isMediumScreen = dimensions.width >= 768 && dimensions.width < 1440;
 
   const [loading, setLoading] = useState(false);
-  // Replace companyId and companyIdLoading with company selection states
-  const [companies, setCompanies] = useState<Company[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
-  const [menuVisible, setMenuVisible] = useState(false);
-  const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
-  const dropdownRef = React.useRef(null);
-
   const [showDobPicker, setShowDobPicker] = useState(false);
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
@@ -161,41 +167,6 @@ const CreateEmployeeScreen = () => {
     return () => clearInterval(intervalId);
   }, []);
 
-  // Replace fetchCompanyId with fetchCompanies
-  // Fetch companies for dropdown
-  useEffect(() => {
-    fetchCompanies();
-  }, []);
-
-  const fetchCompanies = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("company")
-        .select("id, company_name, active")
-        .eq("active", true)
-        .order("company_name");
-
-      if (error) {
-        console.error("Error fetching companies:", error);
-        return;
-      }
-
-      setCompanies(data || []);
-    } catch (error) {
-      console.error("Error fetching companies:", error);
-    }
-  };
-
-  const showMenu = () => {
-    if (dropdownRef.current) {
-      // @ts-ignore - Getting layout measurements
-      dropdownRef.current.measure((x, y, width, height, pageX, pageY) => {
-        setMenuPosition({ x: pageX, y: pageY + height });
-        setMenuVisible(true);
-      });
-    }
-  };
-
   const handleDobChange = (event: any, selectedDate?: Date) => {
     setShowDobPicker(false);
     if (selectedDate) {
@@ -213,23 +184,21 @@ const CreateEmployeeScreen = () => {
   // Confirm admin role change handler
   const handleAdminToggle = (newValue: boolean) => {
     if (newValue) {
-      // If turning on admin privileges, confirm with the user
       Alert.alert(
-        "Confirm Admin Privileges",
-        "This will grant full administrative access to this employee. They will be able to manage company settings, employees, and other admin functions. Are you sure?",
+        t("superAdmin.employees.confirmAdminTitle"),
+        t("superAdmin.employees.confirmAdminMessage"),
         [
           {
-            text: "Cancel",
+            text: t("common.cancel"),
             style: "cancel",
           },
           {
-            text: "Confirm",
+            text: t("common.confirm"),
             onPress: () => setValue("is_admin", true),
           },
         ]
       );
     } else {
-      // If turning off, no confirmation needed
       setValue("is_admin", false);
     }
   };
@@ -278,31 +247,26 @@ const CreateEmployeeScreen = () => {
         }
       }
 
-      // Validate email domain
+      // Validate password
+      if (data.password.length < 8) {
+        setSnackbarMessage(t("superAdmin.employees.passwordLength"));
+        setSnackbarVisible(true);
+        setLoading(false);
+        return;
+      }
+
+      // Validate email domain more thoroughly
       const emailParts = data.email.split("@");
       if (
         emailParts.length !== 2 ||
         !emailParts[1].includes(".") ||
         emailParts[1].length < 3
       ) {
-        setSnackbarMessage(t("superAdmin.employees.invalidEmailDomain"));
+        setSnackbarMessage(t("superAdmin.employees.invalidEmail"));
         setSnackbarVisible(true);
         setLoading(false);
         return;
       }
-
-      // Validate password strength
-      if (data.password.length < 8) {
-        setSnackbarMessage("Password must be at least 8 characters long");
-        setSnackbarVisible(true);
-        setLoading(false);
-        return;
-      }
-
-      // Convert employment_type to boolean (true for full-time/part-time, false for contract/temporary)
-      const isEmployeeType =
-        data.employment_type === EmploymentType.FULL_TIME ||
-        data.employment_type === EmploymentType.PART_TIME;
 
       // Performance optimization: Hash password in parallel with checking for existing user
       // This avoids the sequential bottleneck
@@ -345,7 +309,9 @@ const CreateEmployeeScreen = () => {
         marital_status: data.marital_status,
         gender: data.gender,
         employment_start_date: data.employment_start_date.toISOString(),
-        employment_type: isEmployeeType,
+        employment_type:
+          data.employment_type === EmploymentType.FULL_TIME ||
+          data.employment_type === EmploymentType.PART_TIME,
         workload_percentage: data.workload_percentage,
         job_title: data.job_title,
         education: data.education,
@@ -400,40 +366,154 @@ const CreateEmployeeScreen = () => {
         .from("company_user")
         .insert([
           {
-            id: newUser.id, // Use the ID from our custom users table
+            id: newUser.id,
             ...employeeData,
           },
         ]);
 
       if (employeeError) {
         // If employee creation fails, delete the user for atomicity
-        logDebug(
-          "Error creating employee, cleaning up user:",
-          employeeError
-        );
+        logDebug("Error creating employee, cleaning up user:", employeeError);
         await supabase.from("users").delete().eq("id", newUser.id);
         throw new Error(
           `Failed to create employee: ${employeeError.message || "Unknown database error"}`
         );
       }
 
+      // Get creator's details from admin table
+      const { data: creatorDetails, error: creatorError } = await supabase
+        .from("admin")
+        .select("id, name, email")
+        .eq("email", user?.email)
+        .single();
+
+      if (creatorError) {
+        console.error("Error fetching creator details:", creatorError);
+      }
+
+      const creatorName = creatorDetails?.name || user?.email || "";
+
+      // Log the employee creation activity
+      const activityLogData = {
+        user_id: user?.id,
+        activity_type: data.is_admin
+          ? ActivityType.CREATE_COMPANY_ADMIN
+          : ActivityType.CREATE_EMPLOYEE,
+        description: `New ${data.is_admin ? "company admin" : "employee"} "${data.first_name} ${data.last_name}" (${data.email}) created for company "${selectedCompany.company_name}"`,
+        company_id: selectedCompany.id,
+        metadata: {
+          created_by: {
+            id: user?.id || "",
+            name: creatorName,
+            email: user?.email || "",
+            role: "superadmin",
+          },
+          [data.is_admin ? "admin" : "employee"]: {
+            id: newUser.id,
+            name: `${data.first_name} ${data.last_name}`,
+            email: data.email,
+            role: data.is_admin ? "admin" : "employee",
+          },
+          company: {
+            id: selectedCompany.id,
+            name: selectedCompany.company_name,
+          },
+        },
+        old_value: null,
+        new_value: {
+          first_name: data.first_name,
+          last_name: data.last_name,
+          email: data.email,
+          phone_number: data.phone_number || "Not provided",
+          job_title: data.job_title || "Not provided",
+          company_id: selectedCompany.id,
+          role: data.is_admin ? "admin" : "employee",
+          employment_type: data.employment_type,
+          workload_percentage: data.workload_percentage,
+          date_of_birth: data.date_of_birth.toISOString(),
+          nationality: data.nationality,
+          gender: data.gender,
+          marital_status: data.marital_status,
+          employment_start_date: data.employment_start_date.toISOString(),
+          created_at: new Date().toISOString(),
+        },
+      };
+
+      const { error: logError } = await supabase
+        .from("activity_logs")
+        .insert([activityLogData]);
+
+      if (logError) {
+        console.error("Error logging activity:", logError);
+        // Don't throw here as the employee was created successfully
+      }
+
+      // Send welcome email based on role
+      logDebug("Sending employee welcome email...");
+      let emailResult;
+
+      if (data.is_admin) {
+        logDebug("Sending company admin invitation email...");
+        emailResult = await sendCompanyAdminInviteEmail(
+          data.email,
+          data.password,
+          selectedCompany.company_name
+        );
+      } else {
+        // Send regular employee welcome email
+        const functionUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/send-email`;
+        logDebug("Sending email using function URL:", functionUrl);
+
+        const { success: emailSent, error: emailError } = await fetch(
+          functionUrl,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
+              Origin: "https://hdf-hr.vercel.app",
+            },
+            body: JSON.stringify({
+              to: data.email,
+              subject: `Welcome to ${selectedCompany.company_name} on HDF HR`,
+              html: generateWelcomeEmail(
+                `${data.first_name} ${data.last_name}`,
+                data.email,
+                data.password,
+                selectedCompany.company_name
+              ),
+              text: `Welcome to ${selectedCompany.company_name} on HDF HR!\n\nHello ${data.first_name} ${data.last_name},\n\nYour account has been created with the following credentials:\n\nEmail: ${data.email}\nPassword: ${data.password}\n\nPlease log in at: https://hdf-hr.vercel.app/login\n\nIMPORTANT: Change your password immediately after logging in.\n\nNeed help? Contact us at info@hdf.ch`,
+            }),
+          }
+        ).then((res) => res.json());
+
+        if (!emailSent) {
+          console.error("Error sending welcome email:", emailError);
+        } else {
+          logDebug("Welcome email sent successfully");
+        }
+        emailResult = { success: emailSent };
+      }
+
       logDebug(`Employee created with email: ${data.email}`);
 
       setSnackbarMessage(
-        `${data.is_admin ? "Company admin" : "Employee"} created successfully!`
+        emailResult.success
+          ? t("superAdmin.employees.createSuccess")
+          : t("superAdmin.employees.createSuccessNoEmail")
       );
       setSnackbarVisible(true);
 
       // Navigate back after a short delay
       setTimeout(() => {
         navigation.goBack();
-      }, 5000); // Give them time to see the password
+      }, 2000);
     } catch (error: any) {
       console.error("Error creating employee:", error);
 
       // Detailed error message
       const errorMessage =
-        error.message || "Failed to create employee. Please try again.";
+        error.message || t("superAdmin.employees.createError");
 
       // For network-related errors, show in banner
       if (
@@ -441,7 +521,7 @@ const CreateEmployeeScreen = () => {
         errorMessage.includes("connection") ||
         errorMessage.includes("offline")
       ) {
-        setErrorBannerMessage(errorMessage);
+        setErrorBannerMessage(t("superAdmin.employees.offlineError"));
         setErrorBannerVisible(true);
       } else {
         setSnackbarMessage(errorMessage);
@@ -452,773 +532,15 @@ const CreateEmployeeScreen = () => {
     }
   };
 
-  // Menu container style with theme
-  const menuContainerStyle = {
-    borderRadius: 12,
-    width: 300,
-    marginTop: 4,
-    elevation: 4,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
-  };
-
-  // Pre-render form even while company ID is loading to improve perceived performance
-  const formContent = useMemo(
-    () => (
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.keyboardAvoidingView}
-      >
-        <ScrollView
-          style={[
-            styles.scrollView,
-            { backgroundColor: theme.colors.backgroundSecondary },
-          ]}
-          contentContainerStyle={styles.scrollContent}
-        >
-          <Text
-            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
-          >
-            Company Selection
-          </Text>
-
-          <TouchableOpacity
-            ref={dropdownRef}
-            style={[
-              styles.dropdownButton,
-              selectedCompany && styles.activeDropdownButton,
-            ]}
-            onPress={showMenu}
-          >
-            <View style={styles.dropdownContent}>
-              <IconButton
-                icon="office-building"
-                size={20}
-                iconColor={selectedCompany ? theme.colors.primary : "#757575"}
-                style={styles.dropdownLeadingIcon}
-              />
-              <Text
-                style={[
-                  styles.dropdownButtonText,
-                  selectedCompany && {
-                    color: theme.colors.primary,
-                  },
-                ]}
-                numberOfLines={1}
-                ellipsizeMode="tail"
-              >
-                {selectedCompany
-                  ? selectedCompany.company_name
-                  : "Select Company"}
-              </Text>
-            </View>
-            <IconButton
-              icon="chevron-down"
-              size={20}
-              style={styles.dropdownIcon}
-              iconColor={selectedCompany ? theme.colors.primary : "#757575"}
-            />
-          </TouchableOpacity>
-
-          <Text
-            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
-          >
-            Personal Information
-          </Text>
-
-          <View style={styles.row}>
-            <View style={styles.halfInput}>
-              <Controller
-                control={control}
-                name="first_name"
-                rules={{
-                  required: t("superAdmin.employees.firstNameRequired"),
-                  minLength: {
-                    value: 2,
-                    message: t("superAdmin.employees.nameMinLength"),
-                  },
-                  maxLength: {
-                    value: 50,
-                    message: t("superAdmin.employees.nameMaxLength"),
-                  },
-                  pattern: {
-                    value: /^[a-zA-Z\s\-']+$/,
-                    message: t("superAdmin.employees.nameInvalidChars"),
-                  },
-                }}
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <TextInput
-                    label={`${t("superAdmin.employees.firstName")} *`}
-                    mode="outlined"
-                    value={value}
-                    onChangeText={(text) =>
-                      onChange(text.replace(/[^a-zA-Z\s\-']/g, ""))
-                    }
-                    onBlur={onBlur}
-                    error={!!errors.first_name}
-                    style={styles.input}
-                    disabled={loading}
-                  />
-                )}
-              />
-              {errors.first_name && (
-                <HelperText type="error">
-                  {errors.first_name.message}
-                </HelperText>
-              )}
-            </View>
-
-            <View style={styles.halfInput}>
-              <Controller
-                control={control}
-                name="last_name"
-                rules={{
-                  required: t("superAdmin.employees.lastNameRequired"),
-                  minLength: {
-                    value: 2,
-                    message: t("superAdmin.employees.nameMinLength"),
-                  },
-                  maxLength: {
-                    value: 50,
-                    message: t("superAdmin.employees.nameMaxLength"),
-                  },
-                  pattern: {
-                    value: /^[a-zA-Z\s\-']+$/,
-                    message: t("superAdmin.employees.nameInvalidChars"),
-                  },
-                }}
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <TextInput
-                    label={`${t("superAdmin.employees.lastName")} *`}
-                    mode="outlined"
-                    value={value}
-                    onChangeText={(text) =>
-                      onChange(text.replace(/[^a-zA-Z\s\-']/g, ""))
-                    }
-                    onBlur={onBlur}
-                    error={!!errors.last_name}
-                    style={styles.input}
-                    disabled={loading}
-                  />
-                )}
-              />
-              {errors.last_name && (
-                <HelperText type="error">{errors.last_name.message}</HelperText>
-              )}
-            </View>
-          </View>
-
-          <Controller
-            control={control}
-            name="email"
-            rules={{
-              required: t("superAdmin.employees.emailRequired"),
-              pattern: {
-                value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                message: t("superAdmin.employees.invalidEmail"),
-              },
-              validate: (value) => {
-                const emailParts = value.split("@");
-                if (
-                  emailParts.length !== 2 ||
-                  !emailParts[1].includes(".") ||
-                  emailParts[1].length < 3
-                ) {
-                  return t("superAdmin.employees.invalidEmailDomain");
-                }
-                return true;
-              },
-            }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label={`${t("superAdmin.employees.email")} *`}
-                mode="outlined"
-                value={value}
-                onChangeText={(text) => onChange(text.toLowerCase())}
-                onBlur={onBlur}
-                error={!!errors.email}
-                style={styles.input}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                disabled={loading}
-              />
-            )}
-          />
-          {errors.email && (
-            <HelperText type="error">{errors.email.message}</HelperText>
-          )}
-
-          <Controller
-            control={control}
-            name="phone_number"
-            rules={{
-              pattern: {
-                value: /^\+?[0-9]{8,15}$/,
-                message: t("superAdmin.employees.phoneNumberInvalidFormat"),
-              },
-            }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label={t("superAdmin.employees.phoneNumber")}
-                mode="outlined"
-                value={value}
-                onChangeText={(text) => onChange(text.replace(/[^0-9+]/g, ""))}
-                onBlur={onBlur}
-                error={!!errors.phone_number}
-                style={styles.input}
-                keyboardType="phone-pad"
-                disabled={loading}
-              />
-            )}
-          />
-          {errors.phone_number && (
-            <HelperText type="error">{errors.phone_number.message}</HelperText>
-          )}
-
-          <Text style={styles.inputLabel}>Date of Birth *</Text>
-          <Button
-            mode="outlined"
-            onPress={() => setShowDobPicker(true)}
-            style={styles.dateButton}
-            icon="calendar"
-          >
-            {format(dateOfBirth, "MMMM d, yyyy")}
-          </Button>
-
-          {showDobPicker && (
-            <DateTimePicker
-              value={dateOfBirth}
-              mode="date"
-              display="default"
-              onChange={handleDobChange}
-              maximumDate={new Date()}
-            />
-          )}
-
-          <Text style={styles.inputLabel}>Gender *</Text>
-          <Controller
-            control={control}
-            render={({ field: { onChange, value } }) => (
-              <SegmentedButtons
-                value={value}
-                onValueChange={onChange}
-                buttons={[
-                  { value: Gender.MALE, label: "Male" },
-                  { value: Gender.FEMALE, label: "Female" },
-                  { value: Gender.OTHER, label: "Other" },
-                ]}
-                style={styles.segmentedButtons}
-                theme={{
-                  colors: {
-                    secondaryContainer: theme.colors.primaryContainer,
-                    onSecondaryContainer: theme.colors.primary,
-                  },
-                }}
-              />
-            )}
-            name="gender"
-          />
-
-          <Controller
-            control={control}
-            name="nationality"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label={t("superAdmin.employees.nationality")}
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                style={styles.input}
-                disabled={loading}
-              />
-            )}
-          />
-
-          <Text style={styles.inputLabel}>Marital Status *</Text>
-          <Controller
-            control={control}
-            render={({ field: { onChange, value } }) => (
-              <SegmentedButtons
-                value={value}
-                onValueChange={onChange}
-                buttons={[
-                  { value: MaritalStatus.SINGLE, label: "Single" },
-                  { value: MaritalStatus.MARRIED, label: "Married" },
-                  { value: MaritalStatus.DIVORCED, label: "Divorced" },
-                  { value: MaritalStatus.WIDOWED, label: "Widowed" },
-                ]}
-                style={styles.segmentedButtons}
-                theme={{
-                  colors: {
-                    secondaryContainer: theme.colors.primaryContainer,
-                    onSecondaryContainer: theme.colors.primary,
-                  },
-                }}
-              />
-            )}
-            name="marital_status"
-          />
-
-          <Text
-            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
-          >
-            Employment Details
-          </Text>
-
-          <Controller
-            control={control}
-            name="job_title"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label={t("superAdmin.employees.jobTitle")}
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                style={styles.input}
-                disabled={loading}
-              />
-            )}
-          />
-
-          <Text style={styles.inputLabel}>Employment Type *</Text>
-          <Controller
-            control={control}
-            render={({ field: { onChange, value } }) => (
-              <SegmentedButtons
-                value={value}
-                onValueChange={onChange}
-                buttons={[
-                  { value: EmploymentType.FULL_TIME, label: "Full Time" },
-                  { value: EmploymentType.PART_TIME, label: "Part Time" },
-                  { value: EmploymentType.CONTRACT, label: "Contract" },
-                  { value: EmploymentType.TEMPORARY, label: "Temporary" },
-                ]}
-                style={styles.segmentedButtons}
-                theme={{
-                  colors: {
-                    secondaryContainer: theme.colors.primaryContainer,
-                    onSecondaryContainer: theme.colors.primary,
-                  },
-                }}
-              />
-            )}
-            name="employment_type"
-          />
-
-          <Controller
-            control={control}
-            name="workload_percentage"
-            rules={{
-              validate: (value) =>
-                !value ||
-                (!isNaN(parseInt(value)) &&
-                  parseInt(value) > 0 &&
-                  parseInt(value) <= 100) ||
-                t("superAdmin.employees.workloadPercentageInvalid"),
-            }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label={t("superAdmin.employees.workloadPercentage")}
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.workload_percentage}
-                style={styles.input}
-                keyboardType="numeric"
-                disabled={loading}
-              />
-            )}
-          />
-          {errors.workload_percentage && (
-            <HelperText type="error">
-              {errors.workload_percentage.message}
-            </HelperText>
-          )}
-
-          <Text style={styles.inputLabel}>Employment Start Date *</Text>
-          <Button
-            mode="outlined"
-            onPress={() => setShowStartDatePicker(true)}
-            style={styles.dateButton}
-            icon="calendar"
-          >
-            {format(employmentStartDate, "MMMM d, yyyy")}
-          </Button>
-
-          {showStartDatePicker && (
-            <DateTimePicker
-              value={employmentStartDate}
-              mode="date"
-              display="default"
-              onChange={handleStartDateChange}
-            />
-          )}
-
-          <Text
-            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
-          >
-            Access Level
-          </Text>
-
-          <View style={styles.adminToggleContainer}>
-            <Text style={styles.adminToggleLabel}>
-              Make this employee a company admin?
-            </Text>
-            <Controller
-              control={control}
-              render={({ field: { value } }) => (
-                <Switch
-                  value={value}
-                  onValueChange={handleAdminToggle}
-                  disabled={loading}
-                />
-              )}
-              name="is_admin"
-            />
-          </View>
-
-          <Text style={styles.helperText}>
-            Company admins have full access to manage company settings,
-            employees, departments, and other administrative functions.
-          </Text>
-
-          <Text
-            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
-          >
-            Address
-          </Text>
-
-          <Controller
-            control={control}
-            name="address_line1"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label={t("superAdmin.employees.addressLine1")}
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                style={styles.input}
-                disabled={loading}
-              />
-            )}
-          />
-
-          <Controller
-            control={control}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Address Line 2"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                style={styles.input}
-                disabled={loading}
-              />
-            )}
-            name="address_line2"
-          />
-
-          <View style={styles.row}>
-            <View style={styles.halfInput}>
-              <Controller
-                control={control}
-                rules={{ required: "City is required" }}
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <TextInput
-                    label="City *"
-                    mode="outlined"
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    error={!!errors.address_city}
-                    style={styles.input}
-                    disabled={loading}
-                  />
-                )}
-                name="address_city"
-              />
-              {errors.address_city && (
-                <HelperText type="error">
-                  {errors.address_city.message}
-                </HelperText>
-              )}
-            </View>
-
-            <View style={styles.halfInput}>
-              <Controller
-                control={control}
-                rules={{ required: "State is required" }}
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <TextInput
-                    label="State/Province *"
-                    mode="outlined"
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    error={!!errors.address_state}
-                    style={styles.input}
-                    disabled={loading}
-                  />
-                )}
-                name="address_state"
-              />
-              {errors.address_state && (
-                <HelperText type="error">
-                  {errors.address_state.message}
-                </HelperText>
-              )}
-            </View>
-          </View>
-
-          <View style={styles.row}>
-            <View style={styles.halfInput}>
-              <Controller
-                control={control}
-                rules={{ required: "Postal code is required" }}
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <TextInput
-                    label="Postal Code *"
-                    mode="outlined"
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    error={!!errors.address_postal_code}
-                    style={styles.input}
-                    disabled={loading}
-                  />
-                )}
-                name="address_postal_code"
-              />
-              {errors.address_postal_code && (
-                <HelperText type="error">
-                  {errors.address_postal_code.message}
-                </HelperText>
-              )}
-            </View>
-
-            <View style={styles.halfInput}>
-              <Controller
-                control={control}
-                rules={{ required: "Country is required" }}
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <TextInput
-                    label="Country *"
-                    mode="outlined"
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    error={!!errors.address_country}
-                    style={styles.input}
-                    disabled={loading}
-                  />
-                )}
-                name="address_country"
-              />
-              {errors.address_country && (
-                <HelperText type="error">
-                  {errors.address_country.message}
-                </HelperText>
-              )}
-            </View>
-          </View>
-
-          <Text
-            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
-          >
-            Bank Details
-          </Text>
-
-          <Controller
-            control={control}
-            name="bank_name"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label={t("superAdmin.employees.bankName")}
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                style={styles.input}
-                disabled={loading}
-              />
-            )}
-          />
-
-          <Controller
-            control={control}
-            rules={{ required: "Account number is required" }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Account Number *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.account_number}
-                style={styles.input}
-                disabled={loading}
-              />
-            )}
-            name="account_number"
-          />
-          {errors.account_number && (
-            <HelperText type="error">
-              {errors.account_number.message}
-            </HelperText>
-          )}
-
-          <Controller
-            control={control}
-            rules={{ required: "IBAN is required" }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="IBAN *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.iban}
-                style={styles.input}
-                disabled={loading}
-              />
-            )}
-            name="iban"
-          />
-          {errors.iban && (
-            <HelperText type="error">{errors.iban.message}</HelperText>
-          )}
-
-          <Controller
-            control={control}
-            rules={{ required: "SWIFT code is required" }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="SWIFT Code *"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.swift_code}
-                style={styles.input}
-                disabled={loading}
-              />
-            )}
-            name="swift_code"
-          />
-          {errors.swift_code && (
-            <HelperText type="error">{errors.swift_code.message}</HelperText>
-          )}
-
-          <Text
-            style={[styles.sectionTitle, { color: theme.colors.onBackground }]}
-          >
-            Additional Information
-          </Text>
-
-          <Controller
-            control={control}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label="Comments"
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                style={styles.input}
-                multiline
-                numberOfLines={4}
-                disabled={loading}
-              />
-            )}
-            name="comments"
-          />
-
-          <Controller
-            control={control}
-            name="password"
-            rules={{
-              required: t("superAdmin.employees.passwordRequired"),
-              minLength: {
-                value: 8,
-                message: t("superAdmin.employees.passwordMinLength"),
-              },
-              pattern: {
-                value:
-                  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])[A-Za-z\d@$!%*?&#]{8,}$/,
-                message: t(
-                  "superAdmin.employees.passwordComplexityRequirements"
-                ),
-              },
-              validate: (value) => {
-                if (value.includes(" ")) {
-                  return t("superAdmin.employees.passwordNoSpaces");
-                }
-                if (/(.)\1{2,}/.test(value)) {
-                  return t("superAdmin.employees.passwordNoRepeatingChars");
-                }
-                return true;
-              },
-            }}
-            render={({ field: { onChange, onBlur, value } }) => (
-              <TextInput
-                label={`${t("superAdmin.employees.password")} *`}
-                mode="outlined"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={!!errors.password}
-                style={styles.input}
-                secureTextEntry
-                disabled={loading}
-              />
-            )}
-          />
-          {errors.password && (
-            <HelperText type="error">{errors.password.message}</HelperText>
-          )}
-
-          <Text style={styles.helperText}>
-            The password will be included in the invitation email sent to the
-            employee.
-          </Text>
-
-          <Button
-            mode="contained"
-            onPress={handleSubmit(onSubmit)}
-            style={styles.submitButton}
-            loading={loading}
-            disabled={loading || !selectedCompany}
-          >
-            Create Employee
-          </Button>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    ),
-    [
-      control,
-      errors,
-      loading,
-      selectedCompany,
-      theme.colors.onBackground,
-      dateOfBirth,
-      employmentStartDate,
-      handleSubmit,
-      onSubmit,
-    ]
-  );
-
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      style={[
+        styles.container,
+        { backgroundColor: theme.colors.backgroundSecondary },
+      ]}
     >
       <AppHeader
-        title="Create Employee"
+        title={t("superAdmin.employees.createEmployee")}
         showBackButton={true}
         showHelpButton={true}
         onHelpPress={() => {
@@ -1233,7 +555,7 @@ const CreateEmployeeScreen = () => {
         icon="wifi-off"
         actions={[
           {
-            label: "Retry",
+            label: t("common.retry"),
             onPress: async () => {
               const networkAvailable = await isNetworkAvailable();
               setIsOnline(networkAvailable);
@@ -1241,8 +563,7 @@ const CreateEmployeeScreen = () => {
           },
         ]}
       >
-        You are currently offline. Please check your connection to create a new
-        employee.
+        {t("common.offline")}
       </Banner>
 
       {/* Error banner for important errors */}
@@ -1251,7 +572,7 @@ const CreateEmployeeScreen = () => {
         icon="alert"
         actions={[
           {
-            label: "Dismiss",
+            label: t("common.dismiss"),
             onPress: () => setErrorBannerVisible(false),
           },
         ]}
@@ -1259,48 +580,687 @@ const CreateEmployeeScreen = () => {
         {errorBannerMessage}
       </Banner>
 
-      {formContent}
-
-      <Menu
-        visible={menuVisible}
-        onDismiss={() => setMenuVisible(false)}
-        anchor={menuPosition}
-        contentStyle={menuContainerStyle}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.keyboardAvoidingView}
       >
-        <View style={styles.menuHeader}>
-          <Text style={styles.menuTitle}>Select Company</Text>
-        </View>
-        <Divider />
-        <ScrollView style={{ maxHeight: 400 }}>
-          {companies.map((company) => (
-            <Menu.Item
-              key={company.id}
-              title={company.company_name}
-              onPress={() => {
-                setSelectedCompany(company);
-                setMenuVisible(false);
-              }}
-              style={styles.menuItemStyle}
-              titleStyle={[
-                styles.menuItemText,
-                selectedCompany?.id === company.id && styles.menuItemSelected,
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              maxWidth: isLargeScreen ? 1400 : isMediumScreen ? 1100 : "100%",
+              paddingHorizontal: isLargeScreen ? 48 : isMediumScreen ? 32 : 16,
+            },
+          ]}
+        >
+          <View style={styles.gridContainer}>
+            <View
+              style={[
+                styles.gridColumn,
+                { flex: isLargeScreen ? 0.48 : isMediumScreen ? 0.48 : 1 },
               ]}
-              leadingIcon="office-building"
-              trailingIcon={
-                selectedCompany?.id === company.id ? "check" : undefined
-              }
-            />
-          ))}
-          {companies.length === 0 && (
-            <Menu.Item
-              title="No companies found"
-              disabled={true}
-              style={styles.menuItemStyle}
-            />
-          )}
-        </ScrollView>
-      </Menu>
+            >
+              {/* Company Selection Card */}
+              <Animated.View entering={FadeIn.delay(100)}>
+                <Surface style={styles.detailsCard}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="office-building"
+                          size={20}
+                          iconColor="#64748b"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>
+                        {t("superAdmin.employees.companySelection")}
+                      </Text>
+                    </View>
+                  </View>
 
+                  <View style={styles.cardContent}>
+                    <CompanySelector
+                      onSelect={setSelectedCompany}
+                      selectedCompany={selectedCompany}
+                      required={true}
+                      label={t("superAdmin.employees.selectCompany")}
+                    />
+                  </View>
+                </Surface>
+              </Animated.View>
+
+              {/* Personal Information Card */}
+              <Animated.View entering={FadeIn.delay(200)}>
+                <Surface style={styles.detailsCard}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="account"
+                          size={20}
+                          iconColor="#64748b"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>
+                        {t("superAdmin.employees.personalInformation")}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardContent}>
+                    <View style={styles.row}>
+                      <View style={styles.halfInput}>
+                        <Controller
+                          control={control}
+                          name="first_name"
+                          rules={{
+                            required: t(
+                              "superAdmin.employees.firstNameRequired"
+                            ),
+                            minLength: {
+                              value: 2,
+                              message: t("superAdmin.employees.nameMinLength"),
+                            },
+                            maxLength: {
+                              value: 50,
+                              message: t("superAdmin.employees.nameMaxLength"),
+                            },
+                            pattern: {
+                              value: /^[a-zA-Z\s\-']+$/,
+                              message: t(
+                                "superAdmin.employees.nameInvalidChars"
+                              ),
+                            },
+                          }}
+                          render={({ field: { onChange, onBlur, value } }) => (
+                            <TextInput
+                              label={`${t("superAdmin.employees.firstName")} *`}
+                              mode="outlined"
+                              value={value}
+                              onChangeText={(text) =>
+                                onChange(text.replace(/[^a-zA-Z\s\-']/g, ""))
+                              }
+                              onBlur={onBlur}
+                              error={!!errors.first_name}
+                              style={styles.input}
+                              disabled={loading}
+                            />
+                          )}
+                        />
+                        {errors.first_name && (
+                          <HelperText type="error">
+                            {errors.first_name.message}
+                          </HelperText>
+                        )}
+                      </View>
+
+                      <View style={styles.halfInput}>
+                        <Controller
+                          control={control}
+                          name="last_name"
+                          rules={{
+                            required: t(
+                              "superAdmin.employees.lastNameRequired"
+                            ),
+                            minLength: {
+                              value: 2,
+                              message: t("superAdmin.employees.nameMinLength"),
+                            },
+                            maxLength: {
+                              value: 50,
+                              message: t("superAdmin.employees.nameMaxLength"),
+                            },
+                            pattern: {
+                              value: /^[a-zA-Z\s\-']+$/,
+                              message: t(
+                                "superAdmin.employees.nameInvalidChars"
+                              ),
+                            },
+                          }}
+                          render={({ field: { onChange, onBlur, value } }) => (
+                            <TextInput
+                              label={`${t("superAdmin.employees.lastName")} *`}
+                              mode="outlined"
+                              value={value}
+                              onChangeText={(text) =>
+                                onChange(text.replace(/[^a-zA-Z\s\-']/g, ""))
+                              }
+                              onBlur={onBlur}
+                              error={!!errors.last_name}
+                              style={styles.input}
+                              disabled={loading}
+                            />
+                          )}
+                        />
+                        {errors.last_name && (
+                          <HelperText type="error">
+                            {errors.last_name.message}
+                          </HelperText>
+                        )}
+                      </View>
+                    </View>
+
+                    <Controller
+                      control={control}
+                      name="phone_number"
+                      rules={{
+                        pattern: {
+                          value: /^\+?[0-9]{8,15}$/,
+                          message: t(
+                            "superAdmin.employees.phoneNumberInvalidFormat"
+                          ),
+                        },
+                      }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <TextInput
+                          label={t("superAdmin.employees.phoneNumber")}
+                          mode="outlined"
+                          value={value}
+                          onChangeText={(text) =>
+                            onChange(text.replace(/[^0-9+]/g, ""))
+                          }
+                          onBlur={onBlur}
+                          error={!!errors.phone_number}
+                          style={styles.input}
+                          keyboardType="phone-pad"
+                          disabled={loading}
+                        />
+                      )}
+                    />
+                    {errors.phone_number && (
+                      <HelperText type="error">
+                        {errors.phone_number.message}
+                      </HelperText>
+                    )}
+
+                    <Text style={styles.inputLabel}>
+                      {t("superAdmin.employees.dateOfBirth")} *
+                    </Text>
+                    <Button
+                      mode="outlined"
+                      onPress={() => setShowDobPicker(true)}
+                      style={styles.dateButton}
+                      icon="calendar"
+                    >
+                      {format(dateOfBirth, "MMMM d, yyyy")}
+                    </Button>
+
+                    {showDobPicker && (
+                      <DateTimePicker
+                        value={dateOfBirth}
+                        mode="date"
+                        display="default"
+                        onChange={handleDobChange}
+                        maximumDate={new Date()}
+                      />
+                    )}
+
+                    <Text style={styles.inputLabel}>
+                      {t("superAdmin.employees.gender")} *
+                    </Text>
+                    <Controller
+                      control={control}
+                      render={({ field: { onChange, value } }) => (
+                        <SegmentedButtons
+                          value={value}
+                          onValueChange={onChange}
+                          buttons={[
+                            {
+                              value: Gender.MALE,
+                              label: t("superAdmin.employees.male"),
+                            },
+                            {
+                              value: Gender.FEMALE,
+                              label: t("superAdmin.employees.female"),
+                            },
+                            {
+                              value: Gender.OTHER,
+                              label: t("superAdmin.employees.other"),
+                            },
+                          ]}
+                          style={styles.segmentedButtons}
+                          theme={{
+                            colors: {
+                              secondaryContainer: theme.colors.primaryContainer,
+                              onSecondaryContainer: theme.colors.primary,
+                            },
+                          }}
+                        />
+                      )}
+                      name="gender"
+                    />
+
+                    <Controller
+                      control={control}
+                      name="nationality"
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <TextInput
+                          label={t("superAdmin.employees.nationality")}
+                          mode="outlined"
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          style={styles.input}
+                          disabled={loading}
+                        />
+                      )}
+                    />
+                  </View>
+                </Surface>
+              </Animated.View>
+
+              {/* Employment Details Card */}
+              <Animated.View entering={FadeIn.delay(300)}>
+                <Surface style={styles.detailsCard}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="briefcase"
+                          size={20}
+                          iconColor="#64748b"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>
+                        {t("superAdmin.employees.employmentDetails")}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardContent}>
+                    <Controller
+                      control={control}
+                      name="job_title"
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <TextInput
+                          label={t("superAdmin.employees.jobTitle")}
+                          mode="outlined"
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          style={styles.input}
+                          disabled={loading}
+                        />
+                      )}
+                    />
+                    {errors.job_title && (
+                      <HelperText type="error">
+                        {errors.job_title.message}
+                      </HelperText>
+                    )}
+
+                    <Text style={styles.inputLabel}>Employment Type *</Text>
+                    <Controller
+                      control={control}
+                      render={({ field: { onChange, value } }) => (
+                        <SegmentedButtons
+                          value={value}
+                          onValueChange={onChange}
+                          buttons={[
+                            {
+                              value: EmploymentType.FULL_TIME,
+                              label: "Full Time",
+                            },
+                            {
+                              value: EmploymentType.PART_TIME,
+                              label: "Part Time",
+                            },
+                            {
+                              value: EmploymentType.CONTRACT,
+                              label: "Contract",
+                            },
+                            {
+                              value: EmploymentType.TEMPORARY,
+                              label: "Temporary",
+                            },
+                          ]}
+                          style={styles.segmentedButtons}
+                          theme={{
+                            colors: {
+                              secondaryContainer: theme.colors.primaryContainer,
+                              onSecondaryContainer: theme.colors.primary,
+                            },
+                          }}
+                        />
+                      )}
+                      name="employment_type"
+                    />
+
+                    <Controller
+                      control={control}
+                      name="workload_percentage"
+                      rules={{
+                        validate: (value) =>
+                          !value ||
+                          (!isNaN(parseInt(value)) &&
+                            parseInt(value) > 0 &&
+                            parseInt(value) <= 100) ||
+                          t("superAdmin.employees.workloadPercentageInvalid"),
+                      }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <TextInput
+                          label={t("superAdmin.employees.workloadPercentage")}
+                          mode="outlined"
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          error={!!errors.workload_percentage}
+                          style={styles.input}
+                          keyboardType="numeric"
+                          disabled={loading}
+                        />
+                      )}
+                    />
+                    {errors.workload_percentage && (
+                      <HelperText type="error">
+                        {errors.workload_percentage.message}
+                      </HelperText>
+                    )}
+
+                    <Text style={styles.inputLabel}>
+                      Employment Start Date *
+                    </Text>
+                    <Button
+                      mode="outlined"
+                      onPress={() => setShowStartDatePicker(true)}
+                      style={styles.dateButton}
+                      icon="calendar"
+                    >
+                      {format(employmentStartDate, "MMMM d, yyyy")}
+                    </Button>
+
+                    {showStartDatePicker && (
+                      <DateTimePicker
+                        value={employmentStartDate}
+                        mode="date"
+                        display="default"
+                        onChange={handleStartDateChange}
+                      />
+                    )}
+                  </View>
+                </Surface>
+              </Animated.View>
+            </View>
+
+            <View
+              style={[
+                styles.gridColumn,
+                { flex: isLargeScreen ? 0.48 : isMediumScreen ? 0.48 : 1 },
+              ]}
+            >
+              {/* Bank Details Card */}
+              <Animated.View entering={FadeIn.delay(400)}>
+                <Surface style={styles.detailsCard}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="bank"
+                          size={20}
+                          iconColor="#64748b"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>
+                        {t("superAdmin.employees.bankDetails")}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardContent}>
+                    <Controller
+                      control={control}
+                      name="bank_name"
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <TextInput
+                          label={t("superAdmin.employees.bankName")}
+                          mode="outlined"
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          style={styles.input}
+                          disabled={loading}
+                        />
+                      )}
+                    />
+                    {errors.bank_name && (
+                      <HelperText type="error">
+                        {errors.bank_name.message}
+                      </HelperText>
+                    )}
+
+                    <Controller
+                      control={control}
+                      name="account_number"
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <TextInput
+                          label="Account Number"
+                          mode="outlined"
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          style={styles.input}
+                          disabled={loading}
+                        />
+                      )}
+                    />
+                    {errors.account_number && (
+                      <HelperText type="error">
+                        {errors.account_number.message}
+                      </HelperText>
+                    )}
+
+                    <Controller
+                      control={control}
+                      name="iban"
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <TextInput
+                          label="IBAN"
+                          mode="outlined"
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          style={styles.input}
+                          disabled={loading}
+                        />
+                      )}
+                    />
+                    {errors.iban && (
+                      <HelperText type="error">
+                        {errors.iban.message}
+                      </HelperText>
+                    )}
+
+                    <Controller
+                      control={control}
+                      name="swift_code"
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <TextInput
+                          label="SWIFT Code"
+                          mode="outlined"
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          style={styles.input}
+                          disabled={loading}
+                        />
+                      )}
+                    />
+                    {errors.swift_code && (
+                      <HelperText type="error">
+                        {errors.swift_code.message}
+                      </HelperText>
+                    )}
+                  </View>
+                </Surface>
+              </Animated.View>
+              {/* Account Details Card */}
+              <Animated.View entering={FadeIn.delay(400)}>
+                <Surface style={styles.detailsCard}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.headerLeft}>
+                      <View style={styles.iconContainer}>
+                        <IconButton
+                          icon="account-key"
+                          size={20}
+                          iconColor="#64748b"
+                          style={styles.headerIcon}
+                        />
+                      </View>
+                      <Text style={styles.cardTitle}>
+                        {t("superAdmin.employees.accountDetails")}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.cardContent}>
+                    <Controller
+                      control={control}
+                      name="email"
+                      rules={{
+                        required: t("superAdmin.employees.emailRequired"),
+                        pattern: {
+                          value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                          message: t("superAdmin.employees.invalidEmail"),
+                        },
+                        validate: (value) => {
+                          const emailParts = value.split("@");
+                          if (
+                            emailParts.length !== 2 ||
+                            !emailParts[1].includes(".") ||
+                            emailParts[1].length < 3
+                          ) {
+                            return t("superAdmin.employees.invalidEmailDomain");
+                          }
+                          return true;
+                        },
+                      }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <TextInput
+                          label={`${t("superAdmin.employees.email")} *`}
+                          mode="outlined"
+                          value={value}
+                          onChangeText={(text) => onChange(text.toLowerCase())}
+                          onBlur={onBlur}
+                          error={!!errors.email}
+                          style={styles.input}
+                          keyboardType="email-address"
+                          autoCapitalize="none"
+                          disabled={loading}
+                        />
+                      )}
+                    />
+                    {errors.email && (
+                      <HelperText type="error">
+                        {errors.email.message}
+                      </HelperText>
+                    )}
+
+                    <Controller
+                      control={control}
+                      name="password"
+                      rules={{
+                        required: t("superAdmin.employees.passwordRequired"),
+                        minLength: {
+                          value: 8,
+                          message: t("superAdmin.employees.passwordMinLength"),
+                        },
+                        pattern: {
+                          value:
+                            /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])[A-Za-z\d@$!%*?&#]{8,}$/,
+                          message: t(
+                            "superAdmin.employees.passwordComplexityRequirements"
+                          ),
+                        },
+                        validate: (value) => {
+                          if (value.includes(" ")) {
+                            return t("superAdmin.employees.passwordNoSpaces");
+                          }
+                          if (/(.)\1{2,}/.test(value)) {
+                            return t(
+                              "superAdmin.employees.passwordNoRepeatingChars"
+                            );
+                          }
+                          return true;
+                        },
+                      }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <TextInput
+                          label={`${t("superAdmin.employees.password")} *`}
+                          mode="outlined"
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          error={!!errors.password}
+                          style={styles.input}
+                          secureTextEntry
+                          disabled={loading}
+                        />
+                      )}
+                    />
+                    {errors.password && (
+                      <HelperText type="error">
+                        {errors.password.message}
+                      </HelperText>
+                    )}
+
+                    <Text style={[styles.helperText, { marginBottom: 16 }]}>
+                      {t("superAdmin.employees.inviteEmailHelper")}
+                    </Text>
+
+                    <View style={styles.adminToggleContainer}>
+                      <Text style={styles.adminToggleLabel}>
+                        {t("superAdmin.employees.grantAdminPrivileges")}
+                      </Text>
+                      <Switch
+                        value={isAdmin}
+                        onValueChange={handleAdminToggle}
+                        disabled={loading}
+                      />
+                    </View>
+                  </View>
+                </Surface>
+              </Animated.View>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      <Surface style={styles.bottomBar}>
+        <View style={styles.bottomBarContent}>
+          <View style={styles.actionButtons}>
+            <Button
+              mode="outlined"
+              onPress={() => navigation.goBack()}
+              style={styles.button}
+              disabled={loading}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button
+              mode="contained"
+              onPress={handleSubmit(onSubmit)}
+              style={[
+                styles.button,
+                {
+                  backgroundColor:
+                    loading || !selectedCompany
+                      ? theme.colors.surfaceDisabled
+                      : theme.colors.primary,
+                },
+              ]}
+              loading={loading}
+              disabled={loading || !selectedCompany}
+            >
+              {t("superAdmin.employees.createEmployee")}
+            </Button>
+          </View>
+        </View>
+      </Surface>
       <CustomSnackbar
         visible={snackbarVisible}
         message={snackbarMessage}
@@ -1344,29 +1304,113 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
+    paddingVertical: 32,
+    alignSelf: "center",
+    width: "100%",
+  },
+  gridContainer: {
+    flexDirection: "row",
+    gap: 24,
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
+  gridColumn: {
+    minWidth: 320,
+    gap: 24,
+  },
+  detailsCard: {
+    borderRadius: 16,
+    overflow: "hidden",
+    elevation: 1,
+    shadowColor: "rgba(0,0,0,0.1)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     padding: 16,
-    paddingBottom: 40,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginTop: 24,
-    marginBottom: 16,
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
   },
-  input: {
-    marginBottom: 8,
+  iconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "#f1f5f9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerIcon: {
+    margin: 0,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1e293b",
+    fontFamily: "Poppins-SemiBold",
+  },
+  cardContent: {
+    padding: 24,
   },
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
+    gap: 16,
   },
   halfInput: {
-    width: "48%",
+    flex: 1,
   },
-  inputLabel: {
+  input: {
+    marginBottom: 16,
+    backgroundColor: "#FFFFFF",
+  },
+  helperText: {
     fontSize: 14,
-    marginBottom: 8,
-    opacity: 0.7,
+    color: "#64748b",
+    marginTop: 4,
+  },
+  bottomBar: {
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+    padding: 16,
+  },
+  bottomBarContent: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 12,
+    maxWidth: 1400,
+    marginHorizontal: "auto",
+    width: "100%",
+  },
+  actionButtons: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  button: {
+    minWidth: 120,
+    color: "white",
+  },
+  adminToggleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  adminToggleLabel: {
+    fontSize: 16,
+    color: "#1e293b",
   },
   dateButton: {
     marginBottom: 16,
@@ -1374,89 +1418,10 @@ const styles = StyleSheet.create({
   segmentedButtons: {
     marginBottom: 16,
   },
-  submitButton: {
-    marginTop: 24,
-    paddingVertical: 6,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  adminToggleContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+  inputLabel: {
+    fontSize: 14,
     marginBottom: 8,
-    paddingVertical: 8,
-  },
-  adminToggleLabel: {
-    fontSize: 16,
-  },
-  helperText: {
-    fontSize: 14,
     opacity: 0.7,
-    marginBottom: 16,
-  },
-  dropdownButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
-    borderRadius: 12,
-    paddingLeft: 4,
-    paddingRight: 8,
-    paddingVertical: 6,
-    backgroundColor: "#FFFFFF",
-    marginBottom: 16,
-  },
-  dropdownContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  dropdownLeadingIcon: {
-    margin: 0,
-    padding: 0,
-  },
-  dropdownButtonText: {
-    fontFamily: "Poppins-Regular",
-    color: "#424242",
-    flex: 1,
-    fontSize: 14,
-  },
-  dropdownIcon: {
-    margin: 0,
-    padding: 0,
-  },
-  activeDropdownButton: {
-    borderColor: "#1a73e8",
-    backgroundColor: "#F0F7FF",
-  },
-  menuHeader: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: "#F5F5F5",
-  },
-  menuTitle: {
-    fontSize: 14,
-    fontFamily: "Poppins-Medium",
-    color: "#212121",
-  },
-  menuItemStyle: {
-    height: 48,
-    justifyContent: "center",
-  },
-  menuItemText: {
-    fontFamily: "Poppins-Regular",
-    fontSize: 14,
-    color: "#424242",
-  },
-  menuItemSelected: {
-    color: "#1a73e8",
-    fontFamily: "Poppins-Medium",
   },
   snackbar: {
     marginBottom: 16,

@@ -33,6 +33,7 @@ import { sendCompanyAdminInviteEmail } from "../../utils/emailService";
 import CustomSnackbar from "../../components/CustomSnackbar";
 import CompanySelector from "../../components/CompanySelector";
 import { ActivityType } from "../../types/activity-log";
+import { logDebug } from "../../utils/logger";
 
 interface CompanyAdminFormData {
   first_name: string;
@@ -238,6 +239,17 @@ const CreateCompanyAdminScreen = () => {
       setLoading(true);
       setSnackbarVisible(false);
 
+      // Check if user is authenticated
+      if (!user?.id) {
+        setSnackbarMessage(
+          t("common.errors.notAuthenticated") ||
+            "You must be logged in to perform this action"
+        );
+        setSnackbarVisible(true);
+        setLoading(false);
+        return;
+      }
+
       // Validate email domain
       const emailParts = data.email.split("@");
       if (
@@ -265,111 +277,94 @@ const CreateCompanyAdminScreen = () => {
         return;
       }
 
-      // Check if user already exists
-      const { data: existingUser, error: userCheckError } = await supabase
-        .from("users")
-        .select("id")
-        .eq("email", data.email)
-        .maybeSingle();
+      // Create company admin using the Edge Function
+      const { data: adminResult, error: adminError } =
+        await supabase.functions.invoke("user-management", {
+          body: {
+            action: "create_company_admin",
+            email: data.email.toLowerCase().trim(),
+            password: data.password,
+            company_id: selectedCompany.id,
+            created_by: user.id,
+            first_name: data.first_name,
+            last_name: data.last_name,
+          },
+        });
 
-      if (userCheckError) {
-        throw new Error(userCheckError.message);
-      }
+      if (adminError || !adminResult?.user) {
+        // Handle structured error response
+        if (adminResult?.error) {
+          const error = adminResult.error;
+          let errorMessage = "";
 
-      if (existingUser) {
-        setSnackbarMessage(
-          t("superAdmin.companyAdmin.emailAlreadyExists") ||
-            "Email already exists"
+          switch (error.code) {
+            case "user_exists":
+              errorMessage = t(
+                "superAdmin.companyAdmin.adminEmailAlreadyExists",
+                {
+                  email: error.details?.email,
+                }
+              );
+              break;
+            case "auth_error":
+              errorMessage = t("superAdmin.companyAdmin.authError", {
+                message: error.message,
+              });
+              break;
+            case "admin_creation_failed":
+              errorMessage = t("superAdmin.companyAdmin.adminCreationFailed");
+              break;
+            case "validation_error":
+              errorMessage = t("superAdmin.companyAdmin.validationError", {
+                message: error.message,
+              });
+              break;
+            default:
+              errorMessage =
+                error.message ||
+                t("superAdmin.companyAdmin.errorCreatingAdmin");
+          }
+
+          throw new Error(errorMessage);
+        }
+
+        throw new Error(
+          adminError?.message ||
+            t("superAdmin.companyAdmin.errorCreatingAdmin") ||
+            "Error creating admin user"
         );
-        setSnackbarVisible(true);
-        setLoading(false);
-        return;
       }
 
-      // Hash password
-      const hashedPassword = await hashPassword(data.password);
+      logDebug(`Company admin created with email: ${data.email}`);
 
-      // Generate reset token
-      const resetToken =
-        Math.random().toString(36).substring(2, 15) +
-        Math.random().toString(36).substring(2, 15);
-      const resetTokenExpiry = new Date(
-        Date.now() + 7 * 24 * 60 * 60 * 1000
-      ).toISOString();
-
-      // Create user
-      const { data: newUser, error: userError } = await supabase
-        .from("users")
-        .insert({
-          email: data.email,
-          password_hash: hashedPassword,
-          status: "active",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          reset_token: resetToken,
-          reset_token_expires: resetTokenExpiry,
-        })
-        .select("id")
-        .single();
-
-      if (userError) {
-        throw new Error(userError.message);
-      }
-
-      // Create company_user record
-      const companyUserData = {
-        id: newUser.id,
-        company_id: selectedCompany.id,
-        first_name: data.first_name,
-        last_name: data.last_name,
-        email: data.email,
-        role: "admin",
-        active_status: "active",
-        created_by: user?.id,
-        phone_number: data.phone_number || "Not provided",
-        job_title: data.job_title || "Not provided",
-        date_of_birth: new Date().toISOString(),
-        nationality: "Not provided",
-      };
-
-      const { error: companyUserError } = await supabase
-        .from("company_user")
-        .insert([companyUserData]);
-
-      if (companyUserError) {
-        // If company_user creation fails, delete the user
-        await supabase.from("users").delete().eq("id", newUser.id);
-        throw new Error(companyUserError.message);
-      }
-
-      // Get creator's details from admin table
-      const { data: creatorDetails, error: creatorError } = await supabase
+      // Get super admin's name from admin table
+      const { data: adminDetails, error: adminDetailsError } = await supabase
         .from("admin")
         .select("id, name, email")
-        .eq("email", user?.email)
+        .eq("email", user.email)
         .single();
 
-      if (creatorError) {
-        console.error("Error fetching creator details:", creatorError);
+      if (adminDetailsError) {
+        console.error("Error fetching admin details:", adminDetailsError);
       }
 
-      const creatorName = creatorDetails?.name || user?.email || "";
+      const userDisplayName = adminDetails?.name || user.email || "";
 
       // Log the company admin creation activity
       const activityLogData = {
-        user_id: user?.id,
+        user_id: user.id,
         activity_type: ActivityType.CREATE_COMPANY_ADMIN,
         description: `New company admin "${data.first_name} ${data.last_name}" (${data.email}) created for company "${selectedCompany.company_name}"`,
         company_id: selectedCompany.id,
         metadata: {
           created_by: {
-            id: user?.id || "",
-            name: creatorName,
-            email: user?.email || "",
+            id: user.id,
+            name: userDisplayName,
+            email: user.email,
             role: "superadmin",
           },
           admin: {
-            id: newUser.id,
+            id: adminResult.user.id,
             name: `${data.first_name} ${data.last_name}`,
             email: data.email,
             role: "admin",
@@ -398,10 +393,9 @@ const CreateCompanyAdminScreen = () => {
 
       if (logError) {
         console.error("Error logging activity:", logError);
-        // Don't throw here as the admin was created successfully
       }
 
-      // Send invitation email to the company admin
+      // Send invitation email to the admin
       const { success: emailSent, error: emailError } =
         await sendCompanyAdminInviteEmail(
           data.email,
@@ -411,28 +405,23 @@ const CreateCompanyAdminScreen = () => {
 
       if (!emailSent) {
         console.error("Error sending invitation email:", emailError);
-        // Don't throw here, as the admin account is already created successfully
       }
 
       setSnackbarMessage(
         emailSent
-          ? t("superAdmin.companyAdmin.adminCreatedSuccess") ||
-              "Company admin created successfully!"
-          : t("superAdmin.companyAdmin.adminCreatedNoEmail") ||
-              "Company admin created but invitation email could not be sent."
+          ? t("superAdmin.companyAdmin.adminCreatedSuccess")
+          : t("superAdmin.companyAdmin.adminCreatedButEmailFailed")
       );
       setSnackbarVisible(true);
 
-      // Navigate back after a short delay
+      // Navigate back to companies list after a short delay
       setTimeout(() => {
         navigation.goBack();
       }, 2000);
     } catch (error: any) {
       console.error("Error creating company admin:", error);
       setSnackbarMessage(
-        error.message ||
-          t("superAdmin.companyAdmin.failedToCreate") ||
-          "Failed to create company admin"
+        error.message || t("superAdmin.companyAdmin.failedToCreate")
       );
       setSnackbarVisible(true);
     } finally {

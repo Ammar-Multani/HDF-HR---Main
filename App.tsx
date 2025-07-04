@@ -5,6 +5,8 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { LanguageProvider } from "./contexts/LanguageContext";
 import { AppNavigator } from "./navigation";
+import { authLinking } from "./navigation/AuthNavigator";
+import { NavigationContainer } from "@react-navigation/native";
 import * as SplashScreen from "expo-splash-screen";
 import * as Linking from "expo-linking";
 import { Alert, AppState, AppStateStatus, Platform } from "react-native";
@@ -18,6 +20,7 @@ import {
 } from "./lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFonts } from "expo-font";
+import { supabase } from "./lib/supabase";
 
 // Navigation state key
 const NAVIGATION_STATE_KEY = "@navigation_state";
@@ -147,9 +150,20 @@ export default function App() {
           }
         }
 
-        // Otherwise do a quick check for auth token
+        // Otherwise do a quick check for auth token and verify with Supabase
         const token = await AsyncStorage.getItem("auth_token");
-        const isAuthenticated = !!token;
+        let isAuthenticated = false;
+
+        if (token) {
+          // Verify the token with Supabase
+          const { data } = await supabase.auth.getSession();
+          isAuthenticated = !!data.session;
+
+          // If token exists but session doesn't, clear the token
+          if (!isAuthenticated) {
+            await AsyncStorage.removeItem("auth_token");
+          }
+        }
 
         // Store the result for future quick checks
         await AsyncStorage.setItem(
@@ -166,6 +180,14 @@ export default function App() {
       } catch (error) {
         console.error("Error in auth pre-check:", error);
         setHasCheckedAuth(true); // Continue anyway
+
+        // Clear potentially corrupted auth state
+        try {
+          await AsyncStorage.removeItem(AUTH_CHECK_KEY);
+          await AsyncStorage.removeItem("auth_token");
+        } catch (e) {
+          console.error("Error clearing auth state:", e);
+        }
       }
     };
 
@@ -221,6 +243,35 @@ export default function App() {
       try {
         if (!hasCheckedAuth) {
           return; // Wait for auth check first
+        }
+
+        // Check if we need to force reload after sign-out
+        const forceReload = await AsyncStorage.getItem(
+          "FORCE_RELOAD_AFTER_SIGNOUT"
+        );
+        if (forceReload === "true") {
+          // Clear the flag
+          await AsyncStorage.removeItem("FORCE_RELOAD_AFTER_SIGNOUT");
+
+          // For web, force a page reload
+          if (Platform.OS === "web") {
+            window.location.reload();
+            return;
+          } else {
+            // For mobile, clear auth state
+            const keys = await AsyncStorage.getAllKeys();
+            const authKeys = keys.filter(
+              (key) =>
+                key.startsWith("supabase.auth.") ||
+                key === "auth_token" ||
+                key === "auth_check"
+            );
+
+            if (authKeys.length > 0) {
+              await AsyncStorage.multiRemove(authKeys);
+              await supabase.auth.initialize();
+            }
+          }
         }
 
         // Different preparation based on auth state
@@ -341,11 +392,11 @@ export default function App() {
       <ThemeProvider>
         <LanguageProvider>
           <AuthProvider>
-            <StatusBar style="auto" />
             <AppNavigator />
           </AuthProvider>
         </LanguageProvider>
       </ThemeProvider>
+      <StatusBar style="auto" />
     </SafeAreaProvider>
   );
 }

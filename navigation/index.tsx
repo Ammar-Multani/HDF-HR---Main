@@ -4,6 +4,7 @@ import {
   useNavigationContainerRef,
   StackActions,
   ParamListBase,
+  NavigationContainerRef,
 } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "../contexts/AuthContext";
@@ -25,7 +26,7 @@ const NAVIGATION_STATE_KEY = "@navigation_state";
 const NAVIGATE_TO_DASHBOARD_KEY = "NAVIGATE_TO_DASHBOARD";
 
 // Create a navigation ref that can be used outside of the Navigation Provider
-export const navigationRef = createRef();
+export const navigationRef = createRef<NavigationContainerRef<ParamListBase>>();
 
 // Add window dimensions hook
 const useWindowDimensions = () => {
@@ -160,32 +161,7 @@ export const AppNavigator = ({ initialAuthState = null }) => {
   return (
     <NavigationContainer
       ref={navRef}
-      linking={{
-        ...linking,
-        config: {
-          ...linking.config,
-          screens: {
-            ...linking.config.screens,
-            CompanyAdmin: {
-              screens: {
-                ...linking.config.screens.CompanyAdmin?.screens,
-                Receipts: "receipts",
-                CreateCompanyReceipt: "receipts/create",
-                CompanyReceiptDetails: "receipts/:receiptId",
-                EditCompanyReceipt: "receipts/:receiptId/edit",
-              },
-            },
-            SuperAdmin: {
-              screens: {
-                ...linking.config.screens.SuperAdmin?.screens,
-                SuperAdminCreateEmployeeAccidentReport: "form/accident/create",
-                SuperAdminCreateEmployeeIllnessReport: "form/illness/create",
-                SuperAdminCreateEmployeeStaffDeparture: "form/departure/create",
-              },
-            },
-          },
-        },
-      }}
+      linking={linking}
       initialState={initialState}
       onStateChange={handleStateChange}
       fallback={<Text>Loading...</Text>}

@@ -67,18 +67,26 @@
     "invalidPassword": "Invalid password. Please try again."
   },
   "resetPassword": {
-    "title": "Set New Password",
-    "subtitle": "Create a new password for your account",
+    "title": "Reset Password",
+    "subtitle": "Enter your new password below",
     "newPassword": "New Password",
-    "confirmPassword": "Confirm New Password",
+    "confirmPassword": "Confirm Password",
     "resetButton": "Reset Password",
-    "successMessage": "Password reset successful! You can now sign in with your new password.",
-    "failedReset": "Failed to reset password",
-    "invalidToken": "Invalid or missing reset token",
-    "passwordsDoNotMatch": "Passwords do not match",
-    "passwordLength": "Password must be at least 6 characters",
     "passwordRequired": "Password is required",
-    "confirmPasswordRequired": "Confirm password is required"
+    "passwordLength": "Password must be at least 8 characters long",
+    "passwordLowercase": "Password must contain at least one lowercase letter",
+    "passwordUppercase": "Password must contain at least one uppercase letter",
+    "passwordNumber": "Password must contain at least one number",
+    "passwordSpecial": "Password must contain at least one special character",
+    "confirmPasswordRequired": "Please confirm your password",
+    "passwordsDoNotMatch": "Passwords do not match",
+    "successMessage": "Password reset successful. You can now log in with your new password.",
+    "failedReset": "Failed to reset password. Please try again.",
+    "linkExpired": "Password reset link has expired. Please request a new one.",
+    "tooManyAttempts": "Too many attempts. Please try again later.",
+    "networkError": "Network error. Please check your connection and try again.",
+    "invalidOrExpiredLink": "Invalid or expired password reset link.",
+    "sessionError": "Authentication session error. Please try again with a fresh reset link."
   },
   "language": {
     "english": "English",
@@ -593,6 +601,10 @@
       "deactivateTitle": "Deactivate Company Admin",
       "activateMessage": "Are you sure you want to activate this company admin?",
       "deactivateMessage": "Are you sure you want to deactivate this company admin?",
+      "totalTasks": "Total Tasks",
+      "totalEmployees": "Total Employees",
+      "totalForms": "Total Forms",
+      "totalReceipts": "Total Receipts",
       "profile": {
         "title": "Profile",
         "subtitle": "Manage your account information",
@@ -755,6 +767,21 @@
           "countryRequired": "Country is required",
           "countryInvalidChars": "Country can only contain letters, spaces, hyphens, and apostrophes"
         }
+      },
+      "utilities": {
+        "title": "Utilities",
+        "selectOption": "Select Option",
+        "tasks": "Tasks Management",
+        "tasksDescription": "Create, view and manage company tasks",
+        "forms": "Forms & Reports",
+        "formsDescription": "View and manage submitted forms and reports",
+        "employees": "Employee Management",
+        "employeesDescription": "Manage and oversee all employees within your company",
+        "receipt": "Receipt Management",
+        "receiptDescription": "Create, scan and manage company receipts",
+        "activity": "Activity Logs",
+        "activityDescription": "View activity logs and recent changes within your company",
+        "noMoreData": "No more data to show"
       }
     },
     "forms": {
@@ -1072,6 +1099,21 @@
       "savePreferences": "Save Preferences",
       "preferencesUpdated": "Preferences updated successfully"
     },
+    "utilities": {
+      "title": "Utilities",
+      "selectOption": "Select Option",
+      "tasks": "Tasks Management",
+      "tasksDescription": "Create, view and manage company tasks",
+      "forms": "Forms & Reports",
+      "formsDescription": "View and manage submitted forms and reports",
+      "employees": "Employee Management",
+      "employeesDescription": "Manage and oversee all employees within your company",
+      "receipt": "Receipt Management",
+      "receiptDescription": "Create, scan and manage company receipts",
+      "activity": "Activity Logs",
+      "activityDescription": "View activity logs and recent changes within your company",
+      "noMoreData": "No more data to show"
+    },
     "employees": {
       "title": "Employees",
       "createEmployee": "Create Employee",
@@ -1278,6 +1320,11 @@
     "resetPassword": "Reset Password"
   },
   "forgotPassword": {
+   
+    "email": "Email",
+    "sendResetLink": "Send Reset Link",
+    "checkEmail": "Check your email for a reset link",
+    "resetLinkSent": "Reset link sent to your email",
     "title": "Forgot Password",
     "subtitle": "Enter your email address to receive instructions for resetting your password",
     "emailRequired": "Email is required",

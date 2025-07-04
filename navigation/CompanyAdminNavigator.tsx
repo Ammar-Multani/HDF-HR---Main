@@ -22,6 +22,7 @@ import { SidebarLayout } from "./components/SidebarLayout";
 import { t } from "i18next";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
+import { UserRole } from "../types";
 
 // Company Admin Screens
 import CompanyAdminDashboard from "../screens/companyadmin/CompanyAdminDashboard";
@@ -50,6 +51,7 @@ import CompanyAdminUtilitiesScreen from "../screens/companyadmin/CompanyAdminUti
 const CompanyAdminStack = createNativeStackNavigator();
 const CompanyAdminTab = createBottomTabNavigator();
 const ContentStack = createNativeStackNavigator();
+const WebContentStack = createNativeStackNavigator();
 
 // Update the RootStackParamList type
 type RootStackParamList = {
@@ -259,7 +261,6 @@ const WebStackNavigator = () => {
       if (companyUserError) throw companyUserError;
 
       if (companyUser) {
-        // Properly access the can_upload_receipts property
         const can_upload = companyUser.company
           ? (companyUser.company as any).can_upload_receipts
           : false;
@@ -282,10 +283,24 @@ const WebStackNavigator = () => {
       screen: "EmployeesScreen",
     },
     {
-      icon: "tools" as const,
-      label: t("navigation.utilities"),
-      screen: "UtilitiesScreen",
+      icon: "clipboard-text" as const,
+      label: t("navigation.tasks"),
+      screen: "TasksScreen",
     },
+    {
+      icon: "file-document" as const,
+      label: t("navigation.forms"),
+      screen: "FormSubmissionsScreen",
+    },
+    ...(canUploadReceipts
+      ? [
+          {
+            icon: "receipt" as const,
+            label: t("navigation.receipts"),
+            screen: "ReceiptsScreen",
+          },
+        ]
+      : []),
     {
       icon: "account-circle" as const,
       label: t("navigation.profile"),
@@ -299,7 +314,6 @@ const WebStackNavigator = () => {
   const handleNavigation = (screen: string) => {
     setActiveScreen(screen);
     navigation.navigate("MainContent");
-    // Use a timeout to ensure MainContent is mounted before navigating to the screen
     setTimeout(() => {
       // @ts-ignore - Ignore the typing error as we know these routes exist
       navigation.navigate(screen);
@@ -311,7 +325,129 @@ const WebStackNavigator = () => {
       activeScreen={activeScreen}
       setActiveScreen={setActiveScreen}
       navigationItems={navigationItems}
-      content={<ContentArea />}
+      content={
+        <WebContentStack.Navigator
+          screenOptions={{
+            headerShown: false,
+            animation: "none",
+            presentation: "containedModal",
+            contentStyle: {
+              backgroundColor: "transparent",
+            },
+          }}
+        >
+          <WebContentStack.Group>
+            <WebContentStack.Screen name="MainContent">
+              {() => (
+                <ContentStack.Navigator
+                  screenOptions={{
+                    headerShown: false,
+                    animation: "none",
+                  }}
+                  initialRouteName="DashboardScreen"
+                >
+                  <ContentStack.Screen
+                    name="DashboardScreen"
+                    component={CompanyAdminDashboard}
+                  />
+                  <ContentStack.Screen
+                    name="EmployeesScreen"
+                    component={EmployeeListScreen}
+                  />
+                  <ContentStack.Screen
+                    name="TasksScreen"
+                    component={CompanyAdminTasksScreen}
+                  />
+                  <ContentStack.Screen
+                    name="FormSubmissionsScreen"
+                    component={FormSubmissionsScreen}
+                  />
+                  {canUploadReceipts && (
+                    <ContentStack.Screen
+                      name="ReceiptsScreen"
+                      component={CompanyReceiptsListScreen}
+                    />
+                  )}
+                  <ContentStack.Screen
+                    name="ProfileScreen"
+                    component={CompanyAdminProfileScreen}
+                  />
+                </ContentStack.Navigator>
+              )}
+            </WebContentStack.Screen>
+          </WebContentStack.Group>
+
+          <WebContentStack.Group
+            screenOptions={{
+              presentation: "containedModal",
+              contentStyle: {
+                backgroundColor: "#f8fafc",
+              },
+            }}
+          >
+            <WebContentStack.Screen
+              name="EmployeeDetails"
+              component={EmployeeDetailsScreen}
+            />
+            <WebContentStack.Screen
+              name="CreateEmployee"
+              component={CreateEmployeeScreen}
+            />
+            <WebContentStack.Screen
+              name="EditEmployee"
+              component={EditEmployeeScreen}
+            />
+            <WebContentStack.Screen
+              name="TaskDetails"
+              component={CompanyAdminTaskDetailsScreen}
+            />
+            <WebContentStack.Screen
+              name="CreateTask"
+              component={CompanyAdminCreateTaskScreen}
+            />
+            <WebContentStack.Screen
+              name="EditTask"
+              component={CompanyAdminEditTaskScreen}
+            />
+            <WebContentStack.Screen
+              name="FormDetails"
+              component={FormDetailsScreen}
+            />
+            <WebContentStack.Screen
+              name="CreateEmployeeAccidentReport"
+              component={CreateEmployeeAccidentReportScreen}
+            />
+            <WebContentStack.Screen
+              name="CreateEmployeeIllnessReport"
+              component={CreateEmployeeIllnessReportScreen}
+            />
+            <WebContentStack.Screen
+              name="CreateEmployeeStaffDepartureReport"
+              component={CreateEmployeeStaffDepartureReportScreen}
+            />
+            {canUploadReceipts && (
+              <>
+                <WebContentStack.Screen
+                  name="CreateCompanyReceipt"
+                  component={CreateCompanyReceiptScreen}
+                />
+                <WebContentStack.Screen
+                  name="CompanyReceiptDetails"
+                  component={CompanyReceiptDetailsScreen}
+                />
+                <WebContentStack.Screen
+                  name="EditCompanyReceipt"
+                  component={EditCompanyReceiptScreen}
+                />
+              </>
+            )}
+            <WebContentStack.Screen
+              name="ActivityLogs"
+              component={CompanyActivityLogsScreen}
+            />
+          </WebContentStack.Group>
+        </WebContentStack.Navigator>
+      }
       onNavigate={handleNavigation}
     />
   );
@@ -343,7 +479,6 @@ const CompanyAdminTabNavigator = () => {
       if (companyUserError) throw companyUserError;
 
       if (companyUser) {
-        // Properly access the can_upload_receipts property
         const can_upload = companyUser.company
           ? (companyUser.company as any).can_upload_receipts
           : false;
@@ -416,16 +551,29 @@ const CompanyAdminTabNavigator = () => {
       >
         <CompanyAdminTab.Screen
           name="Dashboard"
-          component={CompanyAdminDashboard}
           options={{
             tabBarIcon: ({ color }) => (
               <MaterialCommunityIcons name="home" color={color} size={24} />
             ),
           }}
-        />
+        >
+          {() => (
+            <ContentStack.Navigator
+              screenOptions={{
+                headerShown: false,
+                animation: "none",
+              }}
+            >
+              <ContentStack.Screen
+                name="DashboardMain"
+                component={CompanyAdminDashboard}
+              />
+            </ContentStack.Navigator>
+          )}
+        </CompanyAdminTab.Screen>
+
         <CompanyAdminTab.Screen
           name="Employees"
-          component={EmployeeListScreen}
           options={{
             tabBarIcon: ({ color }) => (
               <MaterialCommunityIcons
@@ -435,7 +583,33 @@ const CompanyAdminTabNavigator = () => {
               />
             ),
           }}
-        />
+        >
+          {() => (
+            <ContentStack.Navigator
+              screenOptions={{
+                headerShown: false,
+                animation: "none",
+              }}
+            >
+              <ContentStack.Screen
+                name="EmployeesList"
+                component={EmployeeListScreen}
+              />
+              <ContentStack.Screen
+                name="EmployeeDetails"
+                component={EmployeeDetailsScreen}
+              />
+              <ContentStack.Screen
+                name="CreateEmployee"
+                component={CreateEmployeeScreen}
+              />
+              <ContentStack.Screen
+                name="EditEmployee"
+                component={EditEmployeeScreen}
+              />
+            </ContentStack.Navigator>
+          )}
+        </CompanyAdminTab.Screen>
 
         <CompanyAdminTab.Screen
           name="Utilities"
@@ -465,10 +639,6 @@ const CompanyAdminTabNavigator = () => {
                 component={FormDetailsScreen}
               />
               <ContentStack.Screen
-                name="TasksScreen"
-                component={CompanyAdminTasksScreen}
-              />
-              <ContentStack.Screen
                 name="TasksList"
                 component={CompanyAdminTasksScreen}
               />
@@ -484,43 +654,19 @@ const CompanyAdminTabNavigator = () => {
                 name="EditTask"
                 component={CompanyAdminEditTaskScreen}
               />
-              <ContentStack.Screen
-                name="EmployeesScreen"
-                component={EmployeeListScreen}
-              />
-              <ContentStack.Screen
-                name="EmployeeDetails"
-                component={EmployeeDetailsScreen}
-              />
               {canUploadReceipts && (
                 <>
                   <ContentStack.Screen
-                    name="ReceiptsScreen"
-                    component={CompanyReceiptsListScreen}
-                  />
-                  <ContentStack.Screen
                     name="ReceiptsList"
                     component={CompanyReceiptsListScreen}
-                  />
-                  <ContentStack.Screen
-                    name="CreateReceipt"
-                    component={CreateCompanyReceiptScreen}
                   />
                   <ContentStack.Screen
                     name="CreateCompanyReceipt"
                     component={CreateCompanyReceiptScreen}
                   />
                   <ContentStack.Screen
-                    name="ReceiptDetails"
-                    component={CompanyReceiptDetailsScreen}
-                  />
-                  <ContentStack.Screen
                     name="CompanyReceiptDetails"
                     component={CompanyReceiptDetailsScreen}
-                  />
-                  <ContentStack.Screen
-                    name="EditReceipt"
-                    component={EditCompanyReceiptScreen}
                   />
                   <ContentStack.Screen
                     name="EditCompanyReceipt"
@@ -548,24 +694,8 @@ const CompanyAdminTabNavigator = () => {
           )}
         </CompanyAdminTab.Screen>
 
-        {canUploadReceipts && (
-          <CompanyAdminTab.Screen
-            name="Receipts"
-            component={CompanyReceiptsListScreen}
-            options={{
-              tabBarIcon: ({ color }) => (
-                <MaterialCommunityIcons
-                  name="receipt"
-                  color={color}
-                  size={24}
-                />
-              ),
-            }}
-          />
-        )}
         <CompanyAdminTab.Screen
           name="Profile"
-          component={CompanyAdminProfileScreen}
           options={{
             tabBarIcon: ({ color }) => (
               <MaterialCommunityIcons
@@ -575,7 +705,21 @@ const CompanyAdminTabNavigator = () => {
               />
             ),
           }}
-        />
+        >
+          {() => (
+            <ContentStack.Navigator
+              screenOptions={{
+                headerShown: false,
+                animation: "none",
+              }}
+            >
+              <ContentStack.Screen
+                name="ProfileMain"
+                component={CompanyAdminProfileScreen}
+              />
+            </ContentStack.Navigator>
+          )}
+        </CompanyAdminTab.Screen>
       </CompanyAdminTab.Navigator>
     );
   }
@@ -589,6 +733,18 @@ export const CompanyAdminNavigator = () => {
   const { width } = useWindowDimensions();
   const isWeb = Platform.OS === "web";
   const isLargeScreen = isWeb && width > 768;
+  const { isAuthenticated, userRole } = useAuth();
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
+
+  // Protect routes - redirect to login if not authenticated or not company admin
+  useEffect(() => {
+    if (!isAuthenticated || userRole !== UserRole.COMPANY_ADMIN) {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Login" }],
+      });
+    }
+  }, [isAuthenticated, userRole]);
 
   if (isLargeScreen) {
     return <WebStackNavigator />;

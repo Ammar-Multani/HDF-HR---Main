@@ -43,6 +43,11 @@ import { initEmailService } from "../../utils/emailService";
 import { t } from "i18next";
 import { Styles } from "@expo/config-plugins/build/android";
 import CustomLanguageSelector from "../../components/CustomLanguageSelector";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { ActivityType } from "../../types/activity-log";
+import { clearAllCache } from "../../lib/services/cacheService";
+import { generateSecureToken, APP_URL } from "../../utils/auth";
+import { sendPasswordResetEmail } from "../../utils/emailService";
 
 // Add Shimmer component for loading states
 interface ShimmerProps {
@@ -107,7 +112,7 @@ const Shimmer: React.FC<ShimmerProps> = ({ width, height, style }) => {
   );
 };
 
-// Add ResetPasswordModal interface after ShimmerProps
+// Add ResetPasswordModal interface
 interface ResetPasswordModalProps {
   visible: boolean;
   onDismiss: () => void;
@@ -116,7 +121,7 @@ interface ResetPasswordModalProps {
   email: string;
 }
 
-// Add ResetPasswordModal component before EmployeeProfileScreen
+// Add ResetPasswordModal component
 const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({
   visible,
   onDismiss,
@@ -156,12 +161,12 @@ const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({
               color={theme.colors.primary}
             />
             <Text style={styles.resetPasswordModalTitle}>
-              {t("superAdmin.profile.resetPassword")}
+              {t("employee.profile.resetPassword")}
             </Text>
           </View>
 
           <Text style={styles.resetPasswordModalMessage}>
-            {t("superAdmin.profile.resetPasswordConfirm", {
+            {t("employee.profile.resetPasswordConfirm", {
               email: email,
             }) ||
               `Are you sure you want to reset the password for ${email}? A password reset link will be sent to your email.`}
@@ -175,7 +180,7 @@ const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({
               labelStyle={[styles.resetPasswordModalButtonText]}
               disabled={loading}
             >
-              {t("superAdmin.profile.cancel")}
+              {t("employee.profile.cancel")}
             </Button>
             <Button
               mode="contained"
@@ -186,7 +191,7 @@ const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({
               loading={loading}
               disabled={loading}
             >
-              {t("superAdmin.profile.sendResetLink")}
+              {t("employee.profile.sendResetLink")}
             </Button>
           </View>
         </View>
@@ -459,6 +464,7 @@ const getStyles = (theme: any) =>
   StyleSheet.create({
     container: {
       flex: 1,
+      backgroundColor: theme.colors.background,
     },
     keyboardAvoidingView: {
       flex: 1,
@@ -594,7 +600,7 @@ const getStyles = (theme: any) =>
     },
     infoLabel: {
       fontFamily: "Poppins-Medium",
-      width: 120,
+      width: 100,
       color: "#64748b",
       fontSize: 13,
     },
@@ -628,129 +634,13 @@ const getStyles = (theme: any) =>
       fontSize: 14,
       color: "#1e293b",
     },
+    languageSelectorContainer: {
+      marginLeft: "auto",
+    },
     divider: {
       height: 1,
       backgroundColor: "#e2e8f0",
     },
-    signOutModal: {
-      backgroundColor: "white",
-      borderRadius: 16,
-      elevation: 5,
-      overflow: "hidden",
-    },
-    signOutModalContent: {
-      alignItems: "center",
-    },
-    signOutModalHeader: {
-      alignItems: "center",
-      marginBottom: 16,
-    },
-    signOutModalTitle: {
-      fontSize: 20,
-      fontFamily: "Poppins-SemiBold",
-      color: "#1e293b",
-      marginTop: 16,
-      textAlign: "center",
-    },
-    signOutModalMessage: {
-      fontSize: 16,
-      fontFamily: "Poppins-Regular",
-      color: "#64748b",
-      textAlign: "center",
-      marginBottom: 24,
-    },
-    signOutModalActions: {
-      flexDirection: "row",
-      justifyContent: "center",
-      gap: 12,
-      marginTop: 8,
-    },
-    signOutModalButton: {
-      borderRadius: 8,
-      minWidth: 100,
-    },
-    signOutModalButtonText: {
-      fontFamily: "Poppins-Medium",
-    },
-    cancelButton: {
-      borderColor: "#e2e8f0",
-    },
-    confirmButton: {
-      borderWidth: 0,
-    },
-    selectContainer: {
-      marginBottom: 16,
-    },
-    selectLabel: {
-      fontSize: 14,
-      color: "#64748b",
-      marginBottom: 8,
-      fontFamily: "Poppins-Medium",
-    },
-    selectOptions: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 8,
-    },
-    selectOption: {
-      paddingHorizontal: 16,
-      paddingVertical: 8,
-      borderRadius: 20,
-      borderWidth: 1,
-      borderColor: "#e2e8f0",
-      backgroundColor: "#fff",
-    },
-    selectedOption: {
-      backgroundColor: "rgba(54,105,157,0.1)",
-      borderColor: "rgba(54,105,157,255)",
-    },
-    selectOptionText: {
-      color: "#64748b",
-      fontSize: 14,
-      fontFamily: "Poppins-Regular",
-    },
-    selectedOptionText: {
-      color: "rgba(54,105,157,255)",
-      fontFamily: "Poppins-Medium",
-    },
-    addressRow: {
-      flexDirection: "row",
-      gap: 16,
-      marginBottom: 16,
-    },
-    cityInput: {
-      flex: 3,
-    },
-    stateInput: {
-      flex: 2,
-    },
-    postalInput: {
-      flex: 2,
-    },
-    countryInput: {
-      flex: 3,
-    },
-    bottomBar: {
-      bottom: 0,
-      left: 0,
-      right: 0,
-      backgroundColor: "#FFFFFF",
-      borderTopWidth: 1,
-      borderTopColor: "#e2e8f0",
-      padding: 16,
-    },
-    bottomBarContent: {
-      flexDirection: "row",
-      justifyContent: "flex-end",
-      gap: 12,
-      maxWidth: 1400,
-      marginHorizontal: "auto",
-      width: "100%",
-    },
-    button: {
-      minWidth: 120,
-    },
-    submitButton: {},
     snackbar: {
       marginBottom: 16,
       elevation: 6,
@@ -804,11 +694,65 @@ const getStyles = (theme: any) =>
       fontFamily: "Poppins-Medium",
       fontSize: 14,
     },
+    cancelButton: {
+      borderColor: "#e2e8f0",
+    },
+    confirmButton: {
+      borderWidth: 0,
+    },
+    deleteVerificationModal: {
+      backgroundColor: "white",
+      borderRadius: 16,
+      elevation: 5,
+      overflow: "hidden",
+      margin: 20,
+    },
+    deleteVerificationModalContent: {
+      padding: 24,
+      alignItems: "center",
+    },
+    deleteVerificationIcon: {
+      marginBottom: 16,
+    },
+    deleteVerificationTitle: {
+      fontSize: 20,
+      fontFamily: "Poppins-SemiBold",
+      color: "#1e293b",
+      marginBottom: 12,
+      textAlign: "center",
+    },
+    deleteVerificationMessage: {
+      fontSize: 16,
+      fontFamily: "Poppins-Regular",
+      color: "#64748b",
+      textAlign: "center",
+      marginBottom: 24,
+      lineHeight: 24,
+    },
+    deleteVerificationInput: {
+      width: "100%",
+      marginBottom: 24,
+    },
+    deleteVerificationActions: {
+      flexDirection: "row",
+      justifyContent: "center",
+      gap: 12,
+      width: "100%",
+    },
+    deleteVerificationButton: {
+      flex: 1,
+      borderRadius: 8,
+    },
+    deleteVerificationButtonText: {
+      fontFamily: "Poppins-Medium",
+      fontSize: 14,
+    },
     deleteAccountModal: {
       backgroundColor: "white",
       borderRadius: 16,
       elevation: 5,
       overflow: "hidden",
+      margin: 20,
     },
     deleteAccountModalContent: {
       alignItems: "center",
@@ -846,28 +790,28 @@ const getStyles = (theme: any) =>
       fontFamily: "Poppins-Medium",
       fontSize: 14,
     },
-    deleteVerificationModal: {
+    signOutModal: {
       backgroundColor: "white",
       borderRadius: 16,
-      padding: 24,
-      margin: 16,
-      maxWidth: 400,
-      alignSelf: "center",
+      elevation: 5,
+      overflow: "hidden",
+      margin: 20,
     },
-    deleteVerificationModalContent: {
+    signOutModalContent: {
       alignItems: "center",
     },
-    deleteVerificationIcon: {
+    signOutModalHeader: {
+      alignItems: "center",
       marginBottom: 16,
     },
-    deleteVerificationTitle: {
+    signOutModalTitle: {
       fontSize: 20,
       fontFamily: "Poppins-SemiBold",
       color: "#1e293b",
-      marginBottom: 16,
+      marginTop: 16,
       textAlign: "center",
     },
-    deleteVerificationMessage: {
+    signOutModalMessage: {
       fontSize: 16,
       fontFamily: "Poppins-Regular",
       color: "#64748b",
@@ -875,38 +819,97 @@ const getStyles = (theme: any) =>
       marginBottom: 24,
       lineHeight: 24,
     },
-    deleteVerificationInput: {
-      width: "100%",
-      marginBottom: 24,
-    },
-    deleteVerificationActions: {
+    signOutModalActions: {
       flexDirection: "row",
-      justifyContent: "flex-end",
+      justifyContent: "center",
       gap: 12,
-      width: "100%",
+      marginTop: 8,
     },
-    deleteVerificationButton: {
+    signOutModalButton: {
+      borderRadius: 8,
       minWidth: 100,
     },
-    deleteVerificationButtonText: {
+    signOutModalButtonText: {
       fontFamily: "Poppins-Medium",
       fontSize: 14,
     },
-    advancedSettingsContainer: {
-      backgroundColor: "#fafafa",
+    bottomBar: {
+      borderTopWidth: 1,
+      paddingVertical: 16,
+      paddingHorizontal: 24,
+    },
+    bottomBarContent: {
+      flexDirection: "row",
+      justifyContent: "flex-end",
+      gap: 12,
+      maxWidth: 1200,
+      marginHorizontal: "auto",
+      width: "100%",
+    },
+    button: {
+      minWidth: 120,
       borderRadius: 8,
+    },
+    submitButton: {
+      minWidth: 120,
+      borderRadius: 8,
+      backgroundColor: theme.colors.primary,
+    },
+    advancedSettingsContainer: {
       marginTop: 8,
+      borderTopWidth: 1,
+      borderTopColor: "#e2e8f0",
+      paddingTop: 8,
+    },
+    dangerSettingItem: {
+      marginTop: 8,
+    },
+    selectContainer: {
+      marginBottom: 16,
+    },
+    selectLabel: {
+      fontSize: 14,
+      marginBottom: 8,
+    },
+    selectOptions: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+    },
+    selectOption: {
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      borderRadius: 8,
       borderWidth: 1,
       borderColor: "#e2e8f0",
     },
-    dangerSettingItem: {
-      backgroundColor: "#fff1f2",
-      padding: 16,
+    selectedOption: {
+      backgroundColor: theme.colors.primary,
+      borderColor: theme.colors.primary,
     },
-    languageSelectorContainer: {
+    selectOptionText: {
+      fontSize: 14,
+      color: "#1e293b",
+    },
+    selectedOptionText: {
+      color: "#ffffff",
+    },
+    addressRow: {
       flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
+      gap: 16,
+      marginBottom: 16,
+    },
+    cityInput: {
+      flex: 2,
+    },
+    stateInput: {
+      flex: 1,
+    },
+    postalInput: {
+      flex: 1,
+    },
+    countryInput: {
+      flex: 2,
     },
   });
 
@@ -971,6 +974,8 @@ const EmployeeProfileScreen = () => {
     useState(false);
   const [deleteVerificationText, setDeleteVerificationText] = useState("");
   const [advancedSettingsVisible, setAdvancedSettingsVisible] = useState(false);
+  const [helpModalVisible, setHelpModalVisible] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   // Initialize email service
   useEffect(() => {
@@ -1114,30 +1119,82 @@ const EmployeeProfileScreen = () => {
   };
 
   const handleSignOut = async () => {
-    if (Platform.OS === "web") {
-      setSignOutModalVisible(true);
-    } else {
-      Alert.alert("Sign Out", "Are you sure you want to sign out?", [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Sign Out",
-          onPress: performSignOut,
-        },
-      ]);
-    }
+    setSignOutModalVisible(true);
   };
 
   const performSignOut = async () => {
     try {
+      setSigningOut(true);
+
+      // Log the sign out activity
+      const activityLogData = {
+        user_id: user.id,
+        activity_type: ActivityType.SIGN_OUT,
+        description: `User signed out: ${employeeData?.first_name || ""} ${employeeData?.last_name || ""} (${user.email})`,
+        metadata: {
+          user_email: user.email,
+          user_role: "employee",
+          platform: Platform.OS,
+          company_id: employeeData?.company_id,
+          timestamp: new Date().toISOString(),
+        },
+      };
+
+      // Log the activity before signing out
+      await supabase.from("activity_logs").insert([activityLogData]);
+
+      // Set flag to force reload after sign-out
+      await AsyncStorage.setItem("FORCE_RELOAD_AFTER_SIGNOUT", "true");
+
+      // Clear all cached data
+      await clearAllCache();
+
+      // Clear all auth-related storage
+      const keys = await AsyncStorage.getAllKeys();
+      const authKeys = keys.filter(
+        (key) =>
+          key.startsWith("supabase.auth.") ||
+          key.startsWith("cache:") ||
+          key.startsWith("auth_") ||
+          key === "auth_token" ||
+          key === "auth_check" ||
+          key === "NAVIGATE_TO_DASHBOARD" ||
+          key === "last_cache_reset" ||
+          key === "SKIP_LOADING_KEY" ||
+          key === "initial_load_complete"
+      );
+      await AsyncStorage.multiRemove(authKeys);
+
+      // Sign out using the auth context
       await signOut();
+
+      // For web, ensure we redirect to login
+      if (Platform.OS === "web") {
+        // Small delay to ensure all operations complete
+        setTimeout(() => {
+          window.location.href = "/";
+        }, 300);
+      }
     } catch (error) {
-      console.error("Error signing out:", error);
-      setSnackbarMessage("Failed to sign out");
+      console.error("Error during sign out:", error);
+      setSnackbarMessage(t("employee.profile.signOutFailed"));
       setSnackbarVisible(true);
+
+      // Even if there's an error, try to sign out
+      try {
+        await signOut();
+
+        // Force reload as last resort
+        if (Platform.OS === "web") {
+          setTimeout(() => {
+            window.location.href = "/";
+          }, 300);
+        }
+      } catch (e) {
+        console.error("Final sign out attempt failed:", e);
+      }
     } finally {
+      setSigningOut(false);
       setSignOutModalVisible(false);
     }
   };
@@ -1169,7 +1226,7 @@ const EmployeeProfileScreen = () => {
       <Portal>
         <Modal
           visible={signOutModalVisible}
-          onDismiss={() => setSignOutModalVisible(false)}
+          onDismiss={() => !signingOut && setSignOutModalVisible(false)}
           contentContainerStyle={[
             styles.signOutModal,
             {
@@ -1202,6 +1259,7 @@ const EmployeeProfileScreen = () => {
                   styles.signOutModalButtonText,
                   { fontSize: isLargeScreen ? 16 : 14 },
                 ]}
+                disabled={signingOut}
               >
                 Cancel
               </Button>
@@ -1214,6 +1272,8 @@ const EmployeeProfileScreen = () => {
                   styles.signOutModalButtonText,
                   { fontSize: isLargeScreen ? 16 : 14 },
                 ]}
+                loading={signingOut}
+                disabled={signingOut}
               >
                 Sign Out
               </Button>
@@ -1224,60 +1284,103 @@ const EmployeeProfileScreen = () => {
     );
   };
 
-  const handleResetPasswordClick = () => {
-    setResetPasswordModalVisible(true);
-  };
-
   const handleResetPassword = async () => {
     try {
-      if (!user?.email) {
-        setSnackbarMessage(
-          t("superAdmin.profile.emailRequired") || "Email is required"
-        );
-        setSnackbarVisible(true);
-        return;
-      }
-
       setResettingPassword(true);
-      logDebug("Initiating password reset for email:", user.email);
-      const { error } = await forgotPassword(user.email);
 
-      if (error) {
-        let errorMessage = error.message || t("forgotPassword.failedReset");
-        let messageType = "error";
-
-        // Handle specific error cases
-        if (error.message?.includes("sender identity")) {
-          errorMessage = t("forgotPassword.emailServiceError");
-        } else if (error.message?.includes("rate limit")) {
-          errorMessage = t("forgotPassword.tooManyAttempts");
-          messageType = "warning";
-        } else if (error.message?.includes("network")) {
-          errorMessage = t("forgotPassword.networkError");
-          messageType = "warning";
-        }
-
-        console.error("Password reset error:", error);
-        setSnackbarMessage(errorMessage);
-        setSnackbarVisible(true);
-      } else {
-        logDebug("Password reset request successful");
-        setSnackbarMessage(
-          t("forgotPassword.resetInstructions") ||
-            "Password reset instructions have been sent to your email."
-        );
-        setSnackbarVisible(true);
+      if (!employeeData || !user?.email) {
+        throw new Error("Employee data not found");
       }
-    } catch (err) {
-      console.error("Unexpected error during password reset:", err);
-      setSnackbarMessage(
-        t("common.unexpectedError") || "An unexpected error occurred"
+
+      const userEmail = user.email.toLowerCase().trim();
+
+      // Ensure proper URL construction without double slashes
+      const redirectTo = new URL("/auth/reset-password", APP_URL).toString();
+
+      // First, initiate the password reset through Supabase Auth
+      const { data: resetData, error: resetError } =
+        await supabase.auth.resetPasswordForEmail(userEmail, {
+          redirectTo,
+        });
+
+      if (resetError) {
+        throw resetError;
+      }
+
+      // Generate a secure token with 60 minute expiration
+      const { token, expiresAt } = await generateSecureToken(60);
+
+      // Store the reset token in a secure table
+      const { error: storeError } = await supabase
+        .from("password_reset_tokens")
+        .insert({
+          email: userEmail,
+          token: token,
+          expires_at: expiresAt,
+          used: false,
+        })
+        .select();
+
+      if (storeError) {
+        console.error("Error storing reset token:", storeError);
+        throw new Error("Failed to initiate password reset");
+      }
+
+      // Create the reset link using URL constructor to ensure proper formatting
+      const resetUrl = new URL("/auth/reset-password", APP_URL);
+      resetUrl.searchParams.set("token", token);
+      resetUrl.searchParams.set("type", "recovery");
+
+      console.log("Generated reset URL:", resetUrl.toString());
+
+      // Send the password reset email using our custom email service
+      const { success, error } = await sendPasswordResetEmail(
+        userEmail,
+        token,
+        resetUrl.toString()
       );
+
+      if (!success) {
+        throw error || new Error("Failed to send password reset email");
+      }
+
+      // Log the activity
+      const activityLogData = {
+        user_id: user.id,
+        activity_type: ActivityType.PASSWORD_RESET,
+        description: `Password reset requested by ${employeeData.first_name} ${employeeData.last_name} (${userEmail})`,
+        metadata: {
+          action: "reset_requested",
+          created_by: {
+            id: user.id,
+            name: `${employeeData.first_name} ${employeeData.last_name}`,
+            email: userEmail,
+            role: "employee",
+            company_id: employeeData.company_id,
+          },
+        },
+      };
+
+      const { error: logError } = await supabase
+        .from("activity_logs")
+        .insert([activityLogData]);
+
+      if (logError) throw logError;
+
+      setSnackbarMessage(t("forgotPassword.resetLinkSent"));
+      setSnackbarVisible(true);
+      setResetPasswordModalVisible(false);
+    } catch (error: any) {
+      console.error("Reset password error:", error);
+      setSnackbarMessage(error.message || t("forgotPassword.resetError"));
       setSnackbarVisible(true);
     } finally {
       setResettingPassword(false);
-      setResetPasswordModalVisible(false);
     }
+  };
+
+  const handleResetPasswordClick = () => {
+    setResetPasswordModalVisible(true);
   };
 
   // Add handleDataExport function

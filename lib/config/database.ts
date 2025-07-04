@@ -1,4 +1,6 @@
 import { SupabaseClientOptions } from "@supabase/supabase-js";
+import { Platform } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Custom type definitions for pool configuration
 interface PoolConfig {
@@ -23,11 +25,19 @@ export const poolConfig: PoolConfig = {
 };
 
 export const queryConfig: ClientConfig = {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-  },
+  auth: Platform.select({
+    web: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+    default: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: false,
+      storage: AsyncStorage,
+    },
+  }),
   db: {
     schema: "public",
   },

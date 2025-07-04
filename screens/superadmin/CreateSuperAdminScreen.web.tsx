@@ -33,7 +33,8 @@ import { t } from "i18next";
 import { ActivityType } from "../../types/activity-log";
 
 interface AdminFormData {
-  name: string;
+  first_name: string;
+  last_name: string;
   email: string;
   password: string;
   phone_number: string;
@@ -84,7 +85,8 @@ const CreateSuperAdminScreen = () => {
     reset,
   } = useForm<AdminFormData>({
     defaultValues: {
-      name: "",
+      first_name: "",
+      last_name: "",
       email: "",
       password: "",
       phone_number: "",
@@ -94,6 +96,7 @@ const CreateSuperAdminScreen = () => {
   const onSubmit = async (data: AdminFormData) => {
     try {
       setLoading(true);
+      setSnackbarVisible(false);
 
       // Validate email format
       const emailParts = data.email.split("@");
@@ -104,165 +107,95 @@ const CreateSuperAdminScreen = () => {
       ) {
         setSnackbarMessage(t("superAdmin.companies.invalidEmailDomain"));
         setSnackbarVisible(true);
-        setLoading(false);
         return;
       }
 
-      // Validate password strength
-      if (data.password.length < 8) {
-        setSnackbarMessage(t("superAdmin.companies.passwordLength"));
-        setSnackbarVisible(true);
-        setLoading(false);
-        return;
-      }
-
-      // Check if user already exists
-      const { data: existingUser, error: userCheckError } = await supabase
-        .from("users")
-        .select("id")
-        .eq("email", data.email)
-        .maybeSingle();
-
-      if (userCheckError) {
-        throw new Error(userCheckError.message);
-      }
-
-      if (existingUser) {
-        setSnackbarMessage(t("superAdmin.companies.emailAlreadyExists"));
-        setSnackbarVisible(true);
-        setLoading(false);
-        return;
-      }
-
-      // Hash password
-      const hashedPassword = await hashPassword(data.password);
-
-      // Generate reset token (for password reset functionality)
-      const resetToken =
-        Math.random().toString(36).substring(2, 15) +
-        Math.random().toString(36).substring(2, 15);
-      const resetTokenExpiry = new Date(
-        Date.now() + 7 * 24 * 60 * 60 * 1000
-      ).toISOString();
-
-      // Create user
-      const { data: newUser, error: userError } = await supabase
-        .from("users")
-        .insert({
-          email: data.email,
-          password_hash: hashedPassword,
-          status: "active",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          reset_token: resetToken,
-          reset_token_expires: resetTokenExpiry,
-        })
-        .select("id")
-        .single();
-
-      if (userError) {
-        throw new Error(userError.message);
-      }
-
-      // Create admin record with the user's ID
-      const { error: adminRecordError } = await supabase.from("admin").insert([
-        {
-          id: newUser.id,
-          name: data.name,
-          email: data.email,
-          phone_number: data.phone_number || "Not provided",
-          role: UserRole.SUPER_ADMIN,
-          status: true,
-          created_by: user?.id,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-      ]);
-
-      if (adminRecordError) {
-        // If admin creation fails, delete the user
-        await supabase.from("users").delete().eq("id", newUser.id);
-        throw adminRecordError;
-      }
-
-      // Get creator's details from admin table
-      const { data: creatorDetails, error: creatorError } = await supabase
-        .from("admin")
-        .select("id, name, email")
-        .eq("email", user?.email)
-        .single();
-
-      if (creatorError) {
-        console.error("Error fetching creator details:", creatorError);
-      }
-
-      const creatorName = creatorDetails?.name || user?.email || "";
-
-      // Log the super admin creation activity
-      const activityLogData = {
-        user_id: user?.id,
-        activity_type: ActivityType.CREATE_SUPER_ADMIN,
-        description: `New super admin "${data.name}" (${data.email}) created`,
-        metadata: {
-          created_by: {
-            id: user?.id || "",
-            name: creatorName,
-            email: user?.email || "",
-            role: "superadmin",
+      // Call the Edge Function to create super admin
+      const { data: responseData, error: functionError } =
+        await supabase.functions.invoke("user-management", {
+          body: {
+            action: "create_super_admin",
+            email: data.email.toLowerCase().trim(),
+            password: data.password,
+            first_name: data.first_name,
+            last_name: data.last_name,
+            created_by: user?.id,
           },
-          admin: {
-            id: newUser.id,
-            name: data.name,
-            email: data.email,
-            role: "superadmin",
-          },
-        },
-        old_value: null,
-        new_value: {
-          name: data.name,
-          email: data.email,
-          phone_number: data.phone_number || "Not provided",
-          role: UserRole.SUPER_ADMIN,
-          created_at: new Date().toISOString(),
-        },
-      };
+        });
 
-      const { error: logError } = await supabase
+      if (functionError || !responseData?.user) {
+        console.error(
+          "Error creating super admin:",
+          functionError || "No user data returned"
+        );
+        throw new Error(
+          functionError?.message || "Failed to create super admin"
+        );
+      }
+
+      // Log activity
+      const { error: activityError } = await supabase
         .from("activity_logs")
-        .insert([activityLogData]);
+        .insert({
+          user_id: user?.id,
+          activity_type: ActivityType.CREATE_SUPER_ADMIN,
+          description: `New super admin "${data.first_name} ${data.last_name}" (${data.email}) was created`,
+          metadata: {
+            created_by: {
+              id: user?.id,
+              email: user?.email,
+              role: "super_admin",
+            },
+            admin: {
+              id: responseData.user.id,
+              first_name: data.first_name,
+              last_name: data.last_name,
+              email: data.email,
+            },
+          },
+          old_value: null,
+          new_value: {
+            first_name: data.first_name,
+            last_name: data.last_name,
+            email: data.email,
+            created_at: new Date().toISOString(),
+          },
+        });
 
-      if (logError) {
-        console.error("Error logging activity:", logError);
-        // Don't throw here as the admin was created successfully
+      if (activityError) {
+        console.error("Error logging activity:", activityError);
       }
 
       // Send welcome email to the super admin
       const { success: emailSent, error: emailError } =
-        await sendSuperAdminWelcomeEmail(data.name, data.email, data.password);
+        await sendSuperAdminWelcomeEmail(
+          `${data.first_name} ${data.last_name}`,
+          data.email,
+          data.password
+        );
 
       if (!emailSent) {
         console.error("Error sending welcome email:", emailError);
-        // Don't throw here, as the admin account is already created successfully
       }
 
       setSnackbarMessage(
         emailSent
           ? t("superAdmin.superAdminUsers.createSuccess")
-          : t("superAdmin.superAdminUsers.createSuccessNoEmail")
+          : t("superAdmin.superAdminUsers.createSuccessButEmailFailed")
       );
       setSnackbarVisible(true);
 
-      // Reset form
+      // Reset form and navigate back
       reset();
-
-      // Navigate back after a short delay
       setTimeout(() => {
         navigation.goBack();
       }, 2000);
-    } catch (error: any) {
-      console.error("Error creating super admin:", error);
+    } catch (error) {
+      console.error("Error in super admin creation:", error);
       setSnackbarMessage(
-        error.message || t("superAdmin.superAdminUsers.createError")
+        error instanceof Error
+          ? error.message
+          : t("superAdmin.superAdminUsers.createError")
       );
       setSnackbarVisible(true);
     } finally {
@@ -320,9 +253,11 @@ const CreateSuperAdminScreen = () => {
                   <View style={styles.cardContent}>
                     <Controller
                       control={control}
-                      name="name"
+                      name="first_name"
                       rules={{
-                        required: t("superAdmin.superAdminUsers.nameRequired"),
+                        required: t(
+                          "superAdmin.superAdminUsers.firstNameRequired"
+                        ),
                         minLength: {
                           value: 2,
                           message: t(
@@ -344,22 +279,69 @@ const CreateSuperAdminScreen = () => {
                       }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label={`${t("superAdmin.superAdminUsers.name")} *`}
+                          label={`${t("superAdmin.superAdminUsers.firstName")} *`}
                           mode="outlined"
                           value={value}
                           onChangeText={(text) =>
                             onChange(text.replace(/[^a-zA-Z\s\-']/g, ""))
                           }
                           onBlur={onBlur}
-                          error={!!errors.name}
+                          error={!!errors.first_name}
                           style={styles.input}
                           disabled={loading}
                         />
                       )}
                     />
-                    {errors.name && (
+                    {errors.first_name && (
                       <HelperText type="error">
-                        {errors.name.message}
+                        {errors.first_name.message}
+                      </HelperText>
+                    )}
+
+                    <Controller
+                      control={control}
+                      name="last_name"
+                      rules={{
+                        required: t(
+                          "superAdmin.superAdminUsers.lastNameRequired"
+                        ),
+                        minLength: {
+                          value: 2,
+                          message: t(
+                            "superAdmin.superAdminUsers.nameMinLength"
+                          ),
+                        },
+                        maxLength: {
+                          value: 50,
+                          message: t(
+                            "superAdmin.superAdminUsers.nameMaxLength"
+                          ),
+                        },
+                        pattern: {
+                          value: /^[a-zA-Z\s\-']+$/,
+                          message: t(
+                            "superAdmin.superAdminUsers.nameInvalidChars"
+                          ),
+                        },
+                      }}
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <TextInput
+                          label={`${t("superAdmin.superAdminUsers.lastName")} *`}
+                          mode="outlined"
+                          value={value}
+                          onChangeText={(text) =>
+                            onChange(text.replace(/[^a-zA-Z\s\-']/g, ""))
+                          }
+                          onBlur={onBlur}
+                          error={!!errors.last_name}
+                          style={styles.input}
+                          disabled={loading}
+                        />
+                      )}
+                    />
+                    {errors.last_name && (
+                      <HelperText type="error">
+                        {errors.last_name.message}
                       </HelperText>
                     )}
 

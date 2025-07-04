@@ -50,6 +50,7 @@ import {
   ActivityLogUser,
 } from "../../types/activity-log";
 import { format } from "date-fns";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Add Shimmer component for loading states
 interface ShimmerProps {
@@ -164,6 +165,7 @@ const getStyles = (theme: any) =>
   StyleSheet.create({
     container: {
       flex: 1,
+      backgroundColor: theme.colors.backgroundSecondary,
     },
     keyboardAvoidingView: {
       flex: 1,
@@ -173,7 +175,7 @@ const getStyles = (theme: any) =>
     },
     scrollContent: {
       paddingBottom: 140,
-      maxWidth: 1200,
+      maxWidth: 1400,
       alignSelf: "center",
       width: "100%",
     },
@@ -311,7 +313,7 @@ const getStyles = (theme: any) =>
     settingItemContent: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 10,
+      gap: 16,
     },
     settingText: {
       fontSize: 16,
@@ -322,7 +324,7 @@ const getStyles = (theme: any) =>
       backgroundColor: "#e2e8f0",
     },
     languageSelectorContainer: {
-      marginLeft: 0,
+      marginLeft: "auto",
     },
     signOutModal: {
       backgroundColor: "white",
@@ -1214,15 +1216,48 @@ const SuperAdminProfileScreen = () => {
     }
   };
 
+  // Helper for consistent logging with timestamps
+  const logWithTimestamp = (message: string, data: any = null) => {
+    const timestamp = new Date().toISOString().split("T")[1].split(".")[0]; // HH:MM:SS format
+    console.log(`[${timestamp}] PROFILE: ${message}`, data ? data : "");
+  };
+
   const performSignOut = async () => {
     try {
-      await clearAllCache();
+      setLoading(true);
+      logWithTimestamp("Starting sign-out process from profile screen");
+
+      // Log the sign out activity
+      const activityLogData = {
+        user_id: user.id,
+        activity_type: "SIGN_OUT",
+        description: `User signed out: ${adminData?.name || user.email}`,
+        metadata: {
+          user_email: user.email,
+          user_role: "superadmin",
+          platform: Platform.OS,
+          timestamp: new Date().toISOString(),
+        },
+      };
+
+      // Log the activity before signing out
+      logWithTimestamp("Logging sign-out activity to database");
+      await supabase.from("activity_logs").insert([activityLogData]);
+      logWithTimestamp("Sign-out activity logged successfully");
+
+      // Call AuthContext signOut and let it handle all cleanup
+      logWithTimestamp("Calling AuthContext signOut method");
       await signOut();
+      logWithTimestamp("Sign-out completed successfully");
     } catch (error) {
+      logWithTimestamp("Error during sign-out process", error);
       console.error("Error signing out:", error);
-      setSnackbarMessage(t("superAdmin.profile.signOutFailed"));
+      setSnackbarMessage(
+        t("common.errors.signOutFailed", "Sign out failed. Please try again.")
+      );
       setSnackbarVisible(true);
     } finally {
+      setLoading(false);
       setSignOutModalVisible(false);
     }
   };
@@ -1532,24 +1567,18 @@ ${exportData.activityHistory.activities.join("\n")}
 
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={[
-            styles.keyboardAvoidingView,
-          ]}
+          style={[styles.keyboardAvoidingView]}
         >
           <ScrollView
-            style={styles.scrollView}
-            contentContainerStyle={[
-              styles.scrollContent,
-              {
-                maxWidth: isLargeScreen ? 1400 : isMediumScreen ? 1100 : "100%",
-                paddingHorizontal: isLargeScreen
-                  ? 48
-                  : isMediumScreen
-                    ? 32
-                    : 16,
-              },
-            ]}
-          >
+          style={styles.scrollView}
+          contentContainerStyle={[
+            styles.scrollContent,
+            {
+              maxWidth: isLargeScreen ? 1400 : isMediumScreen ? 1100 : "100%",
+              paddingHorizontal: isLargeScreen ? 48 : isMediumScreen ? 32 : 16,
+            },
+          ]}
+        >
             <View style={styles.gridContainer}>
               {/* Profile Header Shimmer */}
               <Animated.View
@@ -1718,9 +1747,7 @@ ${exportData.activityHistory.activities.join("\n")}
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={[
-          styles.keyboardAvoidingView,
-        ]}
+        style={[styles.keyboardAvoidingView]}
       >
         <ScrollView
           style={styles.scrollView}
@@ -1879,7 +1906,7 @@ ${exportData.activityHistory.activities.join("\n")}
                           <View style={styles.settingItemContent}>
                             <MaterialCommunityIcons
                               name="translate"
-                              size={20}
+                              size={24}
                               color="rgba(54,105,157,255)"
                             />
                             <Text variant="medium" style={styles.settingText}>
@@ -1972,7 +1999,7 @@ ${exportData.activityHistory.activities.join("\n")}
                           />
                         </TouchableOpacity>
 
-                        <Divider style={styles.divider} />
+                        {/* <Divider style={styles.divider} /> */}
 
                         {/* <TouchableOpacity
                           style={styles.settingItem}
@@ -1993,9 +2020,9 @@ ${exportData.activityHistory.activities.join("\n")}
                             size={24}
                             color="#999"
                           />
-                        </TouchableOpacity>
+                        </TouchableOpacity> */}
 
-                        <Divider style={styles.divider} /> */}
+                        <Divider style={styles.divider} />
 
                         {/* Advanced Settings Section */}
                         <TouchableOpacity
@@ -2084,12 +2111,12 @@ ${exportData.activityHistory.activities.join("\n")}
         loading={resettingPassword}
         email={user?.email || ""}
       />
-      {/* <DataExportModal
+      <DataExportModal
         visible={dataExportModalVisible}
         onDismiss={() => setDataExportModalVisible(false)}
         onConfirm={handleDataExport}
         loading={exportingData}
-      /> */}
+      />
       <DeleteVerificationModal
         visible={deleteVerificationModalVisible}
         onDismiss={() => {

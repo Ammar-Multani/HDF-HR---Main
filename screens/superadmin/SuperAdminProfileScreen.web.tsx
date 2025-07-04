@@ -43,13 +43,18 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import CustomSnackbar from "../../components/CustomSnackbar";
-import { initEmailService } from "../../utils/emailService";
+import {
+  initEmailService,
+  sendPasswordResetEmail,
+} from "../../utils/emailService";
 import {
   ActivityLog,
   ActivityType,
   ActivityLogUser,
 } from "../../types/activity-log";
 import { format } from "date-fns";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { generateSecureToken, APP_URL } from "../../utils/auth";
 
 // Add Shimmer component for loading states
 interface ShimmerProps {
@@ -164,6 +169,7 @@ const getStyles = (theme: any) =>
   StyleSheet.create({
     container: {
       flex: 1,
+      backgroundColor: theme.colors.backgroundSecondary,
     },
     keyboardAvoidingView: {
       flex: 1,
@@ -238,6 +244,7 @@ const getStyles = (theme: any) =>
     },
     contentContainer: {
       flex: 1,
+      padding: 20,
     },
     gridColumns: {
       flexDirection: "row",
@@ -1216,13 +1223,68 @@ const SuperAdminProfileScreen = () => {
 
   const performSignOut = async () => {
     try {
+      setLoading(true);
+
+      // Log the sign out activity
+      const activityLogData = {
+        user_id: user.id,
+        activity_type: "SIGN_OUT",
+        description: `User signed out: ${adminData?.name || user.email}`,
+        metadata: {
+          user_email: user.email,
+          user_role: "superadmin",
+          platform: Platform.OS,
+          timestamp: new Date().toISOString(),
+        },
+      };
+
+      // Log the activity before signing out
+      await supabase.from("activity_logs").insert([activityLogData]);
+
+      // Set flag to force reload after sign-out
+      await AsyncStorage.setItem("FORCE_RELOAD_AFTER_SIGNOUT", "true");
+
+      // Clear all cached data
       await clearAllCache();
+
+      // Clear all auth-related storage
+      const keys = await AsyncStorage.getAllKeys();
+      const authKeys = keys.filter(
+        (key) =>
+          key.startsWith("supabase.auth.") ||
+          key.startsWith("cache:") ||
+          key.startsWith("auth_") ||
+          key === "auth_token" ||
+          key === "auth_check" ||
+          key === "NAVIGATE_TO_DASHBOARD"
+      );
+      await AsyncStorage.multiRemove(authKeys);
+
+      // Sign out using the auth context - this will handle all cleanup and redirect
       await signOut();
+
+      // For web, ensure we redirect to login
+      if (Platform.OS === "web") {
+        // Small delay to ensure all operations complete
+        setTimeout(() => {
+          window.location.href = "/";
+        }, 300);
+      }
     } catch (error) {
       console.error("Error signing out:", error);
-      setSnackbarMessage(t("superAdmin.profile.signOutFailed"));
+      setSnackbarMessage(
+        t("common.errors.signOutFailed", "Sign out failed. Please try again.")
+      );
       setSnackbarVisible(true);
+
+      // Even if there's an error, try to sign out
+      try {
+        await signOut();
+      } catch (e) {
+        console.error("Final sign out attempt failed:", e);
+      }
     } finally {
+      setLoading(false);
       setSignOutModalVisible(false);
     }
   };
@@ -1305,30 +1367,85 @@ const SuperAdminProfileScreen = () => {
     );
   };
 
-  const handleResetPasswordClick = () => {
-    setResetPasswordModalVisible(true);
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
   };
 
   const handleResetPassword = async () => {
     try {
       setResettingPassword(true);
 
-      if (!adminData) {
+      if (!adminData || !user?.email) {
         throw new Error("Admin data not found");
       }
 
+      const userEmail = user.email.toLowerCase().trim();
+
+      // Ensure proper URL construction without double slashes
+      const redirectTo = new URL("/auth/reset-password", APP_URL).toString();
+
+      // First, initiate the password reset through Supabase Auth
+      const { data: resetData, error: resetError } =
+        await supabase.auth.resetPasswordForEmail(userEmail, {
+          redirectTo,
+        });
+
+      if (resetError) {
+        throw resetError;
+      }
+
+      // Generate a secure token with 60 minute expiration
+      const { token, expiresAt } = await generateSecureToken(60);
+
+      // Store the reset token in a secure table
+      const { error: storeError } = await supabase
+        .from("password_reset_tokens")
+        .insert({
+          email: userEmail,
+          token: token,
+          expires_at: expiresAt,
+          used: false,
+        })
+        .select();
+
+      if (storeError) {
+        console.error("Error storing reset token:", storeError);
+        throw new Error("Failed to initiate password reset");
+      }
+
+      // Create the reset link using URL constructor to ensure proper formatting
+      const resetUrl = new URL("/auth/reset-password", APP_URL);
+      resetUrl.searchParams.set("token", token);
+      resetUrl.searchParams.set("type", "recovery");
+
+      console.log("Generated reset URL:", resetUrl.toString());
+
+      // Send the password reset email using our custom email service
+      const { success, error } = await sendPasswordResetEmail(
+        userEmail,
+        token,
+        resetUrl.toString()
+      );
+
+      if (!success) {
+        throw error || new Error("Failed to send password reset email");
+      }
+
+      // Log the activity
       const activityLogData: ActivityLog = {
         user_id: user.id,
         activity_type: ActivityType.PASSWORD_RESET,
-        description: `Password reset requested by ${adminData.name || user.email}`,
+        description: `Password reset requested by ${adminData.name || userEmail}`,
         metadata: {
           action: "reset_requested",
           created_by: {
             id: user.id,
-            name: adminData.name || user.email,
-            email: user.email,
+            name: adminData.name || userEmail,
+            email: userEmail,
             role: "superadmin",
           },
+          reset_url: resetUrl.toString(),
         },
       };
 
@@ -1338,21 +1455,15 @@ const SuperAdminProfileScreen = () => {
 
       if (logError) throw logError;
 
-      // Log successful password reset request
-      setSnackbarMessage(
-        t("forgotPassword.resetInstructions") ||
-          "Password reset instructions have been sent to your email."
-      );
+      setSnackbarMessage(t("forgotPassword.resetLinkSent"));
       setSnackbarVisible(true);
-    } catch (error) {
-      console.error("Error with password reset:", error);
-      setSnackbarMessage(
-        error instanceof Error ? error.message : "An error occurred"
-      );
+      setResetPasswordModalVisible(false);
+    } catch (error: any) {
+      console.error("Reset password error:", error);
+      setSnackbarMessage(error.message || t("forgotPassword.resetError"));
       setSnackbarVisible(true);
     } finally {
       setResettingPassword(false);
-      setResetPasswordModalVisible(false);
     }
   };
 
@@ -1521,7 +1632,10 @@ ${exportData.activityHistory.activities.join("\n")}
   if (loading) {
     return (
       <SafeAreaView
-        style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
+        style={[
+          styles.container,
+          { backgroundColor: theme.colors.backgroundSecondary },
+        ]}
       >
         <AppHeader
           title={t("superAdmin.profile.title") || "Profile"}
@@ -1532,9 +1646,7 @@ ${exportData.activityHistory.activities.join("\n")}
 
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={[
-            styles.keyboardAvoidingView,
-          ]}
+          style={[styles.keyboardAvoidingView]}
         >
           <ScrollView
             style={styles.scrollView}
@@ -1704,7 +1816,10 @@ ${exportData.activityHistory.activities.join("\n")}
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
+      style={[
+        styles.container,
+        { backgroundColor: theme.colors.backgroundSecondary },
+      ]}
       edges={["top"]}
     >
       <StatusBar barStyle={theme.dark ? "light-content" : "dark-content"} />
@@ -1718,9 +1833,7 @@ ${exportData.activityHistory.activities.join("\n")}
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={[
-          styles.keyboardAvoidingView,
-        ]}
+        style={[styles.keyboardAvoidingView]}
       >
         <ScrollView
           style={styles.scrollView}
@@ -1924,7 +2037,7 @@ ${exportData.activityHistory.activities.join("\n")}
                       <View style={styles.cardContent}>
                         <TouchableOpacity
                           style={styles.settingItem}
-                          onPress={handleResetPasswordClick}
+                          onPress={() => setResetPasswordModalVisible(true)}
                         >
                           <View style={styles.settingItemContent}>
                             <MaterialCommunityIcons

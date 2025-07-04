@@ -1,10 +1,17 @@
 import * as Linking from "expo-linking";
 
+// Parse Supabase URL format (converts # to ? for proper parameter parsing)
+const parseSupabaseUrl = (url: string) => {
+  return url.includes("#") ? url.replace("#", "?") : url;
+};
+
 // Configure linking for deep linking and web URLs
 export const linking = {
   prefixes: [
     "hdf-hr://", // Your app's URL scheme
-    "https://hdfhr.netlify.app", // Your Netlify domain
+    "https://hdf-hr.vercel.app", // Your Netlify domain
+    "http://localhost:8081", // For local development
+    Linking.createURL("/"),
   ],
   config: {
     screens: {
@@ -13,9 +20,12 @@ export const linking = {
       Register: "register",
       ForgotPassword: "forgot-password",
       ResetPassword: {
-        path: "reset-password",
+        path: "auth/reset-password",
         parse: {
           token: (token: string) => token,
+          access_token: (token: string) => token,
+          refresh_token: (token: string) => token,
+          type: (type: string) => type,
         },
       },
 
@@ -83,5 +93,25 @@ export const linking = {
         },
       },
     },
+  },
+  getInitialURL: async () => {
+    const url = await Linking.getInitialURL();
+    if (url != null) {
+      return parseSupabaseUrl(url);
+    }
+    return url;
+  },
+  subscribe: (listener: (url: string) => void) => {
+    const onReceiveURL = ({ url }: { url: string }) => {
+      const parsedUrl = parseSupabaseUrl(url);
+      listener(parsedUrl);
+    };
+
+    // Listen for deep link events
+    const subscription = Linking.addEventListener("url", onReceiveURL);
+
+    return () => {
+      subscription.remove();
+    };
   },
 };

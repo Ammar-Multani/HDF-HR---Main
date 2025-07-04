@@ -25,7 +25,6 @@ import { useForm, Controller } from "react-hook-form";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../contexts/AuthContext";
 import AppHeader from "../../components/AppHeader";
-import { hashPassword } from "../../utils/auth";
 import { useTranslation } from "react-i18next";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Animated, { FadeIn } from "react-native-reanimated";
@@ -243,6 +242,17 @@ const CreateCompanyScreen = () => {
       setLoading(true);
       setSnackbarVisible(false);
 
+      // Check if user is authenticated
+      if (!user?.id) {
+        setSnackbarMessage(
+          t("common.errors.notAuthenticated") ||
+            "You must be logged in to perform this action"
+        );
+        setSnackbarVisible(true);
+        setLoading(false);
+        return;
+      }
+
       // Validate stakeholders first
       if (stakeholders.length === 0) {
         setSnackbarMessage(t("superAdmin.companies.stakeholdersRequired"));
@@ -292,22 +302,6 @@ const CreateCompanyScreen = () => {
         return;
       }
 
-      // Performance optimization: Hash password in parallel with checking for existing user
-      // This avoids the sequential bottleneck
-      const [hashedPassword, existingUserResult] = await Promise.all([
-        hashPassword(data.admin_password),
-        supabase
-          .from("users")
-          .select("id")
-          .eq("email", data.admin_email)
-          .maybeSingle(), // Use maybeSingle instead of single to avoid errors
-      ]);
-
-      // Check if user already exists
-      if (existingUserResult.data) {
-        throw new Error(t("superAdmin.companies.emailAlreadyExists"));
-      }
-
       // Prepare company data
       const companyData = {
         company_name: data.company_name,
@@ -324,19 +318,11 @@ const CreateCompanyScreen = () => {
           country: data.address_country,
         },
         active: true,
-        created_by: user?.id,
+        created_by: user.id,
         stakeholders,
         vat_type: data.vat_type,
         can_upload_receipts: data.can_upload_receipts,
       };
-
-      // Generate reset token just once - avoid regenerating later
-      const resetToken =
-        Math.random().toString(36).substring(2, 15) +
-        Math.random().toString(36).substring(2, 15);
-      const resetTokenExpiry = new Date(
-        Date.now() + 7 * 24 * 60 * 60 * 1000
-      ).toISOString();
 
       // Create company record and get the ID
       const { data: newCompany, error: companyError } = await supabase
@@ -346,87 +332,101 @@ const CreateCompanyScreen = () => {
         .single();
 
       if (companyError) {
-        throw companyError;
+        console.error("Company creation error:", companyError);
+        throw new Error(
+          t("superAdmin.companies.errorCreatingCompany") ||
+            "Error creating company"
+        );
       }
 
-      // User data with reset token included
-      const userData = {
-        email: data.admin_email,
-        password_hash: hashedPassword,
-        status: "active",
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        reset_token: resetToken,
-        reset_token_expires: resetTokenExpiry,
-      };
-
-      // Create the user with reset token in a single operation
-      const { data: newUser, error: userError } = await supabase
-        .from("users")
-        .insert(userData)
-        .select("id")
-        .single();
-
-      if (userError) {
-        // If user creation fails, delete the company for atomicity
-        await supabase.from("company").delete().eq("id", newCompany.id);
-        throw userError;
+      if (!newCompany?.id) {
+        throw new Error(
+          t("superAdmin.companies.companyCreationFailed") ||
+            "Company creation failed"
+        );
       }
 
-      // Create company_user record
-      const companyUserData = {
-        id: newUser.id,
-        company_id: newCompany.id,
-        first_name: data.admin_first_name,
-        last_name: data.admin_last_name,
-        email: data.admin_email,
-        role: "admin",
-        active_status: "active",
-        created_by: user?.id,
-        phone_number: (
-          t("superAdmin.companies.notProvided") || "Not provided"
-        ).substring(0, 20),
-        date_of_birth: new Date().toISOString(),
-        nationality: (
-          t("superAdmin.companies.notProvided") || "Not provided"
-        ).substring(0, 20),
-      };
+      // Create company admin using the Edge Function
+      const { data: adminResult, error: adminError } =
+        await supabase.functions.invoke("user-management", {
+          body: {
+            action: "create_company_admin",
+            email: data.admin_email,
+            password: data.admin_password,
+            company_id: newCompany.id,
+            created_by: user.id,
+            first_name: data.admin_first_name,
+            last_name: data.admin_last_name,
+          },
+        });
 
-      const { error: companyUserError } = await supabase
-        .from("company_user")
-        .insert([companyUserData]);
-
-      if (companyUserError) {
-        // If company_user creation fails, delete the user and company
-        await supabase.from("users").delete().eq("id", newUser.id);
+      if (adminError || !adminResult?.user) {
+        // Delete the company if admin creation fails
         await supabase.from("company").delete().eq("id", newCompany.id);
-        throw companyUserError;
+
+        // Handle structured error response
+        if (adminResult?.error) {
+          const error = adminResult.error;
+          let errorMessage = "";
+
+          switch (error.code) {
+            case "user_exists":
+              errorMessage = t("superAdmin.companies.adminEmailAlreadyExists", {
+                email: error.details?.email,
+              });
+              break;
+            case "auth_error":
+              errorMessage = t("superAdmin.companies.authError", {
+                message: error.message,
+              });
+              break;
+            case "admin_creation_failed":
+              errorMessage = t("superAdmin.companies.adminCreationFailed");
+              break;
+            case "validation_error":
+              errorMessage = t("superAdmin.companies.validationError", {
+                message: error.message,
+              });
+              break;
+            default:
+              errorMessage =
+                error.message || t("superAdmin.companies.errorCreatingAdmin");
+          }
+
+          throw new Error(errorMessage);
+        }
+
+        throw new Error(
+          adminError?.message ||
+            t("superAdmin.companies.errorCreatingAdmin") ||
+            "Error creating admin user"
+        );
       }
 
       // Get super admin's name from admin table
       const { data: adminDetails, error: adminDetailsError } = await supabase
         .from("admin")
         .select("id, name, email")
-        .eq("email", user?.email)
+        .eq("email", user.email)
         .single();
 
       if (adminDetailsError) {
         console.error("Error fetching admin details:", adminDetailsError);
       }
 
-      const userDisplayName = adminDetails?.name || user?.email || "";
+      const userDisplayName = adminDetails?.name || user.email || "";
 
       // Log the company creation activity
       const activityLogData = {
-        user_id: user?.id,
+        user_id: user.id,
         activity_type: ActivityType.CREATE_COMPANY,
         description: `New company "${data.company_name}" created with admin ${data.admin_first_name} ${data.admin_last_name} (${data.admin_email})`,
         company_id: newCompany.id,
         metadata: {
           created_by: {
-            id: user?.id || "",
+            id: user.id,
             name: userDisplayName,
-            email: user?.email || "",
+            email: user.email,
             role: "superadmin",
           },
           company: {
@@ -434,7 +434,7 @@ const CreateCompanyScreen = () => {
             name: data.company_name,
           },
           company_admin: {
-            id: newUser.id,
+            id: adminResult.user.id,
             name: `${data.admin_first_name} ${data.admin_last_name}`,
             email: data.admin_email,
             role: "admin",
@@ -461,7 +461,6 @@ const CreateCompanyScreen = () => {
 
       if (logError) {
         console.error("Error logging activity:", logError);
-        // Don't throw error here, as the company was created successfully
       }
 
       // Send invitation email to the admin
@@ -474,7 +473,6 @@ const CreateCompanyScreen = () => {
 
       if (!emailSent) {
         console.error("Error sending invitation email:", emailError);
-        // Don't throw here, as the company and user are already created successfully
       }
 
       logDebug(`Company admin created with email: ${data.admin_email}`);
@@ -521,7 +519,7 @@ const CreateCompanyScreen = () => {
 
   return (
     <SafeAreaView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
+      style={[styles.container, { backgroundColor: theme.colors.backgroundSecondary }]}
     >
       <AppHeader
         showLogo={false}

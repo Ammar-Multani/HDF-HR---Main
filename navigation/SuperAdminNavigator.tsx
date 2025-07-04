@@ -7,7 +7,6 @@ import {
   useNavigationContainerRef,
   useNavigation,
   useRoute,
-  NavigationProp,
 } from "@react-navigation/native";
 import {
   View,
@@ -18,9 +17,12 @@ import {
   Image,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { useAuth } from "../contexts/AuthContext";
+import { UserRole } from "../types";
 import Text from "../components/Text";
 import { SidebarLayout } from "./components/SidebarLayout";
 import { t } from "i18next";
+import { RootStackParamList, AppNavigationProp, NavigationItem } from "./types";
 
 // Super Admin Screens
 import SuperAdminDashboard from "../screens/superadmin/SuperAdminDashboard";
@@ -58,44 +60,6 @@ const SuperAdminStack = createNativeStackNavigator();
 const SuperAdminTab = createBottomTabNavigator();
 const ContentStack = createNativeStackNavigator();
 const WebContentStack = createNativeStackNavigator();
-
-// Update the RootStackParamList type
-type RootStackParamList = {
-  MainContent: undefined;
-  MainTabs: undefined;
-  Dashboard: undefined;
-  Companies: undefined;
-  Users: undefined;
-  Forms: undefined;
-  Receipts: undefined;
-  Tasks: undefined;
-  Profile: undefined;
-  CompanyDetails: { companyId: string };
-  CreateCompany: undefined;
-  EditCompany: { companyId: string };
-  TaskDetails: { id: string };
-  CreateTask: undefined;
-  EditTask: { id: string };
-  CreateSuperAdmin: undefined;
-  SuperAdminDetailsScreen: { id: string };
-  EditSuperAdmin: { id: string };
-  CompanyAdminDetailsScreen: { id: string };
-  EditCompanyAdmin: { id: string };
-  CreateCompanyAdmin: undefined;
-  CreateEmployee: undefined;
-  SuperAdminFormDetailsScreen: { id: string };
-  CreateReceipt: undefined;
-  ReceiptDetails: { id: string };
-  EditReceipt: { id: string };
-  ActivityLogs: undefined;
-  EmployeeDetails: { id: string };
-  ReceiptsListScreen: undefined;
-  SuperAdminFormsScreen: undefined;
-  SuperAdminTasksScreen: undefined;
-  Utilities: undefined;
-  SuperAdminCreateEmployeeAccidentReport: undefined;
-  SuperAdminCreateEmployeeIllnessReport: undefined;
-};
 
 // Custom navigation item component for sidebar
 interface NavItemProps {
@@ -170,10 +134,27 @@ const useWindowDimensions = () => {
 
 // Web Layout with SidebarLayout
 const WebStackNavigator = () => {
-  const [activeScreen, setActiveScreen] = useState("Dashboard");
-  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
+  const [activeScreen, setActiveScreen] =
+    useState<keyof RootStackParamList>("Dashboard");
+  const navigation = useNavigation<AppNavigationProp>();
+  const { isAuthenticated, userRole } = useAuth();
 
-  const navigationItems = [
+  // Protect routes for web view
+  useEffect(() => {
+    // Don't redirect if accessing reset password URL
+    if (window.location.pathname.includes("/auth/reset-password")) {
+      return;
+    }
+
+    if (!isAuthenticated || userRole !== UserRole.SUPER_ADMIN) {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Login" }],
+      });
+    }
+  }, [isAuthenticated, userRole]);
+
+  const navigationItems: NavigationItem[] = [
     {
       icon: "home",
       label: t("navigation.dashboard"),
@@ -211,21 +192,25 @@ const WebStackNavigator = () => {
     },
   ];
 
-  // Handle navigation
-  const handleNavigation = (screen: string) => {
+  // Handle navigation with session check
+  const handleNavigation = (screen: keyof RootStackParamList) => {
+    if (!isAuthenticated || userRole !== UserRole.SUPER_ADMIN) {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Login" }],
+      });
+      return;
+    }
+
     setActiveScreen(screen);
-    // Navigate to MainContent first, then to the specific screen
-    navigation.navigate("MainContent");
-    // Use a timeout to ensure MainContent is mounted before navigating to the screen
-    setTimeout(() => {
-      (navigation as any).navigate(screen);
-    }, 0);
+    // Use type assertion to handle the navigation
+    (navigation as any).navigate(screen);
   };
 
   return (
     <SidebarLayout
       activeScreen={activeScreen}
-      setActiveScreen={setActiveScreen}
+      setActiveScreen={handleNavigation}
       navigationItems={navigationItems}
       content={
         <WebContentStack.Navigator
@@ -499,10 +484,6 @@ const SuperAdminTabNavigator = () => {
                 component={CompanyDetailsScreen}
               />
               <ContentStack.Screen
-                name="CreateCompany"
-                component={CreateCompanyScreen}
-              />
-              <ContentStack.Screen
                 name="EditCompany"
                 component={EditCompanyScreen}
               />
@@ -605,12 +586,29 @@ const SuperAdminTabNavigator = () => {
   return <WebStackNavigator />;
 };
 
-// Super Admin Navigator
+// Super Admin Navigator with session protection
 export const SuperAdminNavigator = () => {
   const theme = useTheme();
   const { width } = useWindowDimensions();
   const isWeb = Platform.OS === "web";
   const isLargeScreen = isWeb && width > 768;
+  const { isAuthenticated, userRole } = useAuth();
+  const navigation = useNavigation<AppNavigationProp>();
+
+  // Protect routes - redirect to login if not authenticated or not super admin
+  useEffect(() => {
+    // Don't redirect if accessing reset password URL
+    if (window.location.pathname.includes("/auth/reset-password")) {
+      return;
+    }
+
+    if (!isAuthenticated || userRole !== UserRole.SUPER_ADMIN) {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Login" }],
+      });
+    }
+  }, [isAuthenticated, userRole]);
 
   if (isLargeScreen) {
     return <WebStackNavigator />;
@@ -618,10 +616,26 @@ export const SuperAdminNavigator = () => {
 
   // For mobile/small screens, use a single stack navigator with nested tab navigator
   return (
-    <SuperAdminStack.Navigator screenOptions={{ headerShown: false }}>
+    <SuperAdminStack.Navigator
+      screenOptions={{
+        headerShown: false,
+        // Add smooth transitions
+        animation: "slide_from_right",
+      }}
+    >
       <SuperAdminStack.Screen
         name="MainTabs"
         component={SuperAdminTabNavigator}
+        options={{
+          // Prevent going back to auth screens
+          gestureEnabled: false,
+        }}
+      />
+
+      {/* Move CreateCompany screen to main stack for phone size */}
+      <SuperAdminStack.Screen
+        name="CreateCompany"
+        component={CreateCompanyScreen}
       />
 
       {/* Additional stack screens for utilities navigation */}

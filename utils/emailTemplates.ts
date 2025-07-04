@@ -3,73 +3,6 @@
  */
 
 /**
- * Generate a password reset email
- * @param token The reset token
- * @returns The HTML content for the email
- */
-export const generatePasswordResetEmail = (token: string) => {
-  const resetLink = `https://hdfhr.netlify.app/reset-password?token=${token}`;
-
-  return `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Reset Your Password</title>
-      <style>
-        ${sharedStyles}
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="card">
-          <div class="header">
-            <img src="https://hdfhr.netlify.app/assets/assets/splash-icon-dark.06cf42ad68b1100016570ca669fd11fb.png" alt="HDF HR" class="logo">
-            <h1 class="title">Reset Your Password</h1>
-            <p class="subtitle">We received a request to reset your password. If you didn't make this request, you can safely ignore this email.</p>
-          </div>
-          
-          <div style="text-align: center;">
-            <a href="${resetLink}" class="button">Reset Password</a>
-          </div>
-
-          <div class="link-box">
-            ${resetLink}
-          </div>
-
-          <div class="warning">
-            <span class="warning-icon">⚠️</span>
-            <span>This link will expire in 1 hour for security reasons. Please reset your password promptly.</span>
-          </div>
-
-          <div class="support-box">
-            <h3 class="support-title">
-              <span>💬</span>
-              <span>Need Help?</span>
-            </h3>
-            <p style="margin: 0;">Our support team is here to assist you with any questions or concerns:</p>
-            <p style="margin: 12px 0;">
-              📧 Email: <a href="mailto:info@hdf.ch" style="color: rgba(38,127,161,1);">info@hdf.ch</a>
-            </p>
-          </div>
-        </div>
-
-        <div class="footer">
-          <p>&copy; ${new Date().getFullYear()} HDF HR. All rights reserved.</p>
-          <p>This is an automated message, please do not reply.</p>
-          <div class="social-links">
-            <a href="https://hdfhr.netlify.app">Visit Website</a>
-            <a href="mailto:info@hdf.ch">Contact Support</a>
-          </div>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
-};
-
-/**
  * Generate a welcome email for new users
  * @param name The user's full name
  * @param email The user's email
@@ -83,7 +16,7 @@ export const generateWelcomeEmail = (
   password: string,
   companyName: string
 ) => {
-  const loginLink = "https://hdfhr.netlify.app/login";
+  const loginLink = "https://hdf-hr.vercel.app/login";
 
   return `
     <!DOCTYPE html>
@@ -100,7 +33,7 @@ export const generateWelcomeEmail = (
       <div class="container">
         <div class="card">
           <div class="header">
-            <img src="https://hdfhr.netlify.app/assets/assets/splash-icon-dark.06cf42ad68b1100016570ca669fd11fb.png" alt="HDF HR" class="logo">
+            <img src="https://hdf-hr.vercel.app/assets/assets/splash-icon-dark.06cf42ad68b1100016570ca669fd11fb.png" alt="HDF HR" class="logo">
             <h1 class="title">Welcome to ${companyName}</h1>
             <p class="subtitle">Hello ${name}, we're thrilled to have you join us! Your account has been successfully created.</p>
           </div>
@@ -161,7 +94,7 @@ export const generateWelcomeEmail = (
           <p>&copy; ${new Date().getFullYear()} HDF HR. All rights reserved.</p>
           <p>This is an automated message, please do not reply.</p>
           <div class="social-links">
-            <a href="https://hdfhr.netlify.app">Visit Website</a>
+            <a href="https://hdf-hr.vercel.app">Visit Website</a>
             <a href="mailto:info@hdf.ch">Contact Support</a>
           </div>
         </div>
@@ -183,7 +116,7 @@ export const generateAdminInviteEmail = (
   password: string,
   companyName: string
 ) => {
-  const loginLink = "https://hdfhr.netlify.app/login";
+  const loginLink = "https://hdf-hr.vercel.app/login";
 
   return `
     <!DOCTYPE html>
@@ -200,7 +133,7 @@ export const generateAdminInviteEmail = (
       <div class="container">
         <div class="card">
           <div class="header">
-            <img src="https://hdfhr.netlify.app/assets/assets/splash-icon-dark.06cf42ad68b1100016570ca669fd11fb.png" alt="HDF HR" class="logo">
+            <img src="https://hdf-hr.vercel.app/assets/assets/splash-icon-dark.06cf42ad68b1100016570ca669fd11fb.png" alt="HDF HR" class="logo">
             <h1 class="title">Welcome to ${companyName}</h1>
             <p class="subtitle">You've been invited to manage your company's HR platform on HDF HR. Your admin account has been created successfully.</p>
           </div>
@@ -262,7 +195,7 @@ export const generateAdminInviteEmail = (
           <p>&copy; ${new Date().getFullYear()} HDF HR. All rights reserved.</p>
           <p>This is an automated message, please do not reply.</p>
           <div class="social-links">
-            <a href="https://hdfhr.netlify.app">Visit Website</a>
+            <a href="https://hdf-hr.vercel.app">Visit Website</a>
             <a href="mailto:info@hdf.ch">Contact Support</a>
           </div>
         </div>
@@ -284,7 +217,7 @@ export const generateSuperAdminWelcomeEmail = (
   email: string,
   password: string
 ) => {
-  const loginLink = "https://hdfhr.netlify.app/login";
+  const loginLink = "https://hdf-hr.vercel.app/login";
 
   return `
     <!DOCTYPE html>
@@ -301,7 +234,7 @@ export const generateSuperAdminWelcomeEmail = (
       <div class="container">
         <div class="card">
           <div class="header">
-            <img src="https://hdfhr.netlify.app/assets/assets/splash-icon-dark.06cf42ad68b1100016570ca669fd11fb.png" alt="HDF HR" class="logo">
+            <img src="https://hdf-hr.vercel.app/assets/assets/splash-icon-dark.06cf42ad68b1100016570ca669fd11fb.png" alt="HDF HR" class="logo">
             <h1 class="title">Welcome to HDF HR</h1>
             <p class="subtitle">Hello ${name}, you've been granted Super Admin access to the HDF HR platform.</p>
           </div>
@@ -367,7 +300,95 @@ export const generateSuperAdminWelcomeEmail = (
           <p>&copy; ${new Date().getFullYear()} HDF HR. All rights reserved.</p>
           <p>This is an automated message, please do not reply.</p>
           <div class="social-links">
-            <a href="https://hdfhr.netlify.app">Visit Website</a>
+            <a href="https://hdf-hr.vercel.app">Visit Website</a>
+            <a href="mailto:info@hdf.ch">Contact Support</a>
+          </div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+};
+
+/**
+ * Generate a password reset email
+ * @param email The user's email
+ * @param resetToken The reset token
+ * @param appUrl The application URL
+ * @param resetUrl The complete reset URL
+ * @returns The HTML content for the email
+ */
+export const generatePasswordResetEmail = (
+  email: string,
+  resetToken: string,
+  appUrl: string,
+  resetUrl?: string
+) => {
+  // Use provided resetUrl or generate one
+  const finalResetUrl =
+    resetUrl ||
+    `${appUrl}/auth/reset-password?token=${resetToken}&type=recovery`;
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Reset Your Password - HDF HR</title>
+      <style>
+        ${sharedStyles}
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="card">
+          <div class="header">
+            <img src="https://hdf-hr.vercel.app/assets/assets/splash-icon-dark.06cf42ad68b1100016570ca669fd11fb.png" alt="HDF HR" class="logo">
+            <h1 class="title">Password Reset Request</h1>
+            <p class="subtitle">We received a request to reset your password for your HDF HR account.</p>
+          </div>
+
+          <div class="feature-box">
+            <p>If you didn't make this request, you can safely ignore this email.</p>
+          </div>
+
+          <div style="text-align: center;">
+            <a href="${finalResetUrl}" class="button">Reset Your Password</a>
+          </div>
+
+          <div class="warning-box">
+            <span class="warning-icon">⚠️</span>
+            <div>
+              <strong>Important Security Notice:</strong>
+              <p style="margin: 8px 0 0 0;">This link will expire in 1 hour for security reasons. Please reset your password promptly.</p>
+            </div>
+          </div>
+
+          <div class="feature-box">
+            <p>If the button above doesn't work, copy and paste the following URL into your browser:</p>
+            <div class="code-block">
+              ${finalResetUrl}
+            </div>
+          </div>
+
+          <div class="support-box">
+            <h3 class="feature-title">
+              <span>💬</span>
+              <span>Need Help?</span>
+            </h3>
+            <p style="margin: 8px 0;">Our support team is here to assist you with any questions or concerns:</p>
+            <p style="margin: 8px 0;">
+              📧 Email: <a href="mailto:info@hdf.ch" style="color: rgba(38,127,161,1);">info@hdf.ch</a>
+            </p>
+          </div>
+        </div>
+
+        <div class="footer">
+          <p>&copy; ${new Date().getFullYear()} HDF HR. All rights reserved.</p>
+          <p>This is an automated message, please do not reply.</p>
+          <div class="social-links">
+            <a href="https://hdf-hr.vercel.app">Visit Website</a>
             <a href="mailto:info@hdf.ch">Contact Support</a>
           </div>
         </div>

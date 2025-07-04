@@ -45,7 +45,7 @@ import {
   ActivityType,
 } from "../../types";
 import { hashPassword, generateResetToken } from "../../utils/auth";
-import { sendCompanyAdminInviteEmail } from "../../utils/emailService";
+import { sendEmployeeWelcomeEmail } from "../../utils/emailService";
 import { generateWelcomeEmail } from "../../utils/emailTemplates";
 import CustomSnackbar from "../../components/CustomSnackbar";
 import { t } from "i18next";
@@ -66,6 +66,7 @@ interface EmployeeFormData {
   employment_type: EmploymentType;
   workload_percentage: string;
   employment_start_date: Date;
+  employment_end_date?: Date;
   education: string;
   address_line1: string;
   address_line2: string;
@@ -78,6 +79,7 @@ interface EmployeeFormData {
   iban: string;
   swift_code: string;
   comments: string;
+  bank_details?: string;
   is_admin: boolean;
   password: string;
 }
@@ -334,312 +336,135 @@ const CreateEmployeeScreen = () => {
         workloadPercentage > 100
       ) {
         setSnackbarMessage(
-          t("companyAdmin.employees.workloadPercentageInvalid")
+          t("companyAdmin.employees.invalidWorkloadPercentage")
         );
         setSnackbarVisible(true);
         setLoading(false);
         return;
       }
 
-      // Validate email domain
-      const emailParts = data.email.split("@");
-      if (
-        emailParts.length !== 2 ||
-        !emailParts[1].includes(".") ||
-        emailParts[1].length < 3
-      ) {
-        setSnackbarMessage(t("companyAdmin.employees.invalidEmailDomain"));
-        setSnackbarVisible(true);
-        setLoading(false);
-        return;
-      }
-
-      // Validate password strength
-      if (data.password.length < 8) {
-        setSnackbarMessage("Password must be at least 8 characters long");
-        setSnackbarVisible(true);
-        setLoading(false);
-        return;
-      }
-
-      // Convert employment_type to boolean (true for full-time/part-time, false for contract/temporary)
-      const isEmployeeType =
-        data.employment_type === EmploymentType.FULL_TIME ||
-        data.employment_type === EmploymentType.PART_TIME;
-
-      // Performance optimization: Hash password in parallel with checking for existing user
-      // This avoids the sequential bottleneck
-      const [hashedPassword, existingUserResult] = await Promise.all([
-        hashPassword(data.password),
-        supabase
-          .from("users")
-          .select("id")
-          .eq("email", data.email)
-          .maybeSingle(), // Use maybeSingle instead of single to avoid errors
-      ]);
-
-      // Check if user already exists
-      if (existingUserResult.data) {
-        throw new Error("A user with this email already exists");
-      }
-
-      // Generate reset token just once - avoid regenerating later
-      const resetToken =
-        Math.random().toString(36).substring(2, 15) +
-        Math.random().toString(36).substring(2, 15);
-      const resetTokenExpiry = new Date(
-        Date.now() + 7 * 24 * 60 * 60 * 1000
-      ).toISOString();
-
-      // First prepare employee data - we'll only insert after user creation succeeds
-      const employeeData = {
-        company_id: companyId,
-        first_name: data.first_name,
-        last_name: data.last_name,
-        email: data.email,
-        phone_number: data.phone_number,
-        role: data.is_admin ? UserRole.COMPANY_ADMIN : UserRole.EMPLOYEE,
-        active_status: UserStatus.ACTIVE,
-        created_by: user.id,
-        date_of_birth: data.date_of_birth.toISOString(),
-        nationality: data.nationality,
-        id_type: data.id_type,
-        ahv_number: data.ahv_number,
-        marital_status: data.marital_status,
-        gender: data.gender,
-        employment_start_date: data.employment_start_date.toISOString(),
-        employment_type: isEmployeeType,
-        workload_percentage: workloadPercentage,
-        job_title: data.job_title,
-        education: data.education,
-        address: {
-          line1: data.address_line1,
-          line2: data.address_line2 || null,
-          city: data.address_city,
-          state: data.address_state,
-          postal_code: data.address_postal_code,
-          country: data.address_country,
-        },
-        bank_details: {
-          bank_name: data.bank_name,
-          account_number: data.account_number,
-          iban: data.iban,
-          swift_code: data.swift_code,
-        },
-        comments: data.comments || null,
-      };
-
-      // User data with reset token included
-      const userData = {
-        email: data.email,
-        password_hash: hashedPassword,
-        status: "active", // Set as active so they can log in immediately
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        reset_token: resetToken,
-        reset_token_expires: resetTokenExpiry,
-      };
-
-      // Create the user with reset token in a single operation
-      const { data: newUser, error: userError } = await supabase
-        .from("users")
-        .insert(userData)
-        .select("id")
-        .single();
-
-      if (userError) {
-        console.error("Error creating user:", userError);
-        throw new Error(
-          `Failed to create user: ${userError.message || "Unknown error"}`
-        );
-      }
-
-      if (!newUser || !newUser.id) {
-        throw new Error("Failed to create user: No ID returned");
-      }
-
-      // Now that we have the user ID, create the employee record
-      const { error: employeeError } = await supabase
-        .from("company_user")
-        .insert([
-          {
-            id: newUser.id, // Use the ID from our custom users table
-            ...employeeData,
-          },
-        ]);
-
-      if (employeeError) {
-        // If employee creation fails, delete the user for atomicity
-        logDebug(
-          "Error creating employee, cleaning up user:",
-          employeeError
-        );
-        await supabase.from("users").delete().eq("id", newUser.id);
-        throw new Error(
-          `Failed to create employee: ${employeeError.message || "Unknown database error"}`
-        );
-      }
-
-      // Fetch creator's information
-      const { data: creatorData, error: creatorError } = await supabase
-        .from("company_user")
-        .select("first_name, last_name")
-        .eq("id", user.id)
-        .single();
-
-      if (creatorError) {
-        console.error("Error fetching creator data:", creatorError);
-      }
-
-      // Log the activity
-      const activityLogData = {
-        user_id: user.id,
-        activity_type: data.is_admin
-          ? ActivityType.CREATE_COMPANY_ADMIN
-          : "CREATE_EMPLOYEE",
-        description: `${data.is_admin ? "Company admin" : "Employee"} "${data.first_name} ${data.last_name}" (${data.email}) was created in company "${companyName}"`,
-        company_id: companyId,
-        metadata: {
-          created_by: {
-            id: user.id,
-            name: creatorData
-              ? `${creatorData.first_name} ${creatorData.last_name}`
-              : user.email, // Fallback to email if name not found
-            email: user.email,
-            role: "admin",
-          },
-          employee: {
-            id: newUser.id,
-            name: `${data.first_name} ${data.last_name}`,
-            email: data.email,
-            role: data.is_admin ? "admin" : "employee",
-          },
-          company: {
-            id: companyId,
-            name: companyName,
-          },
-        },
-        old_value: null,
-        new_value: {
-          first_name: data.first_name,
-          last_name: data.last_name,
-          email: data.email,
-          phone_number: data.phone_number,
-          job_title: data.job_title,
-          role: data.is_admin ? "admin" : "employee",
-          employment_type: data.employment_type,
-          workload_percentage: data.workload_percentage,
-          employment_start_date: data.employment_start_date.toISOString(),
-          date_of_birth: data.date_of_birth.toISOString(),
-          nationality: data.nationality,
-          marital_status: data.marital_status,
-          gender: data.gender,
-          address: {
-            line1: data.address_line1,
-            line2: data.address_line2 || null,
-            city: data.address_city,
-            state: data.address_state,
-            postal_code: data.address_postal_code,
-            country: data.address_country,
-          },
-          bank_details: {
-            bank_name: data.bank_name,
-            account_number: data.account_number,
-            iban: data.iban,
-            swift_code: data.swift_code,
-          },
-          created_at: new Date().toISOString(),
-        },
-      };
-
-      const { error: logError } = await supabase
-        .from("activity_logs")
-        .insert([activityLogData]);
-
-      if (logError) {
-        console.error("Error logging activity:", logError);
-        // Don't throw here as the employee was created successfully
-      }
-
-      logDebug(`Employee created with email: ${data.email}`);
-
-      // Send welcome email based on role
-      logDebug("Sending employee welcome email...");
-      let emailResult;
-
-      if (data.is_admin) {
-        logDebug("Sending company admin invitation email...");
-        emailResult = await sendCompanyAdminInviteEmail(
-          data.email,
-          data.password,
-          companyName // You'll need to get this from your company data
-        );
-      } else {
-        // Send regular employee welcome email
-        const functionUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/send-email`;
-        logDebug("Sending email using function URL:", functionUrl);
-
-        const { success: emailSent, error: emailError } = await fetch(
-          functionUrl,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
-              Origin: "https://hdfhr.netlify.app",
+      // Call the Edge Function to create employee with all required fields
+      const { data: responseData, error: functionError } =
+        await supabase.functions.invoke("user-management", {
+          body: {
+            action: "create_employee",
+            email: data.email.toLowerCase().trim(),
+            password: data.password,
+            company_id: companyId,
+            created_by: user.id,
+            first_name: data.first_name,
+            last_name: data.last_name,
+            phone_number: data.phone_number,
+            nationality: data.nationality,
+            date_of_birth: data.date_of_birth?.toISOString(),
+            marital_status: data.marital_status,
+            gender: data.gender,
+            employment_start_date: data.employment_start_date?.toISOString(),
+            employment_end_date:
+              data.employment_end_date?.toISOString() || null,
+            employment_type: data.employment_type === "full_time",
+            workload_percentage: workloadPercentage,
+            job_title: data.job_title,
+            address: {
+              line1: data.address_line1,
+              line2: data.address_line2 || null,
+              city: data.address_city,
+              state: data.address_state,
+              postal_code: data.address_postal_code,
+              country: data.address_country,
             },
-            body: JSON.stringify({
-              to: data.email,
-              subject: `Welcome to ${companyName} on HDF HR`,
-              html: generateWelcomeEmail(
-                `${data.first_name} ${data.last_name}`,
-                data.email,
-                data.password,
-                companyName
-              ),
-              text: `Welcome to ${companyName} on HDF HR!\n\nHello ${data.first_name} ${data.last_name},\n\nYour account has been created with the following credentials:\n\nEmail: ${data.email}\nPassword: ${data.password}\n\nPlease log in at: https://hdfhr.netlify.app/login\n\nIMPORTANT: Change your password immediately after logging in.\n\nNeed help? Contact us at info@hdf.ch`,
-            }),
-          }
-        ).then((res) => res.json());
+            bank_details: data.bank_details || null,
+            comments: data.comments || null,
+            ahv_number: data.ahv_number || null,
+            education: data.education || null,
+          },
+        });
 
-        if (!emailSent) {
-          console.error("Error sending welcome email:", emailError);
-        } else {
-          logDebug("Welcome email sent successfully");
-        }
-        emailResult = { success: emailSent };
+      if (functionError) {
+        console.error("Error creating employee:", functionError);
+        setSnackbarMessage(
+          t("companyAdmin.employees.createError", {
+            error: functionError.message || t("common.unknownError"),
+          })
+        );
+        setSnackbarVisible(true);
+        setLoading(false);
+        return;
+      }
+
+      if (!responseData?.user) {
+        throw new Error("No user data returned from Edge Function");
+      }
+
+      // Log activity
+      const { error: activityError } = await supabase
+        .from("activity_logs")
+        .insert({
+          user_id: user.id,
+          activity_type: "CREATE_EMPLOYEE",
+          description: `Employee ${data.first_name} ${data.last_name} (${data.email}) was created`,
+          company_id: companyId,
+          metadata: {
+            created_by: {
+              id: user.id,
+              email: user.email,
+            },
+            employee: {
+              id: responseData.user.id,
+              email: data.email,
+              first_name: data.first_name,
+              last_name: data.last_name,
+            },
+          },
+          old_value: null,
+          new_value: {
+            first_name: data.first_name,
+            last_name: data.last_name,
+            email: data.email,
+            phone_number: data.phone_number,
+            job_title: data.job_title,
+            employment_type: data.employment_type,
+            workload_percentage: workloadPercentage,
+            employment_start_date: data.employment_start_date?.toISOString(),
+            nationality: data.nationality,
+            gender: data.gender,
+          },
+        });
+
+      if (activityError) {
+        console.error("Error logging activity:", activityError);
+      }
+
+      // Send welcome email to the employee
+      const { success: emailSent, error: emailError } =
+        await sendEmployeeWelcomeEmail(
+          data.email.toLowerCase().trim(),
+          data.password,
+          companyName,
+          data.first_name,
+          data.last_name
+        );
+
+      if (!emailSent) {
+        console.error("Error sending welcome email:", emailError);
       }
 
       setSnackbarMessage(
-        emailResult.success
+        emailSent
           ? t("companyAdmin.employees.createSuccess")
-          : t("companyAdmin.employees.createSuccessNoEmail")
+          : t("companyAdmin.employees.createSuccessButEmailFailed")
       );
       setSnackbarVisible(true);
-
-      // Navigate back after a short delay
-      setTimeout(() => {
-        navigation.goBack();
-      }, 2000);
-    } catch (error: any) {
-      console.error("Error creating employee:", error);
-
-      // Detailed error message
-      const errorMessage =
-        error.message || "Failed to create employee. Please try again.";
-
-      // For network-related errors, show in banner
-      if (
-        errorMessage.includes("network") ||
-        errorMessage.includes("connection") ||
-        errorMessage.includes("offline")
-      ) {
-        setErrorBannerMessage(errorMessage);
-        setErrorBannerVisible(true);
-      } else {
-        setSnackbarMessage(errorMessage);
-        setSnackbarVisible(true);
-      }
+      navigation.goBack();
+    } catch (error) {
+      console.error("Error in employee creation:", error);
+      setSnackbarMessage(
+        t("companyAdmin.employees.createError", {
+          error:
+            error instanceof Error ? error.message : t("common.unknownError"),
+        })
+      );
+      setSnackbarVisible(true);
     } finally {
       setLoading(false);
     }
@@ -958,12 +783,6 @@ const CreateEmployeeScreen = () => {
                             { value: Gender.OTHER, label: "Other" },
                           ]}
                           style={styles.segmentedButtons}
-                          theme={{
-                            colors: {
-                              secondaryContainer: theme.colors.primaryContainer,
-                              onSecondaryContainer: theme.colors.primary,
-                            },
-                          }}
                           theme={{
                             colors: {
                               secondaryContainer: theme.colors.primaryContainer,
@@ -1591,24 +1410,48 @@ const CreateEmployeeScreen = () => {
                       control={control}
                       name="iban"
                       rules={{
-                        required: t("companyAdmin.employees.ibanRequired"),
-                        pattern: {
-                          value: /^[A-Z]{2}[0-9]{2}[A-Z0-9]{1,30}$/,
-                          message: t(
-                            "companyAdmin.employees.ibanInvalidFormat"
-                          ),
+                        validate: (value) => {
+                          if (!value) return true; // Optional field
+
+                          const stripped = value.replace(/\s/g, "");
+
+                          // Simple format check
+                          if (!/^[A-Z]{2}/.test(stripped)) {
+                            return "Invalid IBAN format: Must start with country code (Example: ES, GB, DE)";
+                          }
+
+                          if (stripped.length < 15 || stripped.length > 34) {
+                            return "Invalid IBAN format: Length should be between 15-34 characters";
+                          }
+
+                          if (!/^[A-Z0-9]+$/.test(stripped)) {
+                            return "Invalid IBAN format: Only letters and numbers allowed";
+                          }
+
+                          return true;
                         },
                       }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="IBAN *"
+                          label="IBAN"
                           mode="outlined"
                           value={value}
-                          onChangeText={(text) => onChange(text.toUpperCase())}
+                          onChangeText={(text) => {
+                            // Remove any existing spaces first
+                            const stripped = text
+                              .replace(/\s/g, "")
+                              .toUpperCase();
+                            // Add a space every 4 characters
+                            const formatted = stripped
+                              .replace(/(.{4})/g, "$1 ")
+                              .trim();
+                            onChange(formatted);
+                          }}
                           onBlur={onBlur}
                           error={!!errors.iban}
                           style={styles.input}
                           disabled={loading}
+                          placeholder="e.g., ES91 2100 0418 4502 0005 1332"
                         />
                       )}
                     />
@@ -1622,17 +1465,29 @@ const CreateEmployeeScreen = () => {
                       control={control}
                       name="swift_code"
                       rules={{
-                        required: t("companyAdmin.employees.swiftCodeRequired"),
-                        pattern: {
-                          value: /^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/,
-                          message: t(
-                            "companyAdmin.employees.swiftCodeInvalidFormat"
-                          ),
+                        validate: (value) => {
+                          if (!value) return true; // Optional field
+
+                          const stripped = value.replace(/\s/g, "");
+
+                          if (stripped.length !== 8 && stripped.length !== 11) {
+                            return "Invalid SWIFT code format: Must be 8 or 11 characters long";
+                          }
+
+                          if (!/^[A-Z]{4}/.test(stripped)) {
+                            return "Invalid SWIFT code format: Must start with 4 letter bank code";
+                          }
+
+                          if (!/^[A-Z0-9]+$/.test(stripped)) {
+                            return "Invalid SWIFT code format: Only letters and numbers allowed";
+                          }
+
+                          return true;
                         },
                       }}
                       render={({ field: { onChange, onBlur, value } }) => (
                         <TextInput
-                          label="SWIFT Code *"
+                          label="SWIFT/BIC Code"
                           mode="outlined"
                           value={value}
                           onChangeText={(text) => onChange(text.toUpperCase())}
@@ -1640,6 +1495,7 @@ const CreateEmployeeScreen = () => {
                           error={!!errors.swift_code}
                           style={styles.input}
                           disabled={loading}
+                          placeholder="e.g., BOFAUS3N"
                         />
                       )}
                     />
